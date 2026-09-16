@@ -25,7 +25,13 @@ const pkg = require('../package.json');
 
 const ROOT = path.join(__dirname, '..');
 const BUILD = path.join(ROOT, 'build');
-const OUT = path.join(ROOT, 'dist');
+// Overridable because a previous build's output can end up locked by the
+// system -- an antivirus scan holds `app.asar` open and Windows then refuses to
+// unlink it, with no process of ours to blame. Building elsewhere unblocks a
+// release without waiting for whatever is holding it to let go.
+const OUT = process.env.CLEANDRIVE_OUT
+  ? path.resolve(process.env.CLEANDRIVE_OUT)
+  : path.join(ROOT, 'dist');
 
 const PRODUCT = 'CleanDrive';
 const APP_ID = 'com.cleandrive.app'; // must match app.setAppUserModelId in main.js
