@@ -15,6 +15,7 @@ const { findUserBins, purgeRecorded } = require('./lib/recyclebin');
 const historyLib = require('./lib/history');
 const tray = require('./tray');
 const updater = require('./updater');
+const watcher = require('./watcher');
 
 // One in-flight job of each kind at a time; a new run supersedes the old one.
 const tokens = { scan: null, dupes: null, trash: null, auto: null };
@@ -31,6 +32,15 @@ async function guard(fn) {
 }
 
 function register() {
+  // Started here rather than in main.js because it is part of the same job as
+  // the handlers below: keeping the renderer's view of the app true. The
+  // scheduled cleanup writes its result from a separate process, and without
+  // this an open window shows whatever was true when it launched.
+  //
+  // The headless run never calls register(), so it never starts a watch it has
+  // no window to notify.
+  watcher.start();
+
   /* ---- folder picker --------------------------------------------------- */
 
   ipcMain.handle('dialog:pickFolder', (event) =>

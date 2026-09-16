@@ -336,3 +336,10 @@ for (const tab of document.querySelectorAll('.tab[data-tab="trends"]')) {
 }
 
 refreshTrends();
+
+// A scheduled run records a fresh disk measurement, so the chart is stale the
+// moment one lands. Same reason the Automatic tab listens.
+api.onDataChanged((payload) => {
+  if (payload && payload.files && !payload.files.includes('history.json')) return;
+  refreshTrends($('trend-volume').value);
+});

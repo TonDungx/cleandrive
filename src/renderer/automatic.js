@@ -596,7 +596,18 @@ $('purge-now').addEventListener('click', async () => {
   }
 });
 
-(async function initAutomatic() {
+/**
+ * Re-read everything this tab draws.
+ *
+ * Needed because the scheduled cleanup runs in a different process. A window
+ * left open overnight would otherwise still be showing yesterday's figures
+ * while the 02:00 run sat in the log unread — the feature working perfectly and
+ * the screen reporting that it had not.
+ *
+ * `silent` skips the unsaved-changes wording: a refresh triggered by a
+ * background write is not the user typing.
+ */
+async function refreshAutoState({ silent = false } = {}) {
   const data = unwrap(await api.getSettings(), 'Settings');
   if (data) applyAutoState(data);
 
@@ -609,4 +620,34 @@ $('purge-now').addEventListener('click', async () => {
 
   await refreshPurgeStatus();
   await refreshMonitorStatus();
-})();
+  return data;
+}
+
+// A run that finished in the background, announced by the main process. The
+// whole point is that an open window notices without being clicked.
+api.onDataChanged(async (payload) => {
+  const before = state.auto && state.auto.lastRun ? state.auto.lastRun.startedAt : 0;
+  const data = await refreshAutoState({ silent: true });
+  if (!data || !data.lastRun || data.lastRun.startedAt === before) return;
+
+  const run = data.lastRun;
+  if (run.manual) return; // the manual path reports its own result already
+
+  toast(
+    run.outcome === 'dry-run'
+      ? `Scheduled report finished: ${formatCount(run.selected.files)} file(s) would be moved.`
+      : run.outcome === 'skipped'
+        ? `Scheduled cleanup skipped: ${run.reason}`
+        : `Scheduled cleanup moved ${formatCount(run.trashed.files)} file(s) to the Recycle Bin.`
+  );
+});
+
+// Cheap belt to the watcher's braces: if the watch ever fails to start, opening
+// the tab still shows current figures.
+for (const tab of document.querySelectorAll('.tab[data-tab="auto"]')) {
+  tab.addEventListener('click', () => {
+    if ($('auto-status').textContent !== 'Unsaved changes.') refreshAutoState({ silent: true });
+  });
+}
+
+refreshAutoState();

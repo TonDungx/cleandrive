@@ -59,6 +59,9 @@ const api = {
   onTrashProgress: (cb) => subscribe('trash:progress', cb),
   onAutoCleanProgress: (cb) => subscribe('autoclean:progress', cb),
   onUpdateState: (cb) => subscribe('update:state', cb),
+
+  /** Fires when a background run rewrites settings, the log or the history. */
+  onDataChanged: (cb) => subscribe('app:data-changed', cb),
 };
 
 function subscribe(channel, cb) {

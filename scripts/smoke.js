@@ -73,28 +73,35 @@ app.whenReady().then(async () => {
     rendererErrors.push(`preload ${file}: ${err.message}`);
   });
 
+  // Declared outside the try so the `finally` can reach it. A harness that
+  // crashes must not cost the tester their settings.
+  //
+  // Everything below writes to the real userData files: a scan records a
+  // history snapshot, the settings sections save a policy, and the
+  // delete-progress section really does move 40 probe files to the Recycle Bin,
+  // which the ledger records. Copies are taken before any of that happens and
+  // put back unconditionally afterwards.
+  const userData = app.getPath('userData');
+  const managed = ['settings.json', 'autoclean-log.json', 'history.json', 'trash-ledger.json'].map((name) => {
+    const file = path.join(userData, name);
+    return { file, backup: fs.existsSync(file) ? fs.readFileSync(file) : null };
+  });
+  const restoreUserData = () => {
+    for (const { file, backup } of managed) {
+      if (backup) fs.writeFileSync(file, backup);
+      else fs.rmSync(file, { force: true });
+    }
+  };
+
   try {
     console.log(`\nTarget: ${TARGET_LABEL}\n`);
 
-    // Everything below writes to the real userData files -- a scan now records
-    // a history snapshot, and the settings tests save a policy. Copies are taken
-    // before the first of those happens and put back at the end, so running the
-    // smoke test leaves the app exactly as it found it.
-    // trash-ledger.json is in the list because the delete-progress section below
-    // really does move 40 probe files to the Recycle Bin, and recording them is
-    // correct app behaviour — but they are this harness's files, and the ledger
-    // is what a later purge reads.
-    const userData = app.getPath('userData');
-    const managed = ['settings.json', 'autoclean-log.json', 'history.json', 'trash-ledger.json'].map((name) => {
-      const file = path.join(userData, name);
-      return { file, backup: fs.existsSync(file) ? fs.readFileSync(file) : null };
-    });
-    const restoreUserData = () => {
-      for (const { file, backup } of managed) {
-        if (backup) fs.writeFileSync(file, backup);
-        else fs.rmSync(file, { force: true });
-      }
-    };
+    // Start from defaults, not from whatever this machine happens to have
+    // configured. The assertions below are about what a fresh install shows,
+    // and they were failing on a developer's own box purely because that
+    // developer had switched automatic cleanup on -- a test whose result
+    // depends on the tester is not a test.
+    for (const { file } of managed) fs.rmSync(file, { force: true });
 
     await win.loadFile(path.join(__dirname, '..', 'src', 'renderer', 'index.html'));
 
@@ -495,6 +502,66 @@ app.whenReady().then(async () => {
       fs.rmSync(path.dirname(autoDir), { recursive: true, force: true });
     }
 
+    /* -- a run that finished in another process ---------------------------- */
+    // The regression this guards: the 02:00 scheduled run fired correctly,
+    // logged its result and exited, while the window that happened to be open
+    // went on displaying the previous evening's figures. The feature worked and
+    // the screen said it had not.
+    console.log('\nBackground run reaches an open window:');
+
+    {
+      const logFile = path.join(userData, 'autoclean-log.json');
+      const before = await win.webContents.executeJavaScript(`({
+        last: document.getElementById('astat-last').textContent,
+        rows: document.querySelectorAll('#auto-history .file-row').length,
+      })`);
+
+      const existing = fs.existsSync(logFile)
+        ? JSON.parse(fs.readFileSync(logFile, 'utf8'))
+        : { version: 1, runs: [] };
+
+      // Two hours back, mirroring the real case: a 02:00 run noticed at 04:00.
+      // Not `Date.now()` -- the tile renders to the minute, so a run in the same
+      // minute as the previous one produces an identical string and the test
+      // cannot tell "did not refresh" from "refreshed to the same text".
+      const at = Date.now() - 2 * 60 * 60 * 1000;
+      existing.runs.unshift({
+        runId: 'smoke-background', startedAt: at, finishedAt: at, dryRun: true,
+        outcome: 'dry-run', reason: 'Would move 7 file(s) to the Recycle Bin',
+        roots: [], manual: false,
+        scanned: { files: 99, bytes: 1024, errors: 0 },
+        selected: { files: 7, bytes: 7168, truncated: false },
+        trashed: { files: 0, bytes: 0, failed: 0 },
+        purged: { files: 0, bytes: 0 },
+        skipped: {}, notes: [],
+      });
+
+      // Written the way the scheduled run writes it: a temp file renamed into
+      // place. A watch on the target path alone would stop firing here.
+      fs.writeFileSync(`${logFile}.tmp`, `${JSON.stringify(existing, null, 2)}\n`, 'utf8');
+      fs.renameSync(`${logFile}.tmp`, logFile);
+
+      await until(win,
+        `document.getElementById('astat-last').textContent !== ${JSON.stringify(before.last)}`,
+        15000);
+
+      const after = await win.webContents.executeJavaScript(`({
+        last: document.getElementById('astat-last').textContent,
+        rows: document.querySelectorAll('#auto-history .file-row').length,
+        result: document.getElementById('auto-result-body').textContent,
+        toast: document.getElementById('toast').hidden ? '' : document.getElementById('toast').textContent,
+      })`);
+
+      console.log(`    "${before.last}" -> "${after.last}"`);
+      check('an open window notices a run that finished elsewhere',
+        after.last !== before.last, `${before.last} / ${after.last}`);
+      check('the run appears in the recent list', after.rows > before.rows,
+        `${before.rows} -> ${after.rows}`);
+      check('and in the result card', /7/.test(after.result));
+      check('the user is told, since they were not watching that tab',
+        /Scheduled report finished/.test(after.toast), after.toast.slice(0, 60));
+    }
+
     /* -- trends ----------------------------------------------------------- */
     // The scan above recorded a snapshot, so there is at least one point.
     console.log('\nTrends:');
@@ -788,9 +855,11 @@ app.whenReady().then(async () => {
     `);
     check('and back on', updateRestore === true);
 
-    // Last thing before the console check, and it has to stay last: every
-    // section above writes to userData, and an earlier restore would simply be
-    // overwritten by whatever ran after it.
+    // Restoring happens in the `finally` below, not here. It used to sit at the
+    // end of the `try`, which meant any assertion that threw — a timeout
+    // waiting on the DOM, say — skipped it entirely and left the tester's own
+    // automatic-cleanup configuration replaced by this harness's. That is how a
+    // test harness destroys the thing it is testing.
     restoreUserData();
     check('the smoke test leaves the real settings as it found them',
       managed.every(({ file, backup }) => fs.existsSync(file) === (backup !== null)),
@@ -802,6 +871,14 @@ app.whenReady().then(async () => {
   } catch (err) {
     failures++;
     console.error('\nSMOKE TEST THREW:', err);
+  } finally {
+    // Unconditional. The whole point is that a crash does not cost the tester
+    // their settings.
+    try {
+      restoreUserData();
+    } catch (err) {
+      console.error('COULD NOT RESTORE userData:', err.message);
+    }
   }
 
   console.log(failures === 0 ? '\nALL PASS\n' : `\n${failures} FAILURE(S)\n`);
