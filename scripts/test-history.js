@@ -10,8 +10,9 @@ const fsp = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
 
-const { History, growth, predictFull, folderTrends, savings, report, CONFIDENCE } =
+const { History, growth, predictFull, folderTrends, savings, report, defaultVolume, CONFIDENCE } =
   require('../src/main/lib/history');
+const { sample, volumeTargets } = require('../src/main/lib/sampler');
 
 let failures = 0;
 function check(label, cond, detail = '') {
@@ -214,6 +215,64 @@ function ramp(days, perDay, startUsed, jitter = 0) {
     check('growth is reported', r.growth.ok === true);
     check('a prediction is reported', r.prediction.ok === true, r.prediction.reason || '');
     check('savings are present even with no events', r.savings.movedBytes === 0 && r.savings.freedBytes === 0);
+  }
+
+  console.log('\nhistory: which volume the chart opens on\n');
+
+  {
+    // The tab used to open on whichever volume sorted first alphabetically. On
+    // the machine this was written for that was C: with a single measurement,
+    // while D: had a series -- so a history with plenty of data reported "one
+    // measurement so far".
+    const h = new History(path.join(dir, 'choice.json'));
+    await h.load();
+
+    const thin = { totalBytes: TOTAL, freeBytes: TOTAL / 2, usedBytes: TOTAL / 2, usedPercent: 50 };
+    await h.addSnapshot({ at: T0, source: 'scan', volumes: { [`C:${SEP}`]: thin } });
+    for (let i = 0; i < 5; i++) {
+      await h.addSnapshot({ at: T0 + (i + 1) * DAY, source: 'daily', volumes: { [`D:${SEP}`]: thin } });
+    }
+
+    const roots = h.volumeRoots();
+    check('both volumes are listed', roots.length === 2, roots.join(', '));
+    check('the most-measured volume is chosen, not the first alphabetically',
+      /^d:/i.test(defaultVolume(h, roots)), String(defaultVolume(h, roots)));
+
+    const r = report(h);
+    check('so the report opens on a series worth plotting', r.series.length === 5, String(r.series.length));
+    check('and an explicit choice still wins', report(h, { volumeRoot: `C:${SEP}` }).series.length === 1);
+  }
+
+  console.log('\nsampler: measurements that do not depend on anyone opening the app\n');
+
+  {
+    const h = new History(path.join(dir, 'sampled.json'));
+    await h.load();
+
+    const first = await sample({ history: h, source: 'launch', extraTargets: [dir] });
+    check('a measurement is taken without a scan', first.ok === true, first.error || '');
+    check('and recorded', first.recorded === true && h.snapshots.length === 1);
+    check('with the source it was taken for', h.snapshots[0].source === 'launch', h.snapshots[0].source);
+    check('and no scan attached, because nothing was scanned', h.snapshots[0].scan === null);
+
+    // Pressing "Measure now" twice must not manufacture a trend: the store
+    // keeps one point per half hour, and the sampler reports when that happened
+    // rather than letting the UI claim a new measurement.
+    const second = await sample({ history: h, source: 'manual', extraTargets: [dir] });
+    check('a second measurement inside half an hour replaces rather than appends',
+      h.snapshots.length === 1, String(h.snapshots.length));
+    check('and says so', second.coalesced === true);
+
+    const targets = volumeTargets({
+      settings: { monitor: { volumes: [`E:${SEP}data`] }, autoClean: { roots: [`F:${SEP}temp`] } },
+      history: h,
+      extraTargets: [dir],
+    });
+    check('the configured monitor volume is measured', targets.includes(`E:${SEP}data`), targets.join(', '));
+    check('so is a cleanup root', targets.includes(`F:${SEP}temp`), targets.join(', '));
+    check('and every volume already in the history, so a series is never abandoned',
+      targets.some((t) => /^[a-z]:/i.test(t)), targets.join(', '));
+    check('nothing empty is passed to statfs', targets.every((t) => typeof t === 'string' && t.trim() !== ''));
   }
 
   console.log('\nhistory: the confidence thresholds are not silently relaxed\n');

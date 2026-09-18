@@ -226,9 +226,39 @@ function buildMenu() {
 /* alerts                                                                      */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * A reading the monitor has already taken is a measurement the trends can use.
+ *
+ * Monitoring polls every minute by default and, until now, threw every reading
+ * away after painting the tray icon -- while the Trends tab a few pixels away
+ * said it had no measurements. The history store collapses anything taken
+ * within half an hour of the last point, so this contributes at most two points
+ * an hour however often the monitor ticks.
+ *
+ * Failures are swallowed on purpose: the disk-alert feature must not stop
+ * working because a history file could not be written.
+ */
+function recordReading() {
+  Promise.resolve()
+    .then(async () => {
+      const { services } = require('./services');
+      const { sample } = require('./lib/sampler');
+      const { history, settings: store } = services();
+      await history.load();
+      await sample({
+        history,
+        settings: await store.get(),
+        source: 'monitor',
+        extraTargets: [app.getPath('userData')],
+      });
+    })
+    .catch(() => {});
+}
+
 function handleEvent(event) {
   if (event.type === 'reading' || event.type === 'snoozed') {
     render();
+    if (event.type === 'reading') recordReading();
     return;
   }
 

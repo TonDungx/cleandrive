@@ -13,12 +13,28 @@ const { runAutoClean } = require('./lib/autoclean');
 const { diskUsage, usageByVolume } = require('./lib/disk');
 const { findUserBins, purgeRecorded } = require('./lib/recyclebin');
 const historyLib = require('./lib/history');
+const { sample, volumeTargets } = require('./lib/sampler');
+const tasks = require('./tasks');
 const tray = require('./tray');
 const updater = require('./updater');
 const watcher = require('./watcher');
 
 // One in-flight job of each kind at a time; a new run supersedes the old one.
 const tokens = { scan: null, dupes: null, trash: null, auto: null };
+
+/**
+ * What the launch-time reconciliation found, held until a window asks.
+ *
+ * The check runs before the renderer has loaded, and its result is the answer
+ * to "why is my schedule not running" -- so it is kept rather than logged and
+ * forgotten. Cleared once the user has been shown it.
+ */
+let lastReconciliation = null;
+
+/** Called by main.js after the launch reconciliation. */
+function noteReconciliation(result) {
+  lastReconciliation = result && (result.changes.length > 0 || result.problems.length > 0) ? result : null;
+}
 
 /** Uniform envelope so the renderer never has to deal with raw exceptions. */
 async function guard(fn) {
@@ -242,17 +258,75 @@ function register() {
   ipcMain.handle('settings:save', (event, next) =>
     guard(async () => {
       const { settings } = await services().settings.patch(next);
-      // The Task Scheduler entry and the tray are both derived state, never a
+      // The Task Scheduler entries and the tray are both derived state, never a
       // second source of truth: whatever the settings say, the OS and the
       // running process are made to match on every save.
-      const sync = await syncScheduler(settings);
+      //
+      // `settingsExisted: true` is not an assumption -- patch() has just
+      // written the file, so the user's intent is on disk by the time this runs.
+      const reconciled = await tasks.reconcile(settings, { settingsExisted: true });
       tray.apply(settings);
       // Without this, switching update checks on in the UI would not start the
       // checker until the next launch -- and switching them off would leave a
       // timer running that the user believes they stopped.
       updater.apply(settings);
       const state = await readState();
-      return { ...state, schedulerError: sync.ok ? null : sync.error || null };
+      return { ...state, reconciled };
+    })
+  );
+
+  /**
+   * The OS's own account of the tasks: last run, next run, and the exit code
+   * of the last run.
+   *
+   * Separate from `settings:get` because it costs a PowerShell call per task
+   * (~1s), and the settings screen refreshes itself whenever a background run
+   * writes a file. The renderer asks for this when the tab is opened or the
+   * Check button is pressed, not on every repaint.
+   */
+  ipcMain.handle('tasks:status', (event, options = {}) =>
+    guard(async () => {
+      const store = services().settings;
+      const settings = await store.load();
+      // `fresh` skips the short cache in front of the PowerShell call. The tab
+      // opening does not need to; the Check button, which the user pressed
+      // precisely to get a current answer, does.
+      return tasks.status(settings, {
+        withOsInfo: true,
+        fresh: options.fresh === true,
+        settingsExisted: store.exists,
+      });
+    })
+  );
+
+  /** Re-check and repair, on demand, and report what changed. */
+  ipcMain.handle('tasks:reconcile', () =>
+    guard(async () => {
+      const store = services().settings;
+      const settings = await store.load();
+      const reconciled = await tasks.reconcile(settings, { settingsExisted: store.exists });
+      return { reconciled, state: await readState() };
+    })
+  );
+
+  /**
+   * Start a registered task now, through Task Scheduler itself.
+   *
+   * This is the button that answers "will it actually run when I am not
+   * looking": the app does not do the work here, Windows starts the same
+   * headless process the schedule would, and the result appears in the run log
+   * the same way. Running the job in-process would prove nothing about the
+   * registration.
+   */
+  ipcMain.handle('tasks:runNow', (event, which = 'cleanup') =>
+    guard(async () => {
+      const taskPath = which === 'sampler' ? scheduler.sampleTaskPath() : scheduler.cleanupTaskPath();
+      if (!(await scheduler.isInstalled(taskPath))) {
+        throw new Error('No task is registered with Windows yet — save the settings first.');
+      }
+      const started = await scheduler.runNow(taskPath);
+      if (!started.ok) throw new Error(started.error || 'Task Scheduler refused to start the task');
+      return { started: true, taskPath };
     })
   );
 
@@ -454,9 +528,56 @@ function register() {
 
   ipcMain.handle('history:get', (event, options = {}) =>
     guard(async () => {
-      const { history } = services();
+      const { history, settings: store } = services();
       await history.load();
-      return historyLib.report(history, { volumeRoot: options.volume });
+      const settings = await store.load();
+
+      // The chart's own answer to "how do I get data in here": what is
+      // measuring the disk, when it last did, and when it will next. Without
+      // this the tab could only say "no measurements yet" and leave the user to
+      // guess what would produce one.
+      const taskStatus = await tasks.status(settings, { withOsInfo: false, settingsExisted: store.exists });
+
+      return {
+        ...historyLib.report(history, { volumeRoot: options.volume }),
+        sampling: {
+          dailySample: settings.trends.dailySample,
+          sampleTime: settings.trends.sampleTime,
+          taskInstalled: taskStatus.sampler.installed,
+          taskVerified: taskStatus.sampler.verified,
+          taskProblems: taskStatus.sampler.problems || [],
+          nextSampleAt: taskStatus.sampler.expectedNextRunAt,
+          supported: taskStatus.supported,
+          monitorRunning: tray.status().running,
+        },
+      };
+    })
+  );
+
+  /**
+   * Measure the disk now.
+   *
+   * The button exists so that "the chart needs measurements" is something the
+   * user can act on immediately rather than a week of waiting. The history
+   * store still collapses two measurements taken within half an hour of each
+   * other, so pressing it repeatedly cannot manufacture a trend -- and the
+   * reply says when that has happened rather than pretending a point was added.
+   */
+  ipcMain.handle('trends:sample', () =>
+    guard(async () => {
+      const { history, settings: store } = services();
+      await history.load();
+      const settings = await store.load();
+
+      const result = await sample({
+        history,
+        settings,
+        source: 'manual',
+        extraTargets: [app.getPath('userData')],
+      });
+      if (!result.ok) throw new Error(result.error || 'The disk could not be measured');
+
+      return { ...result, snapshots: history.snapshots.length };
     })
   );
 
@@ -568,10 +689,15 @@ async function recordSnapshot(result, source) {
     const { history, settings: store } = services();
     await history.load();
 
-    // Watch the scanned volume plus anything the monitor is configured for, so
-    // the series keeps growing even for a drive the user rarely scans.
+    // The scanned volume plus every volume the sampler would take, so a scan
+    // extends the same series the daily measurement is building rather than
+    // starting a parallel one with a different set of drives in it.
     const settings = await store.get();
-    const targets = [result ? result.root : app.getPath('home'), ...settings.monitor.volumes];
+    const targets = volumeTargets({
+      settings,
+      history,
+      extraTargets: result ? [result.root] : [app.getPath('userData')],
+    });
     const volumes = {};
     for (const [key, usage] of await usageByVolume(targets)) volumes[key] = usage;
 
@@ -645,27 +771,37 @@ async function readState() {
   const settings = await store.load();
   await runLog.load();
 
+  // The cheap half of the task status: existence and whether the registered
+  // definition matches, both read from Task Scheduler. The expensive half (the
+  // OS's last/next run times) is a separate call the renderer makes when the
+  // tab is open.
+  const taskStatus = await tasks.status(settings, { withOsInfo: false, settingsExisted: store.exists });
+
+  const reconciliation = lastReconciliation;
+  lastReconciliation = null;
+
   return {
     settings,
     warnings: store.warnings,
+    settingsExisted: store.exists,
+    settingsPath: services().settingsPath,
+    // So the form can put the real floor on its own input rather than letting
+    // the user type 1, save, and be quietly given 5.
+    limits: { minMinutes: store.minMinutes },
+    tasks: taskStatus,
+    // Kept for the tab's existing wiring: the schedule the app itself would
+    // compute, which is all that can be known before a task exists.
     scheduler: {
-      supported: process.platform === 'win32',
-      installed: await scheduler.isInstalled(),
-      nextRunAt: settings.autoClean.enabled
-        ? scheduler.nextRunAt(settings.autoClean.schedule).getTime()
-        : null,
+      supported: taskStatus.supported,
+      installed: taskStatus.cleanup.installed,
+      verified: taskStatus.cleanup.verified,
+      nextRunAt: taskStatus.cleanup.expectedNextRunAt,
+      description: taskStatus.cleanup.description,
     },
+    reconciliation,
     lastRun: runLog.latest(),
     history: runLog.runs.slice(0, 20),
   };
-}
-
-/** Make the OS task match the saved settings, in whichever direction. */
-async function syncScheduler(settings) {
-  if (process.platform !== 'win32') return { ok: false, error: 'Scheduling is Windows-only for now' };
-  return settings.autoClean.enabled
-    ? scheduler.install({ schedule: settings.autoClean.schedule, app })
-    : scheduler.uninstall();
 }
 
 /** The volumes a set of ledger entries came from, so only those bins are opened. */
@@ -742,4 +878,4 @@ function cancelAll() {
   if (tokens.trash) tokens.trash.cancel();
 }
 
-module.exports = { register, cancelAll };
+module.exports = { register, cancelAll, noteReconciliation };

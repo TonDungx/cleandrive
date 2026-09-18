@@ -38,7 +38,15 @@ const DEFAULT_CATEGORIES = ['temp', 'cache', 'crashdump', 'log', 'gpucache'];
  */
 const DEFAULT_SKIP_PROCESSES = ['Code.exe', 'Docker Desktop.exe', 'idea64.exe', 'pycharm64.exe'];
 
-const SCHEDULE_KINDS = ['daily', 'weekly', 'monthly'];
+/**
+ * `minutes` is a fixed interval rather than a wall-clock appointment, and it
+ * exists so the feature can be *proved* rather than believed. "It runs at 02:00
+ * even with the app closed" is a claim nobody can check without staying up, and
+ * one that was wrong here for a fortnight without anything on screen saying so.
+ * A five-minute interval turns that claim into something testable over a cup of
+ * coffee: close the app, wait, reopen it, read the run log.
+ */
+const SCHEDULE_KINDS = ['minutes', 'daily', 'weekly', 'monthly'];
 
 /**
  * 'system' follows the OS and is the default. It is not merely the polite
@@ -49,7 +57,7 @@ const SCHEDULE_KINDS = ['daily', 'weekly', 'monthly'];
 const THEMES = ['system', 'light', 'dark'];
 
 /** The top-level groups `patch` merges one level into. */
-const SECTIONS = ['autoClean', 'purge', 'monitor', 'appearance', 'updates'];
+const SECTIONS = ['autoClean', 'purge', 'monitor', 'appearance', 'updates', 'trends'];
 
 /** Hard ceilings. These are not preferences -- they bound the blast radius. */
 const LIMITS = {
@@ -60,6 +68,10 @@ const LIMITS = {
   // 15s is the floor because the check is a statfs call and costs nothing, but
   // a value of 0 would spin a timer flat out.
   monitorIntervalSeconds: { min: 15, max: 3600, fallback: 60 },
+  // The floor is raised to MIN_MINUTES_PACKAGED in a build people install; see
+  // SettingsStore's `minMinutes`. One minute is for a developer watching it
+  // work, not for somebody's laptop.
+  everyMinutes: { min: 1, max: 1440, fallback: 15 },
   warnPercent: { min: 50, max: 99, fallback: 85 },
   criticalPercent: { min: 51, max: 100, fallback: 95 },
   snoozeMinutes: { min: 5, max: 1440, fallback: 60 },
@@ -69,6 +81,16 @@ const LIMITS = {
   monitorVolumes: 16,
 };
 
+/**
+ * The shortest interval an installed build will accept.
+ *
+ * Each interval run starts a fresh process that scans the configured folders,
+ * so a one-minute interval on a real machine is a scanner running essentially
+ * without pause. That is a fine thing to watch on purpose and a bad thing to
+ * leave switched on, so the installed app declines it and says why.
+ */
+const MIN_MINUTES_PACKAGED = 5;
+
 function defaults() {
   return {
     version: SCHEMA_VERSION,
@@ -77,7 +99,18 @@ function defaults() {
       // Starts in dry-run on purpose. The first scheduled run should tell you
       // what it would have deleted, not tell you what it did.
       dryRun: true,
-      schedule: { kind: 'weekly', time: '02:00', weekday: 0, day: 1 },
+      schedule: {
+        kind: 'weekly',
+        time: '02:00',
+        weekday: 0,
+        day: 1,
+        everyMinutes: LIMITS.everyMinutes.fallback,
+        // Windows' own catch-up for a missed appointment can take ten minutes
+        // after logon and applies only to occurrences it considers missed, so
+        // "does it survive a restart" is not answerable by watching. An
+        // explicit logon trigger makes the answer arrive in two minutes.
+        catchUpAtLogon: false,
+      },
       roots: [],
       whitelist: [],
       categories: [...DEFAULT_CATEGORIES],
@@ -113,6 +146,26 @@ function defaults() {
     },
     appearance: {
       theme: 'system',
+    },
+    trends: {
+      /**
+       * A daily measurement of the disk, taken whether or not anybody opens
+       * the app.
+       *
+       * Without this the Trends tab is a chart of when the user happened to
+       * feel like running a scan, which is not a time series -- and it was
+       * empty in practice, because the only samplers were a manual scan and a
+       * cleanup that most people have switched off. The sampler is its own
+       * Task Scheduler entry rather than part of the cleanup task, so trends
+       * do not require anyone to enable automatic deletion.
+       *
+       * On by default because it costs one short process a day that reads free
+       * space and writes one line of JSON -- a tenth of a second of work
+       * inside about two seconds of Electron startup. It never deletes
+       * anything and it never opens a window.
+       */
+      dailySample: true,
+      sampleTime: '12:00',
     },
     updates: {
       // On by default. This is distributed to people with no support channel,
@@ -244,7 +297,7 @@ function coerceCategories(value, warnings) {
   return out;
 }
 
-function coerceSchedule(value, warnings) {
+function coerceSchedule(value, warnings, minMinutes = 1) {
   const base = defaults().autoClean.schedule;
   if (!isObject(value)) {
     if (value !== undefined) warnings.push('autoClean.schedule: not an object, using defaults');
@@ -273,15 +326,38 @@ function coerceSchedule(value, warnings) {
     day = base.day;
   }
 
-  return { kind, time, weekday, day };
+  // The floor is a build-time policy, not a stored preference, so it is applied
+  // here rather than written into LIMITS: the same settings file read by an
+  // installed app and by a checkout gets the same answer for everything else.
+  const spec = { ...LIMITS.everyMinutes, min: Math.max(LIMITS.everyMinutes.min, minMinutes) };
+  const everyMinutes = clampInt(
+    value.everyMinutes === undefined ? base.everyMinutes : value.everyMinutes,
+    spec,
+    'autoClean.schedule.everyMinutes',
+    // Only worth reporting when this schedule actually uses it.
+    kind === 'minutes' ? warnings : []
+  );
+
+  // Defaults to on for the interval kind, because that kind exists to be
+  // observed and a run that appears within two minutes of logging back in is
+  // the observation. The appointment kinds leave it off: an extra cleanup at
+  // every logon is not what "every Sunday at 02:00" means.
+  const catchUpAtLogon =
+    typeof value.catchUpAtLogon === 'boolean' ? value.catchUpAtLogon : kind === 'minutes';
+
+  return { kind, time, weekday, day, everyMinutes, catchUpAtLogon };
 }
 
 /**
  * Turn arbitrary parsed JSON into a settings object that is safe to act on.
  *
+ * @param {*} raw
+ * @param {object} [options]
+ * @param {number} [options.minMinutes]  floor for an interval schedule; an
+ *   installed build passes MIN_MINUTES_PACKAGED.
  * @returns {{settings: object, warnings: string[]}}
  */
-function coerceSettings(raw) {
+function coerceSettings(raw, { minMinutes = 1 } = {}) {
   const warnings = [];
   const base = defaults();
   if (!isObject(raw)) {
@@ -300,7 +376,7 @@ function coerceSettings(raw) {
   const autoClean = {
     enabled: bool(rawAuto.enabled, base.autoClean.enabled),
     dryRun: bool(rawAuto.dryRun, base.autoClean.dryRun),
-    schedule: coerceSchedule(rawAuto.schedule, warnings),
+    schedule: coerceSchedule(rawAuto.schedule, warnings, minMinutes),
     roots: coercePaths(rawAuto.roots, 'autoClean.roots', warnings, LIMITS.roots),
     whitelist: coercePaths(rawAuto.whitelist, 'autoClean.whitelist', warnings, LIMITS.whitelist),
     categories: coerceCategories(rawAuto.categories, warnings),
@@ -400,6 +476,17 @@ function coerceSettings(raw) {
     lastVersion: typeof rawUpdates.lastVersion === 'string' ? rawUpdates.lastVersion : null,
   };
 
+  const rawTrends = isObject(raw.trends) ? raw.trends : {};
+  const trends = {
+    dailySample: bool(rawTrends.dailySample, base.trends.dailySample),
+    sampleTime: coerceTime(
+      rawTrends.sampleTime === undefined ? base.trends.sampleTime : rawTrends.sampleTime,
+      'trends.sampleTime',
+      warnings,
+      base.trends.sampleTime
+    ),
+  };
+
   return {
     settings: {
       version: SCHEMA_VERSION,
@@ -408,6 +495,7 @@ function coerceSettings(raw) {
       monitor,
       appearance: { theme },
       updates,
+      trends,
     },
     warnings,
   };
@@ -425,10 +513,27 @@ function coerceSettings(raw) {
  * half-written file that the next scheduled run would read as "no policy".
  */
 class SettingsStore {
-  /** @param {string} filePath */
-  constructor(filePath) {
+  /**
+   * @param {string} filePath
+   * @param {object} [options]
+   * @param {number} [options.minMinutes]  floor for an interval schedule
+   */
+  constructor(filePath, { minMinutes = 1 } = {}) {
     this.filePath = path.resolve(filePath);
+    this.minMinutes = minMinutes;
     this.warnings = [];
+    /**
+     * Whether the file was actually there the last time it was read.
+     *
+     * This is not the same question as "are the settings valid", and telling
+     * them apart matters: a missing file yields the defaults, and the defaults
+     * say automatic cleanup is off. Something that reconciles the OS against
+     * the settings would then read "off" as an instruction and delete a
+     * scheduled task the user had configured — which is very close to what
+     * happened here. A missing file means "intent unknown", and the app says so
+     * instead of acting on it.
+     */
+    this.exists = false;
     this._cache = null;
     this._writeChain = Promise.resolve();
   }
@@ -444,9 +549,12 @@ class SettingsStore {
       } else {
         this.warnings = [];
       }
+      this.exists = false;
       this._cache = defaults();
       return this._cache;
     }
+
+    this.exists = true;
 
     let parsed;
     try {
@@ -457,7 +565,7 @@ class SettingsStore {
       return this._cache;
     }
 
-    const { settings, warnings } = coerceSettings(parsed);
+    const { settings, warnings } = coerceSettings(parsed, { minMinutes: this.minMinutes });
     this.warnings = warnings;
     this._cache = settings;
     return settings;
@@ -471,15 +579,33 @@ class SettingsStore {
   /**
    * Validate and persist. Returns the value actually stored, which may differ
    * from the input wherever a value was clamped or dropped.
+   *
+   * Throws if the bytes did not reach the disk. That sounds obvious and it is
+   * the whole point of this method's history: the failure used to be swallowed,
+   * so a save that never happened returned success, the settings screen said
+   * "Saved. Next run Sunday 02:00", and the schedule it described did not
+   * exist. A cleaner that reports a configuration it does not have is worse
+   * than one that refuses to save.
    */
   async save(next) {
-    const { settings, warnings } = coerceSettings(next);
+    const { settings, warnings } = coerceSettings(next, { minMinutes: this.minMinutes });
     this.warnings = warnings;
-    this._cache = settings;
 
-    // Serialise writes: two saves racing on the same temp name would interleave.
-    this._writeChain = this._writeChain.then(() => this._writeAtomic(settings)).catch(() => {});
-    await this._writeChain;
+    // Serialised: two saves racing on the same temp name would interleave. An
+    // earlier save's failure must not fail this one, so the chain is joined on
+    // both settlements -- but *this* write's own failure is re-thrown below.
+    const write = this._writeChain.then(
+      () => this._writeAtomic(settings),
+      () => this._writeAtomic(settings)
+    );
+    this._writeChain = write.catch(() => {});
+    await write;
+
+    // Only after the write: the cache is meant to be what is on disk, and a
+    // failed save that left a new value in memory would have the next patch()
+    // merge on top of something no process could read back.
+    this._cache = settings;
+    this.exists = true;
     return { settings, warnings };
   }
 
@@ -531,6 +657,7 @@ module.exports = {
   SettingsStore,
   coerceSettings,
   defaults,
+  MIN_MINUTES_PACKAGED,
   SCHEMA_VERSION,
   SAFE_CATEGORIES,
   DEFAULT_CATEGORIES,

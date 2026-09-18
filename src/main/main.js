@@ -7,16 +7,25 @@ process.env.UV_THREADPOOL_SIZE = process.env.UV_THREADPOOL_SIZE || '16';
 const path = require('node:path');
 const { app, BrowserWindow, shell, nativeTheme } = require('electron');
 
-const ipc = require('./ipc');
-const tray = require('./tray');
-const updater = require('./updater');
-
 const isDev = process.argv.includes('--dev');
 
 // Task Scheduler starts the same executable with this flag. There is no window
 // in that mode: a cleanup that popped a window open at 02:00 would be worse
 // than no cleanup at all.
 const isScheduledRun = process.argv.includes('--scheduled-run');
+
+// And with this one for the daily disk measurement the Trends tab is drawn
+// from. It is a different mode rather than a second job for the cleanup task,
+// because measuring a disk needs no permission to delete anything.
+const isSampleOnly = process.argv.includes('--sample-only');
+
+// Required lazily, inside the windowed branch. Between them these pull in the
+// scanner, the duplicate finder, the tray and the updater, and the two headless
+// modes need none of it -- the sampler in particular is a ~150ms process and
+// loading a module graph it never calls would be most of its runtime.
+let ipc = null;
+let tray = null;
+let updater = null;
 
 let mainWindow = null;
 
@@ -80,41 +89,55 @@ function createWindow() {
 }
 
 /**
- * Re-register the scheduled task if it points somewhere the app no longer is.
+ * Bring Windows Task Scheduler into line with the settings, at every launch.
  *
  * A Windows scheduled task stores an absolute path to an executable. Copy the
  * app to another machine, install a new version to a different folder, or just
  * move the folder, and the task survives — still pointing at the old location,
- * failing silently every week with nothing on screen to say so. The settings
- * screen would go on cheerfully reporting the next run time.
+ * failing silently every week with nothing on screen to say so.
  *
- * So on every launch the registered command is compared against this build's
- * own, and a mismatch is repaired. This is the one piece of self-healing in the
- * app, and it earns its place: the failure it prevents is invisible.
+ * The check is broader than it used to be, because the narrow version missed
+ * the failure that actually happened: the task was *deleted* while the settings
+ * still said it was on, and nothing noticed for a fortnight. So this compares
+ * existence, the command, and the schedule itself, and anything it changed or
+ * could not fix is handed to the window to display rather than only logged.
+ *
+ * @returns {Promise<object|null>} the reconciliation result, for the renderer
  */
-async function repairScheduledTask(settings) {
-  if (process.platform !== 'win32' || !settings.autoClean.enabled) return;
-
+async function reconcileTasks(settings, { settingsExisted }) {
   try {
-    const scheduler = require('./lib/scheduler');
-    const invocation = scheduler.selfInvocation(app);
-
-    if (!(await scheduler.isInstalled())) {
-      const created = await scheduler.install({ schedule: settings.autoClean.schedule, app });
-      console.log(created.ok
-        ? '[scheduler] task was missing and has been recreated'
-        : `[scheduler] task is missing and could not be created: ${created.error}`);
-      return;
-    }
-
-    if (await scheduler.isStale(invocation)) {
-      const fixed = await scheduler.install({ schedule: settings.autoClean.schedule, app });
-      console.log(fixed.ok
-        ? `[scheduler] task pointed at a different location; repointed to ${invocation.command}`
-        : `[scheduler] task is stale and could not be repaired: ${fixed.error}`);
-    }
+    const result = await require('./tasks').reconcile(settings, { settingsExisted });
+    for (const change of result.changes) console.log(`[tasks] ${change}`);
+    for (const problem of result.problems) console.warn(`[tasks] ${problem}`);
+    return result;
   } catch (err) {
-    console.error('[scheduler] could not be checked:', err.message);
+    console.error('[tasks] could not be checked:', err.message);
+    return null;
+  }
+}
+
+/**
+ * One disk measurement at launch.
+ *
+ * Cheap (a statfs per volume) and it means the trend keeps a pulse even on a
+ * machine where the daily task was switched off — opening the app is itself an
+ * observation of the disk.
+ */
+async function sampleAtLaunch(settings) {
+  try {
+    const { services } = require('./services');
+    const { history } = services();
+    await history.load();
+    const { sample } = require('./lib/sampler');
+    const result = await sample({
+      history,
+      settings,
+      source: 'launch',
+      extraTargets: [app.getPath('userData')],
+    });
+    if (!result.ok) console.warn('[sample] launch measurement skipped:', result.error);
+  } catch (err) {
+    console.error('[sample] launch measurement failed:', err.message);
   }
 }
 
@@ -133,7 +156,25 @@ function revealWindow() {
 // scheduled run's toast is attributed to "electron.exe", or dropped entirely.
 app.setAppUserModelId('com.cleandrive.app');
 
-if (isScheduledRun) {
+if (isSampleOnly) {
+  /*
+   * The measuring mode, and the only part of the app that never waits for
+   * `app.whenReady()`.
+   *
+   * Waiting would start Chromium -- a browser process, a GPU process and a few
+   * tens of megabytes -- in order to call `fs.statfs` a handful of times.
+   * `app.getPath` is available before ready, so this mode does its work on the
+   * Node side alone and exits: 124ms of measured work, inside a process that
+   * lives about two seconds because Electron's binary has to start either way.
+   */
+  require('./sample-only')
+    .runSample()
+    .catch((err) => {
+      console.error('[sample] failed:', err);
+      process.exitCode = 1;
+    })
+    .finally(() => app.exit(process.exitCode || 0));
+} else if (isScheduledRun) {
   /*
    * The scheduled run deliberately does not take the single-instance lock.
    *
@@ -165,6 +206,10 @@ if (isScheduledRun) {
   });
 
   app.whenReady().then(async () => {
+    ipc = require('./ipc');
+    tray = require('./tray');
+    updater = require('./updater');
+
     ipc.register();
     tray.configure({ window: () => mainWindow, open: revealWindow });
 
@@ -173,8 +218,11 @@ if (isScheduledRun) {
     // construction. Monitoring likewise has to come up with the app rather than
     // only when somebody opens the settings screen.
     let settings = null;
+    let settingsExisted = true;
     try {
-      settings = await require('./services').services().settings.load();
+      const store = require('./services').services().settings;
+      settings = await store.load();
+      settingsExisted = store.exists;
       nativeTheme.themeSource = settings.appearance.theme;
     } catch (err) {
       console.error('[settings] could not be read, using defaults:', err);
@@ -188,7 +236,14 @@ if (isScheduledRun) {
       console.error('[monitor] could not start:', err);
     }
 
-    if (settings) await repairScheduledTask(settings);
+    if (settings) {
+      // Both after the window exists, so anything they find can be shown. The
+      // measurement is not awaited alongside the reconciliation because it
+      // writes to the history file the reconciliation never touches.
+      const reconciled = await reconcileTasks(settings, { settingsExisted });
+      if (reconciled) ipc.noteReconciliation(reconciled);
+      await sampleAtLaunch(settings);
+    }
 
     // Deliberately only in the windowed branch. The scheduled run above never
     // reaches this line: a 2am maintenance task that silently replaced the
@@ -214,13 +269,18 @@ if (isScheduledRun) {
     });
   });
 
-  app.on('before-quit', () => tray.beginQuit());
+  // Both guard on the module being loaded: these listeners are registered
+  // before `whenReady` resolves, so a quit during startup would otherwise
+  // reach a null.
+  app.on('before-quit', () => {
+    if (tray) tray.beginQuit();
+  });
 
   app.on('window-all-closed', () => {
-    ipc.cancelAll();
+    if (ipc) ipc.cancelAll();
     // A running tray is the app still doing its job with no window; quitting
     // here would silently switch the alerts off.
-    if (tray.status().running) return;
+    if (tray && tray.status().running) return;
     if (process.platform !== 'darwin') app.quit();
   });
 

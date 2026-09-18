@@ -45,7 +45,10 @@ Its entire view of the system is the thirty-two functions on `window.cleandrive`
 | `runAutoClean({ dryRun })` / `cancelAutoClean()` | run the cleanup now, as a report or for real; a real run raises a native confirmation with the actual figures first |
 | `diskUsage(target)` | free and total bytes for the volume a path sits on |
 | `previewPurge()` / `purgeNow()` | what could be permanently removed from the Recycle Bin, and doing it — behind the bluntest dialog in the app |
+| `taskStatus()` | what Windows Task Scheduler actually holds: the registered definition, whether it matches the settings, and `LastRunTime` / `NextRunTime` / `LastTaskResult` from the OS. One PowerShell process for all tasks at once, asked on demand and cached for 15s, never on a timer |
+| `reconcileTasks()` / `runTaskNow(which)` | re-check and repair the registration, and ask Task Scheduler to start the task now — so "does it run when I am not looking" can be answered without waiting for 02:00 |
 | `getHistory(options)` / `exportHistory(format)` | the trend report, and writing the raw measurements out as JSON or CSV |
+| `sampleNow()` | measure the disk this instant, for a chart that has nothing in it yet |
 | `monitorStatus()` / `monitorCheck()` | what the disk watcher currently sees, and forcing a reading now |
 | `monitorSnooze(minutes)` / `monitorResume()` | silence and un-silence disk alerts |
 | `setTheme(mode)` | persist `system`, `light` or `dark`, and match Electron's native dialogs to it |
@@ -333,12 +336,13 @@ otherwise be guarding the wrong directory entirely.
 | `test-settings.js` | The settings file treated as hostile input: review categories smuggled into the auto-delete list, out-of-range thresholds, relative paths, ambiguous times, corrupt JSON, and concurrent saves |
 | `test-recyclebin.js` | Written from the attacker's side — a forged ledger naming a precious file, a bin item the user deleted themselves, the same path deleted at a different moment, an item still inside the grace period, and one outside the enumerated bins. All must survive |
 | `test-autoclean.js` | The gates that stop an unattended run: verdict, category, age (taking the *later* of atime and mtime), whitelist, path guards, per-run cap, disk threshold, and an open application |
-| `test-scheduler.js [--live]` | Task XML content and next-run arithmetic offline; with `--live`, registers a real task and removes it again |
-| `test-history.js` | Mostly assertions that *no* number is produced: one data point, five days of data, a flat disk, a shrinking disk, a disk too erratic to extrapolate, and a folder scanned only once |
+| `test-scheduler.js [--live]` | Task XML content, the interval repetition, schedule round-tripping and next-run arithmetic offline; with `--live`, registers a real task **under a suffixed name** and removes it again. The suffix is itself asserted: this suite used to run against the real task name and unregister whatever the person running it had configured |
+| `test-history.js` | Mostly assertions that *no* number is produced: one data point, five days of data, a flat disk, a shrinking disk, a disk too erratic to extrapolate, and a folder scanned only once. Plus which volume the chart opens on, and the sampler's half-hour coalescing |
 | `test-monitor.js` | Ten consecutive readings above the threshold must yield one alert, not ten; rounding noise around the threshold must yield none; a level crossed during a snooze must not be announced when the snooze ends. Plus the runtime PNG encoder |
 | `test-scanner.js "C:\path"` | Scans any real folder from the CLI and prints the summary |
 | `test-permission.ps1` | Sets genuine Windows ACLs on throwaway files, then checks `planTrash` classifies each one correctly *without* triggering the shell's admin prompt |
-| `smoke.js` | Boots the real app — real preload, real IPC, real renderer — clicks its own buttons and reads the rendered DOM back out |
+| `smoke.js` | Boots the real app — real preload, real IPC, real renderer — clicks its own buttons and reads the rendered DOM back out. Redirects `userData` to a temp directory and suffixes the task names first, and asserts both: it used to delete and restore the real files, and its settings save unregistered the real Windows task |
+| `verify-schedule.js` | Drives the real Schedule and Trends screens: the interval schedule round-trips to a real settings file, the task card reports what Windows holds, and "Measure now" records a real measurement. Registers nothing — every Task Scheduler call it makes is a query |
 | `verify-trash.js` | Moves one throwaway probe file to the real Recycle Bin and verifies it left the filesystem |
 | `verify-autoclean.js` | The whole chain on real files: an unattended run takes them, they are found in the actual Recycle Bin under their original paths, exactly those are purged, and the free-space figure moves. Shows plainly that moving to the bin freed nothing |
 | `verify-monitor.js` | Starts the real tray against the real disk and prints what it costs in resident memory, so the figure quoted below is measured rather than claimed |
@@ -911,17 +915,113 @@ until it is tried:
   cancelled outright on any night the user happened to have the app open — a
   maintenance task that looks configured and does nothing.
 
-Nothing parses `schtasks` output. That output is localised — on the development
-machine Windows renders times as `9:45 SA` — so existence is taken from the
-process exit code, and everything the UI shows comes from the app's own run log.
+Nothing parses `schtasks` *table* output. That output is localised — on the
+development machine Windows renders times as `9:45 SA` — so existence is taken
+from the process exit code, the registered definition is read from the XML form
+(element names are not translated), and last/next run times come from
+`Get-ScheduledTaskInfo`, whose property names are not translated either.
+
+### The schedule stopped running, and nothing noticed
+
+This is worth recording in full, because the first version of the feature was
+correct and still failed.
+
+A cleanup was configured for 02:00 daily. It ran — there is a `source:
+"scheduled"` measurement in `history.json` timestamped 02:00:34 to prove it.
+Some time later it stopped, and the app went on displaying a next run time for
+weeks. Two separate faults, and the second is the one that mattered:
+
+1. **The project's own test suite destroyed it.** `scripts/smoke.js` deleted the
+   real `settings.json` and `autoclean-log.json` so its assertions would see a
+   fresh install, and saved settings through the real IPC handler — which
+   reconciles Task Scheduler on every save, so saving `enabled: false`
+   *unregistered the Windows task*. Its `finally` restored the JSON files and
+   could not restore the task. `test-scheduler.js --live` had the same problem
+   by a shorter route: it called `uninstall()` on the real task name.
+2. **Nothing verified anything.** The launch-time check compared only the
+   *command* the task launched. A task that had been deleted outright, or left
+   holding an older schedule, passed — or rather, was never asked. The next run
+   time on screen was computed from `settings.json`, so it stayed plausible
+   after the task behind it was gone.
+
+What changed, in order of how much it matters:
+
+- **The tests cannot reach real state.** `smoke.js` redirects `userData` to a
+  temp directory with `app.setPath` — every code path still runs for real, the
+  data lands somewhere disposable — and both harnesses set
+  `CLEANDRIVE_TASK_SUFFIX`, which `scheduler.js` appends to the task names. The
+  suffix is asserted in both suites, because a guard nobody checks is a guard
+  that quietly stops applying.
+- **`verify()` asks Windows.** Existence, the command, *and* the schedule read
+  back out of the registered XML and compared field by field
+  (`sameSchedule`). Reconciliation runs on launch and on every save, and reports
+  what it changed instead of healing silently.
+- **A missing settings file is not read as "off".** The defaults say cleanup is
+  disabled, so acting on them would delete the task of anyone whose settings
+  file vanished — destroying the record of the intent and the mechanism carrying
+  it out in one step. `SettingsStore.exists` distinguishes "configured off" from
+  "not configured", and the second reports the discrepancy rather than resolving
+  it.
+- **A failed save can no longer report success.** `SettingsStore.save()` chained
+  its write through `.catch(() => {})`. A write that failed resolved as though
+  it had worked, and the screen said "Saved. Next run Sunday 02:00" for a
+  schedule that was never written down. The error now reaches the caller.
+- **The Automatic tab shows the OS's own account**: the registered task name,
+  whether it matches the settings, Windows' `LastRunTime` / `NextRunTime`, and
+  the last run's exit code in words — `0x80070002` reads as "the program it
+  launches could not be found — the app has moved", which is the exact silent
+  failure the self-repair exists to catch.
+
+  That comes from the `Schedule.Service` COM object rather than
+  `Get-ScheduledTaskInfo`, and the reason is measured: the cmdlet version took
+  **5.3s for one task and 10.1s for three**, most of it PowerShell autoloading
+  the ScheduledTasks module. The COM object is the same API without the module
+  — **677ms for three tasks, 537ms for one**. Both report non-localised
+  property names; only the speed differs. If COM is unavailable the card still
+  shows everything that comes from `schtasks` and reports the rest as
+  unavailable.
+- **Every scheduled run leaves a trace.** If anything threw before
+  `runLog.append`, the run log kept yesterday's entry and 02:00 left no record
+  at all. A run that could not start is now logged as a run that could not
+  start, with `outcome: 'error'`, and that one does raise a notification.
+
+### Watching it work: an interval schedule
+
+"It runs at 02:00 even with the app closed, and after a restart" is a claim
+nobody can check without staying up, and it was wrong here for a fortnight. So
+the schedule kinds include **every N minutes**, which turns the same claim into
+something testable over a cup of coffee: set five minutes, close the app, wait,
+reopen it and read the run log.
+
+The mechanics are a `<Repetition>` on the daily calendar trigger with an
+`<Interval>` and **no `<Duration>`**, which repeats indefinitely — the shape
+several of Windows' own tasks use (OneDrive's updater,
+`VerifiedPublisherCertStoreCheck`). The daily trigger re-arms at midnight, so
+the interval survives a reboot. Element order inside the trigger is
+`StartBoundary`, `Enabled`, `Repetition`, `ScheduleBy*`: this schema is a
+sequence, and that is the order Windows itself writes when it exports a task.
+
+Two deliberate limits:
+
+- **An installed build will not accept less than five minutes**
+  (`MIN_MINUTES_PACKAGED`), because each run starts a fresh process that scans
+  the configured folders — a one-minute interval on somebody else's laptop is a
+  scanner that never pauses. A checkout allows one minute.
+- **There is no `BootTrigger` anywhere.** The task runs with
+  `InteractiveToken`, which cannot start before anyone has logged on, so a boot
+  trigger would be a trigger that never fires. "Also run a few minutes after you
+  log in" is a `LogonTrigger` with a two-minute delay, on by default for the
+  interval kind and opt-in for the appointment kinds — an extra cleanup at every
+  logon is not what "every Sunday at 02:00" means.
 
 ### Files it writes
 
 | File (under userData) | Contents |
 | --- | --- |
-| `settings.json` | The policy, plus the chosen theme. Plain JSON, hand-editable, and therefore re-validated and clamped on every load; a corrupt file yields defaults rather than an exception, because the alternative is a scheduled task that silently stops running. Saves are **merged per section**, so a screen that submits only the part it owns cannot reset the rest — which the settings form was doing, silently, on every save |
+| `settings.json` | The policy, plus the chosen theme. Plain JSON, hand-editable, and therefore re-validated and clamped on every load; a corrupt file yields defaults rather than an exception, because the alternative is a scheduled task that silently stops running. Saves are **merged per section**, so a screen that submits only the part it owns cannot reset the rest — which the settings form was doing, silently, on every save. A *missing* file is distinguished from a valid one (`store.exists`), because the defaults say "cleanup off" and acting on that would unregister the task of anyone whose settings file vanished |
 | `trash-ledger.json` | What this app moved to the Recycle Bin, and when. Written by manual deletions too — recording is not purging |
-| `autoclean-log.json` | The last 50 runs, as the Automatic tab displays them |
+| `autoclean-log.json` | The last 50 runs, as the Automatic tab displays them — including runs that failed before they started, which used to leave no trace at all |
+| `history.json` | The disk measurements the Trends tab is drawn from, and the moved/freed events |
 
 ### Platform
 
@@ -948,11 +1048,61 @@ time. Per-folder history is kept as well, but a folder is only ever compared
 against earlier snapshots of *the same root*, and a folder scanned once says
 "scanned once" instead of being given a rate of zero.
 
-Snapshots are taken after each completed scan, after each cleanup, and on every
-scheduled run — the last of these being the most reliable sampler the app has,
-because it happens on a timetable whether or not anyone opens the window. A
-cancelled scan is not recorded: its partial totals would put a dip in the series
-that never happened.
+A cancelled scan is not recorded: its partial totals would put a dip in the
+series that never happened.
+
+### Where the measurements come from, and why that had to change
+
+The first version recorded a snapshot after each completed scan, after each
+cleanup, and on every scheduled run. Stated that way it sounds sufficient. In
+practice the chart was empty, and the reason is worth keeping written down: all
+three of those are things a person does when they feel like it. Someone who has
+not switched on automatic cleanup and only scans when the machine feels slow
+produces three points in six hours and then nothing for a week — a record of
+their mood, not of the disk. Worse, the tab gave no hint what would fill it; its
+empty state suggested enabling unattended deletion, which is a poor price for a
+chart and was not even the quickest way to get one.
+
+A trend needs readings on a timetable, so there are now four samplers, all of
+them going through `lib/sampler.js` so there is one definition of what a
+measurement is:
+
+| Sampler | When | Runs with the app closed |
+| --- | --- | --- |
+| `CleanDrive\DiskSample` task (`--sample-only`) | once a day, plus a catch-up after logon | **yes** |
+| App start | every launch | no |
+| Disk monitor tick | each poll, while monitoring is on | no (the monitor is the app) |
+| "Measure now" | when pressed | no |
+
+Plus the existing scan, cleanup and scheduled-run snapshots.
+
+Three decisions inside that:
+
+- **The sampler is its own task, not more work for the cleanup task.** Tying
+  them together would have meant "you may have a chart of your disk once you let
+  the app delete files unattended".
+- **It never starts Chromium.** `--sample-only` does not wait for
+  `app.whenReady()`, because `app.getPath` and `fs.statfs` both work before it:
+  124ms of measured work inside a process that lives about two seconds, all of
+  which is Electron's binary starting. No window, no GPU process, and it deletes
+  nothing.
+- **It measures the drives the app has a reason to know about** — the home
+  volume, the configured cleanup roots, the monitored volumes, and everything
+  already in the history — rather than probing A: to Z:, which would spin up
+  optical and removable media and add a column for a USB stick plugged in once.
+  A volume stays in the set after it leaves the settings, so a series is never
+  abandoned half way along.
+
+The half-hour coalescing rule in `addSnapshot` is what makes the dense samplers
+safe: the monitor can tick every minute and "Measure now" can be pressed
+repeatedly without either manufacturing a trend. Pressing it twice says so
+rather than claiming a new point.
+
+**The chart also used to open on the wrong volume.** `report()` picked the first
+root alphabetically, which on the development machine was `c:\` with a single
+measurement while `d:\` had a series — so a history with plenty of data greeted
+the user with "one measurement so far". It now opens on the most-measured
+volume, ties going to the most recent.
 
 ### Predictions that refuse themselves
 

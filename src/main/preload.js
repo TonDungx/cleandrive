@@ -44,9 +44,15 @@ const api = {
   /* appearance */
   setTheme: (mode) => ipcRenderer.invoke('theme:set', mode),
 
+  /* the Windows tasks behind the schedule */
+  taskStatus: (options) => ipcRenderer.invoke('tasks:status', options),
+  reconcileTasks: () => ipcRenderer.invoke('tasks:reconcile'),
+  runTaskNow: (which) => ipcRenderer.invoke('tasks:runNow', which),
+
   /* trends */
   getHistory: (options) => ipcRenderer.invoke('history:get', options),
   exportHistory: (format) => ipcRenderer.invoke('history:export', format),
+  sampleNow: () => ipcRenderer.invoke('trends:sample'),
 
   /* disk monitoring */
   monitorStatus: () => ipcRenderer.invoke('monitor:status'),

@@ -207,6 +207,36 @@
             <p class="card-note" id="trend-caveat"></p>
           </section>
 
+          <!--
+            Where the numbers come from. The chart was empty for a fortnight and
+            the tab gave no hint what would fill it, because nothing was
+            measuring the disk on a timetable -- snapshots only happened when
+            somebody ran a scan. This card names the samplers and lets the user
+            take a measurement immediately.
+          -->
+          <section class="card">
+            <h2>Where these measurements come from</h2>
+            <p class="card-note">
+              A trend needs readings taken on a timetable, not whenever somebody opens the app.
+              A daily Windows task measures free space even with CleanDrive closed — it reads the
+              drive and writes one line, and deletes nothing.
+            </p>
+            <label class="check check-lead">
+              <input type="checkbox" id="trend-daily" />
+              <span>Measure the disk once a day</span>
+            </label>
+            <label class="field field-row" id="trend-time-row">
+              At
+              <input type="time" id="trend-time" />
+            </label>
+            <ul class="path-list" id="trend-sampling"></ul>
+            <div class="panel-actions panel-actions-tight">
+              <button class="btn btn-sm" id="trend-sample">Measure now</button>
+              <button class="btn btn-sm" id="trend-save">Save measuring settings</button>
+            </div>
+            <p class="card-note" id="trend-sampling-status"></p>
+          </section>
+
           <section class="card">
             <h2>Folders, by how fast they grow</h2>
             <p class="card-note">
@@ -277,10 +307,16 @@
             <label class="field field-row">
               How often
               <select id="auto-kind">
+                <option value="minutes">Every few minutes (for testing)</option>
                 <option value="daily">Every day</option>
                 <option value="weekly">Every week</option>
                 <option value="monthly">Every month</option>
               </select>
+            </label>
+            <label class="field field-row" id="auto-minutes-row" hidden>
+              Every
+              <input type="number" id="auto-minutes" min="1" max="1440" step="1" />
+              minutes
             </label>
             <label class="field field-row" id="auto-weekday-row">
               On
@@ -298,11 +334,38 @@
               On day
               <select id="auto-day"></select>
             </label>
-            <label class="field field-row">
+            <label class="field field-row" id="auto-time-row">
               At
               <input type="time" id="auto-time" />
             </label>
+            <label class="check">
+              <input type="checkbox" id="auto-catchup" />
+              <span>Also run a few minutes after you log in</span>
+            </label>
             <p class="card-note" id="auto-schedule-note"></p>
+          </section>
+
+          <!--
+            The task card. This exists because the app used to report a next run
+            time it had worked out from its own settings file, which stayed on
+            screen, looking healthy, after the Windows task behind it had been
+            deleted. Everything in here is read back from Task Scheduler.
+          -->
+          <section class="card">
+            <h2>Windows task</h2>
+            <p class="card-note">
+              The schedule is a Windows Task Scheduler entry, not a timer inside this app, so it
+              runs with CleanDrive closed and after a restart. Everything below is read back from
+              Windows itself.
+            </p>
+            <ul class="path-list" id="task-facts"></ul>
+            <p class="notice" id="task-problems" hidden></p>
+            <div class="panel-actions panel-actions-tight">
+              <button class="btn btn-sm" id="task-check">Check with Windows</button>
+              <button class="btn btn-sm" id="task-repair">Repair registration</button>
+              <button class="btn btn-sm" id="task-run">Run the task now</button>
+            </div>
+            <p class="card-note" id="task-status">Not checked yet.</p>
           </section>
 
           <section class="card">

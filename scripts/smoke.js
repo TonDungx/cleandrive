@@ -15,11 +15,40 @@ const ipc = require('../src/main/ipc');
 
 // Running `electron scripts/foo.js` does not read the project's package.json,
 // so Electron falls back to the name "Electron" and `getPath('userData')`
-// points at %APPDATA%\Electron -- a different directory from the one the real
-// app uses. A harness that reads and restores settings would then be operating
-// on a directory the app never touches, which is worse than not checking at
-// all. Set the name before anything asks for a path.
+// points at %APPDATA%\Electron. The name is set anyway, and then *checked*
+// below, so this harness still proves the real app resolves the real directory.
 app.setName(require('../package.json').name);
+
+/*
+ * The production userData path, recorded before it is redirected.
+ *
+ * ## Why this harness no longer runs against the real files
+ *
+ * It used to. It took copies of settings.json, autoclean-log.json,
+ * history.json and trash-ledger.json, deleted them so the assertions would see
+ * a fresh install, ran, and put them back in a `finally`.
+ *
+ * That was not enough, and the cost was real: a run interrupted before the
+ * `finally` (Ctrl-C, or the harness being killed) left the tester with this
+ * harness's leftovers in place of their own data, and the settings file simply
+ * gone. Worse, the settings section saves through the real IPC handler, which
+ * reconciles Task Scheduler on every save -- so saving `enabled: false` here
+ * *deleted the Windows task the tester had configured*, and restoring the JSON
+ * afterwards did not bring it back. A 02:00 cleanup on the development machine
+ * stopped running for a fortnight because of exactly this.
+ *
+ * So the app under test is pointed at a throwaway directory instead. Every code
+ * path is still exercised for real -- the same store, the same IPC, the same
+ * writes -- and the task names are suffixed, so nothing this file does can
+ * reach the schedule or the data of whoever is running it.
+ */
+const PRODUCTION_USER_DATA = app.getPath('userData');
+const SANDBOX_USER_DATA = fs.mkdtempSync(path.join(os.tmpdir(), 'cleandrive-smoke-userdata-'));
+app.setPath('userData', SANDBOX_USER_DATA);
+
+// Read by scheduler.js when it derives the task names. Set before ipc.js is
+// required below, because that module requires the scheduler.
+process.env.CLEANDRIVE_TASK_SUFFIX = process.env.CLEANDRIVE_TASK_SUFFIX || 'smoke';
 
 // Which quick-path button to drive: downloads | documents | pictures | ...
 const targetArg = process.argv.find((a, i) => i > 1 && !a.startsWith('-') && !a.endsWith('smoke.js'));
@@ -73,35 +102,38 @@ app.whenReady().then(async () => {
     rendererErrors.push(`preload ${file}: ${err.message}`);
   });
 
-  // Declared outside the try so the `finally` can reach it. A harness that
-  // crashes must not cost the tester their settings.
-  //
-  // Everything below writes to the real userData files: a scan records a
-  // history snapshot, the settings sections save a policy, and the
-  // delete-progress section really does move 40 probe files to the Recycle Bin,
-  // which the ledger records. Copies are taken before any of that happens and
-  // put back unconditionally afterwards.
+  // The app writes to userData throughout: a scan records a history snapshot,
+  // the settings sections save a policy, and the delete-progress section really
+  // does move 40 probe files to the Recycle Bin, which the ledger records. All
+  // of it lands in the sandbox directory this file created, so there is nothing
+  // to back up and nothing to put back.
   const userData = app.getPath('userData');
-  const managed = ['settings.json', 'autoclean-log.json', 'history.json', 'trash-ledger.json'].map((name) => {
-    const file = path.join(userData, name);
-    return { file, backup: fs.existsSync(file) ? fs.readFileSync(file) : null };
-  });
-  const restoreUserData = () => {
-    for (const { file, backup } of managed) {
-      if (backup) fs.writeFileSync(file, backup);
-      else fs.rmSync(file, { force: true });
-    }
-  };
+  const managed = ['settings.json', 'autoclean-log.json', 'history.json', 'trash-ledger.json'].map((name) =>
+    path.join(userData, name)
+  );
 
   try {
     console.log(`\nTarget: ${TARGET_LABEL}\n`);
+
+    console.log('Isolation:');
+    check('the app resolves the production userData directory',
+      /[\\/]cleandrive$/i.test(PRODUCTION_USER_DATA), PRODUCTION_USER_DATA);
+    check('but this harness is pointed somewhere disposable',
+      userData === SANDBOX_USER_DATA && userData !== PRODUCTION_USER_DATA, userData);
+    check('so the tester\'s own settings are not in reach',
+      !managed.some((file) => file.startsWith(PRODUCTION_USER_DATA)));
+    // The settings save below goes through the real IPC handler, which
+    // registers and unregisters Windows tasks. Under a suffix it cannot touch
+    // the entry a real user configured.
+    const { cleanupTaskPath } = require('../src/main/lib/scheduler');
+    check('and neither is their Windows task', /_smoke$/.test(cleanupTaskPath()), cleanupTaskPath());
 
     // Start from defaults, not from whatever this machine happens to have
     // configured. The assertions below are about what a fresh install shows,
     // and they were failing on a developer's own box purely because that
     // developer had switched automatic cleanup on -- a test whose result
     // depends on the tester is not a test.
-    for (const { file } of managed) fs.rmSync(file, { force: true });
+    for (const file of managed) fs.rmSync(file, { force: true });
 
     await win.loadFile(path.join(__dirname, '..', 'src', 'renderer', 'index.html'));
 
@@ -855,15 +887,10 @@ app.whenReady().then(async () => {
     `);
     check('and back on', updateRestore === true);
 
-    // Restoring happens in the `finally` below, not here. It used to sit at the
-    // end of the `try`, which meant any assertion that threw — a timeout
-    // waiting on the DOM, say — skipped it entirely and left the tester's own
-    // automatic-cleanup configuration replaced by this harness's. That is how a
-    // test harness destroys the thing it is testing.
-    restoreUserData();
-    check('the smoke test leaves the real settings as it found them',
-      managed.every(({ file, backup }) => fs.existsSync(file) === (backup !== null)),
-      managed.map(({ file }) => `${path.basename(file)}:${fs.existsSync(file)}`).join(' '));
+    check('the real settings file was never written to',
+      !fs.existsSync(path.join(PRODUCTION_USER_DATA, 'settings.json')) ||
+        !fs.readFileSync(path.join(PRODUCTION_USER_DATA, 'settings.json'), 'utf8').includes('cleandrive-smoke-auto'),
+      'the harness\'s configuration must not appear in the real file');
 
     /* -- console cleanliness --------------------------------------------- */
     console.log('\nConsole:');
@@ -872,12 +899,24 @@ app.whenReady().then(async () => {
     failures++;
     console.error('\nSMOKE TEST THREW:', err);
   } finally {
-    // Unconditional. The whole point is that a crash does not cost the tester
-    // their settings.
+    // Unconditional, and now merely tidy rather than load-bearing: the tester's
+    // data was never in reach, so a failure here costs a temp directory.
+    // Chromium is still holding its own caches open in this directory at this
+    // point, so the removal often cannot finish -- which is a note, not an
+    // error, and the OS clears temp anyway.
     try {
-      restoreUserData();
+      fs.rmSync(SANDBOX_USER_DATA, { recursive: true, force: true });
+    } catch {
+      console.log(`    (left behind, still in use: ${SANDBOX_USER_DATA})`);
+    }
+
+    // The suffixed tasks, if the settings section registered any.
+    try {
+      const { uninstall, cleanupTaskPath, sampleTaskPath } = require('../src/main/lib/scheduler');
+      await uninstall(cleanupTaskPath());
+      await uninstall(sampleTaskPath());
     } catch (err) {
-      console.error('COULD NOT RESTORE userData:', err.message);
+      console.error('could not remove the smoke test\'s Windows tasks:', err.message);
     }
   }
 

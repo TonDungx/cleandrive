@@ -24,6 +24,14 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
 
+// Both set before the scheduler is required and before the child is started,
+// so the harness and the app under test agree on a name that is not the real
+// one. This script used to register, and then unregister, the very task a real
+// user had configured -- the same mistake that cost this project a working
+// 02:00 cleanup. See "The schedule stopped running, and nothing noticed" in the
+// README.
+process.env.CLEANDRIVE_TASK_SUFFIX = process.env.CLEANDRIVE_TASK_SUFFIX || 'verifymove';
+
 const scheduler = require('../src/main/lib/scheduler');
 
 let failures = 0;
@@ -40,7 +48,12 @@ const UNPACKED = path.join(ROOT, 'dist', 'win-unpacked');
 // Somewhere that is not the project, and ideally not the same drive.
 const TARGET = process.argv[2] || path.join('D:', path.sep, 'cleandrive-location-test', 'CleanDrive');
 
-const USER_DATA = path.join(process.env.APPDATA || os.homedir(), 'cleandrive');
+// The child app is a separate packaged process, so it cannot be redirected with
+// `app.setPath` the way the in-process harnesses are. Electron honours
+// Chromium's `--user-data-dir`, which does the same job from the outside: the
+// app under test reads and writes a throwaway directory, and the real
+// settings.json, history.json and run log are never opened.
+const USER_DATA = fs.mkdtempSync(path.join(os.tmpdir(), 'cleandrive-loc-userdata-'));
 const SETTINGS = path.join(USER_DATA, 'settings.json');
 
 (async () => {
@@ -51,7 +64,6 @@ const SETTINGS = path.join(USER_DATA, 'settings.json');
 
   console.log(`\nverify: running the app from ${TARGET}\n`);
 
-  const settingsBackup = fs.existsSync(SETTINGS) ? fs.readFileSync(SETTINGS) : null;
   const scanRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'cleandrive-loc-'));
 
   try {
@@ -101,7 +113,7 @@ const SETTINGS = path.join(USER_DATA, 'settings.json');
 
     // stdio is inherited rather than discarded: the app logs what it did to the
     // task, and a test that cannot see that is guessing.
-    const child = spawn(movedExe, [], { stdio: 'inherit', env });
+    const child = spawn(movedExe, [`--user-data-dir=${USER_DATA}`], { stdio: 'inherit', env });
 
     let started = false;
     child.on('spawn', () => { started = true; });
@@ -126,13 +138,16 @@ const SETTINGS = path.join(USER_DATA, 'settings.json');
     check('and a packaged build passes only the flag, with no project path',
       after !== null && after.args === '--scheduled-run', after ? after.args : 'null');
   } finally {
-    await scheduler.uninstall().catch(() => {});
+    // Only ever the suffixed task and two temp directories: there is nothing of
+    // the tester's to put back.
+    await scheduler.uninstall(scheduler.cleanupTaskPath()).catch(() => {});
+    await scheduler.uninstall(scheduler.sampleTaskPath()).catch(() => {});
     fs.rmSync(path.dirname(TARGET), { recursive: true, force: true });
     fs.rmSync(scanRoot, { recursive: true, force: true });
-    if (settingsBackup) fs.writeFileSync(SETTINGS, settingsBackup);
-    else fs.rmSync(SETTINGS, { force: true });
-    for (const name of ['history.json', 'autoclean-log.json']) {
-      if (!settingsBackup) fs.rmSync(path.join(USER_DATA, name), { force: true });
+    try {
+      fs.rmSync(USER_DATA, { recursive: true, force: true });
+    } catch {
+      console.log(`    (left behind, still in use: ${USER_DATA})`);
     }
   }
 

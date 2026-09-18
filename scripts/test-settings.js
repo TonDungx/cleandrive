@@ -113,6 +113,72 @@ const ABS = (...parts) => path.resolve(`C:${SEP}${parts.join(SEP)}`);
     check('a non-object file yields defaults', settings.autoClean.enabled === false);
   }
 
+  console.log('\nsettings: an interval schedule\n');
+
+  {
+    const { settings } = coerceSettings({ autoClean: { schedule: { kind: 'minutes', everyMinutes: 5 } } });
+    check('an interval kind is accepted', settings.autoClean.schedule.kind === 'minutes');
+    check('and its interval is kept', settings.autoClean.schedule.everyMinutes === 5);
+    // The interval kind exists to be watched working, so the run that proves a
+    // restart did not break it is on by default for that kind only.
+    check('the logon catch-up defaults on for an interval',
+      settings.autoClean.schedule.catchUpAtLogon === true);
+
+    const weekly = coerceSettings({ autoClean: { schedule: { kind: 'weekly' } } });
+    check('and off for an appointment, which is not what "every Sunday" means',
+      weekly.settings.autoClean.schedule.catchUpAtLogon === false);
+
+    const asked = coerceSettings({ autoClean: { schedule: { kind: 'weekly', catchUpAtLogon: true } } });
+    check('but an appointment can opt in', asked.settings.autoClean.schedule.catchUpAtLogon === true);
+  }
+
+  {
+    // The floor is a property of the build: a checkout may loop every minute to
+    // watch it work, an installed copy may not turn a stranger's machine into a
+    // scanner that never stops.
+    const dev = coerceSettings({ autoClean: { schedule: { kind: 'minutes', everyMinutes: 1 } } });
+    check('a one-minute interval is allowed from source', dev.settings.autoClean.schedule.everyMinutes === 1);
+
+    const packaged = coerceSettings(
+      { autoClean: { schedule: { kind: 'minutes', everyMinutes: 1 } } },
+      { minMinutes: 5 }
+    );
+    check('an installed build raises it to the floor',
+      packaged.settings.autoClean.schedule.everyMinutes === 5,
+      String(packaged.settings.autoClean.schedule.everyMinutes));
+    check('and says it did',
+      packaged.warnings.some((w) => w.includes('everyMinutes')), packaged.warnings.join(' | '));
+
+    const silent = coerceSettings(
+      { autoClean: { schedule: { kind: 'weekly', everyMinutes: 1 } } },
+      { minMinutes: 5 }
+    );
+    check('a clamp nobody asked about is not reported',
+      !silent.warnings.some((w) => w.includes('everyMinutes')), silent.warnings.join(' | '));
+
+    const absurd = coerceSettings({ autoClean: { schedule: { kind: 'minutes', everyMinutes: 99999 } } });
+    check('an interval longer than a day is clamped to a day',
+      absurd.settings.autoClean.schedule.everyMinutes === LIMITS.everyMinutes.max);
+  }
+
+  console.log('\nsettings: the daily disk measurement\n');
+
+  {
+    check('measuring is on out of the box', defaults().trends.dailySample === true);
+
+    const { settings } = coerceSettings({ trends: { dailySample: false, sampleTime: '6:30' } });
+    check('it can be switched off', settings.trends.dailySample === false);
+    check('and its time is normalised', settings.trends.sampleTime === '06:30');
+
+    const bad = coerceSettings({ trends: { sampleTime: 'lunchtime' } });
+    check('an unreadable time falls back rather than scheduling at a guess',
+      bad.settings.trends.sampleTime === '12:00', bad.settings.trends.sampleTime);
+    check('and says so', bad.warnings.some((w) => w.includes('trends.sampleTime')), bad.warnings.join(' | '));
+
+    const notAnObject = coerceSettings({ trends: 'yes please' });
+    check('trends given as a string does not throw', notAnObject.settings.trends.dailySample === true);
+  }
+
   {
     const { settings } = coerceSettings({ purge: { afterDays: 0 } });
     check('a zero-day grace period is clamped up', settings.purge.afterDays === LIMITS.purgeAfterDays.min);
@@ -208,6 +274,42 @@ const ABS = (...parts) => path.resolve(`C:${SEP}${parts.join(SEP)}`);
     const notAnObject = coerceSettings({ appearance: 'dark' });
     check('appearance given as a string does not throw',
       notAnObject.settings.appearance.theme === 'system');
+  }
+
+  console.log('\nsettings: a save that did not happen must not report success\n');
+
+  {
+    // The failure this guards against is the one that made a configured
+    // schedule vanish: the write error was swallowed, save() resolved, and the
+    // screen said "Saved. Next run Sunday 02:00" for a schedule that was never
+    // written down.
+    const store = new SettingsStore(path.join(dir, 'unwritable', 'settings.json'));
+    await store.load();
+    check('a file that is not there reads as absent', store.exists === false);
+
+    // A directory where the file should be: the rename cannot succeed.
+    await fsp.mkdir(path.join(dir, 'unwritable', 'settings.json'), { recursive: true });
+
+    let threw = null;
+    try {
+      await store.save(defaults());
+    } catch (err) {
+      threw = err;
+    }
+    check('a save that could not be written throws', threw !== null, threw ? threw.code || threw.message : 'resolved');
+    check('and does not claim the file now exists', store.exists === false);
+
+    await fsp.rm(path.join(dir, 'unwritable'), { recursive: true, force: true });
+  }
+
+  {
+    const store = new SettingsStore(path.join(dir, 'fresh', 'settings.json'));
+    await store.load();
+    check('a fresh store reports no file', store.exists === false);
+    await store.save(defaults());
+    check('and reports one after a successful save', store.exists === true);
+    await store.load();
+    check('which survives a re-read', store.exists === true);
   }
 
   {

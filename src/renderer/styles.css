@@ -1408,6 +1408,31 @@ main {
   white-space: nowrap;
 }
 
+/*
+ * A fact read back from somewhere else -- Task Scheduler, mostly.
+ *
+ * It gets the larger share of the row and is allowed to wrap, because some of
+ * these values are a sentence rather than a figure: "the program it launches
+ * could not be found -- the app has moved" is the most important thing this app
+ * can tell someone whose schedule stopped working, and ellipsising it at the
+ * halfway mark would hide the half that matters.
+ */
+.pair-value {
+  flex: 2 1 auto;
+  min-width: 0;
+  text-align: right;
+  color: var(--text);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+.pair-value.is-name {
+  font-family: var(--font-mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .pair-moved {
   min-width: 92px;
   text-align: right;

@@ -55,9 +55,13 @@ function renderChart(host, series, thresholds) {
   if (series.length < 2) {
     const note = document.createElement('div');
     note.className = 'chart-empty';
+    // Names the thing to press. The old wording ("run a scan, or switch on
+    // automatic cleanup") asked the user to enable unattended deletion in order
+    // to see a chart, which was both a poor trade and not even the quickest way.
     note.textContent =
       series.length === 0
-        ? 'No measurements yet. Run a scan, or switch on automatic cleanup, and the disk is recorded each time.'
+        ? 'No measurements of this volume yet. “Measure now” below takes one immediately, and the ' +
+          'daily measurement keeps taking them whether or not the app is open.'
         : 'One measurement so far. A second one, on a different day, is what makes a line.';
     host.append(note);
     return;
@@ -237,6 +241,123 @@ function renderSavings(savings) {
   list.append(total);
 }
 
+/* ---- where the measurements come from ----------------------------------- */
+
+function samplingRow(label, value, title) {
+  const row = document.createElement('li');
+  row.className = 'pair-row';
+
+  const left = document.createElement('span');
+  left.className = 'pair-label';
+  left.textContent = label;
+
+  const right = document.createElement('span');
+  right.className = 'pair-value';
+  right.textContent = value;
+  if (title) right.title = title;
+
+  row.append(left, right);
+  return row;
+}
+
+/**
+ * The samplers, named.
+ *
+ * This is the answer to the question the tab could not previously answer: what
+ * puts numbers in this chart. Four things do, and the user can see which of
+ * them are actually running rather than inferring it from an empty chart.
+ */
+function renderSampling(report) {
+  const sampling = report.sampling;
+  const list = $('trend-sampling');
+  list.replaceChildren();
+
+  if (!sampling) return;
+
+  $('trend-daily').checked = sampling.dailySample;
+  $('trend-time').value = sampling.sampleTime;
+  $('trend-time-row').hidden = !sampling.dailySample;
+
+  list.append(samplingRow(
+    'Daily Windows task',
+    !sampling.supported
+      ? 'Windows only'
+      : sampling.dailySample
+        ? (sampling.taskInstalled
+            ? (sampling.taskVerified ? `registered, runs at ${sampling.sampleTime}` : 'registered but does not match')
+            : 'switched on but not registered — save below')
+        : 'off',
+    sampling.taskProblems.length > 0 ? sampling.taskProblems.join(' ') : 'Runs with CleanDrive closed'
+  ));
+
+  list.append(samplingRow(
+    'Next automatic measurement',
+    sampling.nextSampleAt ? formatWhen(sampling.nextSampleAt) : 'none scheduled'
+  ));
+
+  list.append(samplingRow('When the app starts', 'always', 'One measurement per launch'));
+
+  list.append(samplingRow(
+    'While disk monitoring runs',
+    sampling.monitorRunning ? 'on, at most one every 30 minutes' : 'off',
+    'Readings the monitor already takes are recorded instead of discarded'
+  ));
+
+  list.append(samplingRow(
+    'When you run a scan',
+    'always',
+    'A scan also records the folder size, which is what the folder list below compares'
+  ));
+
+  const latest = report.latest;
+  $('trend-sampling-status').textContent = latest
+    ? `Last measurement ${formatWhen(latest.at)}. Two measurements make a line; the growth figure ` +
+      'needs four across at least a week.'
+    : 'No measurement on file yet.';
+}
+
+$('trend-sample').addEventListener('click', async () => {
+  $('trend-sampling-status').textContent = 'Measuring…';
+  const result = unwrap(await api.sampleNow(), 'Measure disk');
+  if (!result) return;
+
+  await refreshTrends($('trend-volume').value);
+
+  toast(
+    result.coalesced
+      ? 'Measured, but it replaced a reading less than half an hour old — the series only keeps ' +
+        'one point per half hour, so repeat presses cannot manufacture a trend.'
+      : `Measured ${Object.keys(result.volumes).length} volume(s). ${formatCount(result.snapshots)} on file.`
+  );
+});
+
+$('trend-daily').addEventListener('change', () => {
+  $('trend-time-row').hidden = !$('trend-daily').checked;
+  $('trend-sampling-status').textContent = 'Unsaved changes to the measuring settings.';
+});
+
+$('trend-time').addEventListener('change', () => {
+  $('trend-sampling-status').textContent = 'Unsaved changes to the measuring settings.';
+});
+
+$('trend-save').addEventListener('click', async () => {
+  $('trend-sampling-status').textContent = 'Saving…';
+  const data = unwrap(
+    await api.saveSettings({
+      trends: { dailySample: $('trend-daily').checked, sampleTime: $('trend-time').value || '12:00' },
+    }),
+    'Save settings'
+  );
+  if (!data) return;
+
+  await refreshTrends($('trend-volume').value);
+
+  const problems = data.reconciled ? data.reconciled.problems : [];
+  if (problems.length > 0) toast(`Saved, but the measuring task is not right: ${problems.join(' ')}`, true);
+  else if (data.settings.trends.dailySample) toast('Saved. Windows will measure the disk daily.');
+  else toast('Saved. The daily measurement is off and its Windows task was removed.');
+});
+
 /* ---- assembly ----------------------------------------------------------- */
 
 function applyTrends(report) {
@@ -305,6 +426,7 @@ function applyTrends(report) {
   }
   $('trend-caveat').textContent = caveat.join(' ');
 
+  renderSampling(report);
   renderFolderTrends(report.folders);
   renderSavings(report.savings);
 

@@ -4,7 +4,7 @@ const { app, Notification } = require('electron');
 
 const { services } = require('./services');
 const { runAutoClean } = require('./lib/autoclean');
-const { usageByVolume } = require('./lib/disk');
+const { sample } = require('./lib/sampler');
 const { formatBytes } = require('./lib/util');
 
 /**
@@ -14,47 +14,115 @@ const { formatBytes } = require('./lib/util');
  * exits. There is deliberately no tray icon and no resident timer: a background
  * process that must stay alive to be useful is one the user will eventually
  * close, and the cleanup would then stop happening without ever saying so.
+ *
+ * ## Every run leaves a trace
+ *
+ * It used to be possible for this process to fail and leave nothing behind. If
+ * anything threw before `runLog.append`, the log kept yesterday's entry, the
+ * Automatic tab showed yesterday's figures, and the only record that 02:00 had
+ * happened at all was a number in Task Scheduler that the app never read. For
+ * an app whose entire promise is not overstating what it did, "it ran and I
+ * cannot tell you what happened" is the worst available outcome.
+ *
+ * So the run log is written on every path through this file, including the
+ * failing ones, and a run that could not start is recorded as a run that could
+ * not start.
  */
 
 async function runScheduled() {
   const { settings: store, ledger, runLog, history } = services();
+  const startedAt = Date.now();
 
-  const settings = await store.load();
-  await ledger.load();
-  await runLog.load();
-  await history.load();
+  let settings = null;
+  let run = null;
 
-  if (store.warnings.length > 0) {
-    console.warn('[scheduled] settings warnings:', store.warnings.join('; '));
+  try {
+    settings = await store.load();
+    await ledger.load();
+    await runLog.load();
+    await history.load();
+
+    if (store.warnings.length > 0) {
+      console.warn('[scheduled] settings warnings:', store.warnings.join('; '));
+    }
+
+    if (!store.exists) {
+      // Worth its own entry rather than the generic "switched off". The task is
+      // registered, so somebody configured this; the file recording *what* they
+      // configured is not there, and that is a fact the Automatic tab should be
+      // able to show them.
+      run = failedRun(
+        startedAt,
+        'No settings file was found, so there was no configuration to act on.',
+        'skipped'
+      );
+      run.notes.push(`Expected at ${services().settingsPath}`);
+    } else {
+      run = await runAutoClean({ settings, ledger });
+      run.warnings = store.warnings;
+    }
+  } catch (err) {
+    console.error('[scheduled] run failed:', err);
+    run = failedRun(startedAt, err && err.message ? err.message : String(err), 'error');
+    process.exitCode = 1;
   }
 
-  const run = await runAutoClean({ settings, ledger });
-  run.warnings = store.warnings;
-  await runLog.append(run);
+  // Outside the try: a failure to record the failure is still worth reporting,
+  // but it must not replace the original one.
+  try {
+    await runLog.append(run);
+  } catch (err) {
+    console.error('[scheduled] the run log could not be written:', err.message);
+    process.exitCode = 1;
+  }
 
-  // A scheduled run is the most reliable sampler the app has: it happens on a
-  // timetable, whether or not anyone opens the window. Even a run that deleted
-  // nothing is a dated measurement of the disk, and those are what the trends
-  // are fitted through.
+  // A scheduled run is a dated measurement of the disk whatever else it did --
+  // even one that deleted nothing, even one that failed. Those are the points
+  // the trends are fitted through, so it is recorded on every path too.
   await recordHistory(history, settings, run);
 
   console.log(`[scheduled] ${run.outcome}${run.reason ? `: ${run.reason}` : ''}`);
 
-  if (settings.autoClean.notify) notify(run);
+  if (!settings || settings.autoClean.notify) notify(run);
 
   // Give the OS a moment to actually present the toast before the process that
   // owns it disappears; a notification from a dead process is dropped.
   return new Promise((resolve) => setTimeout(resolve, run.outcome === 'skipped' ? 0 : 2500));
 }
 
+/**
+ * A run that never got as far as looking at a file, in the same shape as one
+ * that did — so the log, the tab and the history do not each need a special
+ * case for it.
+ */
+function failedRun(startedAt, reason, outcome) {
+  return {
+    runId: `run-${startedAt.toString(36)}`,
+    startedAt,
+    finishedAt: Date.now(),
+    dryRun: false,
+    roots: [],
+    outcome,
+    reason,
+    scanned: { files: 0, bytes: 0, errors: 0 },
+    selected: { files: 0, bytes: 0, truncated: false },
+    trashed: { files: 0, bytes: 0, failed: 0 },
+    purged: { files: 0, bytes: 0 },
+    diskBefore: null,
+    diskAfter: null,
+    skipped: { category: 0, tooRecent: 0, whitelisted: 0, guarded: 0 },
+    notes: [],
+  };
+}
+
 async function recordHistory(history, settings, run) {
   try {
-    const targets = [...settings.autoClean.roots, ...settings.monitor.volumes];
-    const volumes = {};
-    for (const [key, usage] of await usageByVolume(targets.length > 0 ? targets : [process.cwd()])) {
-      volumes[key] = usage;
-    }
-    await history.addSnapshot({ volumes, source: 'scheduled', scan: null });
+    await sample({
+      history,
+      settings,
+      source: 'scheduled',
+      extraTargets: [app.getPath('userData')],
+    });
 
     if (run.trashed.bytes > 0 || run.purged.bytes > 0) {
       await history.addEvent({
@@ -81,7 +149,12 @@ function notify(run) {
   let title;
   let body;
 
-  if (run.outcome === 'skipped') {
+  if (run.outcome === 'error') {
+    // The one skipped-shaped outcome that does interrupt. A cleanup that could
+    // not run is exactly the thing the user has no other way of finding out.
+    title = 'CleanDrive: the scheduled run failed';
+    body = `${run.reason} Open CleanDrive to see the run log.`;
+  } else if (run.outcome === 'skipped') {
     // Nothing happened and nothing is wrong; do not interrupt for that.
     return;
   } else if (run.outcome === 'dry-run') {
@@ -107,4 +180,4 @@ function notify(run) {
   toast.show();
 }
 
-module.exports = { runScheduled };
+module.exports = { runScheduled, failedRun };

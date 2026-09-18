@@ -94,7 +94,9 @@ class History {
    * @param {object}  snapshot
    * @param {object}  snapshot.volumes  { volumeRoot: {totalBytes, freeBytes, usedBytes, usedPercent} }
    * @param {object}  [snapshot.scan]   { root, totalBytes, totalFiles, byCategory, topFolders }
-   * @param {string}  [snapshot.source] 'scan' | 'scheduled' | 'launch'
+   * @param {string}  [snapshot.source] where the measurement came from:
+   *   'daily' (the sampling task), 'launch', 'monitor', 'manual', 'scan',
+   *   'scheduled', 'cleanup' or 'purge'
    */
   async addSnapshot(snapshot) {
     await this.ensureLoaded();
@@ -473,10 +475,37 @@ function savings(history, { since = 0 } = {}) {
   };
 }
 
+/**
+ * Which volume the chart opens on when the user has not picked one.
+ *
+ * Alphabetical order was the obvious rule and the wrong one. On the machine
+ * this was written for it opened on `c:\` -- which had been measured once --
+ * while `d:\` had a series worth plotting, so the tab's first impression was
+ * "one measurement so far" on a history that had several. The most-measured
+ * volume is chosen instead, and ties go to the one measured most recently.
+ */
+function defaultVolume(history, roots) {
+  let best = null;
+  for (const root of roots) {
+    const series = history.volumeSeries(root);
+    if (series.length === 0) continue;
+    const candidate = { root, count: series.length, latest: series[series.length - 1].at };
+    if (
+      !best ||
+      candidate.count > best.count ||
+      (candidate.count === best.count && candidate.latest > best.latest)
+    ) {
+      best = candidate;
+    }
+  }
+  return best ? best.root : roots[0] || null;
+}
+
 /** Everything the Trends tab draws, in one object. */
 function report(history, { volumeRoot } = {}) {
   const roots = history.volumeRoots();
-  const chosen = volumeRoot && roots.includes(pathKey(volumeRoot)) ? pathKey(volumeRoot) : roots[0] || null;
+  const chosen =
+    volumeRoot && roots.includes(pathKey(volumeRoot)) ? pathKey(volumeRoot) : defaultVolume(history, roots);
   const series = chosen ? history.volumeSeries(chosen) : [];
 
   return {
@@ -500,6 +529,7 @@ module.exports = {
   folderTrends,
   savings,
   report,
+  defaultVolume,
   CONFIDENCE,
   MIN_SNAPSHOT_GAP_MS,
   MAX_SNAPSHOTS,

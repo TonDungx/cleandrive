@@ -144,6 +144,8 @@ function readAutoForm() {
         time: $('auto-time').value || '02:00',
         weekday: Number($('auto-weekday').value),
         day: Number($('auto-day').value),
+        everyMinutes: Number($('auto-minutes').value),
+        catchUpAtLogon: $('auto-catchup').checked,
       },
       roots: state.autoLists.roots,
       whitelist: state.autoLists.whitelist,
@@ -180,6 +182,13 @@ function applyAutoState(data) {
   $('auto-weekday').value = String(auto.schedule.weekday);
   $('auto-day').value = String(auto.schedule.day);
   $('auto-time').value = auto.schedule.time;
+  $('auto-minutes').value = String(auto.schedule.everyMinutes);
+  $('auto-catchup').checked = auto.schedule.catchUpAtLogon;
+
+  // An installed build will not accept an interval below five minutes, so the
+  // input says so instead of accepting a 1 and silently storing a 5.
+  const minMinutes = data.limits ? data.limits.minMinutes : 1;
+  $('auto-minutes').min = String(minMinutes);
   $('auto-age').value = String(auto.minAgeDays);
   $('auto-threshold').value = String(auto.minDiskUsedPercent);
   $('auto-max').value = String(auto.maxItemsPerRun);
@@ -212,23 +221,41 @@ function applyAutoState(data) {
   $('astat-last').title = data.lastRun ? `${formatWhen(data.lastRun.startedAt)} — ${data.lastRun.reason || data.lastRun.outcome}` : '';
 
   // A schedule that is switched on but has no task behind it would silently
-  // never run, which is the failure this whole feature exists to avoid.
-  if (!data.scheduler.supported) {
+  // never run, which is the failure this whole feature exists to avoid. Each
+  // branch below is a real state this app has been found in.
+  const cleanup = data.tasks ? data.tasks.cleanup : null;
+
+  if (data.tasks && !data.tasks.supported) {
     showNotice('auto-unsupported',
       'Scheduling is implemented for Windows only. Everything here can still be run by hand.');
-  } else if (auto.enabled && !data.scheduler.installed) {
+  } else if (cleanup && cleanup.orphaned) {
+    showNotice('auto-unsupported',
+      'A CleanDrive task is registered with Windows but this app has no saved settings, so it ' +
+      'would run and find nothing configured. Save your configuration to repair it.');
+  } else if (auto.enabled && cleanup && !cleanup.installed) {
     showNotice('auto-unsupported',
       'Automatic cleanup is switched on but no Windows task is registered — it will not run. ' +
-      'Save the settings again to create it.');
+      'Press “Repair registration”, or save the settings again, to create it.');
+  } else if (auto.enabled && cleanup && !cleanup.verified) {
+    showNotice('auto-unsupported',
+      `The registered Windows task does not match these settings: ${cleanup.problems.join(' ')}`);
   } else {
     $('auto-unsupported').hidden = true;
   }
 
-  if (data.warnings && data.warnings.length > 0) {
-    showNotice('auto-warnings', `Settings were adjusted on load: ${data.warnings.join(' · ')}`);
-  } else {
-    $('auto-warnings').hidden = true;
+  // What the launch-time check had to put right, or could not. Worth saying
+  // out loud: this is the answer to "why did my schedule stop running".
+  const notes = [];
+  if (data.reconciliation) {
+    notes.push(...data.reconciliation.changes, ...data.reconciliation.problems);
   }
+  if (data.warnings && data.warnings.length > 0) {
+    notes.push(`Settings were adjusted on load: ${data.warnings.join(' · ')}`);
+  }
+  if (notes.length > 0) showNotice('auto-warnings', notes.join(' · '));
+  else $('auto-warnings').hidden = true;
+
+  renderTaskFacts(data.tasks, null);
 
   renderRunResult(data.lastRun);
   renderRunHistory(data.history || []);
@@ -244,7 +271,10 @@ function describeSchedule(auto) {
   if (!auto.enabled) return 'Automatic cleanup is off.';
 
   let when;
-  if (auto.schedule.kind === 'daily') {
+  if (auto.schedule.kind === 'minutes') {
+    const every = auto.schedule.everyMinutes;
+    when = every === 1 ? 'every minute' : `every ${every} minutes`;
+  } else if (auto.schedule.kind === 'daily') {
     when = `every day at ${auto.schedule.time}`;
   } else if (auto.schedule.kind === 'weekly') {
     when = `every ${WEEKDAY_NAMES[auto.schedule.weekday]} at ${auto.schedule.time}`;
@@ -261,11 +291,198 @@ function syncScheduleRows() {
   const kind = $('auto-kind').value;
   $('auto-weekday-row').hidden = kind !== 'weekly';
   $('auto-day-row').hidden = kind !== 'monthly';
-  $('auto-schedule-note').textContent =
-    kind === 'monthly'
-      ? 'Days run to 28 only, so a monthly cleanup fires in February too.'
-      : 'A run missed because the PC was off happens at the next opportunity.';
+  $('auto-minutes-row').hidden = kind !== 'minutes';
+  // An interval repeats from midnight, so a start time would be a control that
+  // changes nothing -- hide it rather than leave it there looking meaningful.
+  $('auto-time-row').hidden = kind === 'minutes';
+
+  if (kind === 'minutes') {
+    $('auto-schedule-note').textContent =
+      'For testing that the schedule really is a Windows task: it keeps running with CleanDrive ' +
+      'closed and after a restart. Each run is a real cleanup with your settings, so leave it in ' +
+      'report-only mode unless you mean it.';
+  } else if (kind === 'monthly') {
+    $('auto-schedule-note').textContent =
+      'Days run to 28 only, so a monthly cleanup fires in February too.';
+  } else {
+    $('auto-schedule-note').textContent =
+      'A run missed because the PC was off happens at the next opportunity.';
+  }
 }
+
+/* ---- the Windows task --------------------------------------------------- */
+
+function factRow(label, value, title, { name = false } = {}) {
+  const row = document.createElement('li');
+  row.className = 'pair-row';
+
+  const left = document.createElement('span');
+  left.className = 'pair-label';
+  left.textContent = label;
+
+  const right = document.createElement('span');
+  // `is-name` is monospaced and truncates; the default wraps, because some of
+  // these values are a whole sentence about why a run failed.
+  right.className = name ? 'pair-value is-name' : 'pair-value';
+  right.textContent = value;
+  if (title) right.title = title;
+
+  row.append(left, right);
+  return row;
+}
+
+/**
+ * What Windows holds, as opposed to what this app intends.
+ *
+ * `osInfo` is the expensive half (a PowerShell call per task) and arrives
+ * separately; until it does, the rows that need it say so rather than showing a
+ * time the app worked out for itself. That distinction is the entire point of
+ * this card: the previous version of this screen could not tell "Windows ran it
+ * at 02:00:34 and it exited 0" from "the settings file says it should have".
+ */
+function renderTaskFacts(status, osInfo) {
+  const list = $('task-facts');
+  list.replaceChildren();
+
+  if (!status) {
+    list.append(factRow('Registration', 'not checked yet'));
+    return;
+  }
+
+  if (!status.supported) {
+    list.append(factRow('Registration', 'Windows only'));
+    return;
+  }
+
+  const cleanup = status.cleanup;
+  const os = osInfo || cleanup.os;
+
+  list.append(factRow(
+    'Registered task',
+    cleanup.installed ? `\\${cleanup.taskPath}` : 'none',
+    cleanup.installed ? 'Visible in Task Scheduler under this name' : '',
+    { name: true }
+  ));
+
+  list.append(factRow(
+    'Matches these settings',
+    cleanup.installed ? (cleanup.verified ? 'yes' : 'no') : '–',
+    cleanup.problems && cleanup.problems.length > 0 ? cleanup.problems.join(' ') : ''
+  ));
+
+  // Two rows, never one. The first version showed a single "Windows holds" row
+  // that fell back to the app's own schedule when nothing was registered --
+  // which is the precise confusion this card was built to remove: the screen
+  // presenting an intention as though the OS had confirmed it.
+  list.append(factRow('These settings ask for', cleanup.description));
+  list.append(factRow(
+    'Windows holds',
+    cleanup.registered ? describeRegistered(cleanup.registered) : 'nothing — no task is registered'
+  ));
+
+  if (os && os.error) {
+    // Only the error. "Windows says last run: never" for a task Windows has
+    // never heard of would be a fact about nothing, dressed as a reading.
+    list.append(factRow('Could not ask Windows', os.error));
+  } else if (os) {
+    list.append(factRow('Windows says last run', os.lastRunAt ? formatWhen(os.lastRunAt) : 'never'));
+    list.append(factRow('Windows says next run', os.nextRunAt ? formatWhen(os.nextRunAt) : 'none scheduled'));
+    list.append(factRow(
+      'Result of that run',
+      status.cleanup.osResult || '–',
+      os.lastResult === null || os.lastResult === undefined
+        ? ''
+        : `Task Scheduler code ${os.lastResult}`
+    ));
+    if (os.missedRuns) list.append(factRow('Runs missed', String(os.missedRuns)));
+    if (os.state) list.append(factRow('Task state', os.state));
+  } else {
+    list.append(factRow('Windows says last run', 'press “Check with Windows”'));
+  }
+
+  list.append(factRow(
+    'Daily disk measurement',
+    status.sampler.installed
+      ? (status.sampler.verified ? `registered, ${status.sampler.description}` : 'registered but does not match')
+      : (status.sampler.wanted ? 'wanted but not registered' : 'off'),
+    'Used by the Trends tab; deletes nothing'
+  ));
+
+  const problems = [
+    ...(cleanup.problems || []),
+    ...(status.sampler.problems || []),
+  ];
+  if (problems.length > 0) showNotice('task-problems', problems.join(' '));
+  else $('task-problems').hidden = true;
+}
+
+/** One line for a schedule read back out of the registered task. */
+function describeRegistered(registered) {
+  let when;
+  if (registered.kind === 'minutes') {
+    when = registered.everyMinutes === 1
+      ? 'a run every minute'
+      : `a run every ${registered.everyMinutes} minutes`;
+  } else if (registered.kind === 'daily') {
+    when = `a daily run at ${registered.time}`;
+  } else if (registered.kind === 'monthly') {
+    when = `a monthly run on day ${registered.day} at ${registered.time}`;
+  } else {
+    when = `a weekly run on ${WEEKDAY_NAMES[registered.weekday]} at ${registered.time}`;
+  }
+  return registered.catchUpAtLogon ? `${when}, plus one after logging in` : when;
+}
+
+/** Ask Windows directly. Slow enough (~1s per task) to be a deliberate act. */
+async function refreshTaskStatus({ quiet = false, fresh = false } = {}) {
+  if (!quiet) $('task-status').textContent = 'Asking Windows…';
+  const status = unwrap(await api.taskStatus({ fresh }), 'Windows task');
+  if (!status) {
+    $('task-status').textContent = 'Windows could not be asked.';
+    return null;
+  }
+
+  renderTaskFacts(status, status.cleanup.os);
+  $('task-status').textContent = status.supported
+    ? (status.cleanup.installed
+        ? (status.cleanup.verified
+            ? 'Windows holds exactly what these settings describe.'
+            : 'Windows holds something other than these settings.')
+        : 'Windows has no CleanDrive cleanup task registered.')
+    : 'Scheduling is Windows only.';
+  return status;
+}
+
+$('task-check').addEventListener('click', () => refreshTaskStatus({ fresh: true }));
+
+$('task-repair').addEventListener('click', async () => {
+  $('task-status').textContent = 'Re-registering…';
+  const result = unwrap(await api.reconcileTasks(), 'Windows task');
+  if (!result) return;
+
+  applyAutoState(result.state);
+  await refreshTaskStatus({ quiet: true });
+
+  const { changes, problems } = result.reconciled;
+  if (problems.length > 0) toast(problems.join(' '), true);
+  else if (changes.length > 0) toast(changes.join(' '));
+  else toast('Nothing needed changing — Windows already matches these settings.');
+});
+
+$('task-run').addEventListener('click', async () => {
+  $('task-status').textContent = 'Asking Task Scheduler to start the task…';
+  const started = unwrap(await api.runTaskNow('cleanup'), 'Run task');
+  if (!started) {
+    $('task-status').textContent = 'The task could not be started.';
+    return;
+  }
+  // Deliberately not awaited: the run is a separate process and the result
+  // arrives through the file watcher, exactly as a 02:00 run would. Waiting
+  // here would prove less than letting the normal path report it.
+  $('task-status').textContent =
+    'Windows has started the task. Its result appears below when the run finishes, the same way ' +
+    'a scheduled run does.';
+});
 
 /* ---- results ------------------------------------------------------------ */
 
@@ -462,6 +679,7 @@ async function refreshPurgeStatus() {
 
 for (const id of [
   'auto-enabled', 'auto-dryrun', 'auto-kind', 'auto-weekday', 'auto-day', 'auto-time',
+  'auto-minutes', 'auto-catchup',
   'auto-age', 'auto-threshold', 'auto-max', 'purge-enabled', 'purge-days',
   'monitor-enabled', 'monitor-close-to-tray', 'monitor-warn', 'monitor-critical',
   'monitor-interval', 'monitor-snooze',
@@ -500,20 +718,41 @@ $('auto-skip-input').addEventListener('keydown', (event) => {
 
 $('auto-save').addEventListener('click', async () => {
   $('auto-status').textContent = 'Saving…';
-  const data = unwrap(await api.saveSettings(readAutoForm()), 'Save settings');
-  if (!data) return;
+
+  // Read before saving, so the reply can be compared against what was asked
+  // for. The settings layer refuses some combinations -- switching the cleanup
+  // on with no folders listed is the common one -- and a save that quietly
+  // returns "off" after the user ticked "on" must not be reported as "Saved".
+  const requested = readAutoForm();
+  const data = unwrap(await api.saveSettings(requested), 'Save settings');
+  if (!data) {
+    $('auto-status').textContent = 'Nothing was saved.';
+    return;
+  }
 
   applyAutoState(data);
   await refreshPurgeStatus();
   await refreshMonitorStatus();
 
-  if (data.schedulerError) {
-    toast(`Saved, but Windows Task Scheduler refused the task: ${data.schedulerError}`, true);
-  } else if (data.settings.autoClean.enabled) {
-    toast(`Saved. Next run ${formatWhen(data.scheduler.nextRunAt)}.`);
+  const saved = data.settings.autoClean;
+  const problems = data.reconciled ? data.reconciled.problems : [];
+
+  if (requested.autoClean.enabled && !saved.enabled) {
+    toast(
+      'Saved, but automatic cleanup was left off: ' +
+        (data.warnings.join(' ') || 'the configuration is not runnable as it stands.'),
+      true
+    );
+  } else if (problems.length > 0) {
+    toast(`Saved, but the Windows task is not right: ${problems.join(' ')}`, true);
+  } else if (saved.enabled) {
+    toast(`Saved and registered with Windows. Next run ${formatWhen(data.scheduler.nextRunAt)}.`);
   } else {
-    toast('Saved. Automatic cleanup is off and the Windows task was removed.');
+    toast('Saved. Automatic cleanup is off and its Windows task was removed.');
   }
+
+  // The OS's own view, after a save that just rewrote it.
+  await refreshTaskStatus({ quiet: true });
 });
 
 function setAutoRunning(running) {
@@ -647,6 +886,10 @@ api.onDataChanged(async (payload) => {
 for (const tab of document.querySelectorAll('.tab[data-tab="auto"]')) {
   tab.addEventListener('click', () => {
     if ($('auto-status').textContent !== 'Unsaved changes.') refreshAutoState({ silent: true });
+    // Opening the tab is the moment to spend a second asking Windows what it
+    // actually holds. Not on every refresh: the file watcher can fire this tab
+    // several times during one background run.
+    refreshTaskStatus({ quiet: true });
   });
 }
 

@@ -3,7 +3,7 @@
 const path = require('node:path');
 const { app } = require('electron');
 
-const { SettingsStore } = require('./lib/settings');
+const { SettingsStore, MIN_MINUTES_PACKAGED } = require('./lib/settings');
 const { TrashLedger } = require('./lib/ledger');
 const { RunLog } = require('./lib/autoclean');
 const { History } = require('./lib/history');
@@ -29,7 +29,13 @@ function services() {
     ledgerPath: path.join(dir, 'trash-ledger.json'),
     runLogPath: path.join(dir, 'autoclean-log.json'),
     historyPath: path.join(dir, 'history.json'),
-    settings: new SettingsStore(path.join(dir, 'settings.json')),
+    // The interval floor is a property of the build, not of the file: a
+    // checkout may schedule a one-minute loop to watch it work, an installed
+    // copy may not. Passed in here so every process in the app -- window,
+    // scheduled run, sampler -- reads the same file with the same rules.
+    settings: new SettingsStore(path.join(dir, 'settings.json'), {
+      minMinutes: app.isPackaged ? MIN_MINUTES_PACKAGED : 1,
+    }),
     ledger: new TrashLedger(path.join(dir, 'trash-ledger.json')),
     runLog: new RunLog(path.join(dir, 'autoclean-log.json')),
     history: new History(path.join(dir, 'history.json')),
