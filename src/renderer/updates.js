@@ -9,9 +9,12 @@
  * are up to date" is spending prime screen space on the least interesting fact
  * about itself.
  *
- * Nothing installs on its own. The sequence is check, then download, then
- * restart, each on a click — the same rule the rest of the app follows about
- * deleting files, applied to replacing itself.
+ * The update downloads by itself and asks once, plainly, before installing.
+ * The first version made this three clicks — check, download, restart — on the
+ * grounds that replacing the binary should follow the same rule as deleting a
+ * file. That was the wrong line: downloading costs bandwidth, installing is
+ * what changes the app. So the only button that ever needs pressing is the one
+ * that installs.
  */
 
 state.update = null;
@@ -37,13 +40,16 @@ function describeUpdate(s) {
     case 'checking':
       return 'Asking the release page whether there is a newer version.';
     case 'available':
-      return `Version ${s.version} is available. You are on ${s.currentVersion}.` +
-        (s.signed ? '' : ' This build is not code-signed, so the only check on the ' +
-          'download is that it came from the release server over HTTPS.');
+      return `Version ${s.version} found. Downloading it now — you will be asked before ` +
+        'anything is installed.';
     case 'downloading':
-      return `Downloading version ${s.version} — ${Math.round(s.progress)}%.`;
+      return `Downloading version ${s.version} — ${Math.round(s.progress)}%. ` +
+        'Nothing is installed until you say so.';
     case 'ready':
-      return `Version ${s.version} is downloaded. It installs when you restart.`;
+      return `Version ${s.version} is downloaded and ready. Installing takes a few seconds ` +
+        'and the app reopens by itself.' +
+        (s.signed ? '' : ' This build is not code-signed, so the only check on the download ' +
+          'is that it came from the release server over HTTPS.');
     case 'error':
       return `Could not check: ${s.error}`;
     default:
@@ -72,9 +78,14 @@ function applyUpdateState(next) {
   $('update-progress').hidden = !downloading;
   if (downloading) $('update-bar').style.width = `${Math.round(next.progress)}%`;
 
-  $('update-check').disabled = !next.supported || next.checking || downloading;
+  $('update-check').disabled = !next.supported || next.checking || downloading ||
+    next.status === 'available';
+  // The download runs on its own, so the only button that ever needs pressing
+  // is the one that installs. "Download" stays as a manual fallback for the
+  // case where the automatic fetch failed and left it merely available.
   $('update-download').hidden = next.status !== 'available';
   $('update-install').hidden = next.status !== 'ready';
+  $('update-install').textContent = `Install ${next.version || ''} and restart`.trim();
 
   /* ---- the top bar pill ------------------------------------------------- */
 
@@ -89,14 +100,15 @@ function applyUpdateState(next) {
   pill.classList.toggle('is-busy', next.status === 'downloading');
 
   if (next.status === 'available') {
-    pill.textContent = `Update to ${next.version}`;
-    pill.title = 'Download the new version';
+    pill.textContent = `Downloading ${next.version}…`;
+    pill.title = 'Fetching the update; you will be asked before it installs';
+    pill.classList.add('is-busy');
   } else if (next.status === 'downloading') {
     pill.textContent = `Downloading ${Math.round(next.progress)}%`;
     pill.title = '';
   } else {
-    pill.textContent = `Restart to install ${next.version}`;
-    pill.title = 'Restart CleanDrive to finish updating';
+    pill.textContent = `Install ${next.version}`;
+    pill.title = 'Install the update and restart — takes a few seconds';
   }
 }
 
@@ -126,11 +138,9 @@ $('update-install').addEventListener('click', async () => {
   if (result && result.cancelled) toast('The update will install next time you restart.');
 });
 
-$('update-pill').addEventListener('click', async () => {
+$('update-pill').addEventListener('click', () => {
   const s = state.update;
-  if (!s) return;
-  if (s.status === 'available') $('update-download').click();
-  else if (s.status === 'ready') $('update-install').click();
+  if (s && s.status === 'ready') $('update-install').click();
 });
 
 // The main process pushes every state change, so a download that finishes while
@@ -138,5 +148,14 @@ $('update-pill').addEventListener('click', async () => {
 api.onUpdateState(applyUpdateState);
 
 (async function initUpdates() {
-  applyUpdateState(unwrap(await api.updateState(), 'Updates'));
+  const first = unwrap(await api.updateState(), 'Updates');
+  applyUpdateState(first);
+
+  // The last step of a sequence the user started. An update that finishes in
+  // silence leaves them wondering whether it worked -- which is exactly the
+  // complaint that produced this rewrite.
+  if (first && first.justUpdated) {
+    toast(`CleanDrive updated to ${first.currentVersion}, from ${first.justUpdated}.`);
+    await api.acknowledgeUpdate();
+  }
 })();

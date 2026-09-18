@@ -57,6 +57,48 @@ app.whenReady().then(async () => {
       updater.install().ok === false);
   }
 
+  /* ---- 1b. where the line between fetching and installing sits ----------- */
+  // The first version made the user click three times: check, download,
+  // restart. That was the wrong line -- downloading costs bandwidth, installing
+  // is what changes the app. These assert the corrected policy.
+  {
+    const { autoUpdater } = require('electron-updater');
+    check('an update is fetched without being asked for', autoUpdater.autoDownload === true);
+    check('a declined update still installs on the next real quit',
+      autoUpdater.autoInstallOnAppQuit === true);
+  }
+
+  /* ---- 1c. saying so afterwards ------------------------------------------ */
+  // An update that finishes in silence leaves people unsure it worked.
+  {
+    const fsp = require('node:fs/promises');
+    const { SettingsStore } = require('../src/main/lib/settings');
+    const tmp = await fsp.mkdtemp(path.join(os.tmpdir(), 'cleandrive-ver-'));
+    const store = new SettingsStore(path.join(tmp, 'settings.json'));
+
+    await store.load();
+    await updater.noteVersion(store);
+    check('a first run records the version without claiming an update',
+      updater.snapshot().justUpdated === null);
+    check('and the version is remembered',
+      (await store.get()).updates.lastVersion === app.getVersion(),
+      String((await store.get()).updates.lastVersion));
+
+    await store.patch({ updates: { lastVersion: '0.0.1' } });
+    await updater.noteVersion(store);
+    check('a run after an update reports what it came from',
+      updater.snapshot().justUpdated === '0.0.1', String(updater.snapshot().justUpdated));
+
+    updater.acknowledgeUpdate();
+    check('and the notice clears once shown', updater.snapshot().justUpdated === null);
+
+    await updater.noteVersion(store);
+    check('the same launch is not reported as an update twice',
+      updater.snapshot().justUpdated === null);
+
+    await fsp.rm(tmp, { recursive: true, force: true });
+  }
+
   /* ---- 2. the scheduled run must never reach it -------------------------- */
   // Read from the source rather than asserted about behaviour: the guarantee is
   // structural, and a test that only ran the happy path would not notice the

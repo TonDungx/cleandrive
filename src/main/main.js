@@ -195,6 +195,10 @@ if (isScheduledRun) {
     // application binary is not something anyone asked for, and a headless
     // process has no window in which to ask.
     if (settings) {
+      // Before apply(), so the "you have just updated" notice is ready by the
+      // time the window asks for it.
+      await updater.noteVersion(require('./services').services().settings);
+
       updater.apply(settings, {
         onEvent: (payload) => {
           if (mainWindow && !mainWindow.isDestroyed()) {

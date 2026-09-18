@@ -39,6 +39,7 @@ const api = {
   checkForUpdate: () => ipcRenderer.invoke('update:check'),
   downloadUpdate: () => ipcRenderer.invoke('update:download'),
   installUpdate: () => ipcRenderer.invoke('update:install'),
+  acknowledgeUpdate: () => ipcRenderer.invoke('update:acknowledge'),
 
   /* appearance */
   setTheme: (mode) => ipcRenderer.invoke('theme:set', mode),

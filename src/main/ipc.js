@@ -443,31 +443,12 @@ function register() {
 
   ipcMain.handle('update:download', () => guard(async () => updater.download()));
 
-  ipcMain.handle('update:install', (event) =>
-    guard(async () => {
-      const win = BrowserWindow.fromWebContents(event.sender);
-      const snapshot = updater.snapshot();
+  ipcMain.handle('update:install', () => guard(async () => updater.install()));
 
-      const { response } = await dialog.showMessageBox(win, {
-        type: 'question',
-        buttons: ['Restart and install', 'Not now'],
-        defaultId: 0,
-        cancelId: 1,
-        title: 'Install update',
-        message: `Restart CleanDrive to install version ${snapshot.version}?`,
-        detail:
-          'The app closes, the installer runs, and CleanDrive reopens. Any scan or ' +
-          'cleanup in progress is stopped first.' +
-          (snapshot.signed
-            ? ''
-            : '\n\nThis build is not code-signed, so the only check on the download is ' +
-              'that it came from the release server over HTTPS.'),
-      });
-
-      if (response !== 0) return { ok: false, cancelled: true };
-      return updater.install();
-    })
-  );
+  ipcMain.handle('update:acknowledge', () => guard(async () => {
+    updater.acknowledgeUpdate();
+    return updater.snapshot();
+  }));
 
   /* ---- trends ----------------------------------------------------------- */
 

@@ -120,6 +120,10 @@ function defaults() {
       // thing in the app that contacts the internet, so it is switchable and
       // the UI says what it does.
       enabled: true,
+      // The version running last time the app started. When it differs from the
+      // current one, an update has just been applied and the app says so --
+      // an update that finishes in silence leaves people unsure it worked.
+      lastVersion: null,
     },
   };
 }
@@ -391,7 +395,10 @@ function coerceSettings(raw) {
   }
 
   const rawUpdates = isObject(raw.updates) ? raw.updates : {};
-  const updates = { enabled: bool(rawUpdates.enabled, base.updates.enabled) };
+  const updates = {
+    enabled: bool(rawUpdates.enabled, base.updates.enabled),
+    lastVersion: typeof rawUpdates.lastVersion === 'string' ? rawUpdates.lastVersion : null,
+  };
 
   return {
     settings: {

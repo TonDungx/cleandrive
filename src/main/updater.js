@@ -1,30 +1,34 @@
 'use strict';
 
-const { app, autoUpdater: _unused } = require('electron');
+const { app, dialog, BrowserWindow, Notification } = require('electron');
 
 /**
- * Checking for a new version.
+ * Checking for, fetching and installing a new version.
  *
- * This is the first thing in the app that talks to the internet, and that is a
- * real change rather than a detail. Until now the README could say "no network
- * access of any kind" and mean it: a tool that deletes your files and never
- * phones home is easier to trust than one that does. So the feature is built to
- * give up as little of that as possible.
+ * This is the only thing in the app that talks to the internet, and that is a
+ * real change rather than a detail. Until this existed the README could say "no
+ * network access of any kind" and mean it: a tool that deletes your files and
+ * never phones home is easier to trust. So it contacts exactly one host, the
+ * release feed, sends nothing but the request needed to fetch it, can be
+ * switched off entirely, and is never run by the scheduled cleanup — a 2am
+ * maintenance task that replaced the application binary is not something
+ * anybody asked for, and a headless process has no window in which to ask.
  *
- *   - It contacts exactly one host, the release feed, and sends nothing but the
- *     HTTP request needed to fetch it. No identifiers, no usage data, no
- *     telemetry of any kind.
- *   - It can be switched off, and then nothing is contacted at all.
- *   - It is never run by the scheduled cleanup. A 2am maintenance task that
- *     silently replaced the application binary is not a thing anyone asked for,
- *     and the headless process has no window in which to ask.
- *   - It downloads on request and installs on request. Nothing is replaced
- *     while the user is in the middle of something, which is the same rule the
- *     rest of the app follows about deleting files.
+ * ## Where the line is drawn, and where it was drawn wrong first
  *
- * Without code signing there is no cryptographic proof of who built an update:
- * the only protection is that the feed is fetched over HTTPS from the release
- * host. `state.signed` reports whether that is the case so the UI can say so
+ * The first version of this made the user click three times: check, then
+ * download, then restart. The reasoning was that replacing the binary should
+ * follow the same rule as deleting a file — nothing without a click. That was
+ * the wrong line. Downloading costs bandwidth and some disk; it does not change
+ * the application or touch anything the user owns. *Installing* is the step
+ * that matters.
+ *
+ * So the update now downloads by itself and asks once, plainly, before it
+ * installs — and the answer is remembered for the session, so declining does
+ * not produce a prompt every six hours.
+ *
+ * Without code signing there is no cryptographic proof of who built an update.
+ * The only protection is HTTPS to the release host, and the prompt says so
  * rather than implying a guarantee that is not there.
  */
 
@@ -32,18 +36,22 @@ let updater = null;
 let listeners = new Set();
 let timer = null;
 
+/** Versions already offered in this session, so declining is not re-asked. */
+const declined = new Set();
+let prompting = false;
+
 const state = {
   supported: false,
   enabled: false,
   checking: false,
   status: 'idle', // idle | checking | available | downloading | ready | error | unsupported
   version: null,
-  notes: null,
   progress: 0,
   error: null,
   checkedAt: 0,
   currentVersion: app.getVersion(),
   signed: false,
+  justUpdated: null, // the version updated *from*, on the first run afterwards
 };
 
 /** How often a long-running window re-checks. Updates are not urgent. */
@@ -76,9 +84,14 @@ function load() {
 
   const { autoUpdater } = require('electron-updater');
 
-  // Both off: the point of this module is that the user decides.
-  autoUpdater.autoDownload = false;
-  autoUpdater.autoInstallOnAppQuit = false;
+  // Fetch without asking; install only on a yes. See the note above about
+  // where the line belongs.
+  autoUpdater.autoDownload = true;
+
+  // If the prompt is declined, the update still goes on the next real quit
+  // rather than being downloaded again and again and never applied.
+  autoUpdater.autoInstallOnAppQuit = true;
+
   autoUpdater.logger = null;
 
   autoUpdater.on('checking-for-update', () => {
@@ -92,7 +105,6 @@ function load() {
     state.status = 'available';
     state.checking = false;
     state.version = info.version;
-    state.notes = typeof info.releaseNotes === 'string' ? info.releaseNotes : null;
     state.checkedAt = Date.now();
     emit();
   });
@@ -116,6 +128,7 @@ function load() {
     state.progress = 100;
     state.version = info.version;
     emit();
+    promptToInstall().catch(() => {});
   });
 
   autoUpdater.on('error', (err) => {
@@ -139,6 +152,52 @@ function load() {
 }
 
 /* -------------------------------------------------------------------------- */
+/* the prompt                                                                  */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Ask once, when the download is already in hand.
+ *
+ * Asking at this point rather than before downloading is what makes the answer
+ * cheap: yes means a restart, not a wait. Declining is remembered for the
+ * session, and `autoInstallOnAppQuit` applies it the next time the app closes
+ * properly, so "not now" is not a synonym for "never".
+ */
+async function promptToInstall() {
+  if (prompting || state.status !== 'ready') return;
+  if (declined.has(state.version)) return;
+
+  const win = BrowserWindow.getAllWindows().find((w) => !w.isDestroyed());
+  if (!win) return; // nothing on screen to attach a dialog to
+
+  prompting = true;
+  try {
+    const { response } = await dialog.showMessageBox(win, {
+      type: 'info',
+      buttons: ['Restart and install', 'Not now'],
+      defaultId: 0,
+      cancelId: 1,
+      title: 'Update ready',
+      message: `CleanDrive ${state.version} is ready to install.`,
+      detail:
+        `You are on ${state.currentVersion}. The update is already downloaded — installing ` +
+        'takes a few seconds and the app reopens by itself.' +
+        '\n\nWindows will ask for permission, because CleanDrive is installed for all users.' +
+        (state.signed
+          ? ''
+          : '\n\nThis build is not code-signed, so the only check on the download is that it ' +
+            'came from the release server over HTTPS.') +
+        '\n\nChoosing "Not now" installs it the next time you quit CleanDrive.',
+    });
+
+    if (response === 0) install();
+    else declined.add(state.version);
+  } finally {
+    prompting = false;
+  }
+}
+
+/* -------------------------------------------------------------------------- */
 /* public API                                                                  */
 /* -------------------------------------------------------------------------- */
 
@@ -151,7 +210,7 @@ function apply(settings, { onEvent } = {}) {
 
   state.enabled = Boolean(settings.updates && settings.updates.enabled);
   state.supported = app.isPackaged;
-  state.signed = false; // set true only when a signed build is detected below
+  state.signed = false; // no certificate is configured; see the README
 
   if (timer) {
     clearInterval(timer);
@@ -181,6 +240,39 @@ function apply(settings, { onEvent } = {}) {
   return state;
 }
 
+/**
+ * Notice that this launch follows an update, and say so.
+ *
+ * The version last seen is kept in settings. When it differs from the running
+ * one, the app has just been replaced — and telling the user that is the last
+ * step of the sequence they started. An update that finishes in silence leaves
+ * them wondering whether it worked.
+ */
+async function noteVersion(store) {
+  try {
+    const settings = await store.get();
+    const previous = settings.updates.lastVersion || null;
+    const current = app.getVersion();
+
+    if (previous && previous !== current) {
+      state.justUpdated = previous;
+      emit();
+
+      if (Notification.isSupported()) {
+        new Notification({
+          title: 'CleanDrive updated',
+          body: `Now on version ${current}, up from ${previous}.`,
+          silent: true,
+        }).show();
+      }
+    }
+
+    if (previous !== current) await store.patch({ updates: { lastVersion: current } });
+  } catch (err) {
+    console.error('[updater] could not record the version:', err.message);
+  }
+}
+
 async function check({ manual = false } = {}) {
   if (!app.isPackaged) {
     state.status = 'unsupported';
@@ -207,6 +299,7 @@ async function check({ manual = false } = {}) {
   return { ...state };
 }
 
+/** Kept for the manual button; the automatic path downloads by itself. */
 async function download() {
   if (state.status !== 'available') return { ...state };
   try {
@@ -224,19 +317,38 @@ async function download() {
  *
  * `isSilent: false` on purpose — the installer shows its progress, so a user
  * who did not expect a restart can see what is happening rather than watching
- * the app vanish.
+ * the app vanish for twenty seconds.
  */
 function install() {
-  if (state.status !== 'ready') return { ok: false, error: 'No update has been downloaded' };
+  if (state.status !== 'ready') return { ok: false, error: 'No update has been downloaded yet' };
+
   // The tray keeps the process alive after the window closes; quitting for an
   // update has to go through the same path as a real quit.
-  require('./tray').beginQuit();
-  load().quitAndInstall(false, true);
-  return { ok: true };
+  try {
+    require('./tray').beginQuit();
+  } catch {
+    // Tray not in play; nothing to stand down.
+  }
+
+  try {
+    load().quitAndInstall(false, true);
+    return { ok: true };
+  } catch (err) {
+    state.status = 'error';
+    state.error = String((err && err.message) || err);
+    emit();
+    return { ok: false, error: state.error };
+  }
 }
 
 function snapshot() {
   return { ...state };
+}
+
+/** Clears the "you have just updated" flag once the UI has shown it. */
+function acknowledgeUpdate() {
+  state.justUpdated = null;
+  emit();
 }
 
 function stop() {
@@ -245,4 +357,16 @@ function stop() {
   listeners = new Set();
 }
 
-module.exports = { apply, check, download, install, snapshot, subscribe, stop, INTERVAL_MS };
+module.exports = {
+  apply,
+  check,
+  download,
+  install,
+  snapshot,
+  subscribe,
+  noteVersion,
+  acknowledgeUpdate,
+  promptToInstall,
+  stop,
+  INTERVAL_MS,
+};
