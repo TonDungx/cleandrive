@@ -1083,9 +1083,9 @@ Three decisions inside that:
   the app delete files unattended".
 - **It never starts Chromium.** `--sample-only` does not wait for
   `app.whenReady()`, because `app.getPath` and `fs.statfs` both work before it:
-  124ms of measured work inside a process that lives about two seconds, all of
-  which is Electron's binary starting. No window, no GPU process, and it deletes
-  nothing.
+  124ms of measured work, and **672ms for the whole packaged process** from
+  launch to exit -- the rest being Electron's binary starting, which no mode of
+  this app avoids. No window, no GPU process, and it deletes nothing.
 - **It measures the drives the app has a reason to know about** — the home
   volume, the configured cleanup roots, the monitored volumes, and everything
   already in the history — rather than probing A: to Z:, which would spin up

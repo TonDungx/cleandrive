@@ -160,9 +160,9 @@ function defaults() {
        * do not require anyone to enable automatic deletion.
        *
        * On by default because it costs one short process a day that reads free
-       * space and writes one line of JSON -- a tenth of a second of work
-       * inside about two seconds of Electron startup. It never deletes
-       * anything and it never opens a window.
+       * space and writes one line of JSON. Measured on a packaged build: 672ms
+       * from launch to exit. It never deletes anything and it never opens a
+       * window.
        */
       dailySample: true,
       sampleTime: '12:00',

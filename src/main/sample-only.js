@@ -18,9 +18,10 @@ const { sample } = require('./lib/sampler');
  * before the Chromium side of Electron is initialised, so there is no browser
  * process, no GPU process and no window.
  *
- * Measured on the development machine: 124ms from entering this file to
- * exiting it, inside a process that lives about two seconds -- the rest is
- * Electron's own binary starting up, which no mode of this app can avoid.
+ * Measured: 124ms from entering this file to exiting it, and 672ms for the
+ * whole packaged process from launch to exit. The rest is Electron's own binary
+ * starting up, which no mode of this app can avoid. (Run from a checkout via
+ * npx it is nearer two seconds, almost all of that npm's module resolution.)
  *
  * That matters because the alternative was making the Trends tab depend on the
  * cleanup task, which would have meant "you may have a chart of your disk once

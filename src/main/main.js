@@ -164,8 +164,9 @@ if (isSampleOnly) {
    * Waiting would start Chromium -- a browser process, a GPU process and a few
    * tens of megabytes -- in order to call `fs.statfs` a handful of times.
    * `app.getPath` is available before ready, so this mode does its work on the
-   * Node side alone and exits: 124ms of measured work, inside a process that
-   * lives about two seconds because Electron's binary has to start either way.
+   * Node side alone and exits. Measured: 124ms of work, and 672ms for the whole
+   * packaged process -- the rest being Electron's binary starting, which no
+   * mode of this app can avoid.
    */
   require('./sample-only')
     .runSample()
