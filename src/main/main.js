@@ -40,8 +40,12 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1180,
     height: 780,
-    minWidth: 900,
-    minHeight: 600,
+    // The floor the layout is actually built for: the sidebar drops to icons,
+    // the cards fall to one column, and the top bar wraps. It used to be 900,
+    // which was not a statement about the layout so much as the width nobody
+    // had tried going below.
+    minWidth: 680,
+    minHeight: 520,
     backgroundColor: nativeTheme.shouldUseDarkColors ? WINDOW_BACKGROUND.dark : WINDOW_BACKGROUND.light,
     show: false,
     title: 'CleanDrive',

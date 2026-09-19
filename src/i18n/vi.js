@@ -39,6 +39,11 @@
     'app.tab.dupes': 'Trùng lặp',
     'app.tab.trends': 'Xu hướng',
     'app.tab.auto': 'Tự động',
+    'app.sidebar.sections': 'Các mục',
+    'app.sidebar.hide': 'Ẩn thanh bên',
+    'app.sidebar.hideShort': 'Ẩn',
+    'app.sidebar.show': 'Hiện thanh bên',
+    'app.sidebar.resize': 'Kéo để đổi độ rộng; kéo hết cỡ để ẩn',
     'app.tab.settings': 'Cài đặt',
 
     'app.pickFolder': 'Chọn thư mục…',

@@ -138,9 +138,13 @@ $('pick-folder').addEventListener('click', async () => {
 
 /* ------------------------------------------------------------------ tabs */
 
-for (const tab of document.querySelectorAll('.tab')) {
+// [data-tab], not .tab: the sidebar also holds a button that hides it, and it
+// is drawn as a row like the others. Matching on the class alone made clicking
+// it switch to a panel called "panel-undefined", which left every panel hidden
+// and the window empty.
+for (const tab of document.querySelectorAll('.tab[data-tab]')) {
   tab.addEventListener('click', () => {
-    document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('is-active', t === tab));
+    document.querySelectorAll('.tab[data-tab]').forEach((t) => t.classList.toggle('is-active', t === tab));
     document.querySelectorAll('.panel').forEach((p) => {
       p.classList.toggle('is-active', p.id === `panel-${tab.dataset.tab}`);
     });

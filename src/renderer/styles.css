@@ -88,6 +88,12 @@
   --radius-sm: 8px;
   --radius-pill: 999px;
 
+  /* The sidebar's width, written here so a media query can override it for a
+     narrow window without arguing with the inline value the drag handle sets
+     on the document element: a declaration on .workspace is nearer to the
+     sidebar than one on :root, so the window's opinion wins where it has one. */
+  --sidebar-w: 208px;
+
   --ease: cubic-bezier(0.32, 0.72, 0, 1);
   --fast: 120ms var(--ease);
   --medium: 220ms var(--ease);
@@ -197,10 +203,10 @@ body {
 .topbar {
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: 18px;
   flex: none;
   padding: 0 20px;
-  height: 56px;
+  height: 58px;
   background: var(--bg-elevated);
   border-bottom: 1px solid var(--border-soft);
 }
@@ -474,62 +480,117 @@ input[type="checkbox"]:disabled {
    tabs
    ========================================================================== */
 
-.tabs {
+.workspace {
+  position: relative;
   display: flex;
-  align-items: stretch;
-  gap: 2px;
+  flex: 1;
+  min-height: 0;
+}
+
+/*
+ * The sections.
+ *
+ * "container-type: inline-size" is what makes the icon-only state honest: the
+ * labels disappear when *the sidebar* is too narrow for them, not when the
+ * window is, so dragging it in and resizing the window cannot disagree about
+ * which state it is in.
+ */
+.sidebar {
+  container-type: inline-size;
   flex: none;
-  padding: 0 14px;
+  width: var(--sidebar-w);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 14px 10px;
   background: var(--bg-elevated);
-  border-bottom: 1px solid var(--border-soft);
+  border-right: 1px solid var(--border-soft);
+  overflow: hidden auto;
+}
+
+:root[data-sidebar="closed"] .sidebar {
+  display: none;
+}
+
+.sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+/* Pushes the hide button to the bottom without a second flex container. */
+.sidebar-gap {
+  flex: 1;
+  min-height: 12px;
 }
 
 .tab {
   appearance: none;
   position: relative;
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 7px;
-  height: 42px;
-  padding: 0 14px;
+  gap: 10px;
+  width: 100%;
+  min-height: 34px;
+  padding: 0 10px;
   border: none;
+  border-radius: var(--radius-sm);
   background: none;
   color: var(--text-2);
   font: inherit;
   font-size: 13px;
   font-weight: 500;
+  text-align: left;
   cursor: pointer;
-  transition: color var(--fast);
+  transition: background var(--fast), color var(--fast);
 }
 
-.tab::after {
-  content: "";
-  position: absolute;
-  left: 10px;
-  right: 10px;
-  bottom: -1px;
-  height: 2px;
-  border-radius: 2px 2px 0 0;
-  background: var(--accent);
-  transform: scaleX(0);
-  transition: transform var(--medium);
+.tab-icon {
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
+
+.tab-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .tab:hover {
+  background: var(--surface-2);
   color: var(--text);
 }
 
 .tab.is-active {
-  color: var(--text);
+  background: var(--accent-soft);
+  color: var(--accent);
 }
 
-.tab.is-active::after {
-  transform: scaleX(1);
+/* The marker sits in the sidebar's own padding, so the row itself keeps its
+   full width and the label does not shift when a section is selected. */
+.tab.is-active::before {
+  content: "";
+  position: absolute;
+  left: -10px;
+  top: 50%;
+  width: 3px;
+  height: 17px;
+  border-radius: 0 3px 3px 0;
+  background: var(--accent);
+  transform: translateY(-50%);
+}
+
+.sidebar-toggle {
+  color: var(--text-3);
 }
 
 .tab-badge {
   display: inline-flex;
   align-items: center;
+  flex: none;
   height: 17px;
   padding: 0 6px;
   border-radius: var(--radius-pill);
@@ -540,12 +601,120 @@ input[type="checkbox"]:disabled {
   font-variant-numeric: tabular-nums;
 }
 
+/* Icons alone, once there is no room for a label to say anything useful. The
+   badge keeps its meaning as a dot: something is waiting in that section. */
+@container (max-width: 122px) {
+  .tab {
+    justify-content: center;
+    gap: 0;
+    padding: 0;
+  }
+
+  .tab-label {
+    display: none;
+  }
+
+  .tab-badge {
+    position: absolute;
+    top: 3px;
+    right: 3px;
+    width: 7px;
+    height: 7px;
+    min-width: 0;
+    padding: 0;
+    background: var(--accent);
+    font-size: 0;
+  }
+
+  .tab.is-active::before {
+    left: -10px;
+  }
+}
+
+/*
+ * The grab handle between the sidebar and the content.
+ *
+ * It stays on screen when the sidebar is shut -- widened into a rail with the
+ * button that brings it back -- because a control whose only way back is a
+ * keyboard shortcut or a menu nobody opens is a control people lose.
+ */
+.sidebar-resizer {
+  position: relative;
+  flex: none;
+  width: 7px;
+  cursor: col-resize;
+  background: none;
+  touch-action: none;
+  z-index: 3;
+}
+
+.sidebar-resizer::after {
+  content: "";
+  position: absolute;
+  inset: 0 2px;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  transition: background var(--fast);
+}
+
+.sidebar-resizer:hover::after,
+.sidebar-resizer:focus-visible::after,
+:root[data-sidebar-dragging] .sidebar-resizer::after {
+  background: var(--accent);
+}
+
+:root[data-sidebar="closed"] .sidebar-resizer {
+  width: 30px;
+  border-right: 1px solid var(--border-soft);
+  background: var(--bg-elevated);
+}
+
+.sidebar-open {
+  position: absolute;
+  left: 3px;
+  top: 12px;
+  z-index: 4;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text-2);
+  cursor: pointer;
+  transition: background var(--fast), color var(--fast), border-color var(--fast);
+}
+
+.sidebar-open:hover {
+  background: var(--surface-2);
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+/* While a drag is in progress nothing should animate or select: a sidebar that
+   eases towards the pointer lags behind it, which reads as a stutter. */
+:root[data-sidebar-dragging] {
+  cursor: col-resize;
+  user-select: none;
+}
+
+:root[data-sidebar-dragging] .sidebar,
+:root[data-sidebar-dragging] .tab {
+  transition: none;
+}
+
 /* ==========================================================================
    panels
    ========================================================================== */
 
 main {
   flex: 1;
+  /* min-width, because this is now a column in a row: without it the panel
+     content sets the floor and the sidebar cannot be dragged past it. */
+  min-width: 0;
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
@@ -555,7 +724,10 @@ main {
   display: none;
   max-width: 1360px;
   margin: 0 auto;
-  padding: 20px 20px 44px;
+  /* The bottom is deliberately deeper than the top: the last card in a panel
+     used to end a few pixels above the window edge, which reads as content cut
+     off rather than content finished. */
+  padding: 24px 24px 48px;
 }
 
 .panel.is-active {
@@ -574,8 +746,8 @@ main {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 9px;
-  margin: 0 0 18px;
+  gap: 10px;
+  margin: 0 0 20px;
 }
 
 .panel-actions-tight {
@@ -639,16 +811,18 @@ main {
 
 .stats {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-  gap: 10px;
-  margin: 0 0 18px;
+  /* min() so a stat tile can never be wider than the column it is in: at the
+     narrowest window the grid used to overflow rather than wrap. */
+  grid-template-columns: repeat(auto-fit, minmax(min(170px, 100%), 1fr));
+  gap: 12px;
+  margin: 0 0 20px;
 }
 
 .stat {
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  padding: 14px 16px;
+  gap: 4px;
+  padding: 16px 18px;
   border: 1px solid var(--border-soft);
   border-radius: var(--radius);
   background: var(--surface);
@@ -700,13 +874,13 @@ main {
    two such gaps. */
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(420px, 100%), 1fr));
   grid-auto-flow: row dense;
-  gap: 14px;
+  gap: 16px;
 }
 
 .card {
-  padding: 18px;
+  padding: 20px;
   border: 1px solid var(--border-soft);
   border-radius: var(--radius);
   background: var(--surface);
@@ -718,7 +892,7 @@ main {
 }
 
 .card h2 {
-  margin: 0 0 14px;
+  margin: 0 0 12px;
   font-family: var(--font-display);
   font-size: 12px;
   font-weight: 600;
@@ -731,16 +905,19 @@ main {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  margin: 0 0 14px;
+  gap: 14px;
+  margin: 0 0 16px;
 }
 
 .card-head h2 {
   margin: 0;
 }
 
+/* No negative margin any more. It was pulling the note up under the heading to
+   save six pixels, and the two then read as one block of text with no air in
+   it; the heading gives back the space instead. */
 .card-note {
-  margin: -6px 0 14px;
+  margin: 0 0 16px;
   color: var(--text-2);
   font-size: 12px;
   line-height: 1.6;
@@ -783,9 +960,9 @@ main {
 
 .notice {
   display: flex;
-  gap: 10px;
-  margin: 0 0 16px;
-  padding: 12px 15px;
+  gap: 12px;
+  margin: 0 0 18px;
+  padding: 14px 16px;
   border: 1px solid var(--border-soft);
   border-left: 3px solid var(--warn);
   border-radius: var(--radius-sm);
@@ -813,7 +990,7 @@ main {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 11px;
+  gap: 13px;
 }
 
 .bar-row {
@@ -865,8 +1042,8 @@ main {
 .file-row {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 8px 10px;
+  gap: 14px;
+  padding: 10px;
   margin: 0 -10px;
   border-radius: var(--radius-sm);
   font-size: 12px;
@@ -1009,7 +1186,7 @@ main {
 .groups {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 14px;
 }
 
 .group {
@@ -1023,8 +1200,8 @@ main {
 .group-head {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 13px 16px;
+  gap: 12px;
+  padding: 14px 18px;
   background: linear-gradient(180deg, var(--surface-2) 0%, var(--surface) 100%);
   border-bottom: 1px solid var(--border-soft);
 }
@@ -1044,7 +1221,7 @@ main {
 .group-select {
   appearance: none;
   margin-left: auto;
-  padding: 4px 10px;
+  padding: 5px 11px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--surface-2);
@@ -1063,14 +1240,14 @@ main {
 
 .group-hint {
   margin: 0;
-  padding: 10px 16px 0;
+  padding: 12px 18px 0;
   color: var(--text-3);
   font-size: 11.5px;
   line-height: 1.6;
 }
 
 .group-body {
-  padding: 8px 16px 14px;
+  padding: 10px 18px 16px;
 }
 
 .keeper-tag {
@@ -1203,8 +1380,8 @@ main {
 .check {
   display: flex;
   align-items: flex-start;
-  gap: 9px;
-  margin: 0 0 9px;
+  gap: 10px;
+  margin: 0 0 11px;
   color: var(--text-2);
   font-size: 12.5px;
   line-height: 1.5;
@@ -1228,26 +1405,26 @@ main {
 
 .check-list {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
-  gap: 0 16px;
-  margin: 0 0 14px;
+  grid-template-columns: repeat(auto-fill, minmax(min(190px, 100%), 1fr));
+  gap: 2px 20px;
+  margin: 0 0 18px;
 }
 
 .field-row {
-  margin: 0 0 9px;
+  margin: 0 0 12px;
   flex-wrap: wrap;
 }
 
 .field-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(185px, 1fr));
-  gap: 0 16px;
-  margin: 0 0 8px;
+  grid-template-columns: repeat(auto-fill, minmax(min(185px, 100%), 1fr));
+  gap: 0 20px;
+  margin: 0 0 12px;
 }
 
 .path-list {
   list-style: none;
-  margin: 0 0 12px;
+  margin: 0 0 14px;
   padding: 0;
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-sm);
@@ -1258,8 +1435,8 @@ main {
 .path-row {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 7px 10px;
+  gap: 12px;
+  padding: 9px 12px;
   font-size: 12px;
   transition: background var(--fast);
 }
@@ -1419,8 +1596,8 @@ main {
 .pair-row {
   display: flex;
   align-items: baseline;
-  gap: 12px;
-  padding: 7px 10px;
+  gap: 14px;
+  padding: 9px 12px;
   font-size: 12px;
 }
 
@@ -1516,12 +1693,27 @@ main {
    narrow windows
    ========================================================================== */
 
+/*
+ * Three steps down, each one answering a specific thing that breaks.
+ *
+ * The sidebar's own width is capped rather than fixed, so a window that is
+ * merely narrow keeps whatever width was dragged, and a window that is too
+ * narrow to spare it gets the icon rail whatever the stored width says. The
+ * labels then vanish by container query, not by a second media rule that could
+ * disagree with this one.
+ */
+@media (max-width: 1040px) {
+  .workspace {
+    --sidebar-w: 60px;
+  }
+}
+
 @media (max-width: 900px) {
   .topbar {
     height: auto;
     flex-wrap: wrap;
-    gap: 10px;
-    padding: 10px 14px;
+    gap: 10px 14px;
+    padding: 12px 16px;
   }
 
   .quick {
@@ -1530,21 +1722,56 @@ main {
     flex-wrap: wrap;
   }
 
-  .tabs {
-    overflow-x: auto;
-    scrollbar-width: none;
+  .panel {
+    padding: 20px 18px 40px;
   }
 
-  .tabs::-webkit-scrollbar {
+  .stats {
+    /* Four tiles still fit across a 900px window; at the wider minimum they
+       broke to three and one, which reads as a mistake rather than a wrap. */
+    grid-template-columns: repeat(auto-fit, minmax(min(136px, 100%), 1fr));
+    gap: 10px;
+  }
+
+  .card {
+    padding: 18px;
+  }
+}
+
+@media (max-width: 720px) {
+  /* Two by two rather than three and a straggler: an even block reads as a
+     layout, a ragged one reads as a mistake. */
+  .stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  /* The shortcuts are the one thing here with a full substitute: every folder
+     they point at is two clicks away behind "Choose folder". They go rather
+     than wrap onto a third row and push the content out of the window. */
+  .quick {
     display: none;
   }
 
   .panel {
-    padding: 16px 14px 40px;
+    padding: 16px 14px 36px;
   }
 
-  .grid {
-    grid-template-columns: 1fr;
+  .file-row {
+    flex-wrap: wrap;
+    gap: 8px 12px;
+  }
+
+  .file-main {
+    flex-basis: 100%;
+    order: 3;
+  }
+
+  .file-actions {
+    margin-left: auto;
+  }
+
+  .stat-value {
+    font-size: 19px;
   }
 }
 

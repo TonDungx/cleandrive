@@ -150,6 +150,74 @@ app.whenReady().then(async () => {
       )
     );
 
+    /* -- the sidebar ------------------------------------------------------ */
+    // Driven through the handle itself, because every interesting state of this
+    // control is a consequence of where the pointer was let go: the labels go
+    // when it is narrow, it shuts when it is dragged into the edge, and what it
+    // was left at has to survive the next launch.
+    console.log('\nSidebar:');
+
+    const sidebar = await win.webContents.executeJavaScript(`
+      (() => {
+        const root = document.documentElement;
+        const bar = document.getElementById('sidebar');
+        const handle = document.getElementById('sidebar-resizer');
+        const workspace = document.getElementById('workspace');
+        const label = document.querySelector('.tab-label');
+
+        const left = () => workspace.getBoundingClientRect().left;
+        const labelled = () => getComputedStyle(label).display !== 'none';
+        const drag = (x) => handle.dispatchEvent(
+          new PointerEvent('pointermove', { clientX: left() + x, bubbles: true, pointerId: 1 })
+        );
+
+        const opened = { state: root.dataset.sidebar, width: bar.getBoundingClientRect().width, labelled: labelled() };
+
+        handle.dispatchEvent(new PointerEvent('pointerdown', { button: 0, clientX: left() + opened.width, bubbles: true, pointerId: 1 }));
+
+        drag(130);
+        const narrow = { width: bar.getBoundingClientRect().width, labelled: labelled() };
+
+        drag(40);
+        const shut = { state: root.dataset.sidebar, visible: bar.offsetParent !== null };
+
+        handle.dispatchEvent(new PointerEvent('pointerup', { clientX: left() + 40, bubbles: true, pointerId: 1 }));
+
+        let stored = null;
+        try {
+          stored = JSON.parse(localStorage.getItem('cleandrive.sidebar') || 'null');
+        } catch {
+          stored = null;
+        }
+
+        document.getElementById('sidebar-open').click();
+        const back = { state: root.dataset.sidebar, width: bar.getBoundingClientRect().width, labelled: labelled() };
+
+        return { opened, narrow, shut, stored, back, panelsShowing: document.querySelectorAll('.panel.is-active').length };
+      })()
+    `);
+
+    check('the sidebar starts open, with its sections named',
+      sidebar.opened.state === 'open' && sidebar.opened.labelled === true,
+      `${Math.round(sidebar.opened.width)}px`);
+    check('dragging it narrow leaves the icons and drops the labels',
+      sidebar.narrow.labelled === false && sidebar.narrow.width < sidebar.opened.width,
+      `${Math.round(sidebar.narrow.width)}px`);
+    check('dragging it into the edge shuts it',
+      sidebar.shut.state === 'closed' && sidebar.shut.visible === false);
+    check('and that choice is written down for the next launch',
+      sidebar.stored !== null && sidebar.stored.closed === true, JSON.stringify(sidebar.stored));
+    // A drag to the edge sweeps through every narrow width on the way out;
+    // none of them is a choice, so reopening restores what it had before.
+    check('the button brings it back at the width it had before the drag',
+      sidebar.back.state === 'open' && sidebar.back.labelled === true,
+      `${Math.round(sidebar.back.width)}px`);
+    // The hide button is drawn as a row like the sections are. It used to be
+    // picked up by the tab handler, which switched to a panel that does not
+    // exist and left the window blank.
+    check('exactly one panel is on screen throughout', sidebar.panelsShowing === 1,
+      String(sidebar.panelsShowing));
+
     /* -- folder selection ------------------------------------------------ */
     // The quick-path buttons run the app's own setFolder(), so the folder is
     // chosen through real UI. Clicking "Choose folder…" would open a native

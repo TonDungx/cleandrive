@@ -51,18 +51,81 @@
       </div>
     </header>
 
-    <nav class="tabs" role="tablist">
-      <button class="tab is-active" data-tab="usage" role="tab" data-i18n="app.tab.usage">Disk usage</button>
-      <button class="tab" data-tab="cleanup" role="tab">
-        <span data-i18n="app.tab.cleanup">What to delete</span><span class="tab-badge" id="cleanup-badge" hidden></span>
-      </button>
-      <button class="tab" data-tab="dupes" role="tab" data-i18n="app.tab.dupes">Duplicates</button>
-      <button class="tab" data-tab="trends" role="tab" data-i18n="app.tab.trends">Trends</button>
-      <button class="tab" data-tab="auto" role="tab" data-i18n="app.tab.auto">Automatic</button>
-      <button class="tab" data-tab="settings" role="tab" data-i18n="app.tab.settings">Settings</button>
-    </nav>
+    <!--
+      The sections, as a sidebar rather than a row of tabs.
 
-    <main>
+      It can be dragged narrower, and below the width its labels need it keeps
+      the icons alone -- a container query on the sidebar itself, so the
+      switch follows the sidebar's own width rather than the window's and
+      cannot fall out of step with it. Dragged narrow enough, or sent away with
+      the button at the bottom, it closes entirely and leaves a way back.
+    -->
+    <div class="workspace" id="workspace">
+      <!-- Only on screen while the sidebar is away. -->
+      <button class="sidebar-open" id="sidebar-open" hidden
+        data-i18n-title="app.sidebar.show" title="Show the sidebar"
+        data-i18n-aria="app.sidebar.show" aria-label="Show the sidebar">
+        <svg class="tab-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="2.4" y="3.2" width="11.2" height="9.6" rx="2"/><path d="M6.4 3.2v9.6"/></svg>
+      </button>
+
+      <div class="sidebar" id="sidebar">
+        <nav class="sidebar-nav" role="tablist" data-i18n-aria="app.sidebar.sections" aria-label="Sections">
+          <button class="tab is-active" data-tab="usage" role="tab"
+            data-i18n-title="app.tab.usage" title="Disk usage">
+            <svg class="tab-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="5.6"/><path d="M8 8V2.4"/><path d="M8 8l4.1 3.8"/></svg>
+            <span class="tab-label" data-i18n="app.tab.usage">Disk usage</span>
+          </button>
+          <button class="tab" data-tab="cleanup" role="tab"
+            data-i18n-title="app.tab.cleanup" title="What to delete">
+            <svg class="tab-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3.2 4.6h9.6"/><path d="M6.4 4.6V3.3a.8.8 0 0 1 .8-.8h1.6a.8.8 0 0 1 .8.8v1.3"/><path d="M4.6 4.6l.5 8a1 1 0 0 0 1 .9h3.8a1 1 0 0 0 1-.9l.5-8"/></svg>
+            <span class="tab-label" data-i18n="app.tab.cleanup">What to delete</span><span class="tab-badge" id="cleanup-badge" hidden></span>
+          </button>
+          <button class="tab" data-tab="dupes" role="tab"
+            data-i18n-title="app.tab.dupes" title="Duplicates">
+            <svg class="tab-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="2.4" y="2.4" width="7.8" height="7.8" rx="1.6"/><rect x="5.8" y="5.8" width="7.8" height="7.8" rx="1.6"/></svg>
+            <span class="tab-label" data-i18n="app.tab.dupes">Duplicates</span>
+          </button>
+          <button class="tab" data-tab="trends" role="tab"
+            data-i18n-title="app.tab.trends" title="Trends">
+            <svg class="tab-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M2.6 2.6v10.8h10.8"/><path d="M4.8 10.6l2.8-3 2.2 2.1 3.4-4"/></svg>
+            <span class="tab-label" data-i18n="app.tab.trends">Trends</span>
+          </button>
+          <button class="tab" data-tab="auto" role="tab"
+            data-i18n-title="app.tab.auto" title="Automatic">
+            <svg class="tab-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="5.6"/><path d="M8 4.8V8.3l2.3 1.5"/></svg>
+            <span class="tab-label" data-i18n="app.tab.auto">Automatic</span>
+          </button>
+          <button class="tab" data-tab="settings" role="tab"
+            data-i18n-title="app.tab.settings" title="Settings">
+            <svg class="tab-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M2.6 5.6h4.2"/><circle cx="9" cy="5.6" r="1.7"/><path d="M11 5.6h2.4"/><path d="M2.6 10.4h2.2"/><circle cx="6.8" cy="10.4" r="1.7"/><path d="M8.8 10.4h4.6"/></svg>
+            <span class="tab-label" data-i18n="app.tab.settings">Settings</span>
+          </button>
+
+        </nav>
+
+        <span class="sidebar-gap"></span>
+
+        <button class="tab sidebar-toggle" id="sidebar-toggle"
+          data-i18n-title="app.sidebar.hide" title="Hide the sidebar"
+          data-i18n-aria="app.sidebar.hide" aria-label="Hide the sidebar">
+          <svg class="tab-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="2.4" y="3.2" width="11.2" height="9.6" rx="2"/><path d="M6.4 3.2v9.6"/></svg>
+          <span class="tab-label" data-i18n="app.sidebar.hideShort">Hide</span>
+        </button>
+      </div>
+
+      <div
+        class="sidebar-resizer"
+        id="sidebar-resizer"
+        role="separator"
+        aria-orientation="vertical"
+        tabindex="0"
+        data-i18n-title="app.sidebar.resize"
+        title="Drag to resize; drag it shut to hide"
+        data-i18n-aria="app.sidebar.resize"
+        aria-label="Drag to resize; drag it shut to hide"
+      ></div>
+
+      <main>
       <!-- ------------------------------------------------ disk usage -->
       <section class="panel is-active" id="panel-usage" role="tabpanel">
         <div class="panel-actions">
@@ -623,7 +686,8 @@
           </section>
         </div>
       </section>
-    </main>
+      </main>
+    </div>
 
     <!-- Shared by every delete path: largest files, cleanup, duplicates. -->
     <div class="delete-progress" id="delete-progress" hidden>
@@ -642,6 +706,7 @@
 
     <div class="toast" id="toast" hidden></div>
 
+    <script src="sidebar.js"></script>
     <script src="app.js"></script>
     <!-- All three share app.js's globals; must load after it. -->
     <script src="automatic.js"></script>
