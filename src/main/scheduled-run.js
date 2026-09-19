@@ -3,6 +3,8 @@
 const { app, Notification } = require('electron');
 
 const { services } = require('./services');
+const language = require('./language');
+const { t } = language;
 const { runAutoClean } = require('./lib/autoclean');
 const { sample } = require('./lib/sampler');
 const { formatBytes } = require('./lib/util');
@@ -38,6 +40,9 @@ async function runScheduled() {
 
   try {
     settings = await store.load();
+    // Before anything can be written or announced: the notification this run
+    // may raise at 02:00 is read by the same person who chose the language.
+    language.apply(settings.appearance.language);
     await ledger.load();
     await runLog.load();
     await history.load();
@@ -53,10 +58,10 @@ async function runScheduled() {
       // able to show them.
       run = failedRun(
         startedAt,
-        'No settings file was found, so there was no configuration to act on.',
+        t('run.noSettings', 'No settings file was found, so there was no configuration to act on.'),
         'skipped'
       );
-      run.notes.push(`Expected at ${services().settingsPath}`);
+      run.notes.push(t('run.expectedAt', 'Expected at {path}', { path: services().settingsPath }));
     } else {
       run = await runAutoClean({ settings, ledger });
       run.warnings = store.warnings;
@@ -152,26 +157,35 @@ function notify(run) {
   if (run.outcome === 'error') {
     // The one skipped-shaped outcome that does interrupt. A cleanup that could
     // not run is exactly the thing the user has no other way of finding out.
-    title = 'CleanDrive: the scheduled run failed';
-    body = `${run.reason} Open CleanDrive to see the run log.`;
+    title = t('notify.runFailed.title', 'CleanDrive: the scheduled run failed');
+    body = t('notify.runFailed.body', '{reason} Open CleanDrive to see the run log.', { reason: run.reason });
   } else if (run.outcome === 'skipped') {
     // Nothing happened and nothing is wrong; do not interrupt for that.
     return;
   } else if (run.outcome === 'dry-run') {
-    title = 'CleanDrive: report only';
-    body =
-      `${run.selected.files.toLocaleString('en-US')} file(s), ${formatBytes(run.selected.bytes)} would be ` +
-      'moved to the Recycle Bin. Nothing was deleted — automatic cleanup is still in report-only mode.';
+    title = t('notify.dryRun.title', 'CleanDrive: report only');
+    body = t(
+      'notify.dryRun.body',
+      '{n} file(s), {size} would be moved to the Recycle Bin. Nothing was deleted — automatic cleanup ' +
+        'is still in report-only mode.',
+      { n: run.selected.files.toLocaleString(language.current()), size: formatBytes(run.selected.bytes) }
+    );
   } else if (run.trashed.files === 0) {
-    title = 'CleanDrive: nothing to clean';
-    body = run.reason || 'No files matched the cleanup rules.';
+    title = t('notify.nothing.title', 'CleanDrive: nothing to clean');
+    body = run.reason || t('notify.nothing.body', 'No files matched the cleanup rules.');
   } else {
-    title = 'CleanDrive: cleanup finished';
-    const moved = `Moved ${run.trashed.files.toLocaleString('en-US')} file(s) (${formatBytes(run.trashed.bytes)}) to the Recycle Bin.`;
+    title = t('notify.done.title', 'CleanDrive: cleanup finished');
+    const moved = t('notify.done.moved', 'Moved {n} file(s) ({size}) to the Recycle Bin.', {
+      n: run.trashed.files.toLocaleString(language.current()),
+      size: formatBytes(run.trashed.bytes),
+    });
     const freed =
       run.purged.files > 0
-        ? ` ${formatBytes(run.purged.bytes)} of older items was permanently removed, so that space is now free.`
-        : ' No disk space is free yet — the Recycle Bin is on the same disk.';
+        ? ' ' +
+          t('notify.done.freed', '{size} of older items was permanently removed, so that space is now free.', {
+            size: formatBytes(run.purged.bytes),
+          })
+        : ' ' + t('notify.done.notFreed', 'No disk space is free yet — the Recycle Bin is on the same disk.');
     body = moved + freed;
   }
 

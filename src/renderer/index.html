@@ -8,8 +8,13 @@
     />
     <title>CleanDrive</title>
     <link rel="stylesheet" href="styles.css" />
-    <!-- In <head> on purpose: this must run before the first paint, or an
-         explicitly chosen theme flashes the other one on every launch. -->
+    <!-- All four in <head> on purpose: they must run before the first paint.
+         An explicitly chosen theme would otherwise flash the other one on every
+         launch, and a Vietnamese window would be watched translating itself
+         out of the English the markup is written in. -->
+    <script src="../i18n/index.js"></script>
+    <script src="../i18n/vi.js"></script>
+    <script src="language.js"></script>
     <script src="theme.js"></script>
   </head>
   <body>
@@ -20,64 +25,76 @@
       </div>
 
       <div class="target" id="target">
-        <button class="btn btn-primary" id="pick-folder">Choose folder…</button>
-        <span class="target-path" id="target-path">No folder selected</span>
+        <button class="btn btn-primary" id="pick-folder" data-i18n="app.pickFolder">Choose folder…</button>
+        <span class="target-path" id="target-path" data-i18n="app.noFolder">No folder selected</span>
       </div>
 
       <div class="quick" id="quick-paths"></div>
 
       <button class="update-pill" id="update-pill" hidden></button>
 
-      <div class="theme-switch" id="theme-switch" role="group" aria-label="Appearance">
-        <button class="theme-option" data-theme-choice="system" title="Follow the system theme">Auto</button>
-        <button class="theme-option" data-theme-choice="light" title="Always light">Light</button>
-        <button class="theme-option" data-theme-choice="dark" title="Always dark">Dark</button>
+      <!-- Kept in the top bar rather than moved to the Settings tab with the
+           rest of the appearance controls: this is the one preference people
+           flip on a whim, and the tab has a copy that stays in step because
+           both are driven by the same [data-theme-choice] attribute. -->
+      <div
+        class="segmented theme-switch"
+        id="theme-switch"
+        data-theme-host
+        role="group"
+        data-i18n-aria="app.appearance"
+        aria-label="Appearance"
+      >
+        <button class="segmented-option" data-theme-choice="system" data-i18n-title="app.theme.systemHint" data-i18n="app.theme.system" title="Follow the system theme">Auto</button>
+        <button class="segmented-option" data-theme-choice="light" data-i18n-title="app.theme.lightHint" data-i18n="app.theme.light" title="Always light">Light</button>
+        <button class="segmented-option" data-theme-choice="dark" data-i18n-title="app.theme.darkHint" data-i18n="app.theme.dark" title="Always dark">Dark</button>
       </div>
     </header>
 
     <nav class="tabs" role="tablist">
-      <button class="tab is-active" data-tab="usage" role="tab">Disk usage</button>
+      <button class="tab is-active" data-tab="usage" role="tab" data-i18n="app.tab.usage">Disk usage</button>
       <button class="tab" data-tab="cleanup" role="tab">
-        What to delete<span class="tab-badge" id="cleanup-badge" hidden></span>
+        <span data-i18n="app.tab.cleanup">What to delete</span><span class="tab-badge" id="cleanup-badge" hidden></span>
       </button>
-      <button class="tab" data-tab="dupes" role="tab">Duplicates</button>
-      <button class="tab" data-tab="trends" role="tab">Trends</button>
-      <button class="tab" data-tab="auto" role="tab">Automatic</button>
+      <button class="tab" data-tab="dupes" role="tab" data-i18n="app.tab.dupes">Duplicates</button>
+      <button class="tab" data-tab="trends" role="tab" data-i18n="app.tab.trends">Trends</button>
+      <button class="tab" data-tab="auto" role="tab" data-i18n="app.tab.auto">Automatic</button>
+      <button class="tab" data-tab="settings" role="tab" data-i18n="app.tab.settings">Settings</button>
     </nav>
 
     <main>
       <!-- ------------------------------------------------ disk usage -->
       <section class="panel is-active" id="panel-usage" role="tabpanel">
         <div class="panel-actions">
-          <button class="btn btn-primary" id="run-scan" disabled>Scan folder</button>
-          <button class="btn" id="cancel-scan" hidden>Cancel</button>
-          <span class="status" id="scan-status">Pick a folder to begin.</span>
+          <button class="btn btn-primary" id="run-scan" disabled data-i18n="usage.scan">Scan folder</button>
+          <button class="btn" id="cancel-scan" hidden data-i18n="app.cancel">Cancel</button>
+          <span class="status" id="scan-status" data-i18n="app.pickToBegin">Pick a folder to begin.</span>
         </div>
 
         <div class="progress" id="scan-progress" hidden><div class="progress-bar is-indeterminate"></div></div>
 
         <div class="stats" id="scan-stats" hidden>
-          <div class="stat"><span class="stat-value" id="stat-size">–</span><span class="stat-label">Total size</span></div>
-          <div class="stat"><span class="stat-value" id="stat-files">–</span><span class="stat-label">Files</span></div>
-          <div class="stat"><span class="stat-value" id="stat-dirs">–</span><span class="stat-label">Folders</span></div>
-          <div class="stat"><span class="stat-value" id="stat-time">–</span><span class="stat-label">Scan time</span></div>
+          <div class="stat"><span class="stat-value" id="stat-size">–</span><span class="stat-label" data-i18n="usage.totalSize">Total size</span></div>
+          <div class="stat"><span class="stat-value" id="stat-files">–</span><span class="stat-label" data-i18n="usage.files">Files</span></div>
+          <div class="stat"><span class="stat-value" id="stat-dirs">–</span><span class="stat-label" data-i18n="usage.folders">Folders</span></div>
+          <div class="stat"><span class="stat-value" id="stat-time">–</span><span class="stat-label" data-i18n="usage.scanTime">Scan time</span></div>
         </div>
 
         <div class="grid" id="scan-results" hidden>
           <section class="card">
-            <h2>Where the space went</h2>
+            <h2 data-i18n="usage.whereSpaceWent">Where the space went</h2>
             <ul class="bars" id="top-folders"></ul>
           </section>
 
           <section class="card">
-            <h2>By file type</h2>
+            <h2 data-i18n="usage.byType">By file type</h2>
             <ul class="bars" id="by-type"></ul>
           </section>
 
           <section class="card card-wide">
             <div class="card-head">
-              <h2>Largest files</h2>
-              <button class="btn btn-danger btn-sm" id="delete-large" disabled>Move selected to Recycle Bin</button>
+              <h2 data-i18n="usage.largest">Largest files</h2>
+              <button class="btn btn-danger btn-sm" id="delete-large" disabled data-i18n="app.moveSelected">Move selected to Recycle Bin</button>
             </div>
             <ul class="files" id="largest-files"></ul>
           </section>
@@ -93,47 +110,47 @@
         <div class="stats" id="cleanup-stats" hidden>
           <div class="stat stat-safe">
             <span class="stat-value" id="cstat-safe">–</span>
-            <span class="stat-label">Safe to delete</span>
+            <span class="stat-label" data-i18n="cleanup.safe">Safe to delete</span>
           </div>
           <div class="stat stat-review">
             <span class="stat-value" id="cstat-review">–</span>
-            <span class="stat-label">Worth reviewing</span>
+            <span class="stat-label" data-i18n="cleanup.review">Worth reviewing</span>
           </div>
           <div class="stat stat-protected">
             <span class="stat-value" id="cstat-protected">–</span>
-            <span class="stat-label">Protected locations</span>
+            <span class="stat-label" data-i18n="cleanup.protected">Protected locations</span>
           </div>
         </div>
 
         <div class="panel-actions" id="cleanup-toolbar" hidden>
-          <button class="btn btn-sm" id="select-safe">Select everything marked safe</button>
-          <button class="btn btn-sm" id="cleanup-select-none">Clear selection</button>
+          <button class="btn btn-sm" id="select-safe" data-i18n="cleanup.selectSafe">Select everything marked safe</button>
+          <button class="btn btn-sm" id="cleanup-select-none" data-i18n="app.clearSelection">Clear selection</button>
           <span class="spacer"></span>
-          <span class="status" id="cleanup-selection">Nothing selected</span>
-          <button class="btn btn-danger btn-sm" id="delete-cleanup" disabled>Move selected to Recycle Bin</button>
+          <span class="status" id="cleanup-selection" data-i18n="app.nothingSelected">Nothing selected</span>
+          <button class="btn btn-danger btn-sm" id="delete-cleanup" disabled data-i18n="app.moveSelected">Move selected to Recycle Bin</button>
         </div>
 
         <div class="groups" id="cleanup-groups"></div>
 
         <section class="card" id="protected-card" hidden>
-          <h2>Never deleted</h2>
-          <p class="card-note">
+          <h2 data-i18n="cleanup.neverDeleted">Never deleted</h2>
+          <p class="card-note" data-i18n="cleanup.neverDeletedNote">
             These locations were skipped during the scan and the delete guards refuse
             them, so nothing here can be removed by this app — by you, or by mistake.
           </p>
           <ul class="files" id="protected-list"></ul>
         </section>
 
-        <p class="empty" id="cleanup-empty">Run a scan to see what is safe to remove.</p>
+        <p class="empty" id="cleanup-empty" data-i18n="cleanup.empty">Run a scan to see what is safe to remove.</p>
       </section>
 
       <!-- ------------------------------------------------ duplicates -->
       <section class="panel" id="panel-dupes" role="tabpanel">
         <div class="panel-actions">
-          <button class="btn btn-primary" id="run-dupes" disabled>Find duplicates</button>
-          <button class="btn" id="cancel-dupes" hidden>Cancel</button>
+          <button class="btn btn-primary" id="run-dupes" disabled data-i18n="dupes.find">Find duplicates</button>
+          <button class="btn" id="cancel-dupes" hidden data-i18n="app.cancel">Cancel</button>
           <label class="field">
-            Ignore files under
+            <span data-i18n="dupes.ignoreUnder">Ignore files under</span>
             <select id="min-size">
               <option value="1024">1 KB</option>
               <option value="102400" selected>100 KB</option>
@@ -141,24 +158,24 @@
               <option value="10485760">10 MB</option>
             </select>
           </label>
-          <span class="status" id="dupes-status">Pick a folder to begin.</span>
+          <span class="status" id="dupes-status" data-i18n="app.pickToBegin">Pick a folder to begin.</span>
         </div>
 
         <div class="progress" id="dupes-progress" hidden><div class="progress-bar is-indeterminate"></div></div>
 
         <div class="stats" id="dupes-stats" hidden>
-          <div class="stat"><span class="stat-value" id="dstat-groups">–</span><span class="stat-label">Duplicate groups</span></div>
-          <div class="stat"><span class="stat-value" id="dstat-waste">–</span><span class="stat-label">Reclaimable</span></div>
-          <div class="stat"><span class="stat-value" id="dstat-hashed">–</span><span class="stat-label">Files hashed</span></div>
-          <div class="stat"><span class="stat-value" id="dstat-time">–</span><span class="stat-label">Search time</span></div>
+          <div class="stat"><span class="stat-value" id="dstat-groups">–</span><span class="stat-label" data-i18n="dupes.groups">Duplicate groups</span></div>
+          <div class="stat"><span class="stat-value" id="dstat-waste">–</span><span class="stat-label" data-i18n="dupes.reclaimable">Reclaimable</span></div>
+          <div class="stat"><span class="stat-value" id="dstat-hashed">–</span><span class="stat-label" data-i18n="dupes.hashed">Files hashed</span></div>
+          <div class="stat"><span class="stat-value" id="dstat-time">–</span><span class="stat-label" data-i18n="dupes.searchTime">Search time</span></div>
         </div>
 
         <div class="panel-actions" id="dupes-toolbar" hidden>
-          <button class="btn btn-sm" id="select-extra">Select all but the oldest copy</button>
-          <button class="btn btn-sm" id="select-none">Clear selection</button>
+          <button class="btn btn-sm" id="select-extra" data-i18n="dupes.selectExtra">Select all but the oldest copy</button>
+          <button class="btn btn-sm" id="select-none" data-i18n="app.clearSelection">Clear selection</button>
           <span class="spacer"></span>
-          <span class="status" id="selection-status">Nothing selected</span>
-          <button class="btn btn-danger btn-sm" id="delete-dupes" disabled>Move selected to Recycle Bin</button>
+          <span class="status" id="selection-status" data-i18n="app.nothingSelected">Nothing selected</span>
+          <button class="btn btn-danger btn-sm" id="delete-dupes" disabled data-i18n="app.moveSelected">Move selected to Recycle Bin</button>
         </div>
 
         <div id="dupe-groups" class="groups"></div>
@@ -169,38 +186,38 @@
       <section class="panel" id="panel-trends" role="tabpanel">
         <div class="panel-actions">
           <label class="field">
-            Volume
+            <span data-i18n="trends.volume">Volume</span>
             <select id="trend-volume"></select>
           </label>
           <span class="spacer"></span>
-          <span class="status" id="trend-status">Loading…</span>
-          <button class="btn btn-sm" id="trend-export-json">Export JSON</button>
-          <button class="btn btn-sm" id="trend-export-csv">Export CSV</button>
+          <span class="status" id="trend-status" data-i18n="app.loading">Loading…</span>
+          <button class="btn btn-sm" id="trend-export-json" data-i18n="trends.exportJson">Export JSON</button>
+          <button class="btn btn-sm" id="trend-export-csv" data-i18n="trends.exportCsv">Export CSV</button>
         </div>
 
         <div class="stats">
           <div class="stat">
             <span class="stat-value" id="tstat-used">–</span>
-            <span class="stat-label">In use now</span>
+            <span class="stat-label" data-i18n="trends.inUse">In use now</span>
           </div>
           <div class="stat">
             <span class="stat-value" id="tstat-growth">–</span>
-            <span class="stat-label">Growth</span>
+            <span class="stat-label" data-i18n="trends.growth">Growth</span>
           </div>
           <div class="stat">
             <span class="stat-value" id="tstat-full">–</span>
-            <span class="stat-label">Disk full</span>
+            <span class="stat-label" data-i18n="trends.diskFull">Disk full</span>
           </div>
           <div class="stat stat-safe">
             <span class="stat-value" id="tstat-freed">–</span>
-            <span class="stat-label">Actually freed</span>
+            <span class="stat-label" data-i18n="trends.actuallyFreed">Actually freed</span>
           </div>
         </div>
 
         <div class="grid">
           <section class="card card-wide">
             <div class="card-head">
-              <h2>Disk usage over time</h2>
+              <h2 data-i18n="trends.chartTitle">Disk usage over time</h2>
               <span class="card-badge" id="trend-samples"></span>
             </div>
             <div id="trend-chart" class="chart"></div>
@@ -215,31 +232,31 @@
             take a measurement immediately.
           -->
           <section class="card">
-            <h2>Where these measurements come from</h2>
-            <p class="card-note">
+            <h2 data-i18n="trends.sourcesTitle">Where these measurements come from</h2>
+            <p class="card-note" data-i18n="trends.sourcesNote">
               A trend needs readings taken on a timetable, not whenever somebody opens the app.
               A daily Windows task measures free space even with CleanDrive closed — it reads the
               drive and writes one line, and deletes nothing.
             </p>
             <label class="check check-lead">
               <input type="checkbox" id="trend-daily" />
-              <span>Measure the disk once a day</span>
+              <span data-i18n="trends.daily">Measure the disk once a day</span>
             </label>
             <label class="field field-row" id="trend-time-row">
-              At
+              <span data-i18n="app.at">At</span>
               <input type="time" id="trend-time" />
             </label>
             <ul class="path-list" id="trend-sampling"></ul>
             <div class="panel-actions panel-actions-tight">
-              <button class="btn btn-sm" id="trend-sample">Measure now</button>
-              <button class="btn btn-sm" id="trend-save">Save measuring settings</button>
+              <button class="btn btn-sm" id="trend-sample" data-i18n="trends.measureNow">Measure now</button>
+              <button class="btn btn-sm" id="trend-save" data-i18n="trends.saveMeasuring">Save measuring settings</button>
             </div>
             <p class="card-note" id="trend-sampling-status"></p>
           </section>
 
           <section class="card">
-            <h2>Folders, by how fast they grow</h2>
-            <p class="card-note">
+            <h2 data-i18n="trends.foldersTitle">Folders, by how fast they grow</h2>
+            <p class="card-note" data-i18n="trends.foldersNote">
               Each folder is compared only against earlier scans of that same folder. Scan one
               twice and it gets a rate; scan it once and it says so rather than guessing.
             </p>
@@ -247,8 +264,8 @@
           </section>
 
           <section class="card">
-            <h2>Moved, and actually freed</h2>
-            <p class="card-note">
+            <h2 data-i18n="trends.savingsTitle">Moved, and actually freed</h2>
+            <p class="card-note" data-i18n="trends.savingsNote">
               Two different numbers. Files moved to the Recycle Bin are still on the disk;
               only the second column is space you got back.
             </p>
@@ -266,24 +283,24 @@
 
         <div class="stats">
           <div class="stat">
-            <span class="stat-value" id="astat-state">Off</span>
-            <span class="stat-label">Automatic cleanup</span>
+            <span class="stat-value" id="astat-state" data-i18n="app.off">Off</span>
+            <span class="stat-label" data-i18n="auto.statState">Automatic cleanup</span>
           </div>
           <div class="stat">
             <span class="stat-value" id="astat-next">–</span>
-            <span class="stat-label">Next run</span>
+            <span class="stat-label" data-i18n="auto.statNext">Next run</span>
           </div>
           <div class="stat">
-            <span class="stat-value" id="astat-last">Never</span>
-            <span class="stat-label">Last run</span>
+            <span class="stat-value" id="astat-last" data-i18n="app.never">Never</span>
+            <span class="stat-label" data-i18n="auto.statLast">Last run</span>
           </div>
           <div class="stat">
             <span class="stat-value" id="astat-disk">–</span>
-            <span class="stat-label">Disk in use</span>
+            <span class="stat-label" data-i18n="auto.statDisk">Disk in use</span>
           </div>
         </div>
 
-        <p class="notice notice-loud" id="auto-bin-note">
+        <p class="notice notice-loud" id="auto-bin-note" data-i18n="auto.binNote">
           Moving files to the Recycle Bin frees no disk space — the bin is on the same drive.
           Nothing is actually reclaimed until the bin is emptied. “Freeing the space” below is
           how this app does that for its own items, and it is off until you switch it on.
@@ -291,56 +308,56 @@
 
         <div class="grid">
           <section class="card">
-            <h2>Schedule</h2>
+            <h2 data-i18n="auto.scheduleTitle">Schedule</h2>
             <label class="check check-lead">
               <input type="checkbox" id="auto-enabled" />
-              <span>Run cleanup automatically</span>
+              <span data-i18n="auto.enabled">Run cleanup automatically</span>
             </label>
             <label class="check">
               <input type="checkbox" id="auto-dryrun" />
-              <span>Report only — list what would go, delete nothing</span>
+              <span data-i18n="auto.dryRun">Report only — list what would go, delete nothing</span>
             </label>
-            <p class="card-note">
+            <p class="card-note" data-i18n="auto.dryRunNote">
               A new schedule starts in report-only mode on purpose. Let one run tell you what it
               would have taken before you let it take anything.
             </p>
             <label class="field field-row">
-              How often
+              <span data-i18n="auto.howOften">How often</span>
               <select id="auto-kind">
-                <option value="minutes">Every few minutes (for testing)</option>
-                <option value="daily">Every day</option>
-                <option value="weekly">Every week</option>
-                <option value="monthly">Every month</option>
+                <option value="minutes" data-i18n="auto.kind.minutes">Every few minutes (for testing)</option>
+                <option value="daily" data-i18n="auto.kind.daily">Every day</option>
+                <option value="weekly" data-i18n="auto.kind.weekly">Every week</option>
+                <option value="monthly" data-i18n="auto.kind.monthly">Every month</option>
               </select>
             </label>
             <label class="field field-row" id="auto-minutes-row" hidden>
-              Every
+              <span data-i18n="auto.every">Every</span>
               <input type="number" id="auto-minutes" min="1" max="1440" step="1" />
-              minutes
+              <span data-i18n="app.minutes">minutes</span>
             </label>
             <label class="field field-row" id="auto-weekday-row">
-              On
+              <span data-i18n="auto.on">On</span>
               <select id="auto-weekday">
-                <option value="0">Sunday</option>
-                <option value="1">Monday</option>
-                <option value="2">Tuesday</option>
-                <option value="3">Wednesday</option>
-                <option value="4">Thursday</option>
-                <option value="5">Friday</option>
-                <option value="6">Saturday</option>
+                <option value="0" data-i18n="day.sunday">Sunday</option>
+                <option value="1" data-i18n="day.monday">Monday</option>
+                <option value="2" data-i18n="day.tuesday">Tuesday</option>
+                <option value="3" data-i18n="day.wednesday">Wednesday</option>
+                <option value="4" data-i18n="day.thursday">Thursday</option>
+                <option value="5" data-i18n="day.friday">Friday</option>
+                <option value="6" data-i18n="day.saturday">Saturday</option>
               </select>
             </label>
             <label class="field field-row" id="auto-day-row" hidden>
-              On day
+              <span data-i18n="auto.onDay">On day</span>
               <select id="auto-day"></select>
             </label>
             <label class="field field-row" id="auto-time-row">
-              At
+              <span data-i18n="app.at">At</span>
               <input type="time" id="auto-time" />
             </label>
             <label class="check">
               <input type="checkbox" id="auto-catchup" />
-              <span>Also run a few minutes after you log in</span>
+              <span data-i18n="auto.catchUp">Also run a few minutes after you log in</span>
             </label>
             <p class="card-note" id="auto-schedule-note"></p>
           </section>
@@ -352,8 +369,8 @@
             deleted. Everything in here is read back from Task Scheduler.
           -->
           <section class="card">
-            <h2>Windows task</h2>
-            <p class="card-note">
+            <h2 data-i18n="task.title">Windows task</h2>
+            <p class="card-note" data-i18n="task.note">
               The schedule is a Windows Task Scheduler entry, not a timer inside this app, so it
               runs with CleanDrive closed and after a restart. Everything below is read back from
               Windows itself.
@@ -361,52 +378,52 @@
             <ul class="path-list" id="task-facts"></ul>
             <p class="notice" id="task-problems" hidden></p>
             <div class="panel-actions panel-actions-tight">
-              <button class="btn btn-sm" id="task-check">Check with Windows</button>
-              <button class="btn btn-sm" id="task-repair">Repair registration</button>
-              <button class="btn btn-sm" id="task-run">Run the task now</button>
+              <button class="btn btn-sm" id="task-check" data-i18n="task.check">Check with Windows</button>
+              <button class="btn btn-sm" id="task-repair" data-i18n="task.repair">Repair registration</button>
+              <button class="btn btn-sm" id="task-run" data-i18n="task.runNow">Run the task now</button>
             </div>
-            <p class="card-note" id="task-status">Not checked yet.</p>
+            <p class="card-note" id="task-status" data-i18n="task.notChecked">Not checked yet.</p>
           </section>
 
           <section class="card">
-            <h2>What it may delete</h2>
-            <p class="card-note">
+            <h2 data-i18n="auto.mayDeleteTitle">What it may delete</h2>
+            <p class="card-note" data-i18n="auto.mayDeleteNote">
               Only categories the scan calls safe appear here. Anything marked “worth reviewing”
               is never deleted unattended, whatever this list says.
             </p>
             <div id="auto-categories" class="check-list"></div>
             <label class="field field-row">
-              Untouched for at least
+              <span data-i18n="auto.age">Untouched for at least</span>
               <input type="number" id="auto-age" min="7" max="3650" step="1" />
-              days
+              <span data-i18n="app.days">days</span>
             </label>
             <label class="field field-row">
-              Only when the disk is over
+              <span data-i18n="auto.threshold">Only when the disk is over</span>
               <input type="number" id="auto-threshold" min="0" max="100" step="1" />
-              % full (0 = always)
+              <span data-i18n="auto.thresholdUnit">% full (0 = always)</span>
             </label>
             <label class="field field-row">
-              At most
+              <span data-i18n="auto.max">At most</span>
               <input type="number" id="auto-max" min="1" max="200000" step="100" />
-              files per run
+              <span data-i18n="auto.maxUnit">files per run</span>
             </label>
           </section>
 
           <section class="card card-wide">
             <div class="card-head">
-              <h2>Folders it may clean</h2>
-              <button class="btn btn-sm" id="auto-add-root">Add folder…</button>
+              <h2 data-i18n="auto.rootsTitle">Folders it may clean</h2>
+              <button class="btn btn-sm" id="auto-add-root" data-i18n="app.addFolder">Add folder…</button>
             </div>
-            <p class="card-note">Nothing runs until at least one folder is listed.</p>
+            <p class="card-note" data-i18n="auto.rootsNote">Nothing runs until at least one folder is listed.</p>
             <ul class="path-list" id="auto-roots"></ul>
           </section>
 
           <section class="card card-wide">
             <div class="card-head">
-              <h2>Never touch these</h2>
-              <button class="btn btn-sm" id="auto-add-whitelist">Add folder…</button>
+              <h2 data-i18n="auto.whitelistTitle">Never touch these</h2>
+              <button class="btn btn-sm" id="auto-add-whitelist" data-i18n="app.addFolder">Add folder…</button>
             </div>
-            <p class="card-note">
+            <p class="card-note" data-i18n="auto.whitelistNote">
               Checked before every deletion, in addition to the system locations the app already
               refuses.
             </p>
@@ -415,50 +432,181 @@
 
           <section class="card">
             <div class="card-head">
-              <h2>Skip while these are open</h2>
+              <h2 data-i18n="auto.skipTitle">Skip while these are open</h2>
             </div>
-            <p class="card-note">
+            <p class="card-note" data-i18n="auto.skipNote">
               Process names as Task Manager shows them. If the app cannot tell what is running,
               the whole run is skipped rather than guessed at.
             </p>
             <ul class="path-list" id="auto-skip"></ul>
             <div class="field field-row">
               <input type="text" id="auto-skip-input" placeholder="Code.exe" />
-              <button class="btn btn-sm" id="auto-add-skip">Add</button>
+              <button class="btn btn-sm" id="auto-add-skip" data-i18n="app.add">Add</button>
             </div>
           </section>
 
           <section class="card">
-            <h2>Freeing the space</h2>
+            <h2 data-i18n="purge.title">Freeing the space</h2>
             <label class="check check-lead">
               <input type="checkbox" id="purge-enabled" />
-              <span>Permanently delete CleanDrive’s own recycled items after a grace period</span>
+              <span data-i18n="purge.enabled">Permanently delete CleanDrive’s own recycled items after a grace period</span>
             </label>
             <label class="field field-row">
-              Grace period
+              <span data-i18n="purge.grace">Grace period</span>
               <input type="number" id="purge-days" min="1" max="365" step="1" />
-              days
+              <span data-i18n="app.days">days</span>
             </label>
-            <p class="card-note">
+            <p class="card-note" data-i18n="purge.note">
               This is the only thing in the app that cannot be undone. It matches each item
               against the Recycle Bin’s own record of where it came from and when, so files you
               deleted yourself are never included — not even a file at the same path.
             </p>
             <div class="panel-actions panel-actions-tight">
               <span class="status" id="purge-status">–</span>
-              <button class="btn btn-sm" id="purge-now" disabled>Empty them now…</button>
+              <button class="btn btn-sm" id="purge-now" disabled data-i18n="purge.now">Empty them now…</button>
             </div>
           </section>
-          <section class="card">
+
+          <section class="card card-wide">
             <div class="card-head">
-              <h2>Updates</h2>
-              <span class="card-badge" id="update-badge">—</span>
+              <h2 data-i18n="monitor.title">Warn me before the disk fills</h2>
+              <span class="card-badge" id="monitor-badge" data-i18n="app.off">Off</span>
             </div>
             <label class="check check-lead">
-              <input type="checkbox" id="update-enabled" />
-              <span>Check for new versions</span>
+              <input type="checkbox" id="monitor-enabled" />
+              <span data-i18n="monitor.enabled">Watch disk space and warn me</span>
             </label>
-            <p class="card-note">
+            <p class="card-note" id="monitor-cost" data-i18n="monitor.cost">
+              This is the only setting that keeps CleanDrive running after you close the window —
+              there is no other way to notice a disk filling up. Switching it off ends the process
+              as before.
+            </p>
+            <label class="check">
+              <input type="checkbox" id="monitor-close-to-tray" />
+              <span data-i18n="monitor.closeToTray">Closing the window hides it to the tray instead of quitting</span>
+            </label>
+            <div class="field-grid">
+              <label class="field field-row">
+                <span data-i18n="monitor.warnAt">Warn at</span>
+                <input type="number" id="monitor-warn" min="50" max="99" step="1" /> %
+              </label>
+              <label class="field field-row">
+                <span data-i18n="monitor.criticalAt">Critical at</span>
+                <input type="number" id="monitor-critical" min="51" max="100" step="1" /> %
+              </label>
+              <label class="field field-row">
+                <span data-i18n="monitor.checkEvery">Check every</span>
+                <input type="number" id="monitor-interval" min="15" max="3600" step="15" />
+                <span data-i18n="app.seconds">s</span>
+              </label>
+              <label class="field field-row">
+                <span data-i18n="monitor.snoozeFor">Snooze for</span>
+                <input type="number" id="monitor-snooze" min="5" max="1440" step="5" />
+                <span data-i18n="app.min">min</span>
+              </label>
+            </div>
+            <div class="card-head">
+              <h2 data-i18n="monitor.volumesTitle">Volumes watched</h2>
+              <button class="btn btn-sm" id="monitor-add-volume" data-i18n="app.addFolder">Add folder…</button>
+            </div>
+            <p class="card-note" data-i18n="monitor.volumesNote">Pick any folder; the volume it sits on is what gets watched.</p>
+            <ul class="path-list" id="monitor-volumes"></ul>
+            <div class="panel-actions panel-actions-tight">
+              <span class="status" id="monitor-status" data-i18n="monitor.notRunning">Not running.</span>
+              <span class="spacer"></span>
+              <button class="btn btn-sm" id="monitor-check" data-i18n="app.checkNow">Check now</button>
+              <button class="btn btn-sm" id="monitor-snooze-btn" data-i18n="monitor.snooze">Snooze</button>
+            </div>
+          </section>
+
+        </div>
+
+        <div class="panel-actions">
+          <button class="btn btn-primary" id="auto-save" data-i18n="auto.save">Save settings</button>
+          <button class="btn" id="auto-preview" data-i18n="auto.preview">Preview what it would delete</button>
+          <button class="btn btn-danger" id="auto-run" data-i18n="auto.runNow">Run cleanup now…</button>
+          <button class="btn" id="auto-cancel" hidden data-i18n="app.stop">Stop</button>
+          <span class="spacer"></span>
+          <span class="status" id="auto-status" data-i18n="app.loading">Loading…</span>
+        </div>
+
+        <div class="progress" id="auto-progress" hidden>
+          <div class="progress-bar is-indeterminate"></div>
+        </div>
+
+        <section class="card card-wide" id="auto-result" hidden>
+          <h2 data-i18n="auto.lastResult">Last result</h2>
+          <div id="auto-result-body"></div>
+        </section>
+
+        <section class="card card-wide" id="auto-history-card" hidden>
+          <h2 data-i18n="auto.recentRuns">Recent runs</h2>
+          <ul class="files" id="auto-history"></ul>
+        </section>
+      </section>
+
+      <!-- ------------------------------------------------ settings -->
+      <!--
+        Appearance, language and the version, in one place. The updates card
+        used to sit in the Automatic tab between the cleanup policy and the disk
+        alerts, which put "which version am I running" inside a screen about
+        deleting files on a timetable. Nothing here changes what the app deletes.
+      -->
+      <section class="panel" id="panel-settings" role="tabpanel">
+        <div class="grid">
+          <section class="card">
+            <h2 data-i18n="settings.language.title">Language</h2>
+            <p class="card-note" data-i18n="settings.language.note">
+              Applies immediately, to this window and to the notifications and confirmations the
+              app shows outside it. Auto follows the display language Windows is set to — which is
+              not the same setting as the date and number format.
+            </p>
+            <div
+              class="segmented segmented-wide"
+              id="language-switch"
+              data-language-switch
+              role="group"
+              data-i18n-aria="settings.language.title"
+              aria-label="Language"
+            >
+              <button class="segmented-option" data-language-choice="system" data-i18n="settings.auto">Auto</button>
+              <button class="segmented-option" data-language-choice="en">English</button>
+              <button class="segmented-option" data-language-choice="vi">Tiếng Việt</button>
+            </div>
+            <p class="card-note" id="language-detail"></p>
+          </section>
+
+          <section class="card">
+            <h2 data-i18n="settings.appearance.title">Appearance</h2>
+            <p class="card-note" data-i18n="settings.appearance.note">
+              Auto follows the system, so a machine that switches at sunset switches this window
+              with it. The same control sits in the top bar.
+            </p>
+            <div
+              class="segmented segmented-wide"
+              id="theme-switch-settings"
+              data-theme-host
+              role="group"
+              data-i18n-aria="app.appearance"
+              aria-label="Appearance"
+            >
+              <button class="segmented-option" data-theme-choice="system" data-i18n="settings.auto">Auto</button>
+              <button class="segmented-option" data-theme-choice="light" data-i18n="app.theme.light">Light</button>
+              <button class="segmented-option" data-theme-choice="dark" data-i18n="app.theme.dark">Dark</button>
+            </div>
+          </section>
+
+          <section class="card card-wide">
+            <div class="card-head">
+              <h2 data-i18n="settings.version.title">Version and updates</h2>
+              <span class="card-badge" id="update-badge">—</span>
+            </div>
+            <ul class="path-list" id="version-facts"></ul>
+            <label class="check check-lead">
+              <input type="checkbox" id="update-enabled" />
+              <span data-i18n="update.enabled">Check for new versions</span>
+            </label>
+            <p class="card-note" data-i18n="update.note">
               The only thing in this app that contacts the internet. It fetches one file from
               the release page and sends nothing — no identifiers, no usage data. Switch it off
               and the app makes no network requests at all.
@@ -468,99 +616,25 @@
               <div class="progress-bar" id="update-bar"></div>
             </div>
             <div class="panel-actions panel-actions-tight">
-              <button class="btn btn-sm" id="update-check">Check now</button>
-              <button class="btn btn-sm" id="update-download" hidden>Download</button>
-              <button class="btn btn-primary btn-sm" id="update-install" hidden>Restart and install</button>
+              <button class="btn btn-sm" id="update-check" data-i18n="app.checkNow">Check now</button>
+              <button class="btn btn-sm" id="update-download" hidden data-i18n="update.download">Download</button>
+              <button class="btn btn-primary btn-sm" id="update-install" hidden data-i18n="update.install">Restart and install</button>
             </div>
           </section>
-
-          <section class="card card-wide">
-            <div class="card-head">
-              <h2>Warn me before the disk fills</h2>
-              <span class="card-badge" id="monitor-badge">Off</span>
-            </div>
-            <label class="check check-lead">
-              <input type="checkbox" id="monitor-enabled" />
-              <span>Watch disk space and warn me</span>
-            </label>
-            <p class="card-note" id="monitor-cost">
-              This is the only setting that keeps CleanDrive running after you close the window —
-              there is no other way to notice a disk filling up. Switching it off ends the process
-              as before.
-            </p>
-            <label class="check">
-              <input type="checkbox" id="monitor-close-to-tray" />
-              <span>Closing the window hides it to the tray instead of quitting</span>
-            </label>
-            <div class="field-grid">
-              <label class="field field-row">
-                Warn at
-                <input type="number" id="monitor-warn" min="50" max="99" step="1" /> %
-              </label>
-              <label class="field field-row">
-                Critical at
-                <input type="number" id="monitor-critical" min="51" max="100" step="1" /> %
-              </label>
-              <label class="field field-row">
-                Check every
-                <input type="number" id="monitor-interval" min="15" max="3600" step="15" /> s
-              </label>
-              <label class="field field-row">
-                Snooze for
-                <input type="number" id="monitor-snooze" min="5" max="1440" step="5" /> min
-              </label>
-            </div>
-            <div class="card-head">
-              <h2>Volumes watched</h2>
-              <button class="btn btn-sm" id="monitor-add-volume">Add folder…</button>
-            </div>
-            <p class="card-note">Pick any folder; the volume it sits on is what gets watched.</p>
-            <ul class="path-list" id="monitor-volumes"></ul>
-            <div class="panel-actions panel-actions-tight">
-              <span class="status" id="monitor-status">Not running.</span>
-              <span class="spacer"></span>
-              <button class="btn btn-sm" id="monitor-check">Check now</button>
-              <button class="btn btn-sm" id="monitor-snooze-btn">Snooze</button>
-            </div>
-          </section>
-
         </div>
-
-        <div class="panel-actions">
-          <button class="btn btn-primary" id="auto-save">Save settings</button>
-          <button class="btn" id="auto-preview">Preview what it would delete</button>
-          <button class="btn btn-danger" id="auto-run">Run cleanup now…</button>
-          <button class="btn" id="auto-cancel" hidden>Stop</button>
-          <span class="spacer"></span>
-          <span class="status" id="auto-status">Loading…</span>
-        </div>
-
-        <div class="progress" id="auto-progress" hidden>
-          <div class="progress-bar is-indeterminate"></div>
-        </div>
-
-        <section class="card card-wide" id="auto-result" hidden>
-          <h2>Last result</h2>
-          <div id="auto-result-body"></div>
-        </section>
-
-        <section class="card card-wide" id="auto-history-card" hidden>
-          <h2>Recent runs</h2>
-          <ul class="files" id="auto-history"></ul>
-        </section>
       </section>
     </main>
 
     <!-- Shared by every delete path: largest files, cleanup, duplicates. -->
     <div class="delete-progress" id="delete-progress" hidden>
       <div class="dp-head">
-        <span class="dp-title" id="dp-title">Moving to Recycle Bin</span>
+        <span class="dp-title" id="dp-title" data-i18n="delete.title">Moving to Recycle Bin</span>
         <span class="dp-eta" id="dp-eta"></span>
-        <button class="btn btn-sm" id="dp-cancel">Stop</button>
+        <button class="btn btn-sm" id="dp-cancel" data-i18n="app.stop">Stop</button>
       </div>
       <div class="dp-track"><div class="dp-fill" id="dp-fill"></div></div>
       <div class="dp-meta">
-        <span id="dp-count">Preparing…</span>
+        <span id="dp-count" data-i18n="app.preparing">Preparing…</span>
         <span id="dp-rate"></span>
       </div>
       <div class="dp-current" id="dp-current"></div>
@@ -569,7 +643,7 @@
     <div class="toast" id="toast" hidden></div>
 
     <script src="app.js"></script>
-    <!-- Both share app.js's globals; must load after it. -->
+    <!-- All three share app.js's globals; must load after it. -->
     <script src="automatic.js"></script>
     <script src="trends.js"></script>
     <script src="updates.js"></script>

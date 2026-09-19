@@ -577,11 +577,24 @@ app.whenReady().then(async () => {
         `document.getElementById('astat-last').textContent !== ${JSON.stringify(before.last)}`,
         15000);
 
+      /*
+       * Wait for the toast rather than reading whatever is on screen.
+       *
+       * The tile updates part way through the refresh and the toast is raised
+       * at the end of it, after the disk, purge and monitor queries -- about a
+       * second later now that the settings read also asks Task Scheduler what
+       * it holds. Reading immediately caught the *previous* toast, still
+       * visible from the manual run a few checks earlier, and reported it as a
+       * failure. Its own timeout is the assertion.
+       */
+      const toastText = `(document.getElementById('toast').hidden ? '' : document.getElementById('toast').textContent)`;
+      await until(win, `/Scheduled report finished/.test(${toastText})`, 20000).catch(() => {});
+
       const after = await win.webContents.executeJavaScript(`({
         last: document.getElementById('astat-last').textContent,
         rows: document.querySelectorAll('#auto-history .file-row').length,
         result: document.getElementById('auto-result-body').textContent,
-        toast: document.getElementById('toast').hidden ? '' : document.getElementById('toast').textContent,
+        toast: ${toastText},
       })`);
 
       console.log(`    "${before.last}" -> "${after.last}"`);
@@ -766,23 +779,42 @@ app.whenReady().then(async () => {
       pageBg: getComputedStyle(document.body).backgroundColor,
       text: getComputedStyle(document.body).color,
       active: (document.querySelector('[data-theme-choice].is-active') || {}).dataset,
-      buttons: document.querySelectorAll('[data-theme-choice]').length,
+      buttons: document.querySelectorAll('#theme-switch [data-theme-choice]').length,
+      hosts: document.querySelectorAll('[data-theme-host]').length,
     })`);
 
     const initial = await readTheme();
     check('the switch offers three modes', initial.buttons === 3, String(initial.buttons));
+    // Two copies of it now: the top bar and the Settings tab. Counting every
+    // [data-theme-choice] in the document would have counted six.
+    check('and the Settings tab carries a second copy', initial.hosts === 2, String(initial.hosts));
     check('one of them is marked active', Boolean(initial.active), JSON.stringify(initial.active));
     check('following the system means no pinned attribute',
       initial.attr === null && initial.scheme === 'light dark',
       `attr=${initial.attr} scheme=${initial.scheme}`);
 
-    const click = (mode) => win.webContents.executeJavaScript(`
-      (async () => {
-        document.querySelector('[data-theme-choice="${mode}"]').click();
-        await new Promise(r => setTimeout(r, 120));
-        return true;
-      })()
-    `);
+    /*
+     * Waits for the attribute rather than sleeping on it.
+     *
+     * The theme is applied inside a View Transition callback now, so it lands a
+     * frame after the click rather than synchronously -- and on a window that is
+     * not on screen, "a frame" can be most of a second. A fixed 120ms sleep read
+     * the old theme and reported the palette as not inverting.
+     */
+    const click = async (mode) => {
+      await win.webContents.executeJavaScript(
+        `document.querySelector('#theme-switch [data-theme-choice="${mode}"]').click()`
+      );
+      // "system" is the *absence* of the attribute -- there is no such value for
+      // `color-scheme`, which is why the app removes it rather than writing it.
+      const settled =
+        mode === 'system'
+          ? `document.documentElement.getAttribute('data-theme') === null`
+          : `document.documentElement.getAttribute('data-theme') === '${mode}'`;
+      await until(win, settled, 15000);
+      // Let the sweep finish, so the snapshot overlay is not what gets measured.
+      await wait(700);
+    };
 
     await click('light');
     const light = await readTheme();

@@ -15,6 +15,8 @@ const { findUserBins, purgeRecorded } = require('./lib/recyclebin');
 const historyLib = require('./lib/history');
 const { sample, volumeTargets } = require('./lib/sampler');
 const tasks = require('./tasks');
+const language = require('./language');
+const { t } = language;
 const tray = require('./tray');
 const updater = require('./updater');
 const watcher = require('./watcher');
@@ -63,7 +65,7 @@ function register() {
     guard(async () => {
       const win = BrowserWindow.fromWebContents(event.sender);
       const result = await dialog.showOpenDialog(win, {
-        title: 'Choose a folder to analyse',
+        title: t('dialog.chooseFolder', 'Choose a folder to analyse'),
         properties: ['openDirectory'],
       });
       return result.canceled ? null : result.filePaths[0];
@@ -322,10 +324,12 @@ function register() {
     guard(async () => {
       const taskPath = which === 'sampler' ? scheduler.sampleTaskPath() : scheduler.cleanupTaskPath();
       if (!(await scheduler.isInstalled(taskPath))) {
-        throw new Error('No task is registered with Windows yet — save the settings first.');
+        throw new Error(t('task.error.notRegistered', 'No task is registered with Windows yet — save the settings first.'));
       }
       const started = await scheduler.runNow(taskPath);
-      if (!started.ok) throw new Error(started.error || 'Task Scheduler refused to start the task');
+      if (!started.ok) {
+        throw new Error(started.error || t('task.error.refusedStart', 'Task Scheduler refused to start the task'));
+      }
       return { started: true, taskPath };
     })
   );
@@ -500,6 +504,42 @@ function register() {
     })
   );
 
+  /**
+   * Change the language.
+   *
+   * The main process changes with it, which is the part that would be easy to
+   * forget: the tray menu is already built, and the confirmation dialog in
+   * front of the next deletion is composed here, not in the window. A window
+   * that switched to Vietnamese while the dialog asking "may I delete 2,431
+   * files?" stayed English would leave the one sentence that must be
+   * understood in the language the user just turned off.
+   */
+  ipcMain.handle('language:set', (event, preference) =>
+    guard(async () => {
+      const { settings } = await services().settings.patch({ appearance: { language: preference } });
+      const code = language.apply(settings.appearance.language);
+
+      // Rebuilt rather than relabelled: the menu is constructed from strings
+      // when it is created, so it holds whatever language was current then.
+      tray.apply(settings);
+
+      return { preference: settings.appearance.language, language: code };
+    })
+  );
+
+  /** What the window needs to draw the language control. */
+  ipcMain.handle('language:get', () =>
+    guard(async () => {
+      const settings = await services().settings.load();
+      return {
+        preference: settings.appearance.language,
+        language: language.current(),
+        available: language.LANGUAGES,
+        system: language.systemLanguages(),
+      };
+    })
+  );
+
   /* ---- updates ----------------------------------------------------------- */
 
   ipcMain.handle('update:state', () =>
@@ -575,7 +615,7 @@ function register() {
         source: 'manual',
         extraTargets: [app.getPath('userData')],
       });
-      if (!result.ok) throw new Error(result.error || 'The disk could not be measured');
+      if (!result.ok) throw new Error(result.error || t('trends.error.measure', 'The disk could not be measured'));
 
       return { ...result, snapshots: history.snapshots.length };
     })
@@ -599,7 +639,7 @@ function register() {
       const stamp = new Date().toISOString().slice(0, 10);
 
       const { canceled, filePath } = await dialog.showSaveDialog(win, {
-        title: 'Export storage history',
+        title: t('dialog.exportHistory', 'Export storage history'),
         defaultPath: `cleandrive-history-${stamp}.${csv ? 'csv' : 'json'}`,
         filters: csv ? [{ name: 'CSV', extensions: ['csv'] }] : [{ name: 'JSON', extensions: ['json'] }],
       });
@@ -824,15 +864,20 @@ async function confirmAutoDelete(win, selection, settings) {
 
   const { response } = await dialog.showMessageBox(win, {
     type: 'warning',
-    buttons: ['Move to Recycle Bin', 'Cancel'],
+    buttons: [t('dialog.moveToBin', 'Move to Recycle Bin'), t('app.cancel', 'Cancel')],
     defaultId: 1,
     cancelId: 1,
-    title: 'Confirm automatic cleanup',
-    message: `Move ${selection.files.toLocaleString('en-US')} file(s) to the Recycle Bin?`,
+    title: t('dialog.confirmAuto.title', 'Confirm automatic cleanup'),
+    message: t('dialog.confirmAuto.message', 'Move {n} file(s) to the Recycle Bin?', {
+      n: selection.files.toLocaleString(language.current()),
+    }),
     detail:
-      `These are files in the enabled categories, untouched for at least ` +
-      `${settings.autoClean.minAgeDays} days. Total ${formatBytes(selection.bytes)}.\n\n` +
-      `For example:\n${names}${selection.files > 5 ? '\n  …' : ''}\n\n` +
+      t(
+        'dialog.confirmAuto.detail',
+        'These are files in the enabled categories, untouched for at least {days} days. Total {size}.',
+        { days: settings.autoClean.minAgeDays, size: formatBytes(selection.bytes) }
+      ) +
+      `\n\n${t('dialog.forExample', 'For example:')}\n${names}${selection.files > 5 ? '\n  …' : ''}\n\n` +
       (settings.purge.enabled
         ? `They stay recoverable for ${settings.purge.afterDays} day(s), after which CleanDrive removes ` +
           'its own items permanently and the space is freed.'

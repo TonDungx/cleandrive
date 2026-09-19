@@ -1,0 +1,711 @@
+'use strict';
+
+/**
+ * Vietnamese.
+ *
+ * Keys only — the English is in the source, next to where it is used, and any
+ * key missing here falls back to it. That is deliberate: a half-finished
+ * dictionary shows English, not `auto.schedule.title`.
+ *
+ * ## House style for this file
+ *
+ * The English in this app is plain and specific, and says what is actually true
+ * rather than what sounds reassuring — "moved to the Recycle Bin" is never
+ * called "freed". The Vietnamese has to carry the same distinctions, because
+ * that distinction is the product:
+ *
+ *   - *moved* → **chuyển vào Thùng rác**, *freed* → **giải phóng**. Never both
+ *     as "xoá", which is exactly the confusion the English is written to avoid
+ *   - *Recycle Bin* → **Thùng rác**; *scan* → **quét**; *volume* → **ổ đĩa**
+ *   - *scheduled run* → **lần chạy theo lịch**
+ *   - **Task Scheduler** is left in English: it is the name of the Windows
+ *     window the user has to open to find the entry, and translating it would
+ *     send them looking for something that is not there
+ *   - Product names, versions, file names and paths are never translated
+ *   - Vietnamese marks no plural, so `*.one` and `*.other` map to one word and
+ *     the count stays a number next to it
+ */
+
+(function (root, factory) {
+  const table = factory();
+  const i18n = typeof module === 'object' && module.exports ? require('./index') : root.CleanDriveI18n;
+  if (i18n) i18n.register('vi', table);
+  if (typeof module === 'object' && module.exports) module.exports = table;
+})(typeof globalThis !== 'undefined' ? globalThis : this, function () {
+  return {
+    /* ---- chrome, and words used everywhere ---------------------------- */
+    'app.tab.usage': 'Dung lượng đĩa',
+    'app.tab.cleanup': 'Nên xoá gì',
+    'app.tab.dupes': 'Trùng lặp',
+    'app.tab.trends': 'Xu hướng',
+    'app.tab.auto': 'Tự động',
+    'app.tab.settings': 'Cài đặt',
+
+    'app.pickFolder': 'Chọn thư mục…',
+    'app.noFolder': 'Chưa chọn thư mục',
+    'app.pickToBegin': 'Chọn một thư mục để bắt đầu.',
+    'app.appearance': 'Giao diện',
+    'app.theme.system': 'Tự động',
+    'app.theme.light': 'Sáng',
+    'app.theme.dark': 'Tối',
+    'app.theme.systemHint': 'Theo giao diện của hệ thống',
+    'app.theme.lightHint': 'Luôn sáng',
+    'app.theme.darkHint': 'Luôn tối',
+    'app.theme.failed': 'Không lưu được cài đặt giao diện.',
+
+    'app.cancel': 'Huỷ',
+    'app.stop': 'Dừng',
+    'app.stopping': 'Đang dừng…',
+    'app.add': 'Thêm',
+    'app.addFolder': 'Thêm thư mục…',
+    'app.remove': 'Xoá khỏi danh sách',
+    'app.reveal': 'Mở thư mục chứa',
+    'app.open': 'Mở',
+    'app.checkNow': 'Kiểm tra ngay',
+    'app.checking': 'Đang kiểm tra…',
+    'app.saving': 'Đang lưu…',
+    'app.loading': 'Đang tải…',
+    'app.preparing': 'Đang chuẩn bị…',
+    'app.notSaved': 'Không có gì được lưu.',
+    'app.clearSelection': 'Bỏ chọn tất cả',
+    'app.nothingSelected': 'Chưa chọn gì',
+    'app.selectedCount': 'Đã chọn {n} · {size}',
+    'app.moveSelected': 'Chuyển mục đã chọn vào Thùng rác',
+    'app.on': 'Bật',
+    'app.off': 'Tắt',
+    'app.off.lower': 'tắt',
+    'app.never': 'Chưa bao giờ',
+    'app.never.lower': 'chưa bao giờ',
+    'app.yes': 'có',
+    'app.no': 'không',
+    'app.at': 'Lúc',
+    'app.days': 'ngày',
+    'app.minutes': 'phút',
+    'app.min': 'phút',
+    'app.seconds': 'giây',
+    'app.unit.seconds': 'giây',
+    'app.unknownError': 'Lỗi không xác định',
+    'app.cancelledPartial': 'Đã huỷ — kết quả chưa đầy đủ.',
+
+    // English needs two forms of each; Vietnamese needs one.
+    'app.file.one': 'tệp',
+    'app.file.other': 'tệp',
+    'app.item.one': 'mục',
+    'app.item.other': 'mục',
+    'app.location.one': 'vị trí',
+    'app.location.other': 'vị trí',
+
+    'app.ago.unknown': 'không rõ',
+    'app.ago.today': 'hôm nay',
+    'app.ago.yesterday': 'hôm qua',
+    'app.ago.days': '{n} ngày trước',
+    'app.ago.months': '{n} tháng trước',
+    'app.ago.years': '{n} năm trước',
+    'app.lastOpened': 'Mở lần cuối {when}',
+    'app.modified': 'Sửa lần cuối {when}',
+
+    'app.eta.almost': 'sắp xong',
+    'app.eta.seconds': 'còn {n} giây',
+    'app.eta.minutes': 'còn {n} phút',
+    'app.eta.hours': 'còn {h} giờ',
+    'app.eta.hoursMinutes': 'còn {h} giờ {m} phút',
+
+    // Labels that only ever appear in front of an error message.
+    'app.label.scan': 'Quét',
+    'app.label.dupes': 'Tìm trùng lặp',
+    'app.label.delete': 'Xoá',
+    'app.label.paths': 'Đường dẫn',
+    'app.label.folderPicker': 'Chọn thư mục',
+    'app.label.chooseFolder': 'Chọn thư mục',
+    'app.label.saveSettings': 'Lưu cài đặt',
+    'app.label.settings': 'Cài đặt',
+    'app.label.diskUsage': 'Dung lượng đĩa',
+
+    'app.path.downloads': 'Tải xuống',
+    'app.path.documents': 'Tài liệu',
+    'app.path.pictures': 'Hình ảnh',
+    'app.path.videos': 'Video',
+    'app.path.music': 'Nhạc',
+    'app.path.desktop': 'Màn hình nền',
+    'app.path.home': 'Thư mục người dùng',
+    'app.path.temp': 'Tệp tạm',
+    'app.path.appdata': 'Dữ liệu ứng dụng',
+
+    /* ---- days --------------------------------------------------------- */
+    'day.sunday': 'Chủ nhật',
+    'day.monday': 'Thứ hai',
+    'day.tuesday': 'Thứ ba',
+    'day.wednesday': 'Thứ tư',
+    'day.thursday': 'Thứ năm',
+    'day.friday': 'Thứ sáu',
+    'day.saturday': 'Thứ bảy',
+
+    /* ---- disk usage --------------------------------------------------- */
+    'usage.scan': 'Quét thư mục',
+    'usage.ready': 'Sẵn sàng quét.',
+    'usage.failed': 'Quét thất bại.',
+    'usage.totalSize': 'Tổng dung lượng',
+    'usage.files': 'Tệp',
+    'usage.folders': 'Thư mục',
+    'usage.scanTime': 'Thời gian quét',
+    'usage.whereSpaceWent': 'Dung lượng nằm ở đâu',
+    'usage.byType': 'Theo loại tệp',
+    'usage.largest': 'Tệp lớn nhất',
+    'usage.scanned': 'Đã quét {n} tệp.',
+    'usage.unreadable': 'Bỏ qua {n} mục không đọc được.',
+    'usage.protectedExcluded': 'Đã loại trừ {n} {locations} hệ thống được bảo vệ — xem tab “Nên xoá gì”.',
+    'usage.empty': 'Không tìm thấy tệp nào đọc được trong thư mục này.',
+
+    /* ---- what to delete ----------------------------------------------- */
+    'cleanup.safe': 'An toàn để xoá',
+    'cleanup.review': 'Nên xem lại',
+    'cleanup.protected': 'Vị trí được bảo vệ',
+    'cleanup.selectSafe': 'Chọn tất cả mục được đánh dấu an toàn',
+    'cleanup.selectAllInGroup': 'chọn tất cả',
+    'cleanup.neverDeleted': 'Không bao giờ bị xoá',
+    'cleanup.neverDeletedNote':
+      'Những vị trí này đã bị bỏ qua khi quét và các lớp bảo vệ cũng từ chối xoá chúng, nên không ' +
+      'thứ gì ở đây có thể bị ứng dụng này xoá — dù bạn cố ý hay nhầm lẫn.',
+    'cleanup.empty': 'Hãy quét một thư mục để xem thứ gì an toàn để xoá.',
+    'cleanup.alreadyClean': 'Không có gì rõ ràng là bỏ được trong thư mục này — nó đã sạch.',
+    'cleanup.showingLargest': 'Đang hiện {shown} tệp lớn nhất trong tổng số {total} tệp thuộc nhóm này.',
+
+    'category.temp': 'Tệp tạm',
+    'category.cache': 'Bộ nhớ đệm',
+    'category.crashdump': 'Tệp ghi lỗi treo',
+    'category.log': 'Nhật ký cũ',
+    'category.gpucache': 'Đệm GPU và mã đã biên dịch',
+    'category.buildoutput': 'Kết quả biên dịch',
+
+    /* ---- duplicates --------------------------------------------------- */
+    'dupes.find': 'Tìm tệp trùng',
+    'dupes.ready': 'Sẵn sàng tìm.',
+    'dupes.failed': 'Tìm trùng lặp thất bại.',
+    'dupes.ignoreUnder': 'Bỏ qua tệp nhỏ hơn',
+    'dupes.groups': 'Nhóm trùng lặp',
+    'dupes.reclaimable': 'Có thể thu hồi',
+    'dupes.hashed': 'Tệp đã băm',
+    'dupes.searchTime': 'Thời gian tìm',
+    'dupes.selectExtra': 'Chọn tất cả trừ bản cũ nhất',
+    'dupes.phase.indexing': 'Đang lập chỉ mục tệp',
+    'dupes.phase.grouping': 'Đang nhóm theo kích thước',
+    'dupes.phase.partial': 'Đang so phần đầu tệp',
+    'dupes.phase.full': 'Đang đối chiếu toàn bộ nội dung',
+    'dupes.detail.indexing': '{n} tệp',
+    'dupes.detail.hashing': 'đã băm {done} trong {total} ứng viên',
+    'dupes.checked': 'Đã kiểm tra {n} tệp.',
+    'dupes.cacheHits': 'Dùng lại {n} giá trị băm từ bộ đệm.',
+    'dupes.unreadable': 'Không đọc được {n} tệp.',
+    'dupes.withheld':
+      '{n} bản sao thuộc về chương trình đã cài hoặc thư mục phụ thuộc nên không được chọn tự động — ' +
+      'chỉ {selectable} trong tổng số {total} là an toàn để xoá hàng loạt.',
+    'dupes.empty': 'Không tìm thấy tệp trùng nào trong thư mục này.',
+    'dupes.groupTitle': '{n} bản giống hệt nhau · mỗi bản {size}',
+    'dupes.reclaimableAmount': 'thu hồi được {size}',
+    'dupes.oldest': 'cũ nhất',
+    'dupes.oldestHint': 'Bản cũ nhất — nên giữ lại bản này',
+    'dupes.skippedNote':
+      '{n} {files} không được chọn — chúng thuộc về chương trình đã cài hoặc thư mục phụ thuộc. ' +
+      'Nếu bạn chắc chắn thì hãy tự tích từng tệp.',
+
+    /* ---- deleting ----------------------------------------------------- */
+    'delete.title': 'Đang chuyển vào Thùng rác',
+    'delete.checking': 'Đang kiểm tra thứ gì xoá được',
+    'delete.checkedCount': 'đã kiểm tra {done} trong {total}',
+    'delete.waiting': 'Đang chờ xác nhận',
+    'delete.rate': '{n} tệp/giây',
+    'delete.took': ' trong {n} giây',
+    'delete.moved': 'Đã chuyển {n} {items} vào Thùng rác{took} · giải phóng {freed}',
+    'delete.stopped':
+      'Đã dừng. {n} {items} đã được chuyển vào Thùng rác · giải phóng {freed} · còn {left} chưa đụng tới.',
+    'delete.cancelled': 'Đã huỷ xoá — không có gì bị gỡ đi.',
+    'delete.needsAdmin': '{n} mục cần quyền quản trị',
+    'delete.inUse': '{n} mục đang được chương trình khác sử dụng',
+    'delete.otherSkipped': 'bỏ qua {n} mục',
+    'delete.nothing': 'Không có gì bị xoá. {reason}',
+
+    /* ---- trends ------------------------------------------------------- */
+    'trends.volume': 'Ổ đĩa',
+    'trends.exportJson': 'Xuất JSON',
+    'trends.exportCsv': 'Xuất CSV',
+    'trends.exportLabel': 'Xuất dữ liệu',
+    'trends.exported': 'Đã xuất {n} phép đo.',
+    'trends.exportCancelled': 'Đã huỷ xuất dữ liệu.',
+    'trends.inUse': 'Đang dùng',
+    'trends.growth': 'Mức tăng',
+    'trends.diskFull': 'Đầy đĩa',
+    'trends.actuallyFreed': 'Thực sự giải phóng',
+    'trends.chartTitle': 'Dung lượng đã dùng theo thời gian',
+    'trends.perMonth': '{sign}{size}/tháng',
+    'trends.measurement.one': 'phép đo',
+    'trends.measurement.other': 'phép đo',
+    'trends.scan.one': 'lần quét',
+    'trends.scan.other': 'lần quét',
+    'trends.in.days': 'sau {n} ngày nữa',
+    'trends.in.weeks': 'sau {n} tuần nữa',
+    'trends.in.months': 'sau {n} tháng nữa',
+    'trends.in.years': 'sau {n} năm nữa',
+    'trends.notYet': 'chưa đủ dữ liệu',
+    'trends.notSoon': 'còn lâu',
+    'trends.unknown': 'chưa rõ',
+    'trends.noHistory': 'Chưa có dữ liệu lịch sử.',
+    'trends.recorded': 'Đã ghi {n} phép đo.',
+    'trends.freeOf': 'còn trống {free} trên tổng {total}',
+    'trends.growthHint': 'Khớp từ {n} phép đo trải {days} ngày (r² {r2})',
+    'trends.fullHint': 'Khoảng {date} nếu giữ nguyên tốc độ này (r² {r2})',
+    'trends.freedHint':
+      '{moved} đã được chuyển vào Thùng rác; trong đó {freed} đã bị xoá vĩnh viễn và thực sự trống ra.',
+    'trends.axisCaveat':
+      'Trục dọc được co giãn theo dữ liệu chứ không phải 0–100%, để thấy được cả thay đổi nhỏ.',
+    'trends.chart.none':
+      'Chưa có phép đo nào cho ổ đĩa này. Nút “Đo ngay” bên dưới sẽ đo lập tức, còn phép đo hằng ngày ' +
+      'vẫn tiếp tục đo dù bạn có mở ứng dụng hay không.',
+    'trends.chart.one': 'Mới có một phép đo. Cần thêm một phép đo nữa, vào ngày khác, mới thành một đường.',
+
+    'trends.sourcesTitle': 'Các số đo này lấy từ đâu',
+    'trends.sourcesNote':
+      'Một xu hướng cần các phép đo theo lịch, chứ không phải lúc nào có người mở ứng dụng mới đo. ' +
+      'Một tác vụ Windows hằng ngày sẽ đo chỗ trống ngay cả khi CleanDrive đã đóng — nó đọc ổ đĩa và ' +
+      'ghi một dòng, không xoá gì cả.',
+    'trends.daily': 'Đo dung lượng đĩa mỗi ngày một lần',
+    'trends.measureNow': 'Đo ngay',
+    'trends.measureLabel': 'Đo dung lượng đĩa',
+    'trends.measuring': 'Đang đo…',
+    'trends.saveMeasuring': 'Lưu cài đặt đo',
+    'trends.unsaved': 'Cài đặt đo có thay đổi chưa lưu.',
+    'trends.error.measure': 'Không đo được dung lượng đĩa',
+    'trends.measured.new': 'Đã đo {n} ổ đĩa. Tổng cộng {total} phép đo.',
+    'trends.measured.coalesced':
+      'Đã đo, nhưng phép đo này thay thế một số đo chưa đầy nửa tiếng — chuỗi dữ liệu chỉ giữ một điểm ' +
+      'mỗi nửa tiếng, nên bấm liên tục cũng không tạo ra được xu hướng.',
+    'trends.sampler.daily': 'Tác vụ Windows hằng ngày',
+    'trends.sampler.registered': 'đã đăng ký, chạy lúc {time}',
+    'trends.sampler.notRegistered': 'đã bật nhưng chưa đăng ký — hãy lưu bên dưới',
+    'trends.sampler.closedHint': 'Chạy cả khi CleanDrive đã đóng',
+    'trends.sampler.next': 'Phép đo tự động kế tiếp',
+    'trends.sampler.launch': 'Khi mở ứng dụng',
+    'trends.sampler.launchHint': 'Mỗi lần mở đo một lần',
+    'trends.sampler.always': 'luôn luôn',
+    'trends.sampler.monitor': 'Khi đang theo dõi dung lượng',
+    'trends.sampler.monitorOn': 'bật, nhiều nhất nửa tiếng một lần',
+    'trends.sampler.monitorHint': 'Các số đọc mà bộ theo dõi vốn đã lấy nay được ghi lại thay vì bỏ đi',
+    'trends.sampler.scan': 'Khi bạn chạy một lần quét',
+    'trends.sampler.scanHint':
+      'Một lần quét còn ghi lại kích thước thư mục, và đó là thứ danh sách thư mục bên dưới đem so sánh',
+    'trends.sampler.lastMeasurement':
+      'Phép đo gần nhất {when}. Hai phép đo là thành một đường; con số mức tăng cần bốn phép đo trải ' +
+      'ít nhất một tuần.',
+    'trends.sampler.noneYet': 'Chưa có phép đo nào.',
+    'trends.saved.on': 'Đã lưu. Windows sẽ đo dung lượng đĩa mỗi ngày.',
+    'trends.saved.off': 'Đã lưu. Phép đo hằng ngày đã tắt và tác vụ Windows của nó đã được gỡ.',
+    'trends.saved.taskWrong': 'Đã lưu, nhưng tác vụ đo không đúng: {problems}',
+
+    'trends.foldersTitle': 'Thư mục, theo tốc độ phình to',
+    'trends.foldersNote':
+      'Mỗi thư mục chỉ được so với các lần quét trước của chính nó. Quét hai lần thì có tốc độ; quét ' +
+      'một lần thì nó nói thẳng là chưa đủ, chứ không đoán.',
+    'trends.folders.none': 'Chưa quét thư mục nào.',
+    'trends.folders.atLastScan': '{size} ở lần quét gần nhất',
+    'trends.folders.rateHint': 'hiện {size}, qua {samples} lần quét trải {days} ngày',
+
+    'trends.savingsTitle': 'Đã chuyển đi, và thực sự giải phóng',
+    'trends.savingsNote':
+      'Hai con số khác nhau. Tệp đã chuyển vào Thùng rác thì vẫn còn nằm trên đĩa; chỉ cột thứ hai mới ' +
+      'là dung lượng bạn thật sự lấy lại được.',
+    'trends.savings.month': 'Tháng',
+    'trends.savings.toBin': 'Vào Thùng rác',
+    'trends.savings.freed': 'Đã giải phóng',
+    'trends.savings.total': 'Tổng cộng',
+    'trends.savings.none': 'Chưa xoá gì qua CleanDrive.',
+
+    /* ---- automatic cleanup -------------------------------------------- */
+    'auto.statState': 'Dọn dẹp tự động',
+    'auto.statNext': 'Lần chạy kế tiếp',
+    'auto.statLast': 'Lần chạy gần nhất',
+    'auto.statDisk': 'Đĩa đang dùng',
+    'auto.state.reportOnly': 'Chỉ báo cáo',
+    'auto.binNote':
+      'Chuyển tệp vào Thùng rác không giải phóng được dung lượng nào — thùng rác nằm trên chính ổ đĩa đó. ' +
+      'Không có gì thật sự được thu hồi cho tới khi thùng rác được dọn. Mục “Giải phóng dung lượng” bên ' +
+      'dưới là cách ứng dụng này tự dọn phần của nó, và nó đang tắt cho tới khi bạn bật lên.',
+
+    'auto.scheduleTitle': 'Lịch chạy',
+    'auto.enabled': 'Tự động chạy dọn dẹp',
+    'auto.dryRun': 'Chỉ báo cáo — liệt kê thứ sẽ bị xoá, không xoá gì',
+    'auto.dryRunNote':
+      'Lịch mới luôn bắt đầu ở chế độ chỉ báo cáo, và đó là cố ý. Hãy để một lần chạy cho bạn biết nó ' +
+      'định lấy những gì, trước khi bạn cho phép nó lấy thật.',
+    'auto.howOften': 'Bao lâu một lần',
+    'auto.kind.minutes': 'Vài phút một lần (để thử)',
+    'auto.kind.daily': 'Mỗi ngày',
+    'auto.kind.weekly': 'Mỗi tuần',
+    'auto.kind.monthly': 'Mỗi tháng',
+    'auto.every': 'Mỗi',
+    'auto.on': 'Vào',
+    'auto.onDay': 'Vào ngày',
+    'auto.catchUp': 'Chạy bù vài phút sau khi bạn đăng nhập',
+    'auto.note.minutes':
+      'Dùng để kiểm chứng rằng lịch này thật sự là một tác vụ Windows: nó vẫn chạy khi CleanDrive đã ' +
+      'đóng và sau khi khởi động lại máy. Mỗi lần chạy là một lần dọn dẹp thật theo cài đặt của bạn, ' +
+      'nên hãy để ở chế độ chỉ báo cáo trừ khi bạn thật sự muốn nó xoá.',
+    'auto.note.monthly': 'Ngày chỉ tới 28, để lịch hằng tháng vẫn chạy vào tháng Hai.',
+    'auto.note.missed': 'Lần chạy bị lỡ vì máy đang tắt sẽ chạy vào cơ hội gần nhất sau đó.',
+
+    'auto.mayDeleteTitle': 'Nó được phép xoá gì',
+    'auto.mayDeleteNote':
+      'Chỉ những nhóm mà bản quét đánh giá là an toàn mới xuất hiện ở đây. Bất cứ thứ gì bị đánh dấu ' +
+      '“nên xem lại” đều không bao giờ bị xoá khi không có người trông, dù danh sách này có ghi gì đi nữa.',
+    'auto.age': 'Không đụng tới ít nhất',
+    'auto.threshold': 'Chỉ khi đĩa đã dùng quá',
+    'auto.thresholdUnit': '% (0 = luôn chạy)',
+    'auto.max': 'Nhiều nhất',
+    'auto.maxUnit': 'tệp mỗi lần chạy',
+
+    'auto.rootsTitle': 'Thư mục nó được phép dọn',
+    'auto.rootsNote': 'Không có gì chạy cho tới khi có ít nhất một thư mục trong danh sách.',
+    'auto.roots.empty': 'Chưa có thư mục nào — dọn dẹp tự động sẽ không chạy.',
+    'auto.whitelistTitle': 'Tuyệt đối không đụng vào',
+    'auto.whitelistNote':
+      'Được kiểm tra trước mỗi lần xoá, bên cạnh những vị trí hệ thống mà ứng dụng vốn đã từ chối.',
+    'auto.whitelist.empty': 'Chưa loại trừ gì. Các vị trí hệ thống vẫn luôn được bảo vệ.',
+    'auto.skipTitle': 'Bỏ qua khi các ứng dụng này đang mở',
+    'auto.skipNote':
+      'Tên tiến trình đúng như Task Manager hiển thị. Nếu ứng dụng không xác định được thứ gì đang chạy, ' +
+      'cả lần chạy đó sẽ bị bỏ qua chứ không đoán bừa.',
+    'auto.skip.empty': 'Chưa liệt kê gì — lần dọn sẽ chạy bất kể đang mở ứng dụng nào.',
+
+    'auto.save': 'Lưu cài đặt',
+    'auto.preview': 'Xem trước thứ sẽ bị xoá',
+    'auto.runNow': 'Chạy dọn dẹp ngay…',
+    'auto.lastResult': 'Kết quả gần nhất',
+    'auto.recentRuns': 'Các lần chạy gần đây',
+    'auto.unsaved': 'Có thay đổi chưa lưu.',
+    'auto.label': 'Dọn dẹp',
+    'auto.failed': 'Dọn dẹp thất bại.',
+    'auto.needFolder': 'Hãy thêm ít nhất một thư mục trước.',
+    'auto.savingSettings': 'Đang lưu cài đặt…',
+    'auto.workingOut': 'Đang tính xem thứ gì sẽ bị lấy đi…',
+    'auto.running': 'Đang dọn dẹp…',
+
+    'auto.describe.reportOnly': 'Chỉ báo cáo, {when}. Sẽ không xoá gì cả.',
+    'auto.describe.cleaning': 'Dọn dẹp {when}.',
+
+    'auto.notice.windowsOnly': 'Lập lịch hiện chỉ làm cho Windows. Mọi thứ ở đây vẫn chạy tay được.',
+    'auto.notice.orphaned':
+      'Windows đang giữ một tác vụ CleanDrive nhưng ứng dụng lại không có cài đặt nào được lưu, nên khi ' +
+      'chạy nó sẽ không thấy cấu hình gì. Hãy lưu cấu hình của bạn để sửa lại.',
+    'auto.notice.noTask':
+      'Dọn dẹp tự động đang bật nhưng chưa có tác vụ Windows nào được đăng ký — nó sẽ không chạy. ' +
+      'Hãy bấm “Đăng ký lại”, hoặc lưu cài đặt một lần nữa, để tạo tác vụ đó.',
+    'auto.notice.mismatch': 'Tác vụ Windows đã đăng ký không khớp với cài đặt này: {problems}',
+    'auto.notice.adjusted': 'Cài đặt đã được điều chỉnh khi nạp: {warnings}',
+
+    'auto.result.byHand': '{when} (chạy tay)',
+    'auto.result.scanned': 'Số tệp đã quét',
+    'auto.result.selected': 'Đã chọn',
+    'auto.result.moved': 'Đã chuyển vào Thùng rác',
+    'auto.result.purged': 'Đã xoá vĩnh viễn',
+    'auto.result.diskChange': 'từ {before}% còn {after}%',
+    'auto.result.tooRecent': '{n} mục quá mới',
+    'auto.result.excluded': '{n} mục bị loại trừ',
+    'auto.result.guarded': '{n} mục được bảo vệ',
+    'auto.result.leftAlone': 'Đã bỏ qua',
+    'auto.history.dryRun': 'chỉ báo cáo — {n} tệp sẽ bị lấy đi',
+    'auto.history.real': 'đã chuyển {moved} · đã xoá vĩnh viễn {purged}',
+
+    'auto.stage.checking': 'Đang kiểm tra dung lượng đĩa và ứng dụng đang chạy…',
+    'auto.stage.scanning': 'Đang quét {root}…',
+    'auto.stage.deleting': 'Đang chuyển {n} tệp vào Thùng rác…',
+    'auto.stage.purging': 'Đang dọn các mục cũ trong Thùng rác…',
+
+    'auto.saved.leftOff': 'Đã lưu, nhưng dọn dẹp tự động vẫn để tắt: {reason}',
+    'auto.saved.notRunnable': 'cấu hình hiện tại chưa chạy được.',
+    'auto.saved.taskWrong': 'Đã lưu, nhưng tác vụ Windows chưa đúng: {problems}',
+    'auto.saved.registered': 'Đã lưu và đăng ký với Windows. Lần chạy kế tiếp {when}.',
+    'auto.saved.off': 'Đã lưu. Dọn dẹp tự động đã tắt và tác vụ Windows của nó đã được gỡ.',
+
+    'auto.toast.dryRun': '{n} tệp, {size} sẽ được chuyển đi.',
+    'auto.toast.nothingDone': 'Không có gì được thực hiện.',
+    'auto.toast.moved': 'Đã chuyển {n} tệp vào Thùng rác.',
+    'auto.scheduled.report': 'Báo cáo theo lịch đã xong: {n} tệp sẽ được chuyển đi.',
+    'auto.scheduled.skipped': 'Lần dọn theo lịch bị bỏ qua: {reason}',
+    'auto.scheduled.moved': 'Lần dọn theo lịch đã chuyển {n} tệp vào Thùng rác.',
+
+    /* ---- schedules, as prose ------------------------------------------ */
+    'schedule.none': 'chưa có lịch',
+    'schedule.everyMinute': 'mỗi phút',
+    'schedule.everyMinutes': 'mỗi {n} phút',
+    'schedule.everyDay': 'mỗi ngày lúc {time}',
+    'schedule.everyWeek': '{day} hằng tuần lúc {time}',
+    'schedule.everyMonth': 'ngày {day} mỗi tháng lúc {time}',
+    'schedule.runEveryMinute': 'lịch chạy mỗi phút',
+    'schedule.runEveryMinutes': 'lịch chạy mỗi {n} phút',
+    'schedule.dailyRun': 'lịch chạy hằng ngày lúc {time}',
+    'schedule.weeklyRun': 'lịch chạy hằng tuần vào {day} lúc {time}',
+    'schedule.monthlyRun': 'lịch chạy hằng tháng vào ngày {day} lúc {time}',
+
+    /* ---- the Windows task --------------------------------------------- */
+    'task.title': 'Tác vụ Windows',
+    'task.label': 'Tác vụ Windows',
+    'task.note':
+      'Lịch này là một mục trong Windows Task Scheduler, không phải bộ đếm giờ bên trong ứng dụng, nên nó ' +
+      'chạy cả khi CleanDrive đã đóng và sau khi khởi động lại máy. Mọi thứ bên dưới đều được đọc ngược ' +
+      'lại từ chính Windows.',
+    'task.check': 'Hỏi Windows',
+    'task.repair': 'Đăng ký lại',
+    'task.runNow': 'Chạy tác vụ ngay',
+    'task.runLabel': 'Chạy tác vụ',
+    'task.notChecked': 'Chưa kiểm tra.',
+    'task.registration': 'Đăng ký',
+    'task.notCheckedYet': 'chưa kiểm tra',
+    'task.windowsOnly': 'chỉ có trên Windows',
+    'task.registeredTask': 'Tác vụ đã đăng ký',
+    'task.none': 'không có',
+    'task.nothing': 'không có gì',
+    'task.visibleHint': 'Mở Task Scheduler sẽ thấy tác vụ dưới tên này',
+    'task.matches': 'Có khớp cài đặt này không',
+    'task.settingsAskFor': 'Cài đặt này yêu cầu',
+    'task.windowsHolds': 'Windows đang giữ',
+    'task.holdsNothing': 'không có gì — chưa đăng ký tác vụ nào',
+    'task.holds.everyMinute': 'một lịch chạy mỗi phút',
+    'task.holds.everyMinutes': 'một lịch chạy mỗi {n} phút',
+    'task.holds.daily': 'một lịch chạy hằng ngày lúc {time}',
+    'task.holds.weekly': 'một lịch chạy hằng tuần vào {day} lúc {time}',
+    'task.holds.monthly': 'một lịch chạy hằng tháng vào ngày {day} lúc {time}',
+    'task.holds.plusLogon': '{when}, cộng thêm một lần sau khi đăng nhập',
+    'task.couldNotAsk': 'Không hỏi được Windows',
+    'task.lastRun': 'Windows nói lần chạy gần nhất',
+    'task.nextRun': 'Windows nói lần chạy kế tiếp',
+    'task.noneScheduled': 'chưa có lịch nào',
+    'task.pressCheck': 'hãy bấm “Hỏi Windows”',
+    'task.result': 'Kết quả lần chạy đó',
+    'task.resultCode': 'Mã Task Scheduler {code}',
+    'task.missed': 'Số lần chạy bị lỡ',
+    'task.state': 'Trạng thái tác vụ',
+    'task.sampler': 'Phép đo đĩa hằng ngày',
+    'task.samplerOk': 'đã đăng ký, {schedule}',
+    'task.samplerMismatch': 'đã đăng ký nhưng không khớp',
+    'task.samplerMissing': 'đang bật nhưng chưa đăng ký',
+    'task.samplerHint': 'Được tab Xu hướng dùng; không xoá gì cả',
+    'task.asking': 'Đang hỏi Windows…',
+    'task.askFailed': 'Không hỏi được Windows.',
+    'task.statusExact': 'Windows đang giữ đúng những gì cài đặt này mô tả.',
+    'task.statusOther': 'Windows đang giữ một thứ khác với cài đặt này.',
+    'task.statusNone': 'Windows chưa đăng ký tác vụ dọn dẹp nào của CleanDrive.',
+    'task.statusUnsupported': 'Lập lịch chỉ có trên Windows.',
+    'task.reRegistering': 'Đang đăng ký lại…',
+    'task.nothingToChange': 'Không cần đổi gì — Windows vốn đã khớp với cài đặt này.',
+    'task.starting': 'Đang nhờ Task Scheduler khởi động tác vụ…',
+    'task.startFailed': 'Không khởi động được tác vụ.',
+    'task.started':
+      'Windows đã khởi động tác vụ. Kết quả sẽ hiện bên dưới khi lần chạy kết thúc, đúng như cách một ' +
+      'lần chạy theo lịch vẫn làm.',
+    'task.error.notRegistered': 'Chưa có tác vụ nào được đăng ký với Windows — hãy lưu cài đặt trước.',
+    'task.error.refusedStart': 'Task Scheduler từ chối khởi động tác vụ',
+
+    'task.label.cleanup': 'Dọn dẹp tự động',
+    'task.label.sampler': 'Phép đo đĩa hằng ngày',
+    'task.change.removed': '{label} đang tắt, nên tác vụ Windows của nó đã được gỡ.',
+    'task.problem.removeFailed': '{label}: không gỡ được tác vụ Windows ({error}).',
+    'task.problem.refused': '{label}: Windows Task Scheduler từ chối tác vụ ({error}).',
+    'task.problem.windowsOnly': 'Hiện chỉ lập lịch được trên Windows',
+    'task.problem.windowsOnlyLong': 'Lập lịch hiện chỉ làm cho Windows. Mọi thứ vẫn chạy tay được.',
+    'task.problem.notRegistered':
+      'Chưa có tác vụ nào được đăng ký trong Windows Task Scheduler, nên sẽ không có gì chạy cả.',
+    'task.problem.wrongCommand': 'Tác vụ đã đăng ký khởi chạy {command}, không phải bản ứng dụng này.',
+    'task.problem.wrongSchedule': 'Windows đang giữ {schedule}, không phải lịch đã lưu ở đây.',
+    'task.problem.bounded': 'Chu kỳ lặp đã đăng ký có điểm kết thúc, nên nó sẽ dừng giữa chừng trong ngày.',
+    'task.problem.disabled': 'Tác vụ đang bị tắt trong Task Scheduler.',
+    'task.problem.orphaned':
+      'Windows đang giữ một tác vụ CleanDrive nhưng ứng dụng lại không có cài đặt nào được lưu, nên khi ' +
+      'chạy nó sẽ không thấy cấu hình gì và không làm gì cả. Hãy lưu cấu hình để sửa lại, hoặc tắt dọn ' +
+      'dẹp tự động để gỡ tác vụ đó đi.',
+    'task.repair.created': 'chưa có tác vụ Windows nào được đăng ký, nên một tác vụ vừa được tạo.',
+    'task.repair.repointed': 'tác vụ đã đăng ký trỏ tới một bản ứng dụng khác; nay đã trỏ về đây.',
+    'task.repair.rewritten': 'Windows đang giữ một lịch khác; lịch đó đã được ghi lại cho khớp cài đặt.',
+    'task.repair.unusable': 'tác vụ đã đăng ký không dùng được như đang có nên đã được ghi lại.',
+
+    'task.state.disabled': 'đang tắt',
+    'task.state.queued': 'đang xếp hàng',
+    'task.state.ready': 'sẵn sàng',
+    'task.state.readyDisabled': 'sẵn sàng, nhưng đang bị tắt',
+    'task.state.running': 'đang chạy',
+    'task.state.unknown': 'Windows không rõ',
+
+    'task.result.ok': 'lần chạy gần nhất đã hoàn tất thành công',
+    'task.result.error': 'lần chạy gần nhất kết thúc với lỗi',
+    'task.result.notStarted': 'tác vụ đã sẵn sàng và chưa khởi chạy lần nào',
+    'task.result.running': 'tác vụ đang chạy',
+    'task.result.disabled': 'tác vụ đang bị tắt',
+    'task.result.never': 'tác vụ chưa từng chạy',
+    'task.result.noFuture': 'không còn lần chạy nào được lên lịch',
+    'task.result.stopped': 'lần chạy gần nhất đã bị dừng',
+    'task.result.badWorkingDir': 'thư mục làm việc không hợp lệ',
+    'task.result.missingProgram': 'không tìm thấy chương trình nó khởi chạy — ứng dụng đã bị chuyển đi',
+    'task.result.missingPath': 'không tìm thấy đường dẫn nó khởi chạy — ứng dụng đã bị chuyển đi',
+    'task.result.alreadyRunning': 'đã có một bản đang chạy, nên lần chạy này bị bỏ qua',
+    'task.result.code': 'lần chạy gần nhất báo mã 0x{code}',
+
+    /* ---- freeing the space -------------------------------------------- */
+    'purge.title': 'Giải phóng dung lượng',
+    'purge.label': 'Thùng rác',
+    'purge.enabled': 'Xoá vĩnh viễn các mục do CleanDrive chuyển vào Thùng rác sau một thời gian chờ',
+    'purge.grace': 'Thời gian chờ',
+    'purge.note':
+      'Đây là thứ duy nhất trong ứng dụng không thể hoàn tác. Nó đối chiếu từng mục với chính sổ ghi của ' +
+      'Thùng rác về nơi mục đó đến từ đâu và vào lúc nào, nên những tệp do bạn tự xoá không bao giờ bị ' +
+      'tính vào — kể cả một tệp nằm đúng đường dẫn đó.',
+    'purge.now': 'Dọn ngay…',
+    'purge.nothingRecorded': 'Chưa ghi nhận mục nào.',
+    'purge.noneOldEnough': 'Đang theo dõi {n} mục, chưa mục nào quá {days} ngày.',
+    'purge.ready': '{n} mục · {size} sẵn sàng giải phóng',
+    'purge.switchOnHint': ' — bật ở trên để việc này chạy theo lịch',
+    'purge.nothingDeleted': 'Không có gì bị xoá vĩnh viễn.',
+    'purge.deleted': 'Đã xoá vĩnh viễn {n} mục, giải phóng {size}.',
+
+    /* ---- disk alerts --------------------------------------------------- */
+    'monitor.title': 'Cảnh báo trước khi đĩa đầy',
+    'monitor.label': 'Theo dõi dung lượng đĩa',
+    'monitor.enabled': 'Theo dõi dung lượng đĩa và cảnh báo tôi',
+    'monitor.cost':
+      'Đây là cài đặt duy nhất khiến CleanDrive tiếp tục chạy sau khi bạn đóng cửa sổ — không còn cách ' +
+      'nào khác để nhận ra đĩa đang đầy dần. Tắt nó đi thì tiến trình kết thúc như trước.',
+    'monitor.closeToTray': 'Đóng cửa sổ thì thu vào khay hệ thống thay vì thoát hẳn',
+    'monitor.warnAt': 'Cảnh báo khi đạt',
+    'monitor.criticalAt': 'Nguy cấp khi đạt',
+    'monitor.checkEvery': 'Kiểm tra mỗi',
+    'monitor.snoozeFor': 'Tạm ngưng trong',
+    'monitor.volumesTitle': 'Ổ đĩa đang theo dõi',
+    'monitor.volumesNote': 'Chọn thư mục bất kỳ; ổ đĩa chứa nó là thứ sẽ được theo dõi.',
+    'monitor.volumes.empty': 'Chưa liệt kê ổ nào — mặc định theo dõi ổ chứa thư mục người dùng.',
+    'monitor.notRunning': 'Không chạy.',
+    'monitor.notRunningNote': 'Không chạy. CleanDrive không để lại gì trong bộ nhớ.',
+    'monitor.snooze': 'Tạm ngưng',
+    'monitor.resume': 'Bật lại cảnh báo',
+    'monitor.noReadings': 'chưa có số đọc',
+    'monitor.unreadable': 'Không đọc được ổ đĩa nào.',
+    'monitor.volumeLine': '{root} {percent}% (còn trống {free})',
+    'monitor.snoozedUntil': 'cảnh báo tạm ngưng tới {when}',
+    'monitor.level.ok': 'ổn',
+    'monitor.level.warn': 'sắp hết',
+    'monitor.level.critical': 'gần đầy',
+
+    /* ---- settings ------------------------------------------------------ */
+    'settings.auto': 'Tự động',
+    'settings.language.title': 'Ngôn ngữ',
+    'settings.language.note':
+      'Áp dụng ngay lập tức, cho cửa sổ này và cho cả thông báo lẫn hộp xác nhận mà ứng dụng hiện ra bên ' +
+      'ngoài nó. “Tự động” theo ngôn ngữ hiển thị mà Windows đang đặt — đây không phải cùng một cài đặt ' +
+      'với định dạng ngày tháng và số.',
+    'settings.language.failed': 'Không lưu được cài đặt ngôn ngữ.',
+    'settings.appearance.title': 'Giao diện',
+    'settings.appearance.note':
+      '“Tự động” theo hệ thống, nên máy nào chuyển sang tối lúc hoàng hôn thì cửa sổ này chuyển theo. ' +
+      'Cụm nút y hệt cũng nằm trên thanh trên cùng.',
+    'settings.version.title': 'Phiên bản và cập nhật',
+    'settings.version.installed': 'Phiên bản đang cài',
+    'settings.version.lastChecked': 'Kiểm tra lần cuối',
+    'settings.version.signed': 'Chữ ký số',
+    'settings.version.signedYes': 'đã ký',
+    'settings.version.signedNo': 'chưa ký',
+    'settings.version.signedHint':
+      'Không có chữ ký thì thứ duy nhất bảo vệ một bản cập nhật là kết nối HTTPS tới máy chủ phát hành.',
+
+    /* ---- updates ------------------------------------------------------- */
+    'update.label': 'Cập nhật',
+    'update.enabled': 'Kiểm tra phiên bản mới',
+    'update.note':
+      'Đây là thứ duy nhất trong ứng dụng có kết nối internet. Nó tải về một tệp từ trang phát hành và ' +
+      'không gửi đi gì cả — không định danh, không dữ liệu sử dụng. Tắt nó đi thì ứng dụng không thực ' +
+      'hiện bất kỳ yêu cầu mạng nào.',
+    'update.download': 'Tải về',
+    'update.install': 'Khởi động lại và cài',
+    'update.notNow': 'Để sau',
+    'update.installVersion': 'Cài {version} và khởi động lại',
+    'update.badge.idle': 'Đã mới nhất',
+    'update.badge.available': 'Có bản mới',
+    'update.badge.downloading': 'Đang tải…',
+    'update.badge.ready': 'Sẵn sàng cài',
+    'update.badge.error': 'Kiểm tra thất bại',
+    'update.badge.unsupported': 'Không áp dụng',
+    'update.detail.unsupported':
+      'Đang chạy từ mã nguồn, hoặc từ một bản dựng không cấu hình nguồn phát hành — không có gì để đối ' +
+      'chiếu. Các bản đã cài đặt thì có kiểm tra trang phát hành.',
+    'update.detail.off': 'Đang tắt. Ứng dụng không thực hiện yêu cầu mạng nào.',
+    'update.detail.checking': 'Đang hỏi trang phát hành xem có phiên bản mới hơn không.',
+    'update.detail.available':
+      'Đã thấy phiên bản {version}. Đang tải về — bạn sẽ được hỏi trước khi có bất cứ thứ gì được cài.',
+    'update.detail.downloading':
+      'Đang tải phiên bản {version} — {percent}%. Không có gì được cài cho tới khi bạn đồng ý.',
+    'update.detail.ready':
+      'Phiên bản {version} đã tải xong và sẵn sàng. Cài mất vài giây và ứng dụng tự mở lại.',
+    'update.detail.unsigned':
+      'Bản dựng này chưa ký số, nên thứ duy nhất kiểm chứng tệp tải về là việc nó đến từ máy chủ phát ' +
+      'hành qua HTTPS.',
+    'update.detail.error': 'Không kiểm tra được: {error}',
+    'update.detail.idle': 'Phiên bản {version}.',
+    'update.detail.idleChecked': 'Phiên bản {version}. Kiểm tra lần cuối {when}.',
+    'update.dialog.title': 'Bản cập nhật đã sẵn sàng',
+    'update.dialog.message': 'CleanDrive {version} đã sẵn sàng để cài.',
+    'update.dialog.detail':
+      'Bạn đang dùng {current}. Bản cập nhật đã tải xong — cài mất vài giây và ứng dụng tự mở lại.',
+    'update.dialog.elevation': 'Windows sẽ hỏi quyền, vì CleanDrive được cài cho mọi người dùng.',
+    'update.dialog.notNowNote': 'Chọn “Để sau” thì nó sẽ được cài vào lần kế tiếp bạn thoát CleanDrive.',
+    'update.pill.downloadingVersion': 'Đang tải {version}…',
+    'update.pill.percent': 'Đang tải {percent}%',
+    'update.pill.install': 'Cài {version}',
+    'update.pill.fetchingHint': 'Đang tải bản cập nhật; bạn sẽ được hỏi trước khi nó được cài',
+    'update.pill.installHint': 'Cài bản cập nhật rồi khởi động lại — mất vài giây',
+    'update.toast.on': 'Đã bật kiểm tra cập nhật.',
+    'update.toast.off': 'Đã tắt kiểm tra cập nhật. Ứng dụng không thực hiện yêu cầu mạng nào.',
+    'update.toast.latest': 'Bạn đang dùng phiên bản mới nhất ({version}).',
+    'update.toast.noFeed': 'Bản dựng này không có nguồn phát hành để kiểm tra.',
+    'update.toast.deferred': 'Bản cập nhật sẽ được cài vào lần khởi động lại kế tiếp.',
+    'update.toast.justUpdated': 'CleanDrive đã cập nhật lên {version}, từ {previous}.',
+
+    /* ---- native dialogs ------------------------------------------------ */
+    'dialog.chooseFolder': 'Chọn thư mục để phân tích',
+    'dialog.exportHistory': 'Xuất lịch sử dung lượng',
+    'dialog.moveToBin': 'Chuyển vào Thùng rác',
+    'dialog.confirmAuto.title': 'Xác nhận dọn dẹp tự động',
+    'dialog.confirmAuto.message': 'Chuyển {n} tệp vào Thùng rác?',
+    'dialog.confirmAuto.detail':
+      'Đây là các tệp thuộc những nhóm đang bật, không bị đụng tới ít nhất {days} ngày. Tổng cộng {size}.',
+    'dialog.forExample': 'Ví dụ:',
+
+    /* ---- notifications ------------------------------------------------- */
+    'notify.runFailed.title': 'CleanDrive: lần chạy theo lịch đã thất bại',
+    'notify.runFailed.body': '{reason} Hãy mở CleanDrive để xem nhật ký chạy.',
+    'notify.dryRun.title': 'CleanDrive: chỉ báo cáo',
+    'notify.dryRun.body':
+      '{n} tệp, {size} sẽ được chuyển vào Thùng rác. Không có gì bị xoá — dọn dẹp tự động vẫn đang ở chế ' +
+      'độ chỉ báo cáo.',
+    'notify.nothing.title': 'CleanDrive: không có gì để dọn',
+    'notify.nothing.body': 'Không có tệp nào khớp với quy tắc dọn dẹp.',
+    'notify.done.title': 'CleanDrive: đã dọn xong',
+    'notify.done.moved': 'Đã chuyển {n} tệp ({size}) vào Thùng rác.',
+    'notify.done.freed': 'Đã xoá vĩnh viễn {size} các mục cũ hơn, nên chỗ đó giờ đã trống thật.',
+    'notify.done.notFreed': 'Vẫn chưa có dung lượng nào được giải phóng — Thùng rác nằm trên cùng ổ đĩa.',
+    'notify.disk.lowTitle': 'CleanDrive: sắp hết dung lượng đĩa',
+    'notify.disk.criticalTitle': 'CleanDrive: đĩa gần đầy',
+    'notify.disk.body': '{root} đã dùng {percent}% — còn {free} trên tổng {total}.',
+    'notify.disk.criticalNote': 'Windows có thể bắt đầu trục trặc khi còn dưới khoảng một gigabyte.',
+    'notify.updated.title': 'CleanDrive đã cập nhật',
+    'notify.updated.body': 'Hiện dùng phiên bản {current}, lên từ {previous}.',
+
+    /* ---- the scheduled run --------------------------------------------- */
+    'run.noSettings': 'Không tìm thấy tệp cài đặt nào, nên không có cấu hình gì để thực hiện.',
+    'run.expectedAt': 'Đáng lẽ nằm ở {path}',
+
+    /* ---- the tray ------------------------------------------------------ */
+    'tray.tooltip.unknown': 'CleanDrive — không rõ dung lượng đĩa',
+    'tray.tooltip.usage': 'đã dùng {percent}% · còn trống {free} trên tổng {total}',
+    'tray.volumeUsage': 'đã dùng {percent}% · còn trống {free}',
+    'tray.unreadable': 'không đọc được',
+    'tray.snoozed': 'Cảnh báo đang tạm ngưng',
+    'tray.noVolumes': 'Chưa theo dõi ổ đĩa nào',
+    'tray.open': 'Mở CleanDrive',
+    'tray.snoozeFor': 'Tạm ngưng cảnh báo trong {n} phút',
+    'tray.quit': 'Thoát',
+  };
+});

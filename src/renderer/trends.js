@@ -31,20 +31,20 @@ function svgEl(name, attrs = {}) {
 
 function formatRate(bytesPerMonth) {
   const sign = bytesPerMonth >= 0 ? '+' : '−';
-  return `${sign}${formatBytes(Math.abs(bytesPerMonth))}/month`;
+  return t('trends.perMonth', '{sign}{size}/month', { sign, size: formatBytes(Math.abs(bytesPerMonth)) });
 }
 
 function formatDay(timestamp) {
-  return new Date(timestamp).toLocaleDateString(undefined, { day: '2-digit', month: 'short' });
+  return new Date(timestamp).toLocaleDateString(uiLocale(), { day: '2-digit', month: 'short' });
 }
 
 /** "in 3 weeks" / "in 5 months", coarse on purpose — the input is an estimate. */
 function formatHorizon(days) {
-  if (days < 1) return 'today';
-  if (days < 14) return `in ${Math.round(days)} days`;
-  if (days < 60) return `in ${Math.round(days / 7)} weeks`;
-  if (days < 730) return `in ${Math.round(days / 30)} months`;
-  return `in ${(days / 365).toFixed(1)} years`;
+  if (days < 1) return t('app.ago.today', 'today');
+  if (days < 14) return t('trends.in.days', 'in {n} days', { n: Math.round(days) });
+  if (days < 60) return t('trends.in.weeks', 'in {n} weeks', { n: Math.round(days / 7) });
+  if (days < 730) return t('trends.in.months', 'in {n} months', { n: Math.round(days / 30) });
+  return t('trends.in.years', 'in {n} years', { n: (days / 365).toFixed(1) });
 }
 
 /* ---- the chart ---------------------------------------------------------- */
@@ -60,9 +60,12 @@ function renderChart(host, series, thresholds) {
     // to see a chart, which was both a poor trade and not even the quickest way.
     note.textContent =
       series.length === 0
-        ? 'No measurements of this volume yet. “Measure now” below takes one immediately, and the ' +
-          'daily measurement keeps taking them whether or not the app is open.'
-        : 'One measurement so far. A second one, on a different day, is what makes a line.';
+        ? t(
+            'trends.chart.none',
+            'No measurements of this volume yet. “Measure now” below takes one immediately, and the ' +
+              'daily measurement keeps taking them whether or not the app is open.'
+          )
+        : t('trends.chart.one', 'One measurement so far. A second one, on a different day, is what makes a line.');
     host.append(note);
     return;
   }
@@ -98,7 +101,7 @@ function renderChart(host, series, thresholds) {
     viewBox: `0 0 ${width} ${height}`,
     preserveAspectRatio: 'none',
     role: 'img',
-    'aria-label': 'Disk usage over time',
+    'aria-label': t('trends.chartTitle', 'Disk usage over time'),
   });
 
   // Horizontal guides, labelled with the percentage they stand for.
@@ -148,7 +151,7 @@ function renderFolderTrends(folders) {
   if (folders.length === 0) {
     const empty = document.createElement('li');
     empty.className = 'path-empty';
-    empty.textContent = 'No folders scanned yet.';
+    empty.textContent = t('trends.folders.none', 'No folders scanned yet.');
     list.append(empty);
     return;
   }
@@ -160,19 +163,24 @@ function renderFolderTrends(folders) {
     const name = document.createElement('span');
     name.className = 'path-text';
     name.textContent = elide(folder.root, 52);
-    name.title = `${folder.root}\n${formatBytes(folder.bytes)} at the last scan`;
+    name.title = `${folder.root}\n${t('trends.folders.atLastScan', '{size} at the last scan', {
+      size: formatBytes(folder.bytes),
+    })}`;
 
     const rate = document.createElement('span');
     if (!folder.ok) {
       rate.className = 'trend-rate is-unknown';
-      rate.textContent = `${folder.samples} scan${folder.samples === 1 ? '' : 's'}`;
+      rate.textContent = `${folder.samples} ${word(folder.samples, 'trends.scan', 'scan', 'scans')}`;
       rate.title = folder.reason || '';
     } else {
       const up = folder.bytesPerMonth > 0;
       rate.className = `trend-rate ${up ? 'is-up' : 'is-down'}`;
       rate.textContent = formatRate(folder.bytesPerMonth);
-      rate.title = `${formatBytes(folder.bytes)} now, over ${folder.samples} scans spanning ` +
-        `${folder.spanDays.toFixed(0)} days`;
+      rate.title = t('trends.folders.rateHint', '{size} now, over {samples} scans spanning {days} days', {
+        size: formatBytes(folder.bytes),
+        samples: folder.samples,
+        days: folder.spanDays.toFixed(0),
+      });
     }
 
     row.append(name, rate);
@@ -188,20 +196,20 @@ function renderSavings(savings) {
   head.className = 'pair-row pair-head';
   const h1 = document.createElement('span');
   h1.className = 'pair-label';
-  h1.textContent = 'Month';
+  h1.textContent = t('trends.savings.month', 'Month');
   const h2 = document.createElement('span');
   h2.className = 'pair-moved';
-  h2.textContent = 'To the bin';
+  h2.textContent = t('trends.savings.toBin', 'To the bin');
   const h3 = document.createElement('span');
   h3.className = 'pair-freed';
-  h3.textContent = 'Freed';
+  h3.textContent = t('trends.savings.freed', 'Freed');
   head.append(h1, h2, h3);
   list.append(head);
 
   if (savings.byMonth.length === 0) {
     const empty = document.createElement('li');
     empty.className = 'path-empty';
-    empty.textContent = 'Nothing deleted through CleanDrive yet.';
+    empty.textContent = t('trends.savings.none', 'Nothing deleted through CleanDrive yet.');
     list.append(empty);
     return;
   }
@@ -230,7 +238,7 @@ function renderSavings(savings) {
   total.className = 'pair-row';
   const label = document.createElement('span');
   label.className = 'pair-label';
-  label.textContent = 'Total';
+  label.textContent = t('trends.savings.total', 'Total');
   const moved = document.createElement('span');
   moved.className = 'pair-moved';
   moved.textContent = formatBytes(savings.movedBytes);
@@ -279,83 +287,109 @@ function renderSampling(report) {
   $('trend-time-row').hidden = !sampling.dailySample;
 
   list.append(samplingRow(
-    'Daily Windows task',
+    t('trends.sampler.daily', 'Daily Windows task'),
     !sampling.supported
-      ? 'Windows only'
+      ? t('task.windowsOnly', 'Windows only')
       : sampling.dailySample
-        ? (sampling.taskInstalled
-            ? (sampling.taskVerified ? `registered, runs at ${sampling.sampleTime}` : 'registered but does not match')
-            : 'switched on but not registered — save below')
-        : 'off',
-    sampling.taskProblems.length > 0 ? sampling.taskProblems.join(' ') : 'Runs with CleanDrive closed'
+        ? sampling.taskInstalled
+          ? sampling.taskVerified
+            ? t('trends.sampler.registered', 'registered, runs at {time}', { time: sampling.sampleTime })
+            : t('task.samplerMismatch', 'registered but does not match')
+          : t('trends.sampler.notRegistered', 'switched on but not registered — save below')
+        : t('app.off.lower', 'off'),
+    sampling.taskProblems.length > 0
+      ? sampling.taskProblems.join(' ')
+      : t('trends.sampler.closedHint', 'Runs with CleanDrive closed')
   ));
 
   list.append(samplingRow(
-    'Next automatic measurement',
-    sampling.nextSampleAt ? formatWhen(sampling.nextSampleAt) : 'none scheduled'
-  ));
-
-  list.append(samplingRow('When the app starts', 'always', 'One measurement per launch'));
-
-  list.append(samplingRow(
-    'While disk monitoring runs',
-    sampling.monitorRunning ? 'on, at most one every 30 minutes' : 'off',
-    'Readings the monitor already takes are recorded instead of discarded'
+    t('trends.sampler.next', 'Next automatic measurement'),
+    sampling.nextSampleAt ? formatWhen(sampling.nextSampleAt) : t('task.noneScheduled', 'none scheduled')
   ));
 
   list.append(samplingRow(
-    'When you run a scan',
-    'always',
-    'A scan also records the folder size, which is what the folder list below compares'
+    t('trends.sampler.launch', 'When the app starts'),
+    t('trends.sampler.always', 'always'),
+    t('trends.sampler.launchHint', 'One measurement per launch')
+  ));
+
+  list.append(samplingRow(
+    t('trends.sampler.monitor', 'While disk monitoring runs'),
+    sampling.monitorRunning
+      ? t('trends.sampler.monitorOn', 'on, at most one every 30 minutes')
+      : t('app.off.lower', 'off'),
+    t('trends.sampler.monitorHint', 'Readings the monitor already takes are recorded instead of discarded')
+  ));
+
+  list.append(samplingRow(
+    t('trends.sampler.scan', 'When you run a scan'),
+    t('trends.sampler.always', 'always'),
+    t('trends.sampler.scanHint', 'A scan also records the folder size, which is what the folder list below compares')
   ));
 
   const latest = report.latest;
   $('trend-sampling-status').textContent = latest
-    ? `Last measurement ${formatWhen(latest.at)}. Two measurements make a line; the growth figure ` +
-      'needs four across at least a week.'
-    : 'No measurement on file yet.';
+    ? t(
+        'trends.sampler.lastMeasurement',
+        'Last measurement {when}. Two measurements make a line; the growth figure needs four across ' +
+          'at least a week.',
+        { when: formatWhen(latest.at) }
+      )
+    : t('trends.sampler.noneYet', 'No measurement on file yet.');
 }
 
 $('trend-sample').addEventListener('click', async () => {
-  $('trend-sampling-status').textContent = 'Measuring…';
-  const result = unwrap(await api.sampleNow(), 'Measure disk');
+  $('trend-sampling-status').textContent = t('trends.measuring', 'Measuring…');
+  const result = unwrap(await api.sampleNow(), t('trends.measureLabel', 'Measure disk'));
   if (!result) return;
 
   await refreshTrends($('trend-volume').value);
 
   toast(
     result.coalesced
-      ? 'Measured, but it replaced a reading less than half an hour old — the series only keeps ' +
-        'one point per half hour, so repeat presses cannot manufacture a trend.'
-      : `Measured ${Object.keys(result.volumes).length} volume(s). ${formatCount(result.snapshots)} on file.`
+      ? t(
+          'trends.measured.coalesced',
+          'Measured, but it replaced a reading less than half an hour old — the series only keeps ' +
+            'one point per half hour, so repeat presses cannot manufacture a trend.'
+        )
+      : t('trends.measured.new', 'Measured {n} volume(s). {total} on file.', {
+          n: Object.keys(result.volumes).length,
+          total: formatCount(result.snapshots),
+        })
   );
 });
 
 $('trend-daily').addEventListener('change', () => {
   $('trend-time-row').hidden = !$('trend-daily').checked;
-  $('trend-sampling-status').textContent = 'Unsaved changes to the measuring settings.';
+  $('trend-sampling-status').textContent = t('trends.unsaved', 'Unsaved changes to the measuring settings.');
 });
 
 $('trend-time').addEventListener('change', () => {
-  $('trend-sampling-status').textContent = 'Unsaved changes to the measuring settings.';
+  $('trend-sampling-status').textContent = t('trends.unsaved', 'Unsaved changes to the measuring settings.');
 });
 
 $('trend-save').addEventListener('click', async () => {
-  $('trend-sampling-status').textContent = 'Saving…';
+  $('trend-sampling-status').textContent = t('app.saving', 'Saving…');
   const data = unwrap(
     await api.saveSettings({
       trends: { dailySample: $('trend-daily').checked, sampleTime: $('trend-time').value || '12:00' },
     }),
-    'Save settings'
+    t('app.label.saveSettings', 'Save settings')
   );
   if (!data) return;
 
   await refreshTrends($('trend-volume').value);
 
   const problems = data.reconciled ? data.reconciled.problems : [];
-  if (problems.length > 0) toast(`Saved, but the measuring task is not right: ${problems.join(' ')}`, true);
-  else if (data.settings.trends.dailySample) toast('Saved. Windows will measure the disk daily.');
-  else toast('Saved. The daily measurement is off and its Windows task was removed.');
+  if (problems.length > 0) {
+    toast(t('trends.saved.taskWrong', 'Saved, but the measuring task is not right: {problems}', {
+      problems: problems.join(' '),
+    }), true);
+  } else if (data.settings.trends.dailySample) {
+    toast(t('trends.saved.on', 'Saved. Windows will measure the disk daily.'));
+  } else {
+    toast(t('trends.saved.off', 'Saved. The daily measurement is off and its Windows task was removed.'));
+  }
 });
 
 /* ---- assembly ----------------------------------------------------------- */
@@ -381,13 +415,19 @@ function applyTrends(report) {
     critical: monitor ? monitor.criticalPercent : null,
   });
 
-  $('trend-samples').textContent =
-    `${formatCount(report.snapshots)} measurement${report.snapshots === 1 ? '' : 's'}`;
+  $('trend-samples').textContent = `${formatCount(report.snapshots)} ${word(
+    report.snapshots,
+    'trends.measurement',
+    'measurement',
+    'measurements'
+  )}`;
 
   if (report.latest) {
     $('tstat-used').textContent = `${report.latest.usedPercent.toFixed(1)}%`;
-    $('tstat-used').title =
-      `${formatBytes(report.latest.freeBytes)} free of ${formatBytes(report.latest.totalBytes)}`;
+    $('tstat-used').title = t('trends.freeOf', '{free} free of {total}', {
+      free: formatBytes(report.latest.freeBytes),
+      total: formatBytes(report.latest.totalBytes),
+    });
   } else {
     $('tstat-used').textContent = '–';
   }
@@ -395,26 +435,35 @@ function applyTrends(report) {
   // Growth and prediction each print their own refusal when they have one.
   if (report.growth.ok) {
     $('tstat-growth').textContent = formatRate(report.growth.bytesPerMonth);
-    $('tstat-growth').title = `Fitted through ${report.growth.n} measurements over ` +
-      `${report.growth.spanDays.toFixed(0)} days (r² ${report.growth.r2.toFixed(2)})`;
+    $('tstat-growth').title = t('trends.growthHint', 'Fitted through {n} measurements over {days} days (r² {r2})', {
+      n: report.growth.n,
+      days: report.growth.spanDays.toFixed(0),
+      r2: report.growth.r2.toFixed(2),
+    });
   } else {
-    $('tstat-growth').textContent = 'not yet';
+    $('tstat-growth').textContent = t('trends.notYet', 'not yet');
     $('tstat-growth').title = report.growth.reason || '';
   }
 
   if (report.prediction.ok) {
     $('tstat-full').textContent = formatHorizon(report.prediction.days);
-    $('tstat-full').title = `Around ${new Date(report.prediction.at).toLocaleDateString()} ` +
-      `at the current rate (r² ${report.prediction.r2.toFixed(2)})`;
+    $('tstat-full').title = t('trends.fullHint', 'Around {date} at the current rate (r² {r2})', {
+      date: new Date(report.prediction.at).toLocaleDateString(uiLocale()),
+      r2: report.prediction.r2.toFixed(2),
+    });
   } else {
-    $('tstat-full').textContent = report.prediction.beyondHorizon ? 'not soon' : 'unknown';
+    $('tstat-full').textContent = report.prediction.beyondHorizon
+      ? t('trends.notSoon', 'not soon')
+      : t('trends.unknown', 'unknown');
     $('tstat-full').title = report.prediction.reason || '';
   }
 
   $('tstat-freed').textContent = formatBytes(report.savings.freedBytes);
-  $('tstat-freed').title =
-    `${formatBytes(report.savings.movedBytes)} was moved to the Recycle Bin; ` +
-    `${formatBytes(report.savings.freedBytes)} of that was permanently removed and is genuinely free.`;
+  $('tstat-freed').title = t(
+    'trends.freedHint',
+    '{moved} was moved to the Recycle Bin; {freed} of that was permanently removed and is genuinely free.',
+    { moved: formatBytes(report.savings.movedBytes), freed: formatBytes(report.savings.freedBytes) }
+  );
 
   // The caveat under the chart is the one place the honest limitation is spelled
   // out in full rather than hidden in a tooltip.
@@ -422,7 +471,9 @@ function applyTrends(report) {
   if (!report.growth.ok && report.growth.reason) caveat.push(report.growth.reason);
   else if (!report.prediction.ok && report.prediction.reason) caveat.push(report.prediction.reason);
   if (report.series.length >= 2) {
-    caveat.push('The vertical axis is scaled to the data, not to 0–100%, so small changes are visible.');
+    caveat.push(
+      t('trends.axisCaveat', 'The vertical axis is scaled to the data, not to 0–100%, so small changes are visible.')
+    );
   }
   $('trend-caveat').textContent = caveat.join(' ');
 
@@ -432,12 +483,12 @@ function applyTrends(report) {
 
   $('trend-status').textContent =
     report.snapshots === 0
-      ? 'No history yet.'
-      : `${formatCount(report.snapshots)} measurement(s) recorded.`;
+      ? t('trends.noHistory', 'No history yet.')
+      : t('trends.recorded', '{n} measurement(s) recorded.', { n: formatCount(report.snapshots) });
 }
 
 async function refreshTrends(volume) {
-  const report = unwrap(await api.getHistory(volume ? { volume } : {}), 'Trends');
+  const report = unwrap(await api.getHistory(volume ? { volume } : {}), t('app.tab.trends', 'Trends'));
   if (report) applyTrends(report);
 }
 
@@ -445,9 +496,13 @@ $('trend-volume').addEventListener('change', (event) => refreshTrends(event.targ
 
 for (const [id, format] of [['trend-export-json', 'json'], ['trend-export-csv', 'csv']]) {
   $(id).addEventListener('click', async () => {
-    const result = unwrap(await api.exportHistory(format), 'Export');
+    const result = unwrap(await api.exportHistory(format), t('trends.exportLabel', 'Export'));
     if (!result) return;
-    toast(result.written ? `Exported ${formatCount(result.rows)} measurement(s).` : 'Export cancelled.');
+    toast(
+      result.written
+        ? t('trends.exported', 'Exported {n} measurement(s).', { n: formatCount(result.rows) })
+        : t('trends.exportCancelled', 'Export cancelled.')
+    );
   });
 }
 
@@ -464,4 +519,8 @@ refreshTrends();
 api.onDataChanged((payload) => {
   if (payload && payload.files && !payload.files.includes('history.json')) return;
   refreshTrends($('trend-volume').value);
+});
+
+onLanguageChange(() => {
+  if (state.trends) applyTrends(state.trends);
 });

@@ -7,6 +7,8 @@ process.env.UV_THREADPOOL_SIZE = process.env.UV_THREADPOOL_SIZE || '16';
 const path = require('node:path');
 const { app, BrowserWindow, shell, nativeTheme } = require('electron');
 
+const language = require('./language');
+
 const isDev = process.argv.includes('--dev');
 
 // Task Scheduler starts the same executable with this flag. There is no window
@@ -58,8 +60,12 @@ function createWindow() {
   // here avoids main.js and ipc.js having to share a variable. The renderer
   // needs it synchronously, before its first paint, so it travels in the URL
   // rather than over IPC.
+  //
+  // The language travels the same way and for a sharper version of the same
+  // reason: the window is written in English, so a Vietnamese user would watch
+  // it translate itself if the answer arrived over IPC after the first frame.
   mainWindow.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'), {
-    query: { theme: nativeTheme.themeSource },
+    query: { theme: nativeTheme.themeSource, lang: language.current() },
   });
 
   if (isDev) mainWindow.webContents.openDevTools({ mode: 'detach' });
@@ -225,6 +231,7 @@ if (isSampleOnly) {
       settings = await store.load();
       settingsExisted = store.exists;
       nativeTheme.themeSource = settings.appearance.theme;
+      language.apply(settings.appearance.language);
     } catch (err) {
       console.error('[settings] could not be read, using defaults:', err);
     }

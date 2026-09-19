@@ -6,6 +6,7 @@ const path = require('node:path');
 const { execFile } = require('node:child_process');
 
 const { IS_WIN } = require('./util');
+const { t } = require('../../i18n');
 
 /**
  * Windows Task Scheduler registration.
@@ -43,7 +44,24 @@ const TASK_FOLDER = 'CleanDrive';
 const TASK_NAME = 'AutomaticCleanup';
 const SAMPLE_TASK_NAME = 'DiskSample';
 
+// The XML element names, which are a Windows schema and never translated.
 const WEEKDAY_ELEMENTS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+/** The same days as prose, which is translated. */
+const WEEKDAY_KEYS = [
+  ['day.sunday', 'Sunday'],
+  ['day.monday', 'Monday'],
+  ['day.tuesday', 'Tuesday'],
+  ['day.wednesday', 'Wednesday'],
+  ['day.thursday', 'Thursday'],
+  ['day.friday', 'Friday'],
+  ['day.saturday', 'Saturday'],
+];
+
+function weekdayName(index) {
+  const entry = WEEKDAY_KEYS[index] || WEEKDAY_KEYS[0];
+  return t(entry[0], entry[1]);
+}
 
 const MONTH_ELEMENTS = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -623,7 +641,12 @@ function sameSchedule(a, b) {
  */
 async function verify({ schedule, invocation, taskPath = cleanupTaskPath() }) {
   if (!IS_WIN) {
-    return { ok: false, supported: false, installed: false, problems: ['Scheduling is Windows-only for now'] };
+    return {
+      ok: false,
+      supported: false,
+      installed: false,
+      problems: [t('task.problem.windowsOnly', 'Scheduling is Windows-only for now')],
+    };
   }
 
   const text = await readTaskXml(taskPath);
@@ -632,7 +655,9 @@ async function verify({ schedule, invocation, taskPath = cleanupTaskPath() }) {
       ok: false,
       supported: true,
       installed: false,
-      problems: ['No task is registered with Windows Task Scheduler, so nothing will run.'],
+      problems: [
+        t('task.problem.notRegistered', 'No task is registered with Windows Task Scheduler, so nothing will run.'),
+      ],
     };
   }
 
@@ -649,15 +674,26 @@ async function verify({ schedule, invocation, taskPath = cleanupTaskPath() }) {
 
   if (!invocationMatches) {
     problems.push(
-      `The registered task launches ${registeredInvocation ? registeredInvocation.command : 'nothing'}, ` +
-        'which is not this copy of the app.'
+      t('task.problem.wrongCommand', 'The registered task launches {command}, which is not this copy of the app.', {
+        command: registeredInvocation ? registeredInvocation.command : t('task.nothing', 'nothing'),
+      })
     );
   }
-  if (!scheduleMatches) problems.push(`Windows holds a ${describeSchedule(registered)}, not the one saved here.`);
-  if (registered.repetitionBounded) {
-    problems.push('The registered repetition has an end, so it would stop part way through the day.');
+  if (!scheduleMatches) {
+    problems.push(
+      t('task.problem.wrongSchedule', 'Windows holds a {schedule}, not the one saved here.', {
+        schedule: describeSchedule(registered),
+      })
+    );
   }
-  if (/<Enabled>false<\/Enabled>/.test(text)) problems.push('The task is disabled in Task Scheduler.');
+  if (registered.repetitionBounded) {
+    problems.push(
+      t('task.problem.bounded', 'The registered repetition has an end, so it would stop part way through the day.')
+    );
+  }
+  if (/<Enabled>false<\/Enabled>/.test(text)) {
+    problems.push(t('task.problem.disabled', 'The task is disabled in Task Scheduler.'));
+  }
 
   return {
     ok: problems.length === 0,
@@ -867,11 +903,14 @@ function describeTaskState(state, enabled) {
   const value = Number(state);
   if (!Number.isFinite(value)) return null;
   switch (value) {
-    case 1: return 'disabled';
-    case 2: return 'queued';
-    case 3: return enabled === false ? 'ready, but disabled' : 'ready';
-    case 4: return 'running now';
-    default: return 'unknown to Windows';
+    case 1: return t('task.state.disabled', 'disabled');
+    case 2: return t('task.state.queued', 'queued');
+    case 3:
+      return enabled === false
+        ? t('task.state.readyDisabled', 'ready, but disabled')
+        : t('task.state.ready', 'ready');
+    case 4: return t('task.state.running', 'running now');
+    default: return t('task.state.unknown', 'unknown to Windows');
   }
 }
 
@@ -885,19 +924,25 @@ function describeTaskState(state, enabled) {
 function describeTaskResult(code) {
   if (code === null || code === undefined) return null;
   switch (Number(code) >>> 0) {
-    case 0x0: return 'the last run finished successfully';
-    case 0x1: return 'the last run exited with an error';
-    case 0x41300: return 'the task is ready and has not started yet';
-    case 0x41301: return 'the task is running now';
-    case 0x41302: return 'the task is disabled';
-    case 0x41303: return 'the task has never run';
-    case 0x41304: return 'there are no future runs scheduled';
-    case 0x41306: return 'the last run was stopped';
-    case 0x8007010b: return 'the working directory is not valid';
-    case 0x80070002: return 'the program it launches could not be found — the app has moved';
-    case 0x80070003: return 'the path it launches could not be found — the app has moved';
-    case 0x8004131f: return 'an instance was already running, so this run was skipped';
-    default: return `the last run reported code 0x${(Number(code) >>> 0).toString(16).toUpperCase()}`;
+    case 0x0: return t('task.result.ok', 'the last run finished successfully');
+    case 0x1: return t('task.result.error', 'the last run exited with an error');
+    case 0x41300: return t('task.result.notStarted', 'the task is ready and has not started yet');
+    case 0x41301: return t('task.result.running', 'the task is running now');
+    case 0x41302: return t('task.result.disabled', 'the task is disabled');
+    case 0x41303: return t('task.result.never', 'the task has never run');
+    case 0x41304: return t('task.result.noFuture', 'there are no future runs scheduled');
+    case 0x41306: return t('task.result.stopped', 'the last run was stopped');
+    case 0x8007010b: return t('task.result.badWorkingDir', 'the working directory is not valid');
+    case 0x80070002:
+      return t('task.result.missingProgram', 'the program it launches could not be found — the app has moved');
+    case 0x80070003:
+      return t('task.result.missingPath', 'the path it launches could not be found — the app has moved');
+    case 0x8004131f:
+      return t('task.result.alreadyRunning', 'an instance was already running, so this run was skipped');
+    default:
+      return t('task.result.code', 'the last run reported code 0x{code}', {
+        code: (Number(code) >>> 0).toString(16).toUpperCase(),
+      });
   }
 }
 
@@ -953,19 +998,27 @@ function nextRunAt(schedule, from = new Date()) {
 
 /** One line of English for a schedule. Used in problem messages and the UI. */
 function describeSchedule(schedule) {
-  if (!schedule) return 'no schedule';
+  if (!schedule) return t('schedule.none', 'no schedule');
   switch (schedule.kind) {
     case 'minutes': {
       const every = clampMinutes(schedule.everyMinutes);
-      return every === 1 ? 'run every minute' : `run every ${every} minutes`;
+      return every === 1
+        ? t('schedule.runEveryMinute', 'run every minute')
+        : t('schedule.runEveryMinutes', 'run every {n} minutes', { n: every });
     }
     case 'daily':
-      return `daily run at ${schedule.time}`;
+      return t('schedule.dailyRun', 'daily run at {time}', { time: schedule.time });
     case 'monthly':
-      return `monthly run on day ${schedule.day} at ${schedule.time}`;
+      return t('schedule.monthlyRun', 'monthly run on day {day} at {time}', {
+        day: schedule.day,
+        time: schedule.time,
+      });
     case 'weekly':
     default:
-      return `weekly run on ${WEEKDAY_ELEMENTS[Number(schedule.weekday) || 0]} at ${schedule.time}`;
+      return t('schedule.weeklyRun', 'weekly run on {day} at {time}', {
+        day: weekdayName(Number(schedule.weekday) || 0),
+        time: schedule.time,
+      });
   }
 }
 

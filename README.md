@@ -9,9 +9,11 @@ A capability inventory read off the source in `src/`. The measured figures
 quoted further down this file come from earlier runs on the author's machine
 and are not re-measured here.
 
-Five tabs — **Disk usage**, **What to delete**, **Duplicates**, **Trends** and
-**Automatic** — over one selected folder at a time, plus a scheduled cleanup
-that runs with no window open and an optional tray watcher.
+Six tabs — **Disk usage**, **What to delete**, **Duplicates**, **Trends**,
+**Automatic** and **Settings** — over one selected folder at a time, plus a
+scheduled cleanup that runs with no window open, a daily disk measurement that
+does the same, and an optional tray watcher. The interface reads in English or
+Vietnamese, and says so in whichever one you chose, notifications included.
 
 ### Application shell
 
@@ -24,6 +26,8 @@ that runs with no window open and an optional tray watcher.
 | Clean shutdown | Closing the window cancels every in-flight scan, duplicate search and delete |
 | External links | `http`/`https` URLs open in the real browser; every other `window.open` is denied, and navigation away from `file://` is blocked |
 | macOS lifecycle | `activate` recreates the window; on every other platform closing the last window quits |
+| Language | English and Vietnamese, chosen in Settings or followed from the Windows *display language*; applied to the window, the tray menu, the notifications and the native dialogs without a restart |
+| Appearance | Light, dark or follow-the-system, switched with a circular View Transition sweep from the button pressed, and skipped entirely under `prefers-reduced-motion` |
 
 ### What the renderer is allowed to do
 
@@ -52,6 +56,7 @@ Its entire view of the system is the thirty-two functions on `window.cleandrive`
 | `monitorStatus()` / `monitorCheck()` | what the disk watcher currently sees, and forcing a reading now |
 | `monitorSnooze(minutes)` / `monitorResume()` | silence and un-silence disk alerts |
 | `setTheme(mode)` | persist `system`, `light` or `dark`, and match Electron's native dialogs to it |
+| `setLanguage(preference)` / `getLanguage()` | switch the app's language, including the main process's dialogs, notifications and tray menu; and read back which language a `system` preference resolved to |
 | `updateState()` / `checkForUpdate()` | what the updater knows, and asking the release feed now |
 | `downloadUpdate()` / `installUpdate()` | fetch a new version, and restart into its installer — two separate clicks on purpose |
 | `onScanProgress` / `onDuplicateProgress` / `onTrashProgress` / `onAutoCleanProgress` / `onUpdateState` | subscribe to progress and update state; each returns an unsubscribe function |
@@ -103,6 +108,115 @@ sunset switches this window with it, with no listener anywhere.
 `nativeTheme.themeSource` is set too, so Electron's own dialogs — the delete
 confirmation, the folder picker — match. A light app throwing a black modal is
 the giveaway that a theme was bolted on afterwards.
+
+#### Switching it
+
+The switch is a **circular sweep from the button that was pressed**, using the
+View Transition API: Chromium snapshots the old frame and the new one, and CSS
+animates between them. Changing every colour in the window on a single frame
+reads as a glitch; a reveal that grows from where the pointer just was reads as
+a consequence.
+
+```js
+root.style.setProperty('--theme-r', `${radius}px`);   // to the furthest corner
+document.startViewTransition(() => apply(mode));
+```
+
+```css
+html[data-theme-sweeping]::view-transition-new(root) {
+  animation: theme-sweep 460ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+```
+
+Four details that are not decoration:
+
+- **The radius is measured, not guessed.** It is the distance from the button to
+  the furthest corner of the window, so the circle finishes covering the screen
+  exactly as the animation ends. A fixed radius leaves a corner unswept on a
+  wide window and overshoots on a narrow one.
+- **The default cross-fade is switched off** (`animation: none` and
+  `mix-blend-mode: normal` on both snapshots). Left on, the two themes blend
+  through a third one on the way past.
+- **`prefers-reduced-motion` skips it entirely**, in JavaScript *and* in CSS.
+- **The cleanup does not depend on frames being produced.** `transition.finished`
+  is the obvious signal and it is not sufficient: a window that is hidden or
+  occluded never animates, so the promise stays pending and the attribute would
+  stay set for the life of the window. A timeout is the guarantee and `finished`
+  is the fast path. This was found by a test running against `show: false`.
+
+One consequence worth knowing when reading the code: the DOM change now happens
+*inside* the transition callback, so `data-theme` lands a frame after the click
+rather than synchronously. The smoke test waits for the attribute instead of
+sleeping on it.
+
+The selected option is marked by **one pill that slides**, not by a background
+that vanishes here and appears there. Equal-width grid columns are what make
+that possible without measuring anything: the indicator is one column wide and
+moves by whole multiples of itself, so the only thing script says is which index
+is active.
+
+### Language
+
+English and Vietnamese, switchable in Settings, applied immediately — to the
+window *and* to the notifications, the tray menu and the confirmation in front
+of a deletion, which is the text that matters most.
+
+**English is not a dictionary.** The obvious shape is two tables with every
+sentence behind a key, and it was rejected: it moves the app's prose out of the
+files that use it, and in a codebase where the writing is the feature that costs
+more than it saves. English stays where it always was — inline in the markup,
+and as the second argument to `t()`:
+
+```js
+t('auto.save', 'Save settings')
+t('usage.scanned', 'Scanned {n} files.', { n: 1234 })
+```
+```html
+<h2 data-i18n="auto.scheduleTitle">Schedule</h2>
+```
+
+Only the other languages are tables. A key with no translation falls back to the
+English that is right there in the call, so a half-finished dictionary shows
+English rather than `auto.scheduleTitle`, and adding a language never means
+touching English again.
+
+| Decision | Why |
+| --- | --- |
+| One module, loaded by both processes | The main process composes the delete confirmation, the 02:00 notification and the tray menu. A window in Vietnamese with an English "may I delete 2,431 files?" puts the one sentence that must be understood in the language the user just turned off |
+| The language travels in the URL, like the theme | The markup is written in English, so an answer arriving over IPC would be a Vietnamese user watching the app translate itself after the first frame |
+| `html[data-i18n-pending] body { visibility: hidden }` | Covers the gap between the body being parsed and the DOM pass running. Set only when a translation is actually needed, and cleared in a `finally` — a dictionary that threw must not leave the window permanently invisible |
+| The English in the markup is remembered in a WeakMap | It is the fallback, and the translation overwrites it. Without the copy, switching to Vietnamese and back would leave Vietnamese on screen |
+| Each screen registers its own redraw | The DOM pass only reaches text that is *in* the markup. A table of results, a toast, a run log — all composed by JS, all have to be composed again |
+| Numbers and dates follow the app's language | Not the system locale, which is a different question: this machine formats dates the Vietnamese way while its Windows display language is English |
+
+**"System" follows the display language, not the regional format.** Those are two
+settings and Windows answers them separately — `getSystemLocale()` says `vi-VN`
+on the development machine while its menus are in English. Following the format
+setting would hand somebody a Vietnamese app they never asked for, so
+`getPreferredSystemLanguages()` is what gets consulted.
+
+**Vietnamese has to keep the distinctions the English makes.** The whole product
+is the difference between *moved to the Recycle Bin* and *freed*; a translation
+that renders both as "xoá" is lying where the English is careful. So the
+dictionary fixes the terms — **chuyển vào Thùng rác** against **giải phóng** —
+and `test-i18n.js` asserts it, alongside the check that matters most: that every
+translated string keeps the `{placeholders}` its English has. A dropped `{n}`
+does not fail, it silently prints a sentence with the count missing.
+
+Task Scheduler is deliberately *not* translated: it is the name of the Windows
+window somebody has to open to find the entry.
+
+### Settings
+
+Appearance, language, and the version live in their own tab. The update card
+used to sit in the Automatic tab between the cleanup policy and the disk alerts,
+which put "which version am I running" — the first thing anyone reporting a
+problem is asked — inside a screen about deleting files on a timetable. Nothing
+in Settings changes what the app deletes.
+
+The appearance switch stays in the top bar as well, because it is the one
+preference people flip on a whim. Both copies are driven by the same
+`[data-theme-choice]` attribute, so they cannot disagree.
 
 The first rule in the file is `[hidden] { display: none !important }`, and it is
 there because of a bug that was live for a long time. A browser's own rule is
@@ -338,10 +452,12 @@ otherwise be guarding the wrong directory entirely.
 | `test-autoclean.js` | The gates that stop an unattended run: verdict, category, age (taking the *later* of atime and mtime), whitelist, path guards, per-run cap, disk threshold, and an open application |
 | `test-scheduler.js [--live]` | Task XML content, the interval repetition, schedule round-tripping and next-run arithmetic offline; with `--live`, registers a real task **under a suffixed name** and removes it again. The suffix is itself asserted: this suite used to run against the real task name and unregister whatever the person running it had configured |
 | `test-history.js` | Mostly assertions that *no* number is produced: one data point, five days of data, a flat disk, a shrinking disk, a disk too erratic to extrapolate, and a folder scanned only once. Plus which volume the chart opens on, and the sampler's half-hour coalescing |
+| `test-i18n.js` | The dictionary against the source: every key the app asks for has a translation, every translation keeps the placeholders its English has and invents none, nothing in the dictionary is dead, and *moved* and *freed* are still two different words in Vietnamese |
 | `test-monitor.js` | Ten consecutive readings above the threshold must yield one alert, not ten; rounding noise around the threshold must yield none; a level crossed during a snooze must not be announced when the snooze ends. Plus the runtime PNG encoder |
 | `test-scanner.js "C:\path"` | Scans any real folder from the CLI and prints the summary |
 | `test-permission.ps1` | Sets genuine Windows ACLs on throwaway files, then checks `planTrash` classifies each one correctly *without* triggering the shell's admin prompt |
 | `smoke.js` | Boots the real app — real preload, real IPC, real renderer — clicks its own buttons and reads the rendered DOM back out. Redirects `userData` to a temp directory and suffixes the task names first, and asserts both: it used to delete and restore the real files, and its settings save unregistered the real Windows task |
+| `verify-appearance.js` | Switches language in a real window and reads the DOM back: the tabs, headings and tooltips change, the English returns when you switch back, and the theme sweep starts from the button and cleans up after itself |
 | `verify-schedule.js` | Drives the real Schedule and Trends screens: the interval schedule round-trips to a real settings file, the task card reports what Windows holds, and "Measure now" records a real measurement. Registers nothing — every Task Scheduler call it makes is a query |
 | `verify-trash.js` | Moves one throwaway probe file to the real Recycle Bin and verifies it left the filesystem |
 | `verify-autoclean.js` | The whole chain on real files: an unattended run takes them, they are found in the actual Recycle Bin under their original paths, exactly those are purged, and the free-space figure moves. Shows plainly that moving to the bin freed nothing |

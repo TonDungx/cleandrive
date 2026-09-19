@@ -3,6 +3,7 @@
 const { app } = require('electron');
 
 const scheduler = require('./lib/scheduler');
+const { t } = require('../i18n');
 
 /**
  * Keeping Windows Task Scheduler and the settings file in agreement.
@@ -43,7 +44,9 @@ async function reconcile(settings, { settingsExisted = true } = {}) {
       cleanup: null,
       sampler: null,
       changes: [],
-      problems: ['Scheduling is implemented for Windows only. Everything can still be run by hand.'],
+      problems: [
+        t('task.problem.windowsOnlyLong', 'Scheduling is implemented for Windows only. Everything can still be run by hand.'),
+      ],
     };
   }
 
@@ -58,9 +61,12 @@ async function reconcile(settings, { settingsExisted = true } = {}) {
 
   if (!settingsExisted && (await scheduler.isInstalled(cleanupTaskPath))) {
     problems.push(
-      'A CleanDrive task is registered with Windows but this app has no saved settings, so the run ' +
-        'would find nothing configured and do nothing. Save your configuration to repair it, or ' +
-        'switch automatic cleanup off to remove the task.'
+      t(
+        'task.problem.orphaned',
+        'A CleanDrive task is registered with Windows but this app has no saved settings, so the run ' +
+          'would find nothing configured and do nothing. Save your configuration to repair it, or ' +
+          'switch automatic cleanup off to remove the task.'
+      )
     );
     return {
       supported: true,
@@ -72,7 +78,7 @@ async function reconcile(settings, { settingsExisted = true } = {}) {
   }
 
   const cleanup = await reconcileOne({
-    label: 'Automatic cleanup',
+    label: t('task.label.cleanup', 'Automatic cleanup'),
     taskPath: cleanupTaskPath,
     wanted: settings.autoClean.enabled,
     schedule: settings.autoClean.schedule,
@@ -90,7 +96,7 @@ async function reconcile(settings, { settingsExisted = true } = {}) {
 function reconcileSampler(settings, changes, problems) {
   const trends = settings.trends || { dailySample: false, sampleTime: '12:00' };
   return reconcileOne({
-    label: 'Daily disk measurement',
+    label: t('task.label.sampler', 'Daily disk measurement'),
     taskPath: scheduler.sampleTaskPath(),
     wanted: trends.dailySample,
     schedule: { kind: 'daily', time: trends.sampleTime, catchUpAtLogon: true },
@@ -115,8 +121,15 @@ async function reconcileOne({ label, taskPath, wanted, schedule, invocation, cre
       return { taskPath, wanted: false, installed: false, ok: true };
     }
     const removed = await scheduler.uninstall(taskPath);
-    if (removed.ok) changes.push(`${label} is off, so its Windows task was removed.`);
-    else problems.push(`${label}: the Windows task could not be removed (${removed.error}).`);
+    if (removed.ok) changes.push(t('task.change.removed', '{label} is off, so its Windows task was removed.', { label }));
+    else {
+      problems.push(
+        t('task.problem.removeFailed', '{label}: the Windows task could not be removed ({error}).', {
+          label,
+          error: removed.error,
+        })
+      );
+    }
     return { taskPath, wanted: false, installed: !removed.ok, ok: removed.ok, error: removed.error || null };
   }
 
@@ -127,11 +140,17 @@ async function reconcileOne({ label, taskPath, wanted, schedule, invocation, cre
 
   const created = await create();
   if (!created.ok) {
-    problems.push(`${label}: Windows Task Scheduler refused the task (${created.error}).`);
+    problems.push(
+      t('task.problem.refused', '{label}: Windows Task Scheduler refused the task ({error}).', {
+        label,
+        error: created.error,
+      })
+    );
     return { taskPath, wanted: true, installed: false, ok: false, error: created.error, verification: before };
   }
 
   changes.push(`${label}: ${describeRepair(before)}`);
+
 
   const after = created.verification || (await scheduler.verify({ schedule, invocation, taskPath }));
   if (!after.ok) problems.push(...after.problems);
@@ -147,14 +166,16 @@ async function reconcileOne({ label, taskPath, wanted, schedule, invocation, cre
 }
 
 function describeRepair(check) {
-  if (!check.installed) return 'no Windows task was registered, so one has been created.';
+  if (!check.installed) {
+    return t('task.repair.created', 'no Windows task was registered, so one has been created.');
+  }
   if (check.invocationMatches === false) {
-    return 'the registered task pointed at another copy of the app; it now points here.';
+    return t('task.repair.repointed', 'the registered task pointed at another copy of the app; it now points here.');
   }
   if (check.scheduleMatches === false) {
-    return 'Windows held a different schedule; it has been rewritten to match the settings.';
+    return t('task.repair.rewritten', 'Windows held a different schedule; it has been rewritten to match the settings.');
   }
-  return 'the registered task was not usable as it stood and has been rewritten.';
+  return t('task.repair.unusable', 'the registered task was not usable as it stood and has been rewritten.');
 }
 
 /**

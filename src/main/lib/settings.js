@@ -4,6 +4,8 @@ const fs = require('node:fs');
 const fsp = fs.promises;
 const path = require('node:path');
 
+const i18n = require('../../i18n');
+
 /**
  * Persisted application settings.
  *
@@ -55,6 +57,16 @@ const SCHEDULE_KINDS = ['minutes', 'daily', 'weekly', 'monthly'];
  * at midnight.
  */
 const THEMES = ['system', 'light', 'dark'];
+
+/**
+ * 'system' follows the OS here too, and for the same reason -- but the OS
+ * setting it follows is the *display language*, not the regional format. A
+ * machine can perfectly well be set to show English menus while formatting
+ * dates the Vietnamese way, and this machine is: `getSystemLocale()` answers
+ * `vi-VN` while the Windows display language is English. Reading the format
+ * setting would hand somebody a Vietnamese app they never asked for.
+ */
+const LANGUAGES = ['system', ...i18n.CODES];
 
 /** The top-level groups `patch` merges one level into. */
 const SECTIONS = ['autoClean', 'purge', 'monitor', 'appearance', 'updates', 'trends'];
@@ -146,6 +158,7 @@ function defaults() {
     },
     appearance: {
       theme: 'system',
+      language: 'system',
     },
     trends: {
       /**
@@ -470,6 +483,13 @@ function coerceSettings(raw, { minMinutes = 1 } = {}) {
     warnings.push(`appearance.theme: "${rawAppearance.theme}" is not one of ${THEMES.join(', ')}`);
   }
 
+  const language = LANGUAGES.includes(rawAppearance.language)
+    ? rawAppearance.language
+    : base.appearance.language;
+  if (rawAppearance.language !== undefined && !LANGUAGES.includes(rawAppearance.language)) {
+    warnings.push(`appearance.language: "${rawAppearance.language}" is not one of ${LANGUAGES.join(', ')}`);
+  }
+
   const rawUpdates = isObject(raw.updates) ? raw.updates : {};
   const updates = {
     enabled: bool(rawUpdates.enabled, base.updates.enabled),
@@ -493,7 +513,7 @@ function coerceSettings(raw, { minMinutes = 1 } = {}) {
       autoClean,
       purge,
       monitor,
-      appearance: { theme },
+      appearance: { theme, language },
       updates,
       trends,
     },
@@ -664,6 +684,7 @@ module.exports = {
   DEFAULT_SKIP_PROCESSES,
   SCHEDULE_KINDS,
   THEMES,
+  LANGUAGES,
   SECTIONS,
   LIMITS,
 };

@@ -1518,20 +1518,56 @@ main {
 }
 
 /* ==========================================================================
-   appearance switch
-   ========================================================================== */
+   segmented switches (appearance, language)
+   ==========================================================================
 
-.theme-switch {
-  display: flex;
-  flex: none;
-  gap: 2px;
+   One control, two uses. The selected option used to be marked by giving it a
+   background, which made choosing one a cut: the highlight vanished here and
+   appeared there with nothing connecting the two. It is now a single pill that
+   slides, so the eye follows the choice instead of re-finding it.
+
+   Equal-width columns are what make that possible without measuring anything
+   in JavaScript: with `grid-auto-columns: 1fr` the indicator is exactly one
+   column wide and moves by whole multiples of itself, so the only thing script
+   has to say is which index is active. */
+
+.segmented {
+  --switch-index: 0;
+  --switch-count: 3;
+  position: relative;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
   padding: 2px;
   border: 1px solid var(--border);
   border-radius: var(--radius-pill);
   background: var(--surface-2);
 }
 
-.theme-option {
+.theme-switch {
+  flex: none;
+}
+
+.segmented::before {
+  content: '';
+  position: absolute;
+  z-index: 0;
+  top: 2px;
+  bottom: 2px;
+  left: 2px;
+  width: calc((100% - 4px) / var(--switch-count));
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  transform: translateX(calc(var(--switch-index) * 100%));
+  /* Overshoots very slightly and settles -- the curve of something with a
+     little weight, rather than something being teleported. */
+  transition: transform 340ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.segmented-option {
+  position: relative;
+  z-index: 1;
   appearance: none;
   height: 24px;
   padding: 0 11px;
@@ -1542,18 +1578,91 @@ main {
   font: inherit;
   font-size: 11.5px;
   font-weight: 500;
+  white-space: nowrap;
   cursor: pointer;
-  transition: background var(--fast), color var(--fast);
+  transition: color var(--fast);
 }
 
-.theme-option:hover {
+.segmented-option:hover {
   color: var(--text);
 }
 
-.theme-option.is-active {
-  background: var(--surface);
+.segmented-option.is-active {
   color: var(--text);
-  box-shadow: var(--shadow-sm);
+}
+
+/* The Settings tab's copies: the same control with room to breathe. */
+.segmented-wide {
+  width: 100%;
+  max-width: 360px;
+  margin: 0 0 6px;
+}
+
+.segmented-wide .segmented-option {
+  height: 32px;
+  font-size: 12.5px;
+}
+
+/* ==========================================================================
+   the theme sweep
+   ==========================================================================
+
+   Swapping every colour in the window on a single frame reads as a glitch
+   rather than a change. The View Transition API snapshots the old frame and
+   the new one; this reveals the new one as a circle growing from the button
+   that was pressed, so the change has a visible cause.
+
+   The custom properties are set on :root by theme.js before the transition
+   starts -- the pseudo-element tree hangs off the root element, so they
+   inherit into it. The radius is measured to the furthest corner of the
+   window, so the sweep finishes covering the screen exactly as it ends. */
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  /* The default is a cross-fade of both, with plus-lighter blending, which
+     would wash the two themes together into a third one on the way past. */
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+html[data-theme-sweeping]::view-transition-new(root) {
+  animation: theme-sweep 460ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes theme-sweep {
+  from {
+    clip-path: circle(0px at var(--theme-x, 50%) var(--theme-y, 50%));
+  }
+  to {
+    clip-path: circle(var(--theme-r, 150vmax) at var(--theme-x, 50%) var(--theme-y, 50%));
+  }
+}
+
+/* Someone who has asked their machine for less movement has asked for it here
+   too. theme.js skips the transition entirely as well; this is the half that
+   still applies if the attribute is somehow left on. */
+@media (prefers-reduced-motion: reduce) {
+  .segmented::before {
+    transition: none;
+  }
+
+  html[data-theme-sweeping]::view-transition-new(root) {
+    animation: none;
+  }
+}
+
+/* ==========================================================================
+   translation
+   ==========================================================================
+
+   The DOM pass cannot run until the body is parsed, which is after the browser
+   could paint -- so a Vietnamese window would show one English frame first.
+   The attribute is set in <head> only when a translation is actually needed,
+   and cleared in a `finally`, so a dictionary that threw cannot leave the
+   window permanently invisible. */
+
+html[data-i18n-pending] body {
+  visibility: hidden;
 }
 
 /* ==========================================================================

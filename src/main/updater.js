@@ -2,6 +2,8 @@
 
 const { app, dialog, BrowserWindow, Notification } = require('electron');
 
+const { t } = require('./language');
+
 /**
  * Checking for, fetching and installing a new version.
  *
@@ -174,20 +176,35 @@ async function promptToInstall() {
   try {
     const { response } = await dialog.showMessageBox(win, {
       type: 'info',
-      buttons: ['Restart and install', 'Not now'],
+      buttons: [t('update.install', 'Restart and install'), t('update.notNow', 'Not now')],
       defaultId: 0,
       cancelId: 1,
-      title: 'Update ready',
-      message: `CleanDrive ${state.version} is ready to install.`,
+      title: t('update.dialog.title', 'Update ready'),
+      message: t('update.dialog.message', 'CleanDrive {version} is ready to install.', {
+        version: state.version,
+      }),
       detail:
-        `You are on ${state.currentVersion}. The update is already downloaded — installing ` +
-        'takes a few seconds and the app reopens by itself.' +
-        '\n\nWindows will ask for permission, because CleanDrive is installed for all users.' +
+        t(
+          'update.dialog.detail',
+          'You are on {current}. The update is already downloaded — installing takes a few seconds ' +
+            'and the app reopens by itself.',
+          { current: state.currentVersion }
+        ) +
+        '\n\n' +
+        t(
+          'update.dialog.elevation',
+          'Windows will ask for permission, because CleanDrive is installed for all users.'
+        ) +
         (state.signed
           ? ''
-          : '\n\nThis build is not code-signed, so the only check on the download is that it ' +
-            'came from the release server over HTTPS.') +
-        '\n\nChoosing "Not now" installs it the next time you quit CleanDrive.',
+          : '\n\n' +
+            t(
+              'update.detail.unsigned',
+              'This build is not code-signed, so the only check on the download is that it came from ' +
+                'the release server over HTTPS.'
+            )) +
+        '\n\n' +
+        t('update.dialog.notNowNote', 'Choosing "Not now" installs it the next time you quit CleanDrive.'),
     });
 
     if (response === 0) install();
@@ -260,8 +277,11 @@ async function noteVersion(store) {
 
       if (Notification.isSupported()) {
         new Notification({
-          title: 'CleanDrive updated',
-          body: `Now on version ${current}, up from ${previous}.`,
+          title: t('notify.updated.title', 'CleanDrive updated'),
+          body: t('notify.updated.body', 'Now on version {current}, up from {previous}.', {
+            current,
+            previous,
+          }),
           silent: true,
         }).show();
       }

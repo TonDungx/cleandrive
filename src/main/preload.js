@@ -43,6 +43,8 @@ const api = {
 
   /* appearance */
   setTheme: (mode) => ipcRenderer.invoke('theme:set', mode),
+  setLanguage: (preference) => ipcRenderer.invoke('language:set', preference),
+  getLanguage: () => ipcRenderer.invoke('language:get'),
 
   /* the Windows tasks behind the schedule */
   taskStatus: (options) => ipcRenderer.invoke('tasks:status', options),

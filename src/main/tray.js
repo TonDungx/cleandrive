@@ -5,6 +5,7 @@ const { app, Tray, Menu, Notification, nativeImage } = require('electron');
 const { DiskMonitor } = require('./lib/monitor');
 const { renderGauge } = require('./lib/trayicon');
 const { formatBytes } = require('./lib/util');
+const { t } = require('./language');
 
 /**
  * The tray presence, and the only part of this app that outlives its window.
@@ -187,21 +188,31 @@ function render() {
 }
 
 function tooltip(worst) {
-  if (!worst || !worst.usage || worst.usage.ok !== true) return 'CleanDrive — disk usage unknown';
+  if (!worst || !worst.usage || worst.usage.ok !== true) {
+    return t('tray.tooltip.unknown', 'CleanDrive — disk usage unknown');
+  }
   const { usage, root } = worst;
   return (
     `CleanDrive — ${root}\n` +
-    `${usage.usedPercent.toFixed(1)}% used · ${formatBytes(usage.freeBytes)} free of ` +
-    `${formatBytes(usage.totalBytes)}` +
-    (monitor.isSnoozed() ? '\nAlerts snoozed' : '')
+    t('tray.tooltip.usage', '{percent}% used · {free} free of {total}', {
+      percent: usage.usedPercent.toFixed(1),
+      free: formatBytes(usage.freeBytes),
+      total: formatBytes(usage.totalBytes),
+    }) +
+    (monitor.isSnoozed() ? `\n${t('tray.snoozed', 'Alerts snoozed')}` : '')
   );
 }
 
 function buildMenu() {
   const rows = monitor.snapshot().map((entry) => ({
-    label: entry.usage && entry.usage.ok
-      ? `${entry.root}  ${entry.usage.usedPercent.toFixed(1)}% used · ${formatBytes(entry.usage.freeBytes)} free`
-      : `${entry.root}  unreadable`,
+    label:
+      entry.usage && entry.usage.ok
+        ? `${entry.root}  ` +
+          t('tray.volumeUsage', '{percent}% used · {free} free', {
+            percent: entry.usage.usedPercent.toFixed(1),
+            free: formatBytes(entry.usage.freeBytes),
+          })
+        : `${entry.root}  ${t('tray.unreadable', 'unreadable')}`,
     enabled: false,
   }));
 
@@ -210,15 +221,20 @@ function buildMenu() {
   return Menu.buildFromTemplate([
     { label: 'CleanDrive', enabled: false },
     { type: 'separator' },
-    ...(rows.length > 0 ? rows : [{ label: 'No volumes watched', enabled: false }]),
+    ...(rows.length > 0
+      ? rows
+      : [{ label: t('tray.noVolumes', 'No volumes watched'), enabled: false }]),
     { type: 'separator' },
-    { label: 'Open CleanDrive', click: () => openWindow() },
+    { label: t('tray.open', 'Open CleanDrive'), click: () => openWindow() },
     snoozed
-      ? { label: 'Resume alerts', click: () => clearSnooze() }
-      : { label: `Snooze alerts for ${monitor.snoozeMinutes} minutes`, click: () => snooze() },
-    { label: 'Check now', click: () => { checkNow().catch(() => {}); } },
+      ? { label: t('monitor.resume', 'Resume alerts'), click: () => clearSnooze() }
+      : {
+          label: t('tray.snoozeFor', 'Snooze alerts for {n} minutes', { n: monitor.snoozeMinutes }),
+          click: () => snooze(),
+        },
+    { label: t('app.checkNow', 'Check now'), click: () => { checkNow().catch(() => {}); } },
     { type: 'separator' },
-    { label: 'Quit', click: () => { beginQuit(); app.quit(); } },
+    { label: t('tray.quit', 'Quit'), click: () => { beginQuit(); app.quit(); } },
   ]);
 }
 
@@ -274,11 +290,19 @@ function handleEvent(event) {
   const critical = event.to === 'critical';
 
   const toast = new Notification({
-    title: critical ? 'CleanDrive: disk almost full' : 'CleanDrive: disk space is low',
+    title: critical
+      ? t('notify.disk.criticalTitle', 'CleanDrive: disk almost full')
+      : t('notify.disk.lowTitle', 'CleanDrive: disk space is low'),
     body:
-      `${event.root} is ${usage.usedPercent.toFixed(1)}% full — ` +
-      `${formatBytes(usage.freeBytes)} left of ${formatBytes(usage.totalBytes)}.` +
-      (critical ? ' Windows may start misbehaving below a gigabyte or so.' : ''),
+      t('notify.disk.body', '{root} is {percent}% full — {free} left of {total}.', {
+        root: event.root,
+        percent: usage.usedPercent.toFixed(1),
+        free: formatBytes(usage.freeBytes),
+        total: formatBytes(usage.totalBytes),
+      }) +
+      (critical
+        ? ' ' + t('notify.disk.criticalNote', 'Windows may start misbehaving below a gigabyte or so.')
+        : ''),
     urgency: critical ? 'critical' : 'normal',
     silent: !critical,
   });

@@ -12,7 +12,7 @@
   "scripts": {
     "start": "electron .",
     "dev": "electron . --dev",
-    "test": "node scripts/test-duplicate.js --fixture && node scripts/test-advisor.js && node scripts/test-protection.js && node scripts/test-appsafety.js && node scripts/test-trash.js && node scripts/test-trash-progress.js && node scripts/test-settings.js && node scripts/test-recyclebin.js && node scripts/test-autoclean.js && node scripts/test-scheduler.js && node scripts/test-history.js && node scripts/test-monitor.js",
+    "test": "node scripts/test-duplicate.js --fixture && node scripts/test-advisor.js && node scripts/test-protection.js && node scripts/test-appsafety.js && node scripts/test-trash.js && node scripts/test-trash-progress.js && node scripts/test-settings.js && node scripts/test-recyclebin.js && node scripts/test-autoclean.js && node scripts/test-scheduler.js && node scripts/test-history.js && node scripts/test-monitor.js && node scripts/test-i18n.js",
     "test:scanner": "node scripts/test-scanner.js",
     "test:duplicate": "node scripts/test-duplicate.js --fixture",
     "test:advisor": "node scripts/test-advisor.js",
@@ -33,10 +33,12 @@
     "test:scheduler": "node scripts/test-scheduler.js",
     "test:history": "node scripts/test-history.js",
     "test:monitor": "node scripts/test-monitor.js",
+    "test:i18n": "node scripts/test-i18n.js",
     "test:scheduler:live": "node scripts/test-scheduler.js --live",
     "scheduled-run": "electron . --scheduled-run",
     "sample-only": "electron . --sample-only",
     "verify:schedule": "electron scripts/verify-schedule.js",
+    "verify:appearance": "electron scripts/verify-appearance.js",
     "build": "node scripts/build.js",
     "verify:install": "node scripts/verify-install-location.js",
     "verify:updater": "electron scripts/verify-updater.js"
