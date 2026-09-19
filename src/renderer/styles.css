@@ -200,13 +200,23 @@ body {
    top bar
    ========================================================================== */
 
+/*
+ * The top bar wraps rather than truncates.
+ *
+ * It used to be one fixed-height row, so a window narrower than its contents
+ * cut the folder down to "Chư…" and squeezed the shortcuts into each other --
+ * information hidden with no way to ask for it back. Nothing here is optional
+ * enough to hide, so when it does not fit it takes a second row instead, and
+ * the height follows.
+ */
 .topbar {
   display: flex;
   align-items: center;
-  gap: 18px;
+  flex-wrap: wrap;
+  gap: 10px 18px;
   flex: none;
-  padding: 0 20px;
-  height: 58px;
+  padding: 10px 20px;
+  min-height: 58px;
   background: var(--bg-elevated);
   border-bottom: 1px solid var(--border-soft);
 }
@@ -249,8 +259,11 @@ body {
   display: flex;
   align-items: center;
   gap: 10px;
-  min-width: 0;
-  flex: 1;
+  /* A floor wide enough for a drive letter and the end of a path. Below it the
+     whole group wraps to its own row rather than the folder shrinking to an
+     ellipsis and a letter. */
+  flex: 1 1 320px;
+  min-width: 260px;
 }
 
 /* The folder sits between the button and the quick-jump links, all of which are
@@ -271,8 +284,11 @@ body {
   display: flex;
   align-items: center;
   gap: 4px;
-  flex: none;
+  flex: 0 1 auto;
+  flex-wrap: wrap;
 }
+
+
 
 /* ==========================================================================
    controls
@@ -663,35 +679,54 @@ input[type="checkbox"]:disabled {
   background: var(--accent);
 }
 
+/*
+ * Shut: a quiet edge of the window, not a control demanding attention.
+ *
+ * The first version widened the handle into a 30px strip and let it keep its
+ * accent highlight, so hovering anywhere near the edge painted a tall blue
+ * slab -- with a bordered button sitting on top of it, looking stuck on rather
+ * than built in. Now the strip is the same surface as the top bar, its hover
+ * is a tint rather than a fill, and the button *is* the strip: same width, no
+ * border of its own, flush with the top.
+ */
 :root[data-sidebar="closed"] .sidebar-resizer {
-  width: 30px;
+  width: 24px;
   border-right: 1px solid var(--border-soft);
   background: var(--bg-elevated);
 }
 
+:root[data-sidebar="closed"] .sidebar-resizer:hover::after,
+:root[data-sidebar="closed"] .sidebar-resizer:focus-visible::after {
+  background: transparent;
+}
+
 .sidebar-open {
   position: absolute;
-  left: 3px;
-  top: 12px;
+  left: 0;
+  top: 0;
   z-index: 4;
-  display: inline-flex;
+  display: flex;
   align-items: center;
   justify-content: center;
   width: 24px;
-  height: 24px;
+  height: 40px;
   padding: 0;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--surface);
-  color: var(--text-2);
+  border: none;
+  border-right: 1px solid transparent;
+  background: none;
+  color: var(--text-3);
   cursor: pointer;
-  transition: background var(--fast), color var(--fast), border-color var(--fast);
+  transition: background var(--fast), color var(--fast);
 }
 
 .sidebar-open:hover {
   background: var(--surface-2);
-  border-color: var(--border-strong);
   color: var(--text);
+}
+
+.sidebar-open .tab-icon {
+  width: 14px;
+  height: 14px;
 }
 
 /* While a drag is in progress nothing should animate or select: a sidebar that
@@ -748,6 +783,67 @@ main {
   flex-wrap: wrap;
   gap: 10px;
   margin: 0 0 20px;
+}
+
+/*
+ * A panel's controls, kept in view.
+ *
+ * Sticky against the panel's scrollport, which is <main>. The negative margins
+ * pull it out to the panel's edges so the backdrop covers the full width as
+ * cards pass underneath -- without them the cards would show through the
+ * 24px gutters on either side.
+ */
+.panel-bar {
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  margin: -24px -24px 20px;
+  padding: 16px 24px 4px;
+  background: var(--bg);
+  border-bottom: 1px solid transparent;
+  transition: border-color var(--fast), box-shadow var(--fast);
+}
+
+/* Only once something has scrolled under it does it need an edge: a line
+   across an unscrolled screen is decoration. */
+.panel-bar.is-stuck {
+  border-bottom-color: var(--border-soft);
+  box-shadow: 0 6px 16px -12px var(--shadow-edge);
+}
+
+.panel-bar .panel-actions {
+  margin: 0 0 12px;
+}
+
+.panel-bar .progress {
+  margin: 0 0 12px;
+}
+
+/* On or off, in the bar itself, because the bar is the part that stays on
+   screen while the tiles that say so scroll away. */
+.bar-state {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.bar-state.is-on {
+  border-color: var(--good-line);
+  background: var(--good-soft);
+  color: var(--good);
+}
+
+.bar-state.is-dry {
+  border-color: var(--warn-line);
+  background: var(--warn-soft);
+  color: var(--warn);
 }
 
 .panel-actions-tight {
@@ -1702,6 +1798,17 @@ main {
  * labels then vanish by container query, not by a second media rule that could
  * disagree with this one.
  */
+/* Below this the six shortcuts cannot share a row with the folder and the
+   appearance switch. Letting flex decide leaves whichever item happens to
+   overflow alone on the second row, which looks like an accident; sending the
+   shortcuts down as a group looks like a layout. */
+@media (max-width: 1060px) {
+  .quick {
+    order: 3;
+    flex-basis: 100%;
+  }
+}
+
 @media (max-width: 1040px) {
   .workspace {
     --sidebar-w: 60px;
@@ -1804,6 +1911,47 @@ main {
 
 .theme-switch {
   flex: none;
+}
+
+/*
+ * The sidebar's copy: icons, not words.
+ *
+ * The sliding pill is the same one the Settings tab uses -- the transform is
+ * driven by --switch-index, which theme.js sets on every host -- so this is a
+ * size and a layout, not a second implementation.
+ */
+.sidebar .theme-switch {
+  margin: 0 0 3px;
+}
+
+.sidebar .segmented-option {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 26px;
+  padding: 0;
+}
+
+.theme-icon {
+  width: 15px;
+  height: 15px;
+}
+
+/* On the rail there is no room for three across, so the switch stands up and
+   the pill slides down it instead. */
+@container (max-width: 122px) {
+  .sidebar .segmented {
+    grid-auto-flow: row;
+  }
+
+  .sidebar .segmented::before {
+    left: 2px;
+    right: 2px;
+    bottom: auto;
+    width: auto;
+    height: calc((100% - 4px) / var(--switch-count));
+    transform: translateY(calc(var(--switch-index) * 100%));
+  }
 }
 
 .segmented::before {

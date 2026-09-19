@@ -151,6 +151,21 @@ for (const tab of document.querySelectorAll('.tab[data-tab]')) {
   });
 }
 
+/* A sticky bar earns its edge only once something has gone underneath it. A
+   line drawn across an unscrolled panel is decoration, and this app has a rule
+   about drawing things that do not mean anything. */
+const scroller = document.querySelector('main');
+scroller.addEventListener(
+  'scroll',
+  () => {
+    const stuck = scroller.scrollTop > 2;
+    for (const bar of document.querySelectorAll('.panel-bar')) {
+      bar.classList.toggle('is-stuck', stuck);
+    }
+  },
+  { passive: true }
+);
+
 /* ------------------------------------------------------------------ scan */
 
 function setScanRunning(running) {
@@ -1024,6 +1039,7 @@ async function deleteSelected(paths, onDone) {
 onLanguageChange(() => {
   if (state.folder) {
     $('target-path').textContent = elide(state.folder, 70);
+    $('target-path').title = state.folder;
   } else {
     $('target-path').textContent = t('app.noFolder', 'No folder selected');
     $('scan-status').textContent = t('app.pickToBegin', 'Pick a folder to begin.');

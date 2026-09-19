@@ -239,11 +239,20 @@ function applyAutoState(data) {
   renderAutoLists();
   syncScheduleRows();
 
-  $('astat-state').textContent = auto.enabled
+  const stateWord = auto.enabled
     ? auto.dryRun
       ? t('auto.state.reportOnly', 'Report only')
       : t('app.on', 'On')
     : t('app.off', 'Off');
+
+  $('astat-state').textContent = stateWord;
+
+  // The same word in the bar that stays on screen. The tile scrolls away; the
+  // question it answers -- is any of this actually running -- does not.
+  const chip = $('auto-state');
+  chip.textContent = stateWord;
+  chip.classList.toggle('is-on', auto.enabled && !auto.dryRun);
+  chip.classList.toggle('is-dry', auto.enabled && auto.dryRun);
   $('astat-next').textContent = auto.enabled ? formatWhenShort(data.scheduler.nextRunAt) : '–';
   $('astat-next').title = auto.enabled ? formatWhen(data.scheduler.nextRunAt) : '';
   $('astat-last').textContent = data.lastRun ? formatWhenShort(data.lastRun.startedAt) : t('app.never', 'Never');

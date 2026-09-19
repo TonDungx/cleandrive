@@ -33,22 +33,6 @@
 
       <button class="update-pill" id="update-pill" hidden></button>
 
-      <!-- Kept in the top bar rather than moved to the Settings tab with the
-           rest of the appearance controls: this is the one preference people
-           flip on a whim, and the tab has a copy that stays in step because
-           both are driven by the same [data-theme-choice] attribute. -->
-      <div
-        class="segmented theme-switch"
-        id="theme-switch"
-        data-theme-host
-        role="group"
-        data-i18n-aria="app.appearance"
-        aria-label="Appearance"
-      >
-        <button class="segmented-option" data-theme-choice="system" data-i18n-title="app.theme.systemHint" data-i18n="app.theme.system" title="Follow the system theme">Auto</button>
-        <button class="segmented-option" data-theme-choice="light" data-i18n-title="app.theme.lightHint" data-i18n="app.theme.light" title="Always light">Light</button>
-        <button class="segmented-option" data-theme-choice="dark" data-i18n-title="app.theme.darkHint" data-i18n="app.theme.dark" title="Always dark">Dark</button>
-      </div>
     </header>
 
     <!--
@@ -65,7 +49,7 @@
       <button class="sidebar-open" id="sidebar-open" hidden
         data-i18n-title="app.sidebar.show" title="Show the sidebar"
         data-i18n-aria="app.sidebar.show" aria-label="Show the sidebar">
-        <svg class="tab-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="2.4" y="3.2" width="11.2" height="9.6" rx="2"/><path d="M6.4 3.2v9.6"/></svg>
+        <svg class="tab-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5L10.5 8 6 12.5"/></svg>
       </button>
 
       <div class="sidebar" id="sidebar">
@@ -104,6 +88,41 @@
         </nav>
 
         <span class="sidebar-gap"></span>
+
+        <!--
+          Appearance, at the foot of the sidebar rather than in the top bar.
+
+          It was three words wide up there, next to six folder shortcuts and a
+          path, and it was the first thing the row ran out of space for. Down
+          here it is three icons, it costs nothing, and the Settings tab still
+          carries the same control with its words on -- both are driven by the
+          same [data-theme-choice] attribute, so they cannot fall out of step.
+        -->
+        <div
+          class="segmented theme-switch"
+          id="theme-switch"
+          data-theme-host
+          role="group"
+          data-i18n-aria="app.appearance"
+          aria-label="Appearance"
+        >
+          <button class="segmented-option" data-theme-choice="system"
+            data-i18n-title="app.theme.systemHint" title="Follow the system theme"
+            data-i18n-aria="app.theme.system" aria-label="Auto">
+            <svg class="theme-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="5.6"/><path d="M8 2.4a5.6 5.6 0 0 1 0 11.2z" fill="currentColor" stroke="none"/></svg>
+          </button>
+          <button class="segmented-option" data-theme-choice="light"
+            data-i18n-title="app.theme.lightHint" title="Always light"
+            data-i18n-aria="app.theme.light" aria-label="Light">
+            <svg class="theme-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="2.9"/><path d="M8 1.6v1.5M8 12.9v1.5M3.5 3.5l1.1 1.1M11.4 11.4l1.1 1.1M1.6 8h1.5M12.9 8h1.5M3.5 12.5l1.1-1.1M11.4 4.6l1.1-1.1"/></svg>
+          </button>
+          <button class="segmented-option" data-theme-choice="dark"
+            data-i18n-title="app.theme.darkHint" title="Always dark"
+            data-i18n-aria="app.theme.dark" aria-label="Dark">
+            <svg class="theme-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M13.2 9.6A5.6 5.6 0 0 1 6.4 2.8a5.6 5.6 0 1 0 6.8 6.8z"/></svg>
+          </button>
+        </div>
+
 
         <button class="tab sidebar-toggle" id="sidebar-toggle"
           data-i18n-title="app.sidebar.hide" title="Hide the sidebar"
@@ -341,6 +360,33 @@
 
       <!-- ------------------------------------------------ automatic -->
       <section class="panel" id="panel-auto" role="tabpanel">
+        <!--
+          The controls, at the top and stuck there.
+
+          They used to sit at the bottom, below every card on the longest screen
+          in the app: on a short window nothing here was visible without
+          scrolling past the whole configuration, so "Save settings" was a
+          button people had to go looking for after changing something. The
+          state sits in the same bar, because a screen full of switches with no
+          word on whether any of it is running is the thing this app is written
+          against.
+        -->
+        <div class="panel-bar" id="auto-bar">
+          <div class="panel-actions">
+            <button class="btn btn-primary" id="auto-save" data-i18n="auto.save">Save settings</button>
+            <button class="btn" id="auto-preview" data-i18n="auto.preview">Preview what it would delete</button>
+            <button class="btn btn-danger" id="auto-run" data-i18n="auto.runNow">Run cleanup now…</button>
+            <button class="btn" id="auto-cancel" hidden data-i18n="app.stop">Stop</button>
+            <span class="bar-state" id="auto-state" data-i18n="app.off">Off</span>
+            <span class="spacer"></span>
+            <span class="status" id="auto-status" data-i18n="app.loading">Loading…</span>
+          </div>
+
+          <div class="progress" id="auto-progress" hidden>
+            <div class="progress-bar is-indeterminate"></div>
+          </div>
+        </div>
+
         <p class="notice" id="auto-unsupported" hidden></p>
         <p class="notice" id="auto-warnings" hidden></p>
 
@@ -582,19 +628,6 @@
             </div>
           </section>
 
-        </div>
-
-        <div class="panel-actions">
-          <button class="btn btn-primary" id="auto-save" data-i18n="auto.save">Save settings</button>
-          <button class="btn" id="auto-preview" data-i18n="auto.preview">Preview what it would delete</button>
-          <button class="btn btn-danger" id="auto-run" data-i18n="auto.runNow">Run cleanup now…</button>
-          <button class="btn" id="auto-cancel" hidden data-i18n="app.stop">Stop</button>
-          <span class="spacer"></span>
-          <span class="status" id="auto-status" data-i18n="app.loading">Loading…</span>
-        </div>
-
-        <div class="progress" id="auto-progress" hidden>
-          <div class="progress-bar is-indeterminate"></div>
         </div>
 
         <section class="card card-wide" id="auto-result" hidden>
