@@ -882,6 +882,7 @@ main {
 }
 
 .progress-bar {
+  display: block;
   height: 100%;
   border-radius: inherit;
   background: var(--accent);
@@ -898,6 +899,242 @@ main {
   }
   100% {
     transform: translateX(390%);
+  }
+}
+
+/* ==========================================================================
+   the lane
+
+   A scan of a large folder takes a while, and a 3px line that sweeps says
+   only "something is happening". Something *walking* along it says the same
+   thing and gives the eye somewhere to rest while it waits.
+
+   It is drawn here rather than fetched: the content-security policy allows no
+   remote script or image, and the repo holds no binary assets, so this is
+   paths and keyframes like the tray icon and the section icons before it.
+   Nothing is loaded, nothing is decoded, and it costs one element that the
+   compositor moves.
+   ========================================================================== */
+
+.progress-walk {
+  height: auto;
+  background: none;
+  border-radius: 0;
+  overflow: visible;
+  position: relative;
+  /* The lane they walk in, above the line they walk on. */
+  padding-top: 24px;
+}
+
+.critters {
+  position: absolute;
+  inset: 0 0 3px;
+  display: block;
+  pointer-events: none;
+}
+
+/* A darker track than the plain bar uses. Something is standing on this one,
+   and --surface-2 on --bg is a line you have to look for. */
+.progress-walk .progress-track {
+  display: block;
+  height: 3px;
+  border-radius: var(--radius-pill);
+  background: var(--border);
+  overflow: hidden;
+}
+
+/*
+ * One animal.
+ *
+ * Everything it does comes in as a custom property that critters.js set:
+ * --from and --to are the ends of its walk, --dur how long that takes, --lag
+ * how far into it this one starts (which is what turns two animals on one path
+ * into a chase), --step the time between paces, and --face which way it points
+ * when it sets off.
+ */
+.critter {
+  position: absolute;
+  /* Feet end two units above the foot of the box, so this is what stands them
+     on the line rather than a couple of pixels over it. */
+  bottom: -2px;
+  left: 0;
+  width: 34px;
+  height: 22px;
+  color: var(--text-3);
+  transform: translateX(var(--from, 0px));
+  animation: critter-travel var(--dur, 8s) ease-in-out var(--lag, 0s) infinite alternate;
+}
+
+/* Nothing to walk to: the travel animation would only hold it still anyway,
+   and turning it off spares the compositor a layer per resting animal. */
+.critter[data-behaviour="rest"] {
+  animation: none;
+}
+
+.critter-flip {
+  display: block;
+  width: 100%;
+  height: 100%;
+  /* One flip per length of the line: step-end holds each facing until the
+     moment the walk reverses, which is halfway through the round trip. */
+  animation: critter-turn var(--turn, 16s) step-end var(--lag, 0s) infinite;
+}
+
+.critter[data-behaviour="rest"] .critter-flip {
+  animation: none;
+  transform: scaleX(var(--face, 1));
+}
+
+.critter-art {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.critter-body {
+  animation: critter-bob var(--step, 0.3s) ease-in-out infinite alternate;
+}
+
+.critter-legs {
+  transform-box: fill-box;
+  transform-origin: 50% 8%;
+  animation: critter-step var(--step, 0.3s) ease-in-out infinite alternate;
+}
+
+/* The far pair is always at the other end of its stride. */
+.critter-legs-back {
+  animation-direction: alternate-reverse;
+}
+
+.critter-tail {
+  transform-box: fill-box;
+  transform-origin: 100% 60%;
+  animation: critter-tail 0.9s ease-in-out infinite alternate;
+}
+
+.critter-eye {
+  fill: var(--bg);
+}
+
+/* Sitting still: no stride, but a tail that keeps moving, because the thing
+   that makes a drawing look alive is that it is never completely still. */
+.critter[data-behaviour="rest"] .critter-legs,
+.critter[data-behaviour="rest"] .critter-body {
+  animation: none;
+}
+
+.critter[data-behaviour="rest"] .critter-tail {
+  animation-duration: 1.8s;
+}
+
+/* A bird does not walk, it hops -- same pace, different motion. */
+.critter-bird .critter-body {
+  animation-name: critter-hop;
+}
+
+.critter-bird .critter-legs {
+  animation-name: critter-hop-legs;
+}
+
+.critter-bird .critter-wing {
+  transform-box: fill-box;
+  transform-origin: 80% 40%;
+  animation: critter-wing 0.42s ease-in-out infinite alternate;
+}
+
+/* A mouse is a smaller animal, and drawing it at the same size as a dog made
+   it look like one. */
+.critter-mouse {
+  width: 27px;
+  height: 18px;
+}
+
+.critter-dog {
+  width: 36px;
+}
+
+@keyframes critter-travel {
+  from {
+    transform: translateX(var(--from, 0px));
+  }
+  to {
+    transform: translateX(var(--to, 0px));
+  }
+}
+
+@keyframes critter-turn {
+  0% {
+    transform: scaleX(var(--face, 1));
+  }
+  50% {
+    transform: scaleX(calc(var(--face, 1) * -1));
+  }
+}
+
+@keyframes critter-step {
+  from {
+    transform: rotate(-17deg);
+  }
+  to {
+    transform: rotate(17deg);
+  }
+}
+
+@keyframes critter-bob {
+  from {
+    transform: translateY(0.4px);
+  }
+  to {
+    transform: translateY(-0.4px);
+  }
+}
+
+@keyframes critter-hop {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  45% {
+    transform: translateY(-3.4px);
+  }
+}
+
+@keyframes critter-hop-legs {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  45% {
+    transform: translateY(-1.6px);
+  }
+}
+
+@keyframes critter-wing {
+  from {
+    transform: rotate(-6deg);
+  }
+  to {
+    transform: rotate(9deg);
+  }
+}
+
+@keyframes critter-tail {
+  from {
+    transform: rotate(-10deg);
+  }
+  to {
+    transform: rotate(12deg);
+  }
+}
+
+/* With motion turned down the global rule above freezes every animation at its
+   end, which would leave them stranded wherever the last frame put them. They
+   sit where they started instead: still animals, just ones that are not going
+   anywhere. */
+@media (prefers-reduced-motion: reduce) {
+  .critter {
+    animation: none;
+    transform: translateX(var(--from, 0px));
   }
 }
 
@@ -989,6 +1226,17 @@ main {
 
 .card h2 {
   margin: 0 0 12px;
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+/* A second subject inside a card that already has a heading. */
+.card-subhead {
+  margin: 22px 0 12px;
   font-family: var(--font-display);
   font-size: 12px;
   font-weight: 600;

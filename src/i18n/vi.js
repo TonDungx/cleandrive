@@ -740,6 +740,18 @@
       'ngoài nó. “Tự động” theo ngôn ngữ hiển thị mà Windows đang đặt — đây không phải cùng một cài đặt ' +
       'với định dạng ngày tháng và số.',
     'settings.language.failed': 'Không lưu được cài đặt ngôn ngữ.',
+    'settings.critters.title': 'Bạn đồng hành lúc quét',
+    'settings.critters.note':
+      'Quét một thư mục lớn là một quãng chờ không có gì để nhìn. Vài con vật sẽ đi dạo trên ' +
+      'thanh tiến trình trong lúc đó, ngồi nghỉ, và thỉnh thoảng đuổi nhau. Chúng được vẽ bằng ' +
+      'mã nguồn, chạy trên trình dựng hình, và không đụng gì tới việc quét.',
+    'settings.critters.label': 'Ai đi trên thanh',
+    'settings.critters.cat': 'Mèo',
+    'settings.critters.dog': 'Chó',
+    'settings.critters.bird': 'Chim',
+    'settings.critters.mouse': 'Chuột',
+    'settings.critters.mixed': 'Mỗi thứ một ít',
+    'settings.critters.off': 'Không ai cả — chỉ thanh tiến trình',
     'settings.appearance.title': 'Giao diện',
     'settings.appearance.note':
       '“Tự động” theo hệ thống, nên máy nào chuyển sang tối lúc hoàng hôn thì cửa sổ này chuyển theo. ' +

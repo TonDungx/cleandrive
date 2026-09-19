@@ -153,7 +153,10 @@
           <span class="status" id="scan-status" data-i18n="app.pickToBegin">Pick a folder to begin.</span>
         </div>
 
-        <div class="progress" id="scan-progress" hidden><div class="progress-bar is-indeterminate"></div></div>
+        <div class="progress progress-walk" id="scan-progress" hidden>
+        <span class="critters" aria-hidden="true"></span>
+          <span class="progress-track"><span class="progress-bar is-indeterminate"></span></span>
+        </div>
 
         <div class="stats" id="scan-stats" hidden>
           <div class="stat"><span class="stat-value" id="stat-size">–</span><span class="stat-label" data-i18n="usage.totalSize">Total size</span></div>
@@ -243,7 +246,10 @@
           <span class="status" id="dupes-status" data-i18n="app.pickToBegin">Pick a folder to begin.</span>
         </div>
 
-        <div class="progress" id="dupes-progress" hidden><div class="progress-bar is-indeterminate"></div></div>
+        <div class="progress progress-walk" id="dupes-progress" hidden>
+        <span class="critters" aria-hidden="true"></span>
+          <span class="progress-track"><span class="progress-bar is-indeterminate"></span></span>
+        </div>
 
         <div class="stats" id="dupes-stats" hidden>
           <div class="stat"><span class="stat-value" id="dstat-groups">–</span><span class="stat-label" data-i18n="dupes.groups">Duplicate groups</span></div>
@@ -676,7 +682,7 @@
             <h2 data-i18n="settings.appearance.title">Appearance</h2>
             <p class="card-note" data-i18n="settings.appearance.note">
               Auto follows the system, so a machine that switches at sunset switches this window
-              with it. The same control sits in the top bar.
+              with it. The same control sits at the foot of the sidebar.
             </p>
             <div
               class="segmented segmented-wide"
@@ -690,6 +696,24 @@
               <button class="segmented-option" data-theme-choice="light" data-i18n="app.theme.light">Light</button>
               <button class="segmented-option" data-theme-choice="dark" data-i18n="app.theme.dark">Dark</button>
             </div>
+
+            <h2 class="card-subhead" data-i18n="settings.critters.title">Company while it scans</h2>
+            <p class="card-note" data-i18n="settings.critters.note">
+              A scan of a large folder is a wait with nothing to watch. A few of these walk the
+              progress line while it runs, sit down, and now and then chase each other. They are
+              drawn in code, they animate on the compositor, and they never touch the scan.
+            </p>
+            <label class="field field-row">
+              <span data-i18n="settings.critters.label">Who walks the line</span>
+              <select id="critter-choice">
+                <option value="cat" data-i18n="settings.critters.cat">Cats</option>
+                <option value="dog" data-i18n="settings.critters.dog">Dogs</option>
+                <option value="bird" data-i18n="settings.critters.bird">Birds</option>
+                <option value="mouse" data-i18n="settings.critters.mouse">Mice</option>
+                <option value="mixed" data-i18n="settings.critters.mixed">A bit of everything</option>
+                <option value="off" data-i18n="settings.critters.off">Nobody — just the bar</option>
+              </select>
+            </label>
           </section>
 
           <section class="card card-wide">
@@ -740,6 +764,7 @@
     <div class="toast" id="toast" hidden></div>
 
     <script src="sidebar.js"></script>
+    <script src="critters.js"></script>
     <script src="app.js"></script>
     <!-- All three share app.js's globals; must load after it. -->
     <script src="automatic.js"></script>
