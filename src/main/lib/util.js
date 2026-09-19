@@ -1,6 +1,8 @@
 'use strict';
 
 const path = require('node:path');
+
+const { message: m } = require('../../i18n');
 const os = require('node:os');
 
 /**
@@ -223,16 +225,19 @@ function skipReason(name, fullPath, opts) {
   const lower = name.toLowerCase();
 
   if (SYSTEM_DIR_NAMES.has(lower)) {
-    return { kind: 'system', reason: 'Windows owns this folder' };
+    return { kind: 'system', reason: m('protected.windows', 'Windows owns this folder') };
   }
   if (opts.excludeSystem && isProtectedPath(fullPath)) {
-    return { kind: 'system', reason: 'Operating system or installed programs live here' };
+    return {
+      kind: 'system',
+      reason: m('protected.programs', 'Operating system or installed programs live here'),
+    };
   }
   if (NOISE_DIR_NAMES.has(lower)) {
-    return { kind: 'noise', reason: 'Dependency or version-control folder' };
+    return { kind: 'noise', reason: m('protected.dependency', 'Dependency or version-control folder') };
   }
   if (opts.ignoreHidden && isHiddenName(name)) {
-    return { kind: 'hidden', reason: 'Hidden folder' };
+    return { kind: 'hidden', reason: m('protected.hidden', 'Hidden folder') };
   }
   return null;
 }
@@ -306,22 +311,27 @@ function accessTimesAreTracked() {
       });
 
       const match = /=\s*(\d+)/.exec(stdout);
-      if (!match) return { tracked: null, detail: 'Could not read the NTFS last-access setting.' };
+      if (!match) {
+        return { tracked: null, detail: m('atime.unknown', 'Could not read the NTFS last-access setting.') };
+      }
 
       // 0 and 2 mean updates are enabled; 1 and 3 mean they are disabled.
       const disabled = Number(match[1]) % 2 === 1;
       return disabled
         ? {
             tracked: false,
-            detail:
-              'Windows is not recording last-access times on this system, so "last opened" falls back to the modified date.',
+            detail: m(
+              'atime.off',
+              'Windows is not recording last-access times on this system, so "last opened" falls back ' +
+                'to the modified date.'
+            ),
           }
         : {
             tracked: true,
-            detail: 'Windows is recording last-access times on this system.',
+            detail: m('atime.on', 'Windows is recording last-access times on this system.'),
           };
     } catch {
-      return { tracked: null, detail: 'Could not read the NTFS last-access setting.' };
+      return { tracked: null, detail: m('atime.unknown', 'Could not read the NTFS last-access setting.') };
     }
   })();
 

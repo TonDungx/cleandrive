@@ -9,6 +9,7 @@ const { planTrash, executeTrash } = require('./trash');
 const { fullestVolume } = require('./disk');
 const { findUserBins, purgeRecorded } = require('./recyclebin');
 const { CancelToken, pathKey, isUndeletablePath, IS_WIN } = require('./util');
+const { message: m } = require('../../i18n');
 
 /**
  * One unattended cleanup.
@@ -201,9 +202,14 @@ async function runAutoClean(options) {
     return run;
   };
 
-  if (!auto.enabled) return finish('skipped', 'Automatic cleanup is switched off');
-  if (auto.roots.length === 0) return finish('skipped', 'No folders are configured');
-  if (auto.categories.length === 0) return finish('skipped', 'No cleanup categories are enabled');
+  // Every reason below is a message rather than a sentence, because the run log
+  // it ends up in is read later -- possibly in a different language, and months
+  // after this process exited.
+  if (!auto.enabled) return finish('skipped', m('run.switchedOff', 'Automatic cleanup is switched off'));
+  if (auto.roots.length === 0) return finish('skipped', m('run.noFolders', 'No folders are configured'));
+  if (auto.categories.length === 0) {
+    return finish('skipped', m('run.noCategories', 'No cleanup categories are enabled'));
+  }
 
   /* -- gate 1: is the disk even under pressure ---------------------------- */
 
@@ -213,11 +219,16 @@ async function runAutoClean(options) {
 
   if (auto.minDiskUsedPercent > 0) {
     if (!before) {
-      run.notes.push('Could not read disk usage; the usage threshold was not applied');
+      run.notes.push(
+        m('run.note.noDiskUsage', 'Could not read disk usage; the usage threshold was not applied')
+      );
     } else if (before.usedPercent < auto.minDiskUsedPercent) {
       return finish(
         'skipped',
-        `Disk is ${before.usedPercent.toFixed(1)}% full, below the ${auto.minDiskUsedPercent}% threshold`
+        m('run.belowThreshold', 'Disk is {used}% full, below the {threshold}% threshold', {
+          used: before.usedPercent.toFixed(1),
+          threshold: auto.minDiskUsedPercent,
+        })
       );
     }
   }
@@ -228,10 +239,12 @@ async function runAutoClean(options) {
   if (!apps.known && auto.skipIfRunning.length > 0) {
     // We were asked to avoid certain apps and cannot tell whether they are
     // open. Doing nothing is the only answer that honours the instruction.
-    return finish('skipped', 'Could not determine which applications are running');
+    return finish('skipped', m('run.noProcessList', 'Could not determine which applications are running'));
   }
   if (apps.blocked.length > 0) {
-    return finish('skipped', `Skipped because these are running: ${apps.blocked.join(', ')}`);
+    return finish('skipped', m('run.appsRunning', 'Skipped because these are running: {apps}', {
+      apps: apps.blocked.join(', '),
+    }));
   }
 
   /* -- scan ---------------------------------------------------------------- */
@@ -245,7 +258,12 @@ async function runAutoClean(options) {
     try {
       result = await deps.scan(root, { keepPerCategory: auto.maxItemsPerRun }, { token });
     } catch (err) {
-      run.notes.push(`${root}: ${err.message || 'could not be scanned'}`);
+      run.notes.push(
+        m('run.note.rootFailed', '{root}: {error}', {
+          root,
+          error: err.message || 'could not be scanned',
+        })
+      );
       continue;
     }
 
@@ -275,13 +293,15 @@ async function runAutoClean(options) {
   run.selected.files = unique.length;
   run.selected.bytes = unique.reduce((n, f) => n + f.size, 0);
 
-  if (unique.length === 0) return finish('ok', 'Nothing matched the cleanup rules');
+  if (unique.length === 0) return finish('ok', m('run.nothingMatched', 'Nothing matched the cleanup rules'));
 
   /* -- dry run stops here --------------------------------------------------- */
 
   if (run.dryRun) {
     run.sample = unique.slice(0, 50).map((f) => ({ path: f.path, size: f.size, category: f.category }));
-    return finish('dry-run', `Would move ${unique.length} file(s) to the Recycle Bin`);
+    return finish('dry-run', m('run.wouldMove', 'Would move {n} file(s) to the Recycle Bin', {
+      n: unique.length,
+    }));
   }
 
   /* -- delete --------------------------------------------------------------- */
@@ -295,7 +315,7 @@ async function runAutoClean(options) {
       bytes: run.selected.bytes,
       sample: unique.slice(0, 20),
     });
-    if (!approved) return finish('cancelled', 'Cancelled before anything was deleted');
+    if (!approved) return finish('cancelled', m('run.cancelledBefore', 'Cancelled before anything was deleted'));
   }
 
   onStage({ stage: 'deleting', total: unique.length });
@@ -303,7 +323,7 @@ async function runAutoClean(options) {
   const planned = await deps.planTrash(unique.map((f) => f.path), { confirm: false }, { token });
   if (planned.plan.length === 0) {
     run.trashed.failed = planned.failed.length;
-    return finish('ok', 'Every candidate was refused by the delete guards');
+    return finish('ok', m('run.allRefused', 'Every candidate was refused by the delete guards'));
   }
 
   const executed = await deps.executeTrash(
@@ -342,17 +362,26 @@ async function runAutoClean(options) {
           await options.ledger.forget(purge.purged.map((p) => p.entry));
         }
         if (purge.failed.length > 0) {
-          run.notes.push(`${purge.failed.length} recycled item(s) could not be removed`);
+          run.notes.push(
+            m('run.note.purgeFailed', '{n} recycled item(s) could not be removed', { n: purge.failed.length })
+          );
         }
       }
     } catch (err) {
-      run.notes.push(`Recycle Bin purge failed: ${err.message || 'unknown error'}`);
+      run.notes.push(
+        m('run.note.purgeError', 'Recycle Bin purge failed: {error}', {
+          error: err.message || 'unknown error',
+        })
+      );
     }
   } else if (!settings.purge.enabled && run.trashed.files > 0) {
     // Say it plainly rather than reporting bytes that are not actually back.
     run.notes.push(
-      'Files are in the Recycle Bin, which is on the same disk — no space is free until the bin is emptied. ' +
-        'Turn on delayed purge to have CleanDrive empty its own items after a grace period.'
+      m(
+        'run.note.stillInBin',
+        'Files are in the Recycle Bin, which is on the same disk — no space is free until the bin is ' +
+          'emptied. Turn on delayed purge to have CleanDrive empty its own items after a grace period.'
+      )
     );
   }
 

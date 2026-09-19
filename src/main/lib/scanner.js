@@ -21,6 +21,7 @@ const {
   looksLikeInstalledApp,
   looksLikeAppData,
 } = require('./advisor');
+const { message: m } = require('../../i18n');
 
 const DEFAULTS = {
   followSymlinks: false,
@@ -125,9 +126,12 @@ function walk(root, options, handlers) {
         } else if (isProgramInstallPath(dir)) {
           found = { kind: 'hard', reason: 'Inside the per-user program installation folder' };
         } else if (isRoamingAppData(dir)) {
-          found = { kind: 'hard', reason: 'Roaming application data — settings, accounts and sessions live here' };
+          found = {
+            kind: 'hard',
+            reason: m('blocked.roaming', 'Roaming application data — settings, accounts and sessions live here'),
+          };
         } else if (blockedHere === 'none' && looksLikeAppData(entries)) {
-          found = { kind: 'app', reason: "An installed program's data folder" };
+          found = { kind: 'app', reason: m('blocked.appData', "An installed program's data folder") };
         }
         if (found) {
           blockedHere = found.kind;

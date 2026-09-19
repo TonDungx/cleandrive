@@ -12,6 +12,7 @@ const path = require('node:path');
 const { scan } = require('../src/main/lib/scanner');
 const { formatBytes } = require('../src/main/lib/util');
 const { DAY } = require('../src/main/lib/advisor');
+const { render } = require('../src/i18n');
 
 const MB = 1024 * 1024;
 const now = Date.now();
@@ -86,7 +87,9 @@ async function buildFixture() {
 
   for (const g of cleanup.groups) {
     console.log(`  [${g.verdict}] ${g.label}: ${formatBytes(g.bytes)} in ${g.count} file(s)`);
-    for (const f of g.files) console.log(`        ${path.basename(f.path)} -- ${f.reason}`);
+    for (const f of g.files) {
+      console.log(`        ${path.basename(f.path)} -- ${render(f.reason)}`);
+    }
   }
 
   console.log('\nAssertions:');

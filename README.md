@@ -187,6 +187,7 @@ touching English again.
 | `html[data-i18n-pending] body { visibility: hidden }` | Covers the gap between the body being parsed and the DOM pass running. Set only when a translation is actually needed, and cleared in a `finally` — a dictionary that threw must not leave the window permanently invisible |
 | The English in the markup is remembered in a WeakMap | It is the fallback, and the translation overwrites it. Without the copy, switching to Vietnamese and back would leave Vietnamese on screen |
 | Each screen registers its own redraw | The DOM pass only reaches text that is *in* the markup. A table of results, a toast, a run log — all composed by JS, all have to be composed again |
+| Text produced elsewhere travels as a **message**, not a sentence | `{ i18n, en, params }` rather than rendered English. See below |
 | Numbers and dates follow the app's language | Not the system locale, which is a different question: this machine formats dates the Vietnamese way while its Windows display language is English |
 
 **"System" follows the display language, not the regional format.** Those are two
@@ -205,6 +206,41 @@ does not fail, it silently prints a sentence with the count missing.
 
 Task Scheduler is deliberately *not* translated: it is the name of the Windows
 window somebody has to open to find the entry.
+
+#### A sentence is sometimes an object
+
+`t()` renders immediately, which is right when the text is about to be painted.
+It is wrong for text produced in one place and read in another, and the first
+pass at this shipped both mistakes:
+
+- The scanner's verdicts ("Inside a cache folder — the app rebuilds it on
+  demand") are produced in the main process and sit in the window's state until
+  the next scan. Rendered at production time, they stay in whatever language was
+  current *then*, so switching language left the whole "What to delete" tab in
+  the old one.
+- A scheduled run's reason is **written to a file**. Rendered, it is English on
+  disk forever — and `autoclean-log.json` still read "No settings file was
+  found, so there was no configuration to act on." in a fully Vietnamese app.
+
+So producers hand back a message — `{ i18n, en, params }` — and the screen
+renders it with `tm()`. The English travels with it, which is what makes the
+migration free: a log entry written by an older version is a plain string, and
+`render()` passes those straight through.
+
+```js
+finish('skipped', m('run.switchedOff', 'Automatic cleanup is switched off'))
+```
+
+**The check that finds the ones nobody noticed.** Every other check compares the
+dictionary against the keys the app *asks for* — and a sentence that was never
+wrapped in `t()` asks for nothing, so it is invisible to all of them. The
+dictionary reads as complete while the screen still says "Automatic cleanup is
+off." So `test-i18n.js` also works from the other end: it looks at the positions
+where text becomes visible (`textContent`, `toast()`, `title`, dialog fields,
+`finish()`, `notes.push()`) and fails on any string literal there that did not
+come from `t()` or `m()`. It found four on its first run, one of which was a
+real bug rather than an oversight — a missing `require` that stopped
+application-data folders being detected at all.
 
 ### Settings
 

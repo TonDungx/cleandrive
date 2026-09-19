@@ -86,7 +86,7 @@ async function runScheduled() {
   // the trends are fitted through, so it is recorded on every path too.
   await recordHistory(history, settings, run);
 
-  console.log(`[scheduled] ${run.outcome}${run.reason ? `: ${run.reason}` : ''}`);
+  console.log(`[scheduled] ${run.outcome}${run.reason ? `: ${language.render(run.reason)}` : ''}`);
 
   if (!settings || settings.autoClean.notify) notify(run);
 
@@ -158,7 +158,9 @@ function notify(run) {
     // The one skipped-shaped outcome that does interrupt. A cleanup that could
     // not run is exactly the thing the user has no other way of finding out.
     title = t('notify.runFailed.title', 'CleanDrive: the scheduled run failed');
-    body = t('notify.runFailed.body', '{reason} Open CleanDrive to see the run log.', { reason: run.reason });
+    body = t('notify.runFailed.body', '{reason} Open CleanDrive to see the run log.', {
+      reason: language.render(run.reason),
+    });
   } else if (run.outcome === 'skipped') {
     // Nothing happened and nothing is wrong; do not interrupt for that.
     return;
@@ -172,7 +174,7 @@ function notify(run) {
     );
   } else if (run.trashed.files === 0) {
     title = t('notify.nothing.title', 'CleanDrive: nothing to clean');
-    body = run.reason || t('notify.nothing.body', 'No files matched the cleanup rules.');
+    body = language.render(run.reason) || t('notify.nothing.body', 'No files matched the cleanup rules.');
   } else {
     title = t('notify.done.title', 'CleanDrive: cleanup finished');
     const moved = t('notify.done.moved', 'Moved {n} file(s) ({size}) to the Recycle Bin.', {

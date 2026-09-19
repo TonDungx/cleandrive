@@ -182,21 +182,26 @@ app.whenReady().then(async () => {
           index: document.getElementById('theme-switch').style.getPropertyValue('--switch-index'),
         };
 
-        // Long enough for the transition callback to have run and the sweep to
-        // have cleaned itself up, on a window that may not be painting at all.
-        await new Promise((r) => setTimeout(r, 1500));
-
-        return {
-          api,
-          before,
-          during,
-          after: {
-            sweeping: document.documentElement.hasAttribute('data-theme-sweeping'),
-            theme: document.documentElement.getAttribute('data-theme'),
-          },
-        };
+        return { api, before, during };
       })()
     `);
+
+    /*
+     * Wait for the theme to land rather than sleeping on it.
+     *
+     * The DOM change happens inside the View Transition callback, which runs in
+     * a frame -- and this window is not on screen, so frames come about once a
+     * second. A fixed 1500ms wait passed most of the time and reported
+     * `data-theme: null` the rest, which is a flaky test, which is worse than
+     * no test.
+     */
+    await until(win, `document.documentElement.getAttribute('data-theme') === 'dark'`, 15000).catch(() => {});
+    await until(win, `!document.documentElement.hasAttribute('data-theme-sweeping')`, 15000).catch(() => {});
+
+    sweep.after = await win.webContents.executeJavaScript(`({
+      sweeping: document.documentElement.hasAttribute('data-theme-sweeping'),
+      theme: document.documentElement.getAttribute('data-theme'),
+    })`);
 
     check('the View Transition API is available in this Electron', sweep.api === true);
     check('the window started in the system theme', sweep.before === null, String(sweep.before));

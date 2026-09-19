@@ -18,6 +18,7 @@
 
 const path = require('node:path');
 const { isProtectedPath, extOf } = require('./util');
+const { message: m } = require('../../i18n');
 
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -346,9 +347,11 @@ function gate(result, blockKind) {
     category: 'appcache',
     verdict: 'review',
     source: result.source,
-    reason:
-      'A cache belonging to an installed program. Usually rebuilt, but only that ' +
-      'program knows what it keeps here — check before removing it.',
+    reason: m(
+      'reason.appcache',
+      'A cache belonging to an installed program. Usually rebuilt, but only that program knows what ' +
+        'it keeps here — check before removing it.'
+    ),
   };
 }
 
@@ -368,7 +371,7 @@ function classifyRaw(file, dirTag, now) {
 
   /* -- Office / editor lock files: always junk, any size ------------------ */
   if (name.startsWith('~$') || name.startsWith('.~lock.')) {
-    return advice('temp', 'Editor lock file from a document that is no longer open', 'name');
+    return advice('temp', m('reason.lockFile', 'Editor lock file from a document that is no longer open'), 'name');
   }
 
   /* -- inherited directory context --------------------------------------- */
@@ -386,45 +389,94 @@ function classifyRaw(file, dirTag, now) {
 
   /* -- installers sitting in Downloads ------------------------------------ */
   if (dirTag === 'downloads' && INSTALLER_EXT.has(ext) && modifiedDays >= THRESHOLDS.installerDays) {
-    return advice(
-      'installer',
-      `Installer downloaded ${formatAge(modifiedDays)} ago — the program it installs is unaffected by deleting it`,
-      'ext'
-    );
+    const age = ageParts(modifiedDays);
+    return advice('installer', m(`reason.installer.${age.unit}`, INSTALLER_EN[age.unit], { n: age.value }), 'ext');
   }
 
   /* -- big archives and VM disks ------------------------------------------ */
   if (ARCHIVE_EXT.has(ext) && size >= THRESHOLDS.archiveBytes) {
+    if (ageDays >= THRESHOLDS.staleDays) {
+      const age = ageParts(ageDays);
+      return advice('archive', m(`reason.archiveStale.${age.unit}`, ARCHIVE_EN[age.unit], { n: age.value }), 'ext');
+    }
     return advice(
       'archive',
-      ageDays >= THRESHOLDS.staleDays
-        ? `Not opened in ${formatAge(ageDays)} — check the contents are stored elsewhere first`
-        : 'Check the contents are stored elsewhere before deleting',
+      m('reason.archive', 'Check the contents are stored elsewhere before deleting'),
       'ext'
     );
   }
 
   /* -- large and untouched ------------------------------------------------- */
   if (size >= THRESHOLDS.largeBytes && ageDays >= THRESHOLDS.staleDays) {
-    return advice('stale', `Not opened in ${formatAge(ageDays)}`, 'size');
+    const age = ageParts(ageDays);
+    return advice('stale', m(`reason.stale.${age.unit}`, STALE_EN[age.unit], { n: age.value }), 'size');
   }
 
   return null;
 }
 
 const DIR_REASON = {
-  temp: 'Inside a temporary folder',
-  cache: 'Inside a cache folder — the app rebuilds it on demand',
-  gpucache: 'GPU or compiled-code cache — regenerated on next launch',
-  crashdump: 'Crash dump left by a program that stopped responding',
-  log: 'Old log file',
-  buildoutput: 'Build output — recreated by rebuilding the project',
+  temp: m('reason.dir.temp', 'Inside a temporary folder'),
+  cache: m('reason.dir.cache', 'Inside a cache folder — the app rebuilds it on demand'),
+  gpucache: m('reason.dir.gpucache', 'GPU or compiled-code cache — regenerated on next launch'),
+  crashdump: m('reason.dir.crashdump', 'Crash dump left by a program that stopped responding'),
+  log: m('reason.dir.log', 'Old log file'),
+  buildoutput: m('reason.dir.buildoutput', 'Build output — recreated by rebuilding the project'),
 };
 
 const EXT_REASON = {
-  temp: 'Temporary or partially-downloaded file',
-  crashdump: 'Crash dump from a program that stopped responding',
-  log: 'Old log file',
+  temp: m('reason.ext.temp', 'Temporary or partially-downloaded file'),
+  crashdump: m('reason.ext.crashdump', 'Crash dump from a program that stopped responding'),
+  log: m('reason.ext.log', 'Old log file'),
+};
+
+/*
+ * Ages, as a number and a unit rather than a sentence.
+ *
+ * `formatAge` used to return "3 months" and the reasons interpolated it. That
+ * cannot be translated: the unit would stay English inside a Vietnamese
+ * sentence, and Vietnamese does not put it where English does anyway. So the
+ * unit selects the key and the number is the parameter, which lets each
+ * language write the whole sentence its own way.
+ */
+const AGE_UNITS = ['years', 'months', 'days', 'recent'];
+
+function ageParts(days) {
+  if (days >= 365) {
+    const years = days / 365;
+    return { unit: 'years', value: years < 2 ? Number(years.toFixed(1)) : Math.round(years) };
+  }
+  if (days >= 60) return { unit: 'months', value: Math.round(days / 30) };
+  if (days >= 1) return { unit: 'days', value: Math.round(days) };
+  return { unit: 'recent', value: 0 };
+}
+
+const STALE_EN = {
+  years: 'Not opened in {n} years',
+  months: 'Not opened in {n} months',
+  days: 'Not opened in {n} days',
+  recent: 'Not opened in the last day',
+};
+
+const ARCHIVE_EN = {
+  years: 'Not opened in {n} years — check the contents are stored elsewhere first',
+  months: 'Not opened in {n} months — check the contents are stored elsewhere first',
+  days: 'Not opened in {n} days — check the contents are stored elsewhere first',
+  recent: 'Check the contents are stored elsewhere before deleting',
+};
+
+const INSTALLER_EN = {
+  years: 'Installer downloaded {n} years ago — the program it installs is unaffected by deleting it',
+  months: 'Installer downloaded {n} months ago — the program it installs is unaffected by deleting it',
+  days: 'Installer downloaded {n} days ago — the program it installs is unaffected by deleting it',
+  recent: 'Installer downloaded today — the program it installs is unaffected by deleting it',
+};
+
+const LOG_EN = {
+  years: 'Nothing written to it in {n} years',
+  months: 'Nothing written to it in {n} months',
+  days: 'Nothing written to it in {n} days',
+  recent: 'Nothing written to it in the last day',
 };
 
 function advice(category, reason, source = 'dir') {
@@ -438,24 +490,22 @@ function advice(category, reason, source = 'dir') {
  */
 function logAdvice(modifiedDays, source) {
   if (modifiedDays < THRESHOLDS.logDays) return null;
-  return advice('log', `Nothing written to it in ${formatAge(modifiedDays)}`, source);
+  const age = ageParts(modifiedDays);
+  return advice('log', m(`reason.log.${age.unit}`, LOG_EN[age.unit], { n: age.value }), source);
 }
 
+/**
+ * The old sentence-producing version, kept for callers outside the advisor.
+ *
+ * Nothing in the app's own text goes through it any more -- see `ageParts` and
+ * the *_EN tables above for why an age cannot be interpolated into a translated
+ * sentence -- but it is exported, and a test reads it.
+ */
 function formatAge(days) {
-  if (days >= 365) {
-    const years = days / 365;
-    const value = years < 2 ? Number(years.toFixed(1)) : Math.round(years);
-    return `${value} year${value === 1 ? '' : 's'}`;
-  }
-  if (days >= 60) {
-    const months = Math.round(days / 30);
-    return `${months} month${months === 1 ? '' : 's'}`;
-  }
-  if (days >= 1) {
-    const whole = Math.round(days);
-    return `${whole} day${whole === 1 ? '' : 's'}`;
-  }
-  return 'less than a day';
+  const { unit, value } = ageParts(days);
+  if (unit === 'recent') return 'less than a day';
+  const word = unit.slice(0, -1);
+  return `${value} ${word}${value === 1 ? '' : 's'}`;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -513,17 +563,21 @@ function programComponentReason(filePath) {
   for (let i = 0; i < segments.length - 1; i++) {
     const segment = segments[i].toLowerCase();
     if (DEPENDENCY_DIRS.has(segment)) {
-      return `Inside "${segments[i]}" — each project needs its own copy of this`;
+      return m('reason.dependency', 'Inside "{dir}" — each project needs its own copy of this', {
+        dir: segments[i],
+      });
     }
   }
 
   if (isProtectedPath(filePath)) {
-    return 'Belongs to the operating system or an installed program';
+    return m('reason.systemOwned', 'Belongs to the operating system or an installed program');
   }
 
   const ext = extOf(segments[segments.length - 1] || '');
   if (BINARY_MODULE_EXT.has(ext)) {
-    return `A .${ext} loaded by some program — the copies are usually not interchangeable`;
+    return m('reason.binaryModule', 'A .{ext} loaded by some program — the copies are usually not interchangeable', {
+      ext,
+    });
   }
 
   return null;

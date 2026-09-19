@@ -8,6 +8,8 @@
 //   node scripts/test-protection.js
 
 const fsp = require('node:fs/promises');
+
+const { render } = require('../src/i18n');
 const os = require('node:os');
 const path = require('node:path');
 const { programComponentReason } = require('../src/main/lib/advisor');
@@ -96,8 +98,14 @@ const ALLOWED_CASES = [
   check('selectable total excludes the DLLs',
     result.selectableBytes === 8192 && result.reclaimableBytes === 16384,
     `${result.selectableBytes} of ${result.reclaimableBytes}`);
-  check('every protected file carries a reason',
-    dllGroup && dllGroup.files.every((f) => !f.protected || typeof f.protectionReason === 'string'));
+  // A reason is a *message* now -- { i18n, en, params } -- so that the screen
+  // can word it in whatever language is being read, including for a scan whose
+  // results are still in the window when the language changes. Asserting that
+  // it renders is a stronger check than asserting it is a string: it catches a
+  // message built with a key but no English behind it.
+  check('every protected file carries a reason that renders',
+    dllGroup &&
+      dllGroup.files.every((f) => !f.protected || render(f.protectionReason).length > 0));
   check('duplicate rows carry an access time',
     result.groups.every((g) => g.files.every((f) => typeof f.atimeMs === 'number')));
 

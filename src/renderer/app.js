@@ -157,8 +157,11 @@ function setScanRunning(running) {
 }
 
 api.onScanProgress((p) => {
-  $('scan-status').textContent =
-    `Scanning… ${formatCount(p.files)} files, ${formatBytes(p.bytes)} (${formatSeconds(p.elapsedMs)})`;
+  $('scan-status').textContent = t('usage.scanning', 'Scanning… {files} files, {size} ({elapsed})', {
+    files: formatCount(p.files),
+    size: formatBytes(p.bytes),
+    elapsed: formatSeconds(p.elapsedMs),
+  });
 });
 
 $('run-scan').addEventListener('click', async () => {
@@ -258,7 +261,7 @@ function renderLargest(files) {
   for (const file of files.slice(0, 50)) {
     const badge =
       file.verdict === 'safe' || file.verdict === 'review'
-        ? makeBadge(file.verdict, file.verdict, file.reason || '')
+        ? makeBadge(file.verdict, verdictWord(file.verdict), tm(file.reason))
         : null;
 
     list.appendChild(
@@ -269,7 +272,7 @@ function renderLargest(files) {
           $('delete-large').disabled = state.selectedLarge.size === 0;
         },
         {
-          meta: file.reason ? `${timeLabel(file)} · ${file.reason}` : timeLabel(file),
+          meta: file.reason ? `${timeLabel(file)} · ${tm(file.reason)}` : timeLabel(file),
           badge,
         }
       )
@@ -333,6 +336,21 @@ function fileRow(file, selection, onToggle, { meta = null, badge = null } = {}) 
   return li;
 }
 
+/**
+ * The verdict, as the badge says it.
+ *
+ * The badge used to print the raw verdict key -- "safe", "review" -- which
+ * happens to be English and happens to be a word. It is neither in Vietnamese.
+ */
+function verdictWord(verdict) {
+  switch (verdict) {
+    case 'safe': return t('verdict.safe', 'safe');
+    case 'review': return t('verdict.review', 'review');
+    case 'protected': return t('verdict.protected', 'protected');
+    default: return t('verdict.keep', 'keep');
+  }
+}
+
 function makeBadge(verdict, text, title) {
   const el = document.createElement('span');
   el.className = `badge badge-${verdict}`;
@@ -375,10 +393,11 @@ function renderCleanup(cleanup, accessTimes) {
     notice.hidden = false;
     notice.textContent =
       (accessTimes && accessTimes.tracked === false
-        ? 'Last-opened dates are not available on this system. '
-        : 'Last-opened dates could not be confirmed on this system. ') +
-      (accessTimes ? accessTimes.detail : '') +
-      ' Ages below are based on the modified date instead.';
+        ? t('usage.atime.unavailable', 'Last-opened dates are not available on this system.')
+        : t('usage.atime.unconfirmed', 'Last-opened dates could not be confirmed on this system.')) +
+      ' ' +
+      (accessTimes ? `${tm(accessTimes.detail)} ` : '') +
+      t('usage.atime.fallback', 'Ages below are based on the modified date instead.');
   }
 
   $('cstat-safe').textContent = formatBytes(cleanup.safeBytes);
@@ -427,7 +446,9 @@ function renderCleanupGroup(group) {
   head.className = 'group-head';
 
   const title = document.createElement('strong');
-  title.textContent = group.label;
+  // Translated from the category key rather than from the label the scan
+  // produced, so switching language re-words the groups without re-scanning.
+  title.textContent = t(`category.${group.category}`, group.label);
 
   const size = document.createElement('span');
   size.className = group.verdict === 'safe' ? 'group-waste' : '';
@@ -454,7 +475,7 @@ function renderCleanupGroup(group) {
 
   const hint = document.createElement('p');
   hint.className = 'group-hint';
-  hint.textContent = group.hint;
+  hint.textContent = t(`category.${group.category}.hint`, group.hint);
   body.appendChild(hint);
 
   const list = document.createElement('ul');
@@ -462,7 +483,7 @@ function renderCleanupGroup(group) {
   for (const file of group.files) {
     list.appendChild(
       fileRow(file, state.selectedCleanup, updateCleanupSelection, {
-        meta: `${timeLabel(file)} · ${file.reason}`,
+        meta: `${timeLabel(file)} · ${tm(file.reason)}`,
       })
     );
   }
@@ -506,10 +527,10 @@ function renderProtected(entries) {
 
     const metaEl = document.createElement('span');
     metaEl.className = 'file-meta';
-    metaEl.textContent = entry.reason;
+    metaEl.textContent = tm(entry.reason);
 
     main.append(pathEl, metaEl);
-    li.append(makeBadge('protected', 'blocked'), main);
+    li.append(makeBadge('protected', t('cleanup.blocked', 'blocked')), main);
     list.appendChild(li);
   }
 
@@ -702,7 +723,7 @@ function renderGroup(group) {
   for (const file of group.files) {
     let badge = null;
     if (file.protected) {
-      badge = makeBadge('protected', 'in use', file.protectionReason);
+      badge = makeBadge('protected', t('cleanup.inUse', 'in use'), tm(file.protectionReason));
     } else if (file.keeper) {
       badge = document.createElement('span');
       badge.className = 'keeper-tag';
@@ -727,8 +748,8 @@ function updateSelectionStatus() {
   const count = state.selectedDupes.size;
   const bytes = sumSelected(state.selectedDupes);
   $('selection-status').textContent = count
-    ? `${formatCount(count)} selected · ${formatBytes(bytes)}`
-    : 'Nothing selected';
+    ? t('app.selectedCount', '{n} selected · {size}', { n: formatCount(count), size: formatBytes(bytes) })
+    : t('app.nothingSelected', 'Nothing selected');
   $('delete-dupes').disabled = count === 0;
 }
 
@@ -868,8 +889,11 @@ const progressPanel = {
 
     if (p.phase === 'confirming') {
       $('dp-title').textContent = t('delete.waiting', 'Waiting for confirmation');
-      $('dp-count').textContent =
-        `${formatCount(p.total)} item${p.total === 1 ? '' : 's'} ready · ${formatBytes(p.totalBytes)}`;
+      $('dp-count').textContent = t('delete.ready', '{n} {items} ready · {size}', {
+        n: formatCount(p.total),
+        items: word(p.total, 'app.item', 'item', 'items'),
+        size: formatBytes(p.totalBytes),
+      });
       $('dp-rate').textContent = '';
       $('dp-eta').textContent = '';
       $('dp-current').textContent = '';

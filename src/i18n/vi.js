@@ -176,6 +176,142 @@
     'category.log': 'Nhật ký cũ',
     'category.gpucache': 'Đệm GPU và mã đã biên dịch',
     'category.buildoutput': 'Kết quả biên dịch',
+    'category.installer': 'Bộ cài cũ',
+    'category.archive': 'Tệp nén và ảnh đĩa lớn',
+    'category.appcache': 'Bộ nhớ đệm của ứng dụng',
+    'category.stale': 'Lớn và lâu không đụng tới',
+
+    // The hint under each group heading. Keyed by category so switching
+    // language re-words them without re-running the scan.
+    'category.temp.hint': 'Do các ứng dụng bỏ lại mà không tự dọn.',
+    'category.cache.hint': 'Sẽ được tạo lại tự động vào lần ứng dụng cần đến.',
+    'category.crashdump.hint':
+      'Ảnh chụp chẩn đoán từ các chương trình bị treo. Chỉ hữu ích với lập trình viên đang gỡ đúng lỗi đó.',
+    'category.log.hint': 'Nhật ký chẩn đoán cũ hơn một tuần.',
+    'category.buildoutput.hint': 'Sẽ có lại khi build lại dự án. Mã nguồn không bị đụng tới.',
+    'category.installer.hint': 'Tệp cài đặt bạn đã chạy rồi. Tải lại được, nhưng tốn băng thông.',
+    'category.archive.hint':
+      'Kiểm tra từng tệp — một tệp nén hay ổ đĩa ảo có thể là bản duy nhất của thứ nằm bên trong nó.',
+    'category.gpucache.hint':
+      'Shader và bytecode đã biên dịch. Mọi ứng dụng nền Chromium đều tạo lại chúng ở lần chạy sau.',
+    'category.appcache.hint':
+      'Bộ nhớ đệm của các chương trình đã cài. Thường được tạo lại — nhưng chỉ chương trình đó mới biết nó ' +
+      'giữ gì ở đây, nên không mục nào được chọn sẵn cho bạn.',
+    'category.stale.hint': 'Tệp lớn bạn đã lâu không mở. Bản thân chúng không phải là rác.',
+
+    /* ---- verdicts, as the badge says them ------------------------------ */
+    'verdict.safe': 'an toàn',
+    'verdict.review': 'nên xem lại',
+    'verdict.protected': 'được bảo vệ',
+    'verdict.keep': 'giữ lại',
+    'cleanup.blocked': 'bị chặn',
+    'cleanup.inUse': 'đang dùng',
+
+    /* ---- why a file got its verdict ------------------------------------
+     *
+     * These are produced by the scanner in the main process and rendered here,
+     * so the language they appear in is the one being read *now* rather than
+     * the one that was current when the scan ran.
+     */
+    'reason.dir.temp': 'Nằm trong thư mục tạm',
+    'reason.dir.cache': 'Nằm trong thư mục đệm — ứng dụng tự tạo lại khi cần',
+    'reason.dir.gpucache': 'Đệm GPU hoặc mã đã biên dịch — được tạo lại ở lần chạy sau',
+    'reason.dir.crashdump': 'Tệp ghi lỗi do một chương trình ngừng phản hồi để lại',
+    'reason.dir.log': 'Tệp nhật ký cũ',
+    'reason.dir.buildoutput': 'Kết quả biên dịch — sẽ có lại khi build lại dự án',
+    'reason.ext.temp': 'Tệp tạm hoặc tải xuống dở',
+    'reason.ext.crashdump': 'Tệp ghi lỗi từ một chương trình ngừng phản hồi',
+    'reason.ext.log': 'Tệp nhật ký cũ',
+    'reason.lockFile': 'Tệp khoá của trình soạn thảo, từ một tài liệu không còn mở',
+    'reason.appcache':
+      'Bộ nhớ đệm của một chương trình đã cài. Thường được tạo lại, nhưng chỉ chương trình đó mới biết nó ' +
+      'giữ gì ở đây — hãy kiểm tra trước khi xoá.',
+    'reason.archive': 'Hãy chắc nội dung bên trong đã được lưu ở nơi khác trước khi xoá',
+    'reason.dependency': 'Nằm trong "{dir}" — mỗi dự án cần bản sao riêng của thứ này',
+    'reason.systemOwned': 'Thuộc về hệ điều hành hoặc một chương trình đã cài',
+    'reason.binaryModule': 'Một tệp .{ext} được chương trình nào đó nạp — các bản sao thường không thay thế nhau được',
+
+    // The unit picks the key, so the number can sit where Vietnamese puts it.
+    'reason.stale.years': 'Không mở trong {n} năm',
+    'reason.stale.months': 'Không mở trong {n} tháng',
+    'reason.stale.days': 'Không mở trong {n} ngày',
+    'reason.stale.recent': 'Không mở trong ngày qua',
+    'reason.archiveStale.years': 'Không mở trong {n} năm — hãy chắc nội dung đã được lưu ở nơi khác trước',
+    'reason.archiveStale.months': 'Không mở trong {n} tháng — hãy chắc nội dung đã được lưu ở nơi khác trước',
+    'reason.archiveStale.days': 'Không mở trong {n} ngày — hãy chắc nội dung đã được lưu ở nơi khác trước',
+    'reason.archiveStale.recent': 'Hãy chắc nội dung bên trong đã được lưu ở nơi khác trước khi xoá',
+    'reason.installer.years': 'Bộ cài tải về {n} năm trước — xoá nó không ảnh hưởng gì tới chương trình đã cài',
+    'reason.installer.months': 'Bộ cài tải về {n} tháng trước — xoá nó không ảnh hưởng gì tới chương trình đã cài',
+    'reason.installer.days': 'Bộ cài tải về {n} ngày trước — xoá nó không ảnh hưởng gì tới chương trình đã cài',
+    'reason.installer.recent': 'Bộ cài tải về hôm nay — xoá nó không ảnh hưởng gì tới chương trình đã cài',
+    'reason.log.years': 'Không có gì được ghi vào trong {n} năm',
+    'reason.log.months': 'Không có gì được ghi vào trong {n} tháng',
+    'reason.log.days': 'Không có gì được ghi vào trong {n} ngày',
+    'reason.log.recent': 'Không có gì được ghi vào trong ngày qua',
+
+    /* ---- folders the scan refuses to touch ----------------------------- */
+    'protected.windows': 'Windows sở hữu thư mục này',
+    'protected.programs': 'Hệ điều hành hoặc các chương trình đã cài nằm ở đây',
+    'protected.dependency': 'Thư mục phụ thuộc hoặc quản lý phiên bản',
+    'protected.hidden': 'Thư mục ẩn',
+    'blocked.roaming': 'Dữ liệu ứng dụng dạng roaming — cài đặt, tài khoản và phiên đăng nhập nằm ở đây',
+    'blocked.appData': 'Thư mục dữ liệu của một chương trình đã cài',
+
+    /* ---- last-access times --------------------------------------------- */
+    'atime.on': 'Windows có ghi nhận thời điểm mở lần cuối trên máy này.',
+    'atime.off':
+      'Windows không ghi nhận thời điểm mở lần cuối trên máy này, nên "mở lần cuối" được thay bằng ngày sửa đổi.',
+    'atime.unknown': 'Không đọc được cài đặt last-access của NTFS.',
+    'usage.atime.unavailable': 'Trên máy này không có dữ liệu ngày mở lần cuối.',
+    'usage.atime.unconfirmed': 'Không xác nhận được dữ liệu ngày mở lần cuối trên máy này.',
+    'usage.atime.fallback': 'Các mốc thời gian bên dưới dựa trên ngày sửa đổi.',
+    'usage.scanning': 'Đang quét… {files} tệp, {size} ({elapsed})',
+
+    /* ---- what a scheduled run did, as written to the run log ------------
+     *
+     * These end up in autoclean-log.json as keys rather than sentences, so a
+     * run recorded months ago still reads in whatever language is set today.
+     */
+    'run.switchedOff': 'Dọn dẹp tự động đang tắt',
+    'run.noFolders': 'Chưa cấu hình thư mục nào',
+    'run.noCategories': 'Chưa bật nhóm tệp nào để dọn',
+    'run.noProcessList': 'Không xác định được những ứng dụng nào đang chạy',
+    'run.appsRunning': 'Bỏ qua vì các ứng dụng này đang chạy: {apps}',
+    'run.nothingMatched': 'Không có tệp nào khớp với quy tắc dọn dẹp',
+    'run.belowThreshold': 'Đĩa mới dùng {used}%, dưới ngưỡng {threshold}%',
+    'run.wouldMove': 'Sẽ chuyển {n} tệp vào Thùng rác',
+    'run.cancelledBefore': 'Đã huỷ trước khi có gì bị xoá',
+    'run.allRefused': 'Mọi ứng viên đều bị các lớp bảo vệ từ chối',
+    'run.note.noDiskUsage': 'Không đọc được dung lượng đĩa; ngưỡng phần trăm không được áp dụng',
+    'run.note.rootFailed': '{root}: {error}',
+    'run.note.purgeFailed': 'Không gỡ được {n} mục trong Thùng rác',
+    'run.note.purgeError': 'Dọn Thùng rác thất bại: {error}',
+    'run.note.stillInBin':
+      'Các tệp đang nằm trong Thùng rác, vốn ở cùng ổ đĩa — chưa có dung lượng nào trống ra cho tới khi ' +
+      'thùng rác được dọn. Bật xoá vĩnh viễn có thời gian chờ để CleanDrive tự dọn phần của nó sau một ' +
+      'khoảng thời gian.',
+
+    'auto.describe.off': 'Dọn dẹp tự động đang tắt.',
+
+    /* ---- the native confirmations -------------------------------------- */
+    'dialog.confirmDelete.title': 'Xác nhận xoá',
+    'dialog.confirmDelete.message': 'Chuyển {n} mục vào Thùng rác?',
+    'dialog.confirmDelete.detail': 'Việc này giải phóng {size}. Các mục vẫn khôi phục được từ Thùng rác.',
+    'dialog.confirmAuto.withPurge':
+      'Chúng vẫn khôi phục được trong {days} ngày, sau đó CleanDrive xoá vĩnh viễn phần của nó và dung ' +
+      'lượng mới thật sự được giải phóng.',
+    'dialog.confirmAuto.withoutPurge':
+      'Chúng nằm lại trong Thùng rác. Lưu ý việc này chưa giải phóng dung lượng nào cho tới khi thùng rác được dọn.',
+    'dialog.skipped.needsAdmin':
+      '{n} tệp thuộc về một chương trình đã cài và cần quyền quản trị — chúng bị bỏ qua chứ không bị xoá.',
+    'dialog.skipped.inUse': '{n} tệp đang được chương trình khác mở nên bị bỏ qua.',
+    'dialog.purge.title': 'Xoá vĩnh viễn các mục trong Thùng rác',
+    'dialog.purge.confirm': 'Xoá vĩnh viễn',
+    'dialog.purge.message': 'Xoá vĩnh viễn {n} mục khỏi Thùng rác?',
+    'dialog.purge.detail': 'Việc này giải phóng {size} và không thể hoàn tác.',
+    'dialog.purge.scope':
+      'Chỉ những mục do chính CleanDrive chuyển vào, từ hơn {days} ngày trước, mới bị ảnh hưởng. Những gì ' +
+      'bạn tự xoá vẫn nằm nguyên trong Thùng rác.',
 
     /* ---- duplicates --------------------------------------------------- */
     'dupes.find': 'Tìm tệp trùng',
@@ -213,6 +349,7 @@
     'delete.checking': 'Đang kiểm tra thứ gì xoá được',
     'delete.checkedCount': 'đã kiểm tra {done} trong {total}',
     'delete.waiting': 'Đang chờ xác nhận',
+    'delete.ready': '{n} {items} sẵn sàng · {size}',
     'delete.rate': '{n} tệp/giây',
     'delete.took': ' trong {n} giây',
     'delete.moved': 'Đã chuyển {n} {items} vào Thùng rác{took} · giải phóng {freed}',

@@ -65,4 +65,14 @@ function t(key, english, params) {
   return i18n.t(key, english, params);
 }
 
-module.exports = { apply, current, t, systemLanguages, LANGUAGES: i18n.LANGUAGES, CODES: i18n.CODES };
+module.exports = {
+  apply,
+  current,
+  t,
+  /** Build a sentence to be rendered later, by whoever displays it. */
+  m: i18n.message,
+  render: i18n.render,
+  systemLanguages,
+  LANGUAGES: i18n.LANGUAGES,
+  CODES: i18n.CODES,
+};

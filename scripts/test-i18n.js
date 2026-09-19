@@ -50,6 +50,12 @@ const DYNAMIC_PREFIXES = [
   'trends.measurement.',
   'trends.scan.',
   'update.badge.',
+  // An age picks its own key so each language can put the unit where it belongs:
+  // `reason.stale.months`, `reason.log.years`, and so on.
+  'reason.stale.',
+  'reason.archiveStale.',
+  'reason.installer.',
+  'reason.log.',
 ];
 
 /* -------------------------------------------------------------------------- */
@@ -68,7 +74,10 @@ function sourceFiles(dir, out = []) {
   return out;
 }
 
-const CALL = /\bt\(\s*(['"])((?:[^'"\\]|\\.)+?)\1\s*(?:,\s*((?:(['"])(?:[^\\]|\\.)*?\4\s*\+?\s*)+))?/gs;
+// `t(` renders now; `m(` builds a message to be rendered later. Both declare a
+// key and carry the English, and a scan that saw only one of them would call a
+// dictionary complete while half the app fell back to English.
+const CALL = /\b[tm]\(\s*(['"])((?:[^'"\\]|\\.)+?)\1\s*(?:,\s*((?:(['"])(?:[^\\]|\\.)*?\4\s*\+?\s*)+))?/gs;
 const ATTR = /data-i18n(?:-title|-aria|-placeholder)?="([^"]+)"/g;
 
 const asked = new Map(); // key -> english (null when it lives in the markup)
@@ -207,6 +216,113 @@ console.log('\ni18n: falling back, and choosing a language\n');
     i18n.LANGUAGES.map((l) => l.nativeLabel).join(', '));
   check('Vietnamese is offered as "Tiếng Việt"',
     i18n.LANGUAGES.some((l) => l.code === 'vi' && l.nativeLabel === 'Tiếng Việt'));
+}
+
+/* -------------------------------------------------------------------------- */
+/* English that never reaches a dictionary                                     */
+/* -------------------------------------------------------------------------- */
+
+console.log('\ni18n: no English slips past t() on its way to the screen\n');
+
+/*
+ * The check that would have caught what the other checks could not.
+ *
+ * Everything above compares the dictionary against the keys the app *asks for*.
+ * A sentence that was never wrapped in `t()` asks for nothing, so it is
+ * invisible to all of it -- the dictionary reads as complete while the screen
+ * still says "Automatic cleanup is off." in a Vietnamese window. That is
+ * exactly how a first pass at this shipped.
+ *
+ * So this looks at the other end: the positions where text becomes visible, and
+ * any string literal sitting in one of them that did not come from `t()` or
+ * `m()`.
+ */
+const SINKS = [
+  /\.textContent\s*=\s*([^;]+);/g,
+  /\.title\s*=\s*([^;]+);/g,
+  /\.placeholder\s*=\s*([^;]+);/g,
+  /\btoast\(([\s\S]{0,400}?)\)\s*;/g,
+  /\bshowNotice\(\s*'[^']+'\s*,([\s\S]{0,400}?)\)\s*;/g,
+  /\breturn\s+('(?:[^'\\]|\\.){4,}'|`(?:[^`\\$]|\\.){4,}`)\s*;/g,
+  /\b(?:title|message|detail|body|label|buttons)\s*:\s*([^,\n]{4,200})/g,
+  // Producers of text that is displayed elsewhere. `finish('skipped', …)` writes
+  // its argument to the run log and the Automatic tab shows it; leaving that
+  // one out is how a plain-English reason survived the first pass.
+  /\bfinish\(\s*'[^']+'\s*,([\s\S]{0,300}?)\)\s*;/g,
+  /\badvice\(\s*'[^']+'\s*,([\s\S]{0,300}?)(?:,\s*'[a-z]+'\s*)?\)/g,
+  /\bnotes\.push\(([\s\S]{0,300}?)\)\s*;/g,
+];
+
+/**
+ * English that is *meant* to stay in the source.
+ *
+ * `advisor.js` holds the category labels and hints as the fallback the renderer
+ * translates from (`t('category.' + group.category, group.label)`), so the
+ * English there is the second argument to a `t()` call in another file. It is
+ * reached by a computed key, which is why it cannot be spotted automatically.
+ */
+const ALLOWED_FILES = new Set(['lib/advisor.js']);
+
+function looksLikeProse(text) {
+  if (!/[a-z]{3}/.test(text)) return false;
+  if (!/\s/.test(text) && text.length < 12) return false;
+  if (/^[a-z-]+(\s[a-z-]+)*$/.test(text) && text.length < 24) return false; // class lists
+  if (/[#.[\]]/.test(text) && /input|button|div|span|\[data-/.test(text)) return false;
+  if (/^[A-Za-z]:[\\/]/.test(text)) return false;
+  if (text.includes('/') && !text.includes(' ')) return false;
+  if (/^\$\{/.test(text)) return false;
+  // `auto.schedule.title` is a key, not a sentence. A sink expression cut at a
+  // comma can leave one exposed, and reporting it as untranslated English would
+  // be the check crying wolf at the very thing it is asking for.
+  if (/^[a-z][A-Za-z0-9]*(\.[A-Za-z0-9]+)+$/.test(text)) return false;
+  return true;
+}
+
+{
+  const leaks = [];
+
+  for (const file of sourceFiles(SRC).filter((f) => f.endsWith('.js'))) {
+    const rel = path.relative(SRC, file).replace(/\\/g, '/').replace(/^(main|renderer)\//, '');
+    if (ALLOWED_FILES.has(rel)) continue;
+
+    const src = fs
+      .readFileSync(file, 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' '))
+      .replace(/^(\s*)\/\/.*$/gm, '$1');
+
+    for (const re of SINKS) {
+      for (const m of src.matchAll(re)) {
+        // Blank out every t(…) and m(…) call, then see what English is left.
+        // Blank whole calls first, then any call the sink's own regex cut short
+        // -- `title: t('a.key', 'English'),` is captured up to the comma, so
+        // the closing paren the first pattern needs is not there.
+        const rest = (m[1] || '')
+          .replace(/\b[tm]\(\s*(['"])(?:[^'"\\]|\\.)+?\1[\s\S]*?\)/g, 'T')
+          .replace(/\b[tm]\(\s*(['"])(?:[^'"\\]|\\.)+?\1/g, 'T');
+        for (const lit of rest.matchAll(/'((?:[^'\\]|\\.){3,})'|`((?:[^`\\]|\\.){3,})`/g)) {
+          const text = (lit[1] || lit[2] || '').replace(/\\n/g, ' ');
+
+          /*
+           * Judge the literal with its interpolations removed.
+           *
+           * A template literal is usually a computed key (`category.${c}`) or a
+           * joining fragment (` · ${parts}`), and both are meant to be there.
+           * What is left after stripping `${…}` tells them apart: a real leak
+           * still reads as a sentence, so the rule is two or more words of
+           * plain English. Single words are left to the key-coverage checks
+           * above -- this one is looking for sentences.
+           */
+          const bare = text.replace(/\$\{[^}]*\}/g, ' ').replace(/\s+/g, ' ').trim();
+          if (!/[A-Za-z]{2,}\s+[A-Za-z]{2,}/.test(bare)) continue;
+          if (looksLikeProse(bare)) leaks.push(`${rel}: "${bare.slice(0, 60)}"`);
+        }
+      }
+    }
+  }
+
+  const unique = [...new Set(leaks)];
+  check('no user-facing English bypasses the dictionary', unique.length === 0,
+    unique.slice(0, 8).join(' · '));
 }
 
 /* -------------------------------------------------------------------------- */

@@ -26,6 +26,7 @@
   /** A build without the dictionaries must still start, in English. */
   if (!i18n) {
     window.t = (key, english) => (english == null ? key : english);
+    window.tm = (value) => (typeof value === 'string' ? value : (value && value.en) || '');
     window.onLanguageChange = () => {};
     return;
   }
@@ -51,6 +52,17 @@
    * step for four scripts.
    */
   window.t = (key, english, params) => i18n.t(key, english, params);
+
+  /**
+   * Render a sentence the main process built but did not word.
+   *
+   * Scan verdicts and run-log reasons arrive as `{ i18n, en, params }` rather
+   * than as text, so they can be shown in whatever language is current when
+   * they are *displayed* -- including entries written to the log months ago, in
+   * a different language, by a different version. A plain string passes
+   * through, which is what an old log entry contains.
+   */
+  window.tm = (value) => i18n.render(value);
 
   /**
    * Everything the app draws at runtime rather than from the markup.

@@ -11,6 +11,9 @@ const os = require('node:os');
 const path = require('node:path');
 
 const { runAutoClean, selectFiles, lastTouched, blockingApps, RunLog } = require('../src/main/lib/autoclean');
+// A run's reason is a message now -- { i18n, en, params } -- so the log it is
+// written to can be read later in whatever language is set then.
+const { render } = require('../src/i18n');
 const { coerceSettings } = require('../src/main/lib/settings');
 const { TrashLedger } = require('../src/main/lib/ledger');
 
@@ -148,7 +151,7 @@ function file(p, size, mtimeMs = OLD, atimeMs = 0) {
       settings: coerceSettings({ autoClean: { enabled: false, roots: [root] } }).settings,
       now: NOW,
     });
-    check('a disabled config does nothing', run.outcome === 'skipped', run.reason || '');
+    check('a disabled config does nothing', run.outcome === 'skipped', render(run.reason));
   }
 
   {
@@ -157,8 +160,8 @@ function file(p, size, mtimeMs = OLD, atimeMs = 0) {
       deps: { scan: fakeScan(bigCache) },
       now: NOW,
     });
-    check('a disk below the usage threshold stops the run', run.outcome === 'skipped', run.reason || '');
-    check('and says what the disk actually is', /% full/.test(run.reason || ''), run.reason || '');
+    check('a disk below the usage threshold stops the run', run.outcome === 'skipped', render(run.reason));
+    check('and says what the disk actually is', /% full/.test(render(run.reason)), render(run.reason));
   }
 
   {
@@ -168,8 +171,9 @@ function file(p, size, mtimeMs = OLD, atimeMs = 0) {
       deps: { scan: fakeScan(bigCache) },
       now: NOW,
     });
-    check('a named app being open stops the run', run.outcome === 'skipped', run.reason || '');
-    check('and names the app', (run.reason || '').toLowerCase().includes(self.toLowerCase()), run.reason || '');
+    check('a named app being open stops the run', run.outcome === 'skipped', render(run.reason));
+    check('and names the app', render(run.reason).toLowerCase().includes(self.toLowerCase()),
+      render(run.reason));
   }
 
   {
@@ -188,7 +192,7 @@ function file(p, size, mtimeMs = OLD, atimeMs = 0) {
       },
       now: NOW,
     });
-    check('a dry run reports without deleting', run.outcome === 'dry-run', run.reason || '');
+    check('a dry run reports without deleting', run.outcome === 'dry-run', render(run.reason));
     check('a dry run counts what it would take', run.selected.files === 1);
     check('a dry run shows a sample', Array.isArray(run.sample) && run.sample.length === 1);
   }
@@ -226,7 +230,8 @@ function file(p, size, mtimeMs = OLD, atimeMs = 0) {
     check('the ledger records the run id', reread.entries[0].runId === run.runId);
 
     check('with purge off the run says the space is not actually free',
-      run.notes.some((n) => n.includes('no space is free until the bin is emptied')), run.notes.join(' | '));
+      run.notes.some((n) => render(n).includes('no space is free until the bin is emptied')),
+      run.notes.map(render).join(' | '));
   }
 
   console.log('\nautoclean: the run log\n');

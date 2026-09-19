@@ -247,7 +247,9 @@ function applyAutoState(data) {
   $('astat-next').textContent = auto.enabled ? formatWhenShort(data.scheduler.nextRunAt) : '–';
   $('astat-next').title = auto.enabled ? formatWhen(data.scheduler.nextRunAt) : '';
   $('astat-last').textContent = data.lastRun ? formatWhenShort(data.lastRun.startedAt) : t('app.never', 'Never');
-  $('astat-last').title = data.lastRun ? `${formatWhen(data.lastRun.startedAt)} — ${data.lastRun.reason || data.lastRun.outcome}` : '';
+  $('astat-last').title = data.lastRun
+    ? `${formatWhen(data.lastRun.startedAt)} — ${tm(data.lastRun.reason) || data.lastRun.outcome}`
+    : '';
 
   // A schedule that is switched on but has no task behind it would silently
   // never run, which is the failure this whole feature exists to avoid. Each
@@ -303,7 +305,7 @@ function showNotice(id, text) {
 }
 
 function describeSchedule(auto) {
-  if (!auto.enabled) return 'Automatic cleanup is off.';
+  if (!auto.enabled) return t('auto.describe.off', 'Automatic cleanup is off.');
 
   let when;
   if (auto.schedule.kind === 'minutes') {
@@ -586,7 +588,7 @@ function renderRunResult(run) {
     ? t('auto.result.byHand', '{when} (started by hand)', { when: formatWhen(run.startedAt) })
     : formatWhen(run.startedAt);
   const right = document.createElement('span');
-  right.textContent = run.reason || run.outcome;
+  right.textContent = tm(run.reason) || run.outcome;
   outcome.append(left, right);
   body.append(outcome);
 
@@ -627,7 +629,7 @@ function renderRunResult(run) {
   for (const note of run.notes || []) {
     const para = document.createElement('p');
     para.className = 'result-note';
-    para.textContent = note;
+    para.textContent = tm(note);
     body.append(para);
   }
 
@@ -938,7 +940,7 @@ async function performAutoRun(dryRun) {
       size: formatBytes(run.selected.bytes),
     }));
   } else if (run.outcome === 'skipped' || run.outcome === 'cancelled') {
-    toast(run.reason || t('auto.toast.nothingDone', 'Nothing was done.'));
+    toast(tm(run.reason) || t('auto.toast.nothingDone', 'Nothing was done.'));
   } else {
     toast(t('auto.toast.moved', 'Moved {n} file(s) to the Recycle Bin.', {
       n: formatCount(run.trashed.files),
@@ -1008,7 +1010,7 @@ api.onDataChanged(async (payload) => {
           n: formatCount(run.selected.files),
         })
       : run.outcome === 'skipped'
-        ? t('auto.scheduled.skipped', 'Scheduled cleanup skipped: {reason}', { reason: run.reason })
+        ? t('auto.scheduled.skipped', 'Scheduled cleanup skipped: {reason}', { reason: tm(run.reason) })
         : t('auto.scheduled.moved', 'Scheduled cleanup moved {n} file(s) to the Recycle Bin.', {
             n: formatCount(run.trashed.files),
           })

@@ -180,13 +180,19 @@ function register() {
 
           const { response } = await dialog.showMessageBox(win, {
             type: 'warning',
-            buttons: ['Move to Recycle Bin', 'Cancel'],
+            buttons: [t('dialog.moveToBin', 'Move to Recycle Bin'), t('app.cancel', 'Cancel')],
             defaultId: 1,
             cancelId: 1,
-            title: 'Confirm delete',
-            message: `Move ${count.toLocaleString('en-US')} item${count === 1 ? '' : 's'} to the Recycle Bin?`,
+            title: t('dialog.confirmDelete.title', 'Confirm delete'),
+            message: t('dialog.confirmDelete.message', 'Move {n} item(s) to the Recycle Bin?', {
+              n: count.toLocaleString(language.current()),
+            }),
             detail:
-              `This frees ${formatBytes(planned.totalBytes)}. Items stay recoverable from the Recycle Bin.` +
+              t(
+                'dialog.confirmDelete.detail',
+                'This frees {size}. Items stay recoverable from the Recycle Bin.',
+                { size: formatBytes(planned.totalBytes) }
+              ) +
               skippedNote(planned) +
               (slow
                 ? `\n\nWindows moves about ${ESTIMATED_FILES_PER_SEC} files per second, so this will take ` +
@@ -457,15 +463,24 @@ function register() {
       const win = BrowserWindow.fromWebContents(event.sender);
       const { response } = await dialog.showMessageBox(win, {
         type: 'warning',
-        buttons: ['Delete permanently', 'Cancel'],
+        buttons: [t('dialog.purge.confirm', 'Delete permanently'), t('app.cancel', 'Cancel')],
         defaultId: 1,
         cancelId: 1,
-        title: 'Permanently delete recycled items',
-        message: `Permanently delete ${preview.purged.length.toLocaleString('en-US')} item(s) from the Recycle Bin?`,
+        title: t('dialog.purge.title', 'Permanently delete recycled items'),
+        message: t('dialog.purge.message', 'Permanently delete {n} item(s) from the Recycle Bin?', {
+          n: preview.purged.length.toLocaleString(language.current()),
+        }),
         detail:
-          `This frees ${formatBytes(preview.freedBytes)} and cannot be undone.\n\n` +
-          `Only items CleanDrive moved there itself, more than ${settings.purge.afterDays} day(s) ago, ` +
-          'are affected. Anything you deleted yourself stays in the Recycle Bin.',
+          t('dialog.purge.detail', 'This frees {size} and cannot be undone.', {
+            size: formatBytes(preview.freedBytes),
+          }) +
+          '\n\n' +
+          t(
+            'dialog.purge.scope',
+            'Only items CleanDrive moved there itself, more than {days} day(s) ago, are affected. ' +
+              'Anything you deleted yourself stays in the Recycle Bin.',
+            { days: settings.purge.afterDays }
+          ),
       });
 
       if (response !== 0) return { purged: 0, bytes: 0, cancelled: true };
@@ -879,9 +894,16 @@ async function confirmAutoDelete(win, selection, settings) {
       ) +
       `\n\n${t('dialog.forExample', 'For example:')}\n${names}${selection.files > 5 ? '\n  …' : ''}\n\n` +
       (settings.purge.enabled
-        ? `They stay recoverable for ${settings.purge.afterDays} day(s), after which CleanDrive removes ` +
-          'its own items permanently and the space is freed.'
-        : 'They stay in the Recycle Bin. Note that this frees no disk space until the bin is emptied.'),
+        ? t(
+            'dialog.confirmAuto.withPurge',
+            'They stay recoverable for {days} day(s), after which CleanDrive removes its own items ' +
+              'permanently and the space is freed.',
+            { days: settings.purge.afterDays }
+          )
+        : t(
+            'dialog.confirmAuto.withoutPurge',
+            'They stay in the Recycle Bin. Note that this frees no disk space until the bin is emptied.'
+          )),
   });
 
   return response === 0;
@@ -896,13 +918,19 @@ function skippedNote(planned) {
   const parts = [];
   if (planned.needsAdmin && planned.needsAdmin.length) {
     parts.push(
-      `${planned.needsAdmin.length.toLocaleString('en-US')} file(s) belong to an installed program and ` +
-        `need administrator permission — they are skipped, not deleted.`
+      t(
+        'dialog.skipped.needsAdmin',
+        '{n} file(s) belong to an installed program and need administrator permission — they are ' +
+          'skipped, not deleted.',
+        { n: planned.needsAdmin.length.toLocaleString(language.current()) }
+      )
     );
   }
   if (planned.inUse && planned.inUse.length) {
     parts.push(
-      `${planned.inUse.length.toLocaleString('en-US')} file(s) are open in another program and are skipped.`
+      t('dialog.skipped.inUse', '{n} file(s) are open in another program and are skipped.', {
+        n: planned.inUse.length.toLocaleString(language.current()),
+      })
     );
   }
   return parts.length ? `\n\n${parts.join('\n')}` : '';

@@ -101,6 +101,47 @@
     return current;
   }
 
+  /**
+   * A sentence that has not been rendered yet.
+   *
+   * ## Why a sentence is sometimes an object
+   *
+   * `t()` renders immediately, which is right when the text is about to be put
+   * on screen. It is wrong for text that is produced somewhere else and read
+   * later:
+   *
+   *   - the scanner's verdicts travel from the main process to the window and
+   *     sit in the window's state until the next scan, so rendering them at
+   *     production time freezes them in whatever language was current *then*;
+   *   - a scheduled run's reason is **written to a file**. Rendered, it is
+   *     English on disk forever, and the run log still reads "No settings file
+   *     was found" in a Vietnamese app a year later.
+   *
+   * So the producers hand back `{ i18n, en, params }` and the screen renders it
+   * with `render()`. The English travels with it, so an old log entry written
+   * by a previous version -- a plain string -- still displays, and a key that
+   * has since been deleted still displays too.
+   */
+  function message(key, english, params) {
+    return params ? { i18n: key, en: english, params } : { i18n: key, en: english };
+  }
+
+  /**
+   * Turn whatever a producer handed over into text.
+   *
+   * Accepts a message, a plain string (already rendered, or written by an older
+   * version of the app) and null. Callers should not have to know which they
+   * have -- a run log holds both.
+   */
+  function render(value) {
+    if (value === null || value === undefined) return '';
+    if (typeof value === 'string') return value;
+    if (typeof value === 'object' && typeof value.i18n === 'string') {
+      return t(value.i18n, value.en, value.params);
+    }
+    return String(value);
+  }
+
   /** `{name}` placeholders. A missing parameter is left as written rather than
    *  printed as "undefined", which at least reads as a bug instead of a value. */
   function format(text, params) {
@@ -199,6 +240,8 @@
     setLanguage,
     getLanguage,
     t,
+    message,
+    render,
     format,
     translateDom,
     missingKeys,
