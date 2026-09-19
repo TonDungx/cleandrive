@@ -1907,6 +1907,13 @@ main {
   border: 1px solid var(--border);
   border-radius: var(--radius-pill);
   background: var(--surface-2);
+  /* The sliding pill is a rounded rectangle inside a capsule, and it carries a
+     shadow. At the ends of the track the two curves do not agree and the
+     shadow has nothing to sit on, so the pill reads as bulging out of its own
+     frame -- worst on the vertical form, where the caps are half the width.
+     Clipping to the frame makes that impossible at any size, rather than
+     arithmetic that has to be right at every one. */
+  overflow: hidden;
 }
 
 .theme-switch {
@@ -1942,9 +1949,14 @@ main {
 @container (max-width: 122px) {
   .sidebar .segmented {
     grid-auto-flow: row;
+    /* Not a capsule standing on end. A pill of three square-ish cells inside a
+       shape whose caps are half its width leaves the selected end reading as a
+       half-moon; a plain radius nests the two shapes. */
+    border-radius: 13px;
   }
 
   .sidebar .segmented::before {
+    border-radius: 10px;
     left: 2px;
     right: 2px;
     bottom: auto;
@@ -1969,6 +1981,12 @@ main {
   /* Overshoots very slightly and settles -- the curve of something with a
      little weight, rather than something being teleported. */
   transition: transform 340ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+/* Inside the clip, so focus is still visible: an outline drawn outside the
+   frame would be the one thing overflow: hidden throws away. */
+.segmented-option:focus-visible {
+  outline-offset: -2px;
 }
 
 .segmented-option {
