@@ -39,6 +39,7 @@
     "sample-only": "electron . --sample-only",
     "verify:schedule": "electron scripts/verify-schedule.js",
     "verify:appearance": "electron scripts/verify-appearance.js",
+    "verify:second-instance": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify-second-instance.ps1",
     "build": "node scripts/build.js",
     "verify:install": "node scripts/verify-install-location.js",
     "verify:updater": "electron scripts/verify-updater.js"

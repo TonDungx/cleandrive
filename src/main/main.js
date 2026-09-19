@@ -209,12 +209,21 @@ if (isSampleOnly) {
 } else if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
-  app.on('second-instance', () => {
-    if (mainWindow) {
-      if (mainWindow.isMinimized()) mainWindow.restore();
-      mainWindow.focus();
-    }
-  });
+  /*
+   * Someone tried to start the app again -- the shortcut, the Start menu, the
+   * .exe. The lock stops the second process, so this is the only chance the
+   * first one gets to answer, and the answer has to be the window.
+   *
+   * It used to focus the window and nothing else, which did nothing at all in
+   * the state people actually hit: with monitoring on, closing the window
+   * hides it, and focusing a hidden window leaves it hidden. The app was
+   * running, the shortcut did nothing when clicked, and the only way back in
+   * was the tray icon.
+   *
+   * revealWindow() is the same path the tray uses, and it covers the window
+   * being hidden, minimised, or gone entirely.
+   */
+  app.on('second-instance', () => revealWindow());
 
   app.whenReady().then(async () => {
     ipc = require('./ipc');

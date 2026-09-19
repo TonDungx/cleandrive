@@ -502,6 +502,7 @@ otherwise be guarding the wrong directory entirely.
 | `bench-batch.ps1` | Measures batched `SHFileOperation` throughput via P/Invoke, for comparison |
 | `build.js` | Generates the .ico and packages the app into `dist/` |
 | `verify-install-location.js` | Copies a build elsewhere, points the scheduled task at a path that does not exist, and checks the app repairs it |
+| `verify-second-instance.ps1` | Opens the app, closes the window to the tray, starts it again the way the shortcut does, and checks by PID that the window that comes back is the one that was hidden rather than a second copy |
 | `verify-updater.js` | Asserts when the updater may run at all, then serves a local feed announcing a newer version to prove it would notice a release |
 
 ### Platform
