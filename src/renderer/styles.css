@@ -247,10 +247,14 @@ body {
   flex: 1;
 }
 
+/* The folder sits between the button and the quick-jump links, all of which are
+   set in the interface font -- a monospaced path in the middle of that row read
+   as a different typeface pasted in, so it is set like its neighbours. The file
+   lists further down stay monospaced: there a column of paths is the content,
+   and lining the separators up is worth the change of face. */
 .target-path {
   color: var(--text-2);
-  font-family: var(--font-mono);
-  font-size: 11.5px;
+  font-size: 12px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -683,11 +687,22 @@ main {
    cards
    ========================================================================== */
 
+/* Two things keep the rows even.
+
+   Cards stretch to the height of their row rather than sitting at its top: a
+   short card beside a tall one used to leave a slab of bare background
+   underneath it, which reads as a hole in the layout rather than as a card that
+   has run out of things to say.
+
+   And "dense" lets a later narrow card fill a gap that a full-width card would
+   otherwise leave behind it. Without it the card before every "card-wide" one
+   ends its row alone, with the rest of the row empty -- the Automatic tab had
+   two such gaps. */
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+  grid-auto-flow: row dense;
   gap: 14px;
-  align-items: start;
 }
 
 .card {
@@ -908,35 +923,48 @@ main {
   white-space: nowrap;
 }
 
+/* These used to be borderless grey words that appeared only on hover, which
+   made them hard to find and, once found, hard to read as things you could
+   click. They are on screen now, drawn as small buttons, and they take an edge
+   when the mouse is anywhere on the row. */
 .file-actions {
   flex: none;
   display: flex;
-  gap: 4px;
-  opacity: 0;
-  transition: opacity var(--fast);
-}
-
-.file-row:hover .file-actions,
-.file-row:focus-within .file-actions {
-  opacity: 1;
+  gap: 6px;
 }
 
 .link {
   appearance: none;
-  padding: 2px 7px;
-  border: none;
-  border-radius: 5px;
-  background: none;
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-2);
   color: var(--text-2);
   font: inherit;
   font-size: 11.5px;
+  font-weight: 500;
+  white-space: nowrap;
   cursor: pointer;
-  transition: background var(--fast), color var(--fast);
+  transition: background var(--fast), border-color var(--fast), color var(--fast);
 }
 
-.link:hover {
+/* The row's hover tint is --surface-2, the same fill these carry by default, so
+   on a hovered row they step up a surface to stay visible against it. */
+.file-row:hover .link,
+.file-row:focus-within .link {
   background: var(--surface-3);
+  border-color: var(--border-strong);
   color: var(--text);
+}
+
+.link:hover,
+.file-row:hover .link:hover {
+  background: var(--accent-soft);
+  border-color: var(--accent-ring);
+  color: var(--accent);
 }
 
 /* ==========================================================================
@@ -1400,12 +1428,15 @@ main {
   border-top: 1px solid var(--border-soft);
 }
 
+/* The label wraps rather than ellipsising. It used to truncate, which in
+   Vietnamese -- where these labels run half again as long -- left rows reading
+   "Kh..." and "Phep do dia hang n..." beside a two-word value and a card full
+   of room. */
 .pair-label {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  flex: 1 1 auto;
+  /* A floor, so the label keeps a column to wrap inside instead of being
+     squeezed to one word a line by a value that is a whole sentence. */
+  min-width: 132px;
 }
 
 /*
