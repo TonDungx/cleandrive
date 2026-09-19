@@ -89,6 +89,39 @@ class History {
   }
 
   /**
+   * Take in whatever another process has written since this one loaded.
+   *
+   * Three processes write this file and none of them coordinate: the window,
+   * the scheduled cleanup, and the daily sampler. Each loaded the file once,
+   * kept its own copy, and `flush()` writes that whole copy back -- so the
+   * last one to write erased everything the others had recorded since. An open
+   * window wiped the daily measurement as a matter of course; the Trends tab
+   * was missing points for a reason that had nothing to do with the disk.
+   *
+   * Reading the file back immediately before each change closes that window
+   * from "as long as the app stays open" to the milliseconds between this read
+   * and the rename inside writeAtomic. Two processes can still collide inside
+   * that gap, and nothing here pretends otherwise -- it is a lock-free store,
+   * not a transactional one. What it no longer does is lose an hour of
+   * measurements to a window somebody left open.
+   */
+  async refresh() {
+    let parsed;
+    try {
+      parsed = JSON.parse(await fsp.readFile(this.filePath, 'utf8'));
+    } catch {
+      // No file yet, or one we cannot read: memory is all there is, and the
+      // next flush will write it. A corrupt history is an empty history.
+      return this;
+    }
+
+    const cutoff = Date.now() - MAX_AGE_DAYS * DAY;
+    this.snapshots = mergeSeries(parsed && parsed.snapshots, this.snapshots, cutoff);
+    this.events = mergeSeries(parsed && parsed.events, this.events, cutoff);
+    return this;
+  }
+
+  /**
    * Record one observation.
    *
    * @param {object}  snapshot
@@ -100,6 +133,7 @@ class History {
    */
   async addSnapshot(snapshot) {
     await this.ensureLoaded();
+    await this.refresh();
 
     const at = Number.isFinite(snapshot.at) ? snapshot.at : Date.now();
     const volumes = {};
@@ -116,17 +150,33 @@ class History {
     // A snapshot with no readable volume tells us nothing we can plot.
     if (Object.keys(volumes).length === 0 && !snapshot.scan) return null;
 
-    const previous = this.snapshots[this.snapshots.length - 1];
     const entry = { at, source: snapshot.source || 'scan', volumes, scan: normaliseScan(snapshot.scan) };
 
-    // Two observations a minute apart are one observation. Replace rather than
-    // append, so opening the app repeatedly does not flatten the series with a
-    // cluster of identical points.
-    if (previous && at - previous.at < MIN_SNAPSHOT_GAP_MS && !(entry.scan && !previous.scan)) {
-      this.snapshots[this.snapshots.length - 1] = { ...previous, ...entry, scan: entry.scan || previous.scan };
+    // Two observations half an hour apart are one observation. Replace rather
+    // than append, so opening the app repeatedly does not flatten the series
+    // with a cluster of identical points.
+    //
+    // The neighbour is found by time rather than by position, because the
+    // refresh above can have brought in a point another process recorded
+    // *after* this one -- the sampler and a scheduled cleanup land within a
+    // minute of each other on every reboot. Taking the last entry would let
+    // this one overwrite a newer reading.
+    let near = -1;
+    for (let i = this.snapshots.length - 1; i >= 0; i--) {
+      if (Math.abs(this.snapshots[i].at - at) < MIN_SNAPSHOT_GAP_MS) {
+        near = i;
+        break;
+      }
+    }
+
+    if (near !== -1 && !(entry.scan && !this.snapshots[near].scan)) {
+      const previous = this.snapshots[near];
+      this.snapshots[near] = { ...previous, ...entry, scan: entry.scan || previous.scan };
     } else {
       this.snapshots.push(entry);
     }
+
+    this.snapshots.sort((a, b) => a.at - b.at);
 
     this.trim();
     await this.flush();
@@ -143,9 +193,11 @@ class History {
   async addEvent({ at = Date.now(), movedBytes = 0, freedBytes = 0, files = 0, source = 'manual' }) {
     await this.ensureLoaded();
     if (movedBytes <= 0 && freedBytes <= 0) return null;
+    await this.refresh();
 
     const event = { at, movedBytes, freedBytes, files, source };
     this.events.push(event);
+    this.events.sort((a, b) => a.at - b.at);
     this.trim();
     await this.flush();
     return event;
@@ -232,6 +284,27 @@ function normaliseScan(scan) {
       ? scan.topFolders.slice(0, 12).map((f) => ({ name: String(f.name), size: Number(f.size) || 0 }))
       : [],
   };
+}
+
+/**
+ * Two versions of the same series, as one.
+ *
+ * Entries are identified by when they were taken and where they came from: two
+ * processes recording at the same millisecond from the same source is the same
+ * observation written twice, and anything else is two observations. Entries
+ * held in memory win over the copy on disk, because they are this process's
+ * own edit -- the half-hour replacement rule above rewrites an entry in place,
+ * and the version on disk is the one it is replacing.
+ */
+function mergeSeries(onDisk, inMemory, cutoff) {
+  const byKey = new Map();
+
+  for (const entry of [...(Array.isArray(onDisk) ? onDisk : []), ...inMemory]) {
+    if (!entry || !Number.isFinite(entry.at) || entry.at < cutoff) continue;
+    byKey.set(`${entry.at}|${entry.source || ''}`, entry);
+  }
+
+  return [...byKey.values()].sort((a, b) => a.at - b.at);
 }
 
 async function writeAtomic(filePath, payload) {

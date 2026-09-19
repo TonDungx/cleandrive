@@ -134,6 +134,52 @@ function ramp(days, perDay, startUsed, jitter = 0) {
     check('a volume that could not be read is not stored as zero', unreadable === null);
   }
 
+  // Three processes write this file -- the window, the scheduled cleanup and
+  // the daily sampler -- and each used to keep its own copy and write the whole
+  // thing back, so whoever wrote last erased the others. A window left open all
+  // afternoon quietly deleted every measurement the scheduled tasks took.
+  {
+    const raceFile = path.join(dir, 'race.json');
+    const usage = { ok: true, totalBytes: TOTAL, freeBytes: 100 * GB, usedBytes: 400 * GB, usedPercent: 80 };
+
+    const seed = new History(raceFile);
+    await seed.addSnapshot({ at: T0, source: 'launch', volumes: { [VOL]: usage } });
+
+    // The window opens and loads. It holds this copy for as long as it is open.
+    const windowProc = new History(raceFile);
+    await windowProc.ensureLoaded();
+
+    // A scheduled task records a measurement while that window sits there.
+    const taskProc = new History(raceFile);
+    await taskProc.addSnapshot({ at: T0 + 2 * DAY, source: 'daily', volumes: { [VOL]: usage } });
+
+    // And now the window writes something of its own: a monitor tick, a scan,
+    // anything at all.
+    await windowProc.addSnapshot({ at: T0 + 4 * DAY, source: 'monitor', volumes: { [VOL]: usage } });
+
+    const onDisk = JSON.parse(await fsp.readFile(raceFile, 'utf8'));
+    const sources = onDisk.snapshots.map((s) => s.source);
+    check('a measurement taken by a scheduled task survives the window writing after it',
+      sources.includes('daily'), sources.join(', '));
+    check('and the window records its own point as well', sources.includes('monitor'), sources.join(', '));
+    check('with nothing recorded twice', new Set(sources).size === sources.length, sources.join(', '));
+    check('in the order they were taken',
+      onDisk.snapshots.every((s, i, all) => i === 0 || all[i - 1].at <= s.at));
+
+    // The same collision one minute apart, where the half-hour rule applies:
+    // the two readings become one, and neither process loses its point.
+    const near = new History(raceFile);
+    await near.ensureLoaded();
+    const other = new History(raceFile);
+    await other.addSnapshot({ at: T0 + 6 * DAY, source: 'daily', volumes: { [VOL]: usage } });
+    await near.addSnapshot({ at: T0 + 6 * DAY - 60 * 1000, source: 'scheduled', volumes: { [VOL]: usage } });
+
+    const after = JSON.parse(await fsp.readFile(raceFile, 'utf8'));
+    check('two readings a minute apart stay one observation even across processes',
+      after.snapshots.filter((s) => s.at >= T0 + 6 * DAY - 60 * 1000).length === 1,
+      String(after.snapshots.length));
+  }
+
   {
     const reread = new History(file);
     await reread.load();
