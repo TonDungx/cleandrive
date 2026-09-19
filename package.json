@@ -1,6 +1,6 @@
 {
   "name": "cleandrive",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "description": "Disk space analyser, duplicate finder and scheduled cleaner",
   "repository": {
     "type": "git",
