@@ -15,6 +15,7 @@ process.env.CLEANDRIVE_TASK_SUFFIX = process.env.CLEANDRIVE_TASK_SUFFIX || 'self
 
 const {
   buildTaskXml,
+  buildSamplerTask,
   nextRunAt,
   escapeXml,
   startBoundary,
@@ -95,6 +96,34 @@ const BASE = {
   {
     check('the start boundary has no timezone suffix, as Task Scheduler expects',
       startBoundary('02:00', BASE.reference) === '2026-01-15T02:00:00');
+  }
+
+  // Both of these guard the same shipped bug: the sampler's document was built
+  // without the invocation, so Windows was handed <Command>undefined</Command>
+  // -- accepted by Task Scheduler, unrunnable, and rewritten identically on
+  // every save. The unit that built it was inline and untestable.
+  {
+    const sampler = buildSamplerTask({ app: { isPackaged: true }, time: '12:00', userId: BASE.userId });
+
+    check('the sampler document launches the app that registered it',
+      sampler.xml.includes(`<Command>${escapeXml(sampler.invocation.command)}</Command>`),
+      (/<Command>[^<]*<\/Command>/.exec(sampler.xml) || ['(none)'])[0]);
+    check('and never the word "undefined"', !sampler.xml.includes('<Command>undefined</Command>'));
+    check('it asks for a measurement, not a cleanup run',
+      sampler.xml.includes('<Arguments>--sample-only</Arguments>'),
+      (/<Arguments>[^<]*<\/Arguments>/.exec(sampler.xml) || ['(none)'])[0]);
+    check('it is a daily task with a logon catch-up',
+      sampler.schedule.kind === 'daily' && sampler.schedule.catchUpAtLogon === true);
+    check('and it is capped at five minutes, not two hours',
+      sampler.xml.includes('<ExecutionTimeLimit>PT5M</ExecutionTimeLimit>'));
+
+    let refused = false;
+    try {
+      buildTaskXml({ ...BASE, command: undefined, schedule: { kind: 'daily', time: '02:00' } });
+    } catch {
+      refused = true;
+    }
+    check('a document with no program to run is refused rather than registered', refused);
   }
 
   console.log('\nscheduler: an interval, so the schedule can be watched working\n');

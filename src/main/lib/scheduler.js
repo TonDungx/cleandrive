@@ -261,6 +261,14 @@ function buildTaskXml(config) {
     logonDelayMinutes = LOGON_DELAY_MINUTES,
   } = config;
 
+  // Without this, a caller that forgets to pass the invocation writes
+  // `<Command>undefined</Command>` -- a document Task Scheduler accepts, and a
+  // task Windows can never run, reported on screen as "the registered task
+  // launches undefined". That shipped in 0.1.3, when the sampler was added, and
+  // survived every release since: nothing between here and the registration
+  // looks at the command.
+  if (!command) throw new Error('buildTaskXml: no command for the task to run');
+
   const triggers = [
     ...calendarTrigger(schedule, reference),
     ...(schedule.catchUpAtLogon ? logonTrigger(userId, logonDelayMinutes) : []),
@@ -430,6 +438,28 @@ async function installSampler(options = {}) {
     return { ok: false, error: 'Scheduling is implemented for Windows only', unsupported: true };
   }
 
+  const { xml, schedule, invocation, taskPath } = buildSamplerTask(options);
+
+  const created = await register({ taskPath, xml, tempDir: options.tempDir });
+  if (!created.ok) return created;
+
+  const check = await verify({ schedule, invocation, taskPath });
+  return { ...created, verified: check.ok, verification: check };
+}
+
+/**
+ * The sampler's task document, and the three things it was built from.
+ *
+ * Separate from installSampler so a test can read the document without
+ * registering anything. It is separate *because* of a bug: this function's
+ * body used to be inline, and it built the XML without the invocation -- so
+ * Windows was handed a task whose program was the string "undefined", the
+ * daily measurement never ran, and every save afterwards reported a task that
+ * did not match and rewrote it to be equally wrong. The cleanup task's
+ * equivalent line is covered by the live test, which reads the registration
+ * back; the sampler had no such test, and inline code cannot be given one.
+ */
+function buildSamplerTask(options = {}) {
   const taskPath = options.taskPath || sampleTaskPath();
   const invocation = options.invocation || selfInvocation(options.app, '--sample-only');
   const schedule = { kind: 'daily', time: options.time || '12:00', catchUpAtLogon: true };
@@ -445,13 +475,10 @@ async function installSampler(options = {}) {
     executionTimeLimit: 'PT5M',
     logonDelayMinutes: SAMPLE_LOGON_DELAY_MINUTES,
     reference: options.reference,
+    ...invocation,
   });
 
-  const created = await register({ taskPath, xml, tempDir: options.tempDir });
-  if (!created.ok) return created;
-
-  const check = await verify({ schedule, invocation, taskPath });
-  return { ...created, verified: check.ok, verification: check };
+  return { xml, schedule, invocation, taskPath };
 }
 
 /** Remove a task. A task that was never there is not an error. */
@@ -1043,6 +1070,7 @@ module.exports = {
   nextRunAt,
   describeSchedule,
   buildTaskXml,
+  buildSamplerTask,
   selfInvocation,
   currentUserId,
   escapeXml,
