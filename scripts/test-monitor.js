@@ -271,6 +271,46 @@ function harness(startPercent, options = {}) {
     check('rendering is deterministic', renderAppIcon(64).equals(corner));
   }
 
+  console.log('\nmonitor: a test run does not put toasts on the tester\'s screen\n');
+
+  {
+    /*
+     * This passes only because the guard returns before it touches Electron.
+     *
+     * Under plain node, require('electron') is the npm package -- a path, not
+     * the API -- so `Notification` is undefined and any call through it throws.
+     * A show() that returns null without throwing is therefore proof that the
+     * harness check ran first, which is the whole property being asserted.
+     *
+     * It is not a hypothetical. `npm run test:e2e` switches monitoring on at an
+     * 85% threshold to prove the monitor works, and on a machine sitting at 85%
+     * it told its own developer their disk was filling up -- in English,
+     * seconds after the installed copy had said the same thing in Vietnamese.
+     */
+    const notify = require('../src/main/lib/notify');
+
+    const before = process.env.CLEANDRIVE_TASK_SUFFIX;
+    process.env.CLEANDRIVE_TASK_SUFFIX = 'unittest';
+
+    check('a run under a task suffix is recognised as a harness', notify.isHarness() === true);
+
+    let threw = null;
+    let result = 'not called';
+    try {
+      result = notify.show({ title: 'nope', body: 'nope' }, () => {});
+    } catch (err) {
+      threw = err;
+    }
+
+    check('and its notifications are refused rather than shown',
+      threw === null && result === null, threw ? threw.message : String(result));
+
+    delete process.env.CLEANDRIVE_TASK_SUFFIX;
+    check('while a real run is not a harness', notify.isHarness() === false);
+
+    if (before !== undefined) process.env.CLEANDRIVE_TASK_SUFFIX = before;
+  }
+
   console.log(failures === 0 ? '\nALL PASS\n' : `\n${failures} FAILURE(S)\n`);
   process.exit(failures === 0 ? 0 : 1);
 })().catch((err) => {

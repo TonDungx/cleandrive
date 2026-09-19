@@ -1,8 +1,9 @@
 'use strict';
 
-const { app, dialog, BrowserWindow, Notification } = require('electron');
+const { app, dialog, BrowserWindow } = require('electron');
 
 const { t } = require('./language');
+const notify = require('./lib/notify');
 
 /**
  * Checking for, fetching and installing a new version.
@@ -275,16 +276,14 @@ async function noteVersion(store) {
       state.justUpdated = previous;
       emit();
 
-      if (Notification.isSupported()) {
-        new Notification({
-          title: t('notify.updated.title', 'CleanDrive updated'),
-          body: t('notify.updated.body', 'Now on version {current}, up from {previous}.', {
-            current,
-            previous,
-          }),
-          silent: true,
-        }).show();
-      }
+      notify.show({
+        title: t('notify.updated.title', 'CleanDrive updated'),
+        body: t('notify.updated.body', 'Now on version {current}, up from {previous}.', {
+          current,
+          previous,
+        }),
+        silent: true,
+      });
     }
 
     if (previous !== current) await store.patch({ updates: { lastVersion: current } });

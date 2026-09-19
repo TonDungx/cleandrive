@@ -50,6 +50,22 @@ async function guard(fn) {
 }
 
 function register() {
+  /*
+   * The language, for anything this process says outside the window.
+   *
+   * main.js applies it too, and earlier -- it has to, because the theme and
+   * the first paint depend on it. This is the safety net for every other way
+   * into these handlers: a test harness, or whatever the next entry point
+   * turns out to be. Without it, tray.apply() runs here and the disk-space
+   * notification comes out in English no matter what the user chose, which is
+   * how a smoke test once told its own developer their disk was filling up in
+   * the wrong language.
+   */
+  services()
+    .settings.get()
+    .then((settings) => language.apply(settings.appearance.language))
+    .catch(() => {});
+
   // Started here rather than in main.js because it is part of the same job as
   // the handlers below: keeping the renderer's view of the app true. The
   // scheduled cleanup writes its result from a separate process, and without

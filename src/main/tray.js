@@ -1,10 +1,11 @@
 'use strict';
 
-const { app, Tray, Menu, Notification, nativeImage } = require('electron');
+const { app, Tray, Menu, nativeImage } = require('electron');
 
 const { DiskMonitor } = require('./lib/monitor');
 const { renderGauge } = require('./lib/trayicon');
 const { formatBytes } = require('./lib/util');
+const notify = require('./lib/notify');
 const { t } = require('./language');
 
 /**
@@ -284,34 +285,33 @@ function handleEvent(event) {
   // Only a rise is worth interrupting for. Dropping back to "ok" is good news,
   // and good news does not need a notification.
   if (!event.rising || event.suppressed) return;
-  if (!Notification.isSupported()) return;
 
   const { usage } = event;
   const critical = event.to === 'critical';
 
-  const toast = new Notification({
-    title: critical
-      ? t('notify.disk.criticalTitle', 'CleanDrive: disk almost full')
-      : t('notify.disk.lowTitle', 'CleanDrive: disk space is low'),
-    body:
-      t('notify.disk.body', '{root} is {percent}% full — {free} left of {total}.', {
-        root: event.root,
-        percent: usage.usedPercent.toFixed(1),
-        free: formatBytes(usage.freeBytes),
-        total: formatBytes(usage.totalBytes),
-      }) +
-      (critical
-        ? ' ' + t('notify.disk.criticalNote', 'Windows may start misbehaving below a gigabyte or so.')
-        : ''),
-    urgency: critical ? 'critical' : 'normal',
-    silent: !critical,
-  });
-
-  // Clicking opens the app rather than starting a cleanup. A deletion that
-  // began from a notification click, with nothing shown first, is exactly the
-  // kind of thing this app does not do.
-  toast.on('click', () => openWindow());
-  toast.show();
+  notify.show(
+    {
+      title: critical
+        ? t('notify.disk.criticalTitle', 'CleanDrive: disk almost full')
+        : t('notify.disk.lowTitle', 'CleanDrive: disk space is low'),
+      body:
+        t('notify.disk.body', '{root} is {percent}% full — {free} left of {total}.', {
+          root: event.root,
+          percent: usage.usedPercent.toFixed(1),
+          free: formatBytes(usage.freeBytes),
+          total: formatBytes(usage.totalBytes),
+        }) +
+        (critical
+          ? ' ' + t('notify.disk.criticalNote', 'Windows may start misbehaving below a gigabyte or so.')
+          : ''),
+      urgency: critical ? 'critical' : 'normal',
+      silent: !critical,
+    },
+    // Clicking opens the app rather than starting a cleanup. A deletion that
+    // began from a notification click, with nothing shown first, is exactly
+    // the kind of thing this app does not do.
+    () => openWindow()
+  );
 }
 
 /** Whether closing the window should hide it. Only meaningful while running. */

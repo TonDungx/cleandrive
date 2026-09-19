@@ -1,8 +1,9 @@
 'use strict';
 
-const { app, Notification } = require('electron');
+const { app } = require('electron');
 
 const { services } = require('./services');
+const toasts = require('./lib/notify');
 const language = require('./language');
 const { t } = language;
 const { runAutoClean } = require('./lib/autoclean');
@@ -191,9 +192,7 @@ function notify(run) {
     body = moved + freed;
   }
 
-  const toast = new Notification({ title, body, silent: false });
-  toast.on('click', () => app.focus());
-  toast.show();
+  toasts.show({ title, body, silent: false }, () => app.focus());
 }
 
 module.exports = { runScheduled, failedRun };
