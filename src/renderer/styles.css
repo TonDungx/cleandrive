@@ -2378,48 +2378,294 @@ html[data-i18n-pending] body {
 
    The one screen in this app that shows pictures rather than rows, and the one
    whose files cannot be got back. Two things follow from that and are visible
-   in the rules below: nothing is ever pre-selected, so there is no styling for
-   a "suggested" state; and every cell that cannot be drawn says so rather than
+   below: nothing is ever pre-selected, so there is no styling for a
+   "suggested" state; and every cell that cannot be drawn says so rather than
    sitting blank, because a blank square reads as the app still thinking.
+
+   ## What the first version got wrong
+
+   It put all three filter axes into .panel-bar as chips. Thirty-three of them,
+   wrapped to five rows, four hundred pixels tall -- and pinned, because that is
+   what .panel-bar is for. The pictures got a slot.
+
+   Two rules came out of that and shape everything here:
+
+   **Only actions are pinned.** Anything that describes the library scrolls away
+   with it. What survives in the bar is the scan button, the folder picker, the
+   active filters as tokens, and the sort.
+
+   **A control's shape follows its data's shape.** Where a picture came from is
+   a partition, so it is one proportional bar. The year is an axis, so it is a
+   histogram. What a file *is* overlaps, so those stay chips. Using chips for
+   all three is what produced the wall.
+
+   ## Colour
+
+   The stacked bar is monochrome on purpose. This app rations colour -- green,
+   amber and red mean verdicts, and the accent means interaction -- so seven
+   sources get seven weights of one accent rather than seven hues. It reads as
+   one object rather than a pie chart, which is also what it is.
    ========================================================================== */
 
-/* ---- filter chips ---- */
+/* ---- active filters, in the pinned bar ---- */
 
-.chips {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin: 0 0 12px;
-}
-
-.chip-row {
-  display: flex;
+.tokens {
+  display: inline-flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 5px;
 }
 
-.chip-row-label {
-  flex: 0 0 auto;
-  min-width: 82px;
+.token {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  padding: 0 6px 0 9px;
+  border: 1px solid var(--accent-ring);
+  border-radius: var(--radius-pill);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font: inherit;
   font-size: 11.5px;
   font-weight: 600;
-  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: background var(--fast), border-color var(--fast);
+}
+
+.token:hover {
+  border-color: var(--accent);
+}
+
+.token-x {
+  font-size: 13px;
+  line-height: 1;
+  opacity: 0.7;
+}
+
+.token:hover .token-x {
+  opacity: 1;
+}
+
+/* ---- the overview ---- */
+
+/*
+ * Flex rather than a fixed two-column grid.
+ *
+ * The year card hides itself when a library spans one year, and with columns
+ * declared up front that left a card-shaped hole where it had been. Flexing
+ * lets whatever is left take the row.
+ */
+.overview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 0 0 16px;
+}
+
+.ov-card {
+  min-width: 0;
+  padding: 12px 14px 13px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+/* The bar gets a row to itself; the other two share the one below, and either
+   takes the whole of it when the other is not there. */
+.ov-origin { flex: 1 1 100%; }
+.ov-years { flex: 1 1 240px; }
+.ov-traits { flex: 2.4 1 380px; }
+
+.ov-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0 0 9px;
+}
+
+.ov-head h2 {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--text-3);
+}
+
+.ov-total {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-2);
+}
+
+.ov-more {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.ov-more:hover { text-decoration: underline; }
+
+/* ---- the proportional bar ---- */
+
+.ov-bar {
+  display: flex;
+  height: 30px;
+  gap: 2px;
+  margin: 0 0 10px;
+}
+
+.ov-seg {
+  position: relative;
+  min-width: 3px;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: var(--accent);
+  cursor: pointer;
+  /* The width is the share of the library, so it is set inline. */
+  transition: opacity var(--fast), transform var(--fast);
+}
+
+.ov-seg:first-child { border-radius: var(--radius-sm) 3px 3px var(--radius-sm); }
+.ov-seg:last-child { border-radius: 3px var(--radius-sm) var(--radius-sm) 3px; }
+.ov-seg:only-child { border-radius: var(--radius-sm); }
+
+.ov-seg:hover,
+.ov-seg:focus-visible {
+  opacity: 1 !important;
+  outline: none;
+}
+
+/* A segment that is not the filtered one recedes rather than disappears: the
+   shape of the library is still worth seeing while looking at part of it. */
+.overview.is-filtered .ov-seg { opacity: 0.22 !important; }
+.overview.is-filtered .ov-seg.is-active { opacity: 1 !important; }
+
+.ov-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+}
+
+.ov-key {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  color: var(--text-2);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition: color var(--fast);
+}
+
+.ov-key:hover { color: var(--text); }
+.ov-key.is-active { color: var(--accent); font-weight: 600; }
+
+.ov-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  background: var(--accent);
+  flex: 0 0 auto;
+}
+
+.ov-key-size {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-3);
+}
+
+.ov-key.is-active .ov-key-size { color: var(--accent); }
+
+/* ---- the year histogram ---- */
+
+.ov-hist {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 56px;
+}
+
+.ov-year {
+  position: relative;
+  display: flex;
+  flex: 1 1 0;
+  min-width: 0;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: stretch;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+/* The bars get whatever height is left after the labels, so a full-height bar
+   and its label together still fit the card. */
+.ov-year-track {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  align-items: flex-end;
+}
+
+.ov-year-fill {
+  /* Height is the share of bytes, set inline against this track. A year with
+     any files at all keeps a visible stub, because "1 file" and "no files" are
+     different answers and a zero-height bar says the second. */
+  width: 100%;
+  min-height: 3px;
+  border-radius: 3px 3px 0 0;
+  background: var(--accent);
+  opacity: 0.55;
+  transition: opacity var(--fast);
+}
+
+.ov-year:hover .ov-year-fill { opacity: 0.85; }
+.ov-year.is-active .ov-year-fill { opacity: 1; }
+
+.ov-year-label {
+  flex: 0 0 auto;
+  margin-top: 4px;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: clip;
+}
+
+.ov-year.is-active .ov-year-label { color: var(--accent); font-weight: 600; }
+
+/* ---- trait chips, of which there are now far fewer ---- */
+
+.chips-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
 }
 
 .chip {
   display: inline-flex;
   align-items: baseline;
   gap: 6px;
-  padding: 4px 10px;
+  padding: 3px 9px;
   border: 1px solid var(--border);
   border-radius: var(--radius-pill);
-  background: var(--surface);
+  background: var(--surface-2);
   color: var(--text-2);
   font: inherit;
-  font-size: 12px;
+  font-size: 11.5px;
   cursor: pointer;
   transition: background var(--fast), border-color var(--fast), color var(--fast);
 }
@@ -2435,54 +2681,43 @@ html[data-i18n-pending] body {
   color: var(--accent);
 }
 
-.chip-name {
-  font-weight: 600;
-}
+.chip-name { font-weight: 600; }
 
-/* The count and the size, quieter than the name but always present: a chip
-   that does not say how much it holds is one you have to click to find out
-   whether it was worth clicking. */
 .chip-meta {
   font-size: 11px;
   font-variant-numeric: tabular-nums;
   color: var(--text-3);
 }
 
-.chip.is-active .chip-meta {
-  color: var(--accent);
-  opacity: 0.85;
-}
+.chip.is-active .chip-meta { color: var(--accent); opacity: 0.85; }
 
-/* ---- the grid, and the panel beside it ---- */
+/* ---- the grid ---- */
 
 .media-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 300px;
   gap: 16px;
   align-items: start;
+  /* Room for the floating action bar to sit over without covering a row. */
+  padding-bottom: 64px;
 }
 
 /*
- * The grid scrolls inside itself rather than with the page.
+ * No scroller of its own.
  *
- * That is what makes virtualising it possible: the cells are positioned
- * against this box, so "which rows are visible" is `scrollTop` here and not a
- * calculation involving the panel, the sticky bar and the window.
+ * The first version gave the grid `overflow-y: auto` and a fixed height, which
+ * meant two nested scrollbars and a grid that could never be taller than the
+ * slot it was given. It is now just a tall box on the page, and the
+ * virtualisation reads <main>'s scroll position instead.
  */
 .media-grid {
   position: relative;
-  overflow-y: auto;
-  overflow-x: hidden;
-  height: min(70vh, 720px);
-  padding: 2px;
-  border: 1px solid var(--border-soft);
-  border-radius: var(--radius);
-  background: var(--bg-elevated);
+  min-width: 0;
+  outline-offset: 3px;
 }
 
 .media-grid:focus-visible {
   outline: 2px solid var(--accent-ring);
-  outline-offset: 1px;
 }
 
 /* Full height of everything, drawn or not, so the scrollbar tells the truth
@@ -2499,8 +2734,6 @@ html[data-i18n-pending] body {
   width: 148px;
   cursor: pointer;
   user-select: none;
-  /* Cells enter and leave as they scroll; skipping the paint for ones
-     positioned outside the box costs nothing here. */
   content-visibility: auto;
   contain-intrinsic-size: 148px 172px;
 }
@@ -2519,13 +2752,8 @@ html[data-i18n-pending] body {
   transition: border-color var(--fast), box-shadow var(--fast);
 }
 
-.media-cell:hover .media-frame {
-  border-color: var(--border-strong);
-}
-
-.media-cell.is-focused .media-frame {
-  border-color: var(--accent);
-}
+.media-cell:hover .media-frame { border-color: var(--border-strong); }
+.media-cell.is-focused .media-frame { border-color: var(--accent); }
 
 .media-cell.is-selected .media-frame {
   border-color: var(--accent);
@@ -2570,16 +2798,8 @@ html[data-i18n-pending] body {
   line-height: 1.5;
 }
 
-.media-duration {
-  right: 5px;
-  bottom: 5px;
-}
-
-.media-cloud {
-  left: 5px;
-  top: 5px;
-  font-size: 11px;
-}
+.media-duration { right: 5px; bottom: 5px; }
+.media-cloud { left: 5px; top: 5px; font-size: 11px; }
 
 /* The tick appears on selection only. There is no half-state and no
    "suggested" state, because nothing here is ever selected for the user. */
@@ -2596,9 +2816,7 @@ html[data-i18n-pending] body {
   transition: opacity var(--fast);
 }
 
-.media-cell:hover .media-tick {
-  opacity: 1;
-}
+.media-cell:hover .media-tick { opacity: 1; }
 
 .media-cell.is-selected .media-tick {
   opacity: 1;
@@ -2622,8 +2840,8 @@ html[data-i18n-pending] body {
 
 .media-detail {
   position: sticky;
-  top: 0;
-  max-height: min(70vh, 720px);
+  top: 12px;
+  max-height: calc(100vh - 160px);
   overflow-y: auto;
   padding: 14px;
   border: 1px solid var(--border);
@@ -2663,10 +2881,7 @@ html[data-i18n-pending] body {
   margin: 0 0 6px;
 }
 
-.detail-origin {
-  font-size: 12.5px;
-  font-weight: 600;
-}
+.detail-origin { font-size: 12.5px; font-weight: 600; }
 
 /* How sure the app is, said in words next to the verdict rather than implied
    by leaving it out. A guess that looks like a conclusion is the failure this
@@ -2678,25 +2893,10 @@ html[data-i18n-pending] body {
   font-weight: 600;
 }
 
-.detail-strength.is-certain {
-  background: var(--good-soft);
-  color: var(--good);
-}
-
-.detail-strength.is-strong {
-  background: var(--accent-soft);
-  color: var(--accent);
-}
-
-.detail-strength.is-likely {
-  background: var(--warn-soft);
-  color: var(--warn);
-}
-
-.detail-strength.is-guess {
-  background: var(--surface-3);
-  color: var(--text-3);
-}
+.detail-strength.is-certain { background: var(--good-soft); color: var(--good); }
+.detail-strength.is-strong { background: var(--accent-soft); color: var(--accent); }
+.detail-strength.is-likely { background: var(--warn-soft); color: var(--warn); }
+.detail-strength.is-guess { background: var(--surface-3); color: var(--text-3); }
 
 /* The evidence. Never folded away behind a disclosure: the rule in this app is
    that a conclusion arrives with its grounds, and grounds you have to click
@@ -2709,9 +2909,7 @@ html[data-i18n-pending] body {
   color: var(--text-2);
 }
 
-.detail-why li {
-  margin: 0 0 3px;
-}
+.detail-why li { margin: 0 0 3px; }
 
 .detail-facts {
   display: grid;
@@ -2721,9 +2919,7 @@ html[data-i18n-pending] body {
   font-size: 12px;
 }
 
-.detail-facts dt {
-  color: var(--text-3);
-}
+.detail-facts dt { color: var(--text-3); }
 
 .detail-facts dd {
   margin: 0;
@@ -2751,9 +2947,57 @@ html[data-i18n-pending] body {
   font-size: 11.5px;
 }
 
-.detail-traits span {
-  color: var(--text-2);
+.detail-traits span { color: var(--text-2); }
+
+/* ---- the floating action bar ---- */
+
+/*
+ * Fixed to the bottom of the window rather than taking a row from the layout.
+ *
+ * A toolbar costs its height whether or not there is anything to do with it,
+ * and on this screen height is rows of photographs. This costs nothing until
+ * there is something to act on, and it stays reachable however far down the
+ * grid somebody has scrolled.
+ */
+.actionbar {
+  position: fixed;
+  left: 50%;
+  bottom: 18px;
+  z-index: 8;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: calc(100vw - 48px);
+  padding: 8px 10px 8px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow);
+  transform: translateX(-50%);
+  animation: actionbar-in 160ms var(--ease);
 }
+
+@keyframes actionbar-in {
+  from { opacity: 0; transform: translate(-50%, 10px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .actionbar { animation: none; }
+}
+
+/* Never shrunk. It is the sentence that says what is about to happen, and a
+   bar that abbreviates it to "1 selected · 900 …" has dropped the half that
+   matters. The bar grows instead, up to the window. */
+.actionbar-count {
+  flex: 0 0 auto;
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.actionbar-gap { flex: 0 0 6px; }
 
 .check-note {
   display: block;
@@ -2776,6 +3020,8 @@ html[data-i18n-pending] body {
   overflow-wrap: anywhere;
 }
 
+/* ---- narrow ---- */
+
 /*
  * Below this the detail panel has nowhere to sit beside the grid without
  * squeezing both. It goes underneath instead and the grid takes the full
@@ -2783,9 +3029,7 @@ html[data-i18n-pending] body {
  * and columns are how many pictures can be compared at once.
  */
 @media (max-width: 1100px) {
-  .media-layout {
-    grid-template-columns: minmax(0, 1fr);
-  }
+  .media-layout { grid-template-columns: minmax(0, 1fr); }
 
   .media-detail {
     position: static;
@@ -2793,12 +3037,25 @@ html[data-i18n-pending] body {
   }
 }
 
-@media (max-width: 760px) {
-  .chip-row-label {
-    min-width: 100%;
+@media (max-width: 860px) {
+  .ov-years,
+  .ov-traits { flex: 1 1 100%; }
+  .ov-hist { height: 44px; }
+}
+
+@media (max-width: 620px) {
+  .actionbar {
+    left: 12px;
+    right: 12px;
+    max-width: none;
+    transform: none;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    border-radius: var(--radius);
   }
 
-  .media-grid {
-    height: min(60vh, 520px);
+  @keyframes actionbar-in {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
   }
 }

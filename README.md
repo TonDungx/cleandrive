@@ -386,6 +386,59 @@ is exactly 1920×1080, the size of this screen"* — and beside the word `strong
 `likely` or `a guess`, so a guess cannot be mistaken for a conclusion by
 somebody skimming before they delete.
 
+#### Three axes, three different controls
+
+The first version of this screen shipped and was wrong, in a way a screenshot
+makes obvious and a description does not: thirty-three filter chips wrapped to
+five rows, four hundred pixels of them, inside `.panel-bar` — which is sticky,
+so they never scrolled away. The pictures got whatever was left, which at the
+default window size was about two rows.
+
+Three mistakes, compounding.
+
+**One control for three different shapes of data.** Where a picture came from is
+a *partition* — every file is in exactly one bucket. What a file *is* is a set
+of overlapping tags. A year is a position on an *axis*. Rendering all three as
+chips throws away everything specific about each of them, and costs a row per
+seven options for the privilege.
+
+So each gets the control its shape asks for:
+
+| Axis | Control | What the shape buys |
+| --- | --- | --- |
+| Where from | one proportional bar, segments by bytes | the *share* of the library each source is, not just that it exists |
+| Year | a histogram | the shape of a library over time, and the gaps, in the space three chips took |
+| What it is | chips, because they really do overlap | unchanged — but far fewer of them |
+
+The bar is monochrome, in weights of the accent rather than seven hues, because
+this app rations colour: green, amber and red mean verdicts, and spending a
+palette on a chart legend would make them mean less.
+
+**Facets that divide nothing were shown anyway.** The widest chip on screen read
+*Synced to the cloud — 4,032 · 2.0 GB* out of a library of 4,062 files. A filter
+matching ninety-nine per cent of everything is not a filter. Nor is one matching
+a single file. Traits are now ranked by the size of the *smaller* side of the
+split they make — a trait matching half the library scores highest, and one
+matching all of it or one file of it falls to the bottom — and the top seven are
+offered with the rest behind "show more". Nothing is hidden, only ordered: an
+earlier attempt used two hard thresholds and left a card holding one chip on any
+small library, because almost everything fell off one edge or the other.
+
+**Everything was pinned, including the parts that describe rather than act.**
+Only the action row stays now: scan, where to look, the sort, and the active
+filters as removable tokens. The tokens are there because the overview scrolls
+away, and a filtered grid three screens down would otherwise look exactly like
+the whole library — which is the sort of thing that ends with a selection nobody
+meant to make.
+
+Two structural fixes came with it. The grid had `overflow-y: auto` and a height
+of `min(70vh, 720px)`, which is two nested scrollbars and a grid that can never
+be taller than its slot; it now scrolls with the page and the virtualisation
+reads `main`'s scroll position instead. And the selection toolbar became a bar
+that floats over the grid and appears only when there are results — a toolbar
+costs its height on every screen whether or not there is anything to do with it,
+and on this screen height is rows of photographs.
+
 #### What the measurements changed
 
 Four decisions in this subsystem were made by measuring rather than by

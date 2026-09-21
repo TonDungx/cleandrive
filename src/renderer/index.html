@@ -245,29 +245,27 @@
         a select-everything button is the wrong neighbourhood for them.
       -->
       <section class="panel" id="panel-media" role="tabpanel">
+        <!--
+          One line, and only one line, is pinned.
+
+          The first version put all three filter axes in here, which is what
+          .panel-bar makes tempting and what it is worst at: thirty-three chips
+          wrapped to five rows, took four hundred pixels, and -- because the bar
+          is sticky -- never scrolled away. The pictures, which are the entire
+          reason for the screen, got whatever slot was left over. Everything
+          that is not an action now lives below, and scrolls.
+        -->
         <div class="panel-bar" id="media-bar">
           <div class="panel-actions">
             <button class="btn btn-primary" id="media-scan" data-i18n="media.scan">Find photos &amp; video</button>
             <button class="btn" id="media-cancel" hidden data-i18n="app.stop">Stop</button>
             <button class="btn btn-sm" id="media-folders" data-i18n="media.whereToLook">Where to look…</button>
+            <!-- Active filters, as removable tokens. They belong up here
+                 because "what am I looking at" must stay true while the
+                 overview that set them has scrolled away. -->
+            <span class="tokens" id="media-tokens"></span>
             <span class="spacer"></span>
-            <span class="status" id="media-status" data-i18n="media.readyToScan">Ready to look through your photo folders.</span>
-          </div>
-
-          <div class="progress progress-walk" id="media-progress" hidden>
-            <span class="critters" aria-hidden="true"></span>
-            <span class="progress-track"><span class="progress-bar is-indeterminate"></span></span>
-          </div>
-
-          <!-- Filters, as chips that carry their own count and size. A chip
-               that does not say how much it holds is a chip you have to click
-               to find out about. -->
-          <div class="chips" id="media-chips" hidden></div>
-
-          <div class="panel-actions panel-actions-tight" id="media-toolbar" hidden>
-            <button class="btn btn-sm" id="media-select-filtered" data-i18n="media.selectShown">Select everything shown</button>
-            <button class="btn btn-sm" id="media-select-none" data-i18n="app.clearSelection">Clear selection</button>
-            <label class="field field-row">
+            <label class="field field-row" id="media-sort-field" hidden>
               <span data-i18n="media.sort">Sort</span>
               <select id="media-sort">
                 <option value="size" data-i18n="media.sort.size">Largest first</option>
@@ -277,15 +275,18 @@
                 <option value="detail" data-i18n="media.sort.detail">Least detail first</option>
               </select>
             </label>
-            <span class="spacer"></span>
-            <span class="status" id="media-selection" data-i18n="app.nothingSelected">Nothing selected</span>
-            <button class="btn btn-danger btn-sm" id="media-delete" disabled data-i18n="app.moveSelected">Move selected to Recycle Bin</button>
+            <span class="status" id="media-status" data-i18n="media.readyToScan">Ready to look through your photo folders.</span>
+          </div>
+
+          <div class="progress progress-walk" id="media-progress" hidden>
+            <span class="critters" aria-hidden="true"></span>
+            <span class="progress-track"><span class="progress-bar is-indeterminate"></span></span>
           </div>
         </div>
 
-        <!-- Which folders are searched, and which are not. Collapsed by
-             default: it is the answer to "why is my photo missing", not
-             something to read every time. -->
+        <!-- Which folders are searched, and which are not. Opened from the bar;
+             the answer to "why is my photo missing", not something to read
+             every time. -->
         <section class="card" id="media-roots-card" hidden>
           <div class="card-head">
             <h2 data-i18n="media.rootsTitle">Where this looks</h2>
@@ -303,10 +304,53 @@
           <ul class="path-list" id="media-excluded"></ul>
         </section>
 
+        <!--
+          The overview, and it scrolls away with everything else.
+
+          Each axis gets the control its shape asks for, which is the thing the
+          first version got wrong by making all three of them chips:
+
+            - where a picture came from is a *partition* -- every file is in
+              exactly one -- so it is one proportional bar, which says how much
+              of the library each source is as well as which sources exist;
+            - the year is an *axis*, so it is a small histogram, which shows the
+              shape of a library rather than just listing the years in it;
+            - what a file *is* overlaps, so those stay chips -- but only the
+              ones that actually divide anything.
+        -->
+        <section class="overview" id="media-overview" hidden>
+          <div class="ov-card ov-origin">
+            <div class="ov-head">
+              <h2 data-i18n="media.chip.origin">Where from</h2>
+              <span class="ov-total" id="ov-total"></span>
+            </div>
+            <div class="ov-bar" id="ov-origin-bar"
+              data-i18n-aria="media.chip.origin" aria-label="Where from" role="group"></div>
+            <div class="ov-legend" id="ov-origin-legend"></div>
+          </div>
+
+          <div class="ov-card ov-years" id="ov-years-card">
+            <div class="ov-head">
+              <h2 data-i18n="media.chip.year">Year</h2>
+              <span class="ov-total" id="ov-years-note"></span>
+            </div>
+            <div class="ov-hist" id="ov-years"
+              data-i18n-aria="media.chip.year" aria-label="Year" role="group"></div>
+          </div>
+
+          <div class="ov-card ov-traits" id="ov-traits-card">
+            <div class="ov-head">
+              <h2 data-i18n="media.chip.what">What it is</h2>
+              <button class="ov-more" id="ov-traits-more" hidden></button>
+            </div>
+            <div class="chips-row" id="ov-traits"></div>
+          </div>
+        </section>
+
         <div class="media-layout" id="media-layout" hidden>
-          <!-- The grid is virtualised: only the cells in view exist in the DOM.
-               A folder of twenty thousand photographs rendered in one pass is a
-               renderer that stops responding. -->
+          <!-- Virtualised against the page, not against a box of its own.
+               An inner scroller meant two scrollbars and a grid that could
+               never be taller than the slot it was given. -->
           <div class="media-grid" id="media-grid" tabindex="0"
             data-i18n-aria="media.gridLabel" aria-label="Photos and video" role="listbox" aria-multiselectable="true">
             <div class="media-canvas" id="media-canvas"></div>
@@ -317,8 +361,25 @@
           <aside class="media-detail" id="media-detail" hidden></aside>
         </div>
 
+        <!--
+          Actions float over the grid rather than taking a row from it.
+
+          A toolbar costs its height on every screen whether or not anything is
+          selected, and on this screen height is rows of photographs. This is
+          fixed to the bottom, appears only once there is something to act on,
+          and says what would happen before it offers to do it.
+        -->
+        <div class="actionbar" id="media-actionbar" hidden>
+          <span class="actionbar-count" id="media-selection" data-i18n="app.nothingSelected">Nothing selected</span>
+          <span class="actionbar-gap"></span>
+          <button class="btn btn-sm" id="media-select-filtered" data-i18n="media.selectShown">Select everything shown</button>
+          <button class="btn btn-sm" id="media-select-none" hidden data-i18n="app.clearSelection">Clear selection</button>
+          <button class="btn btn-danger btn-sm" id="media-delete" disabled data-i18n="app.moveSelected">Move selected to Recycle Bin</button>
+        </div>
+
         <p class="empty" id="media-empty" hidden></p>
       </section>
+
 
       <!-- ------------------------------------------------ duplicates -->
       <section class="panel" id="panel-dupes" role="tabpanel">

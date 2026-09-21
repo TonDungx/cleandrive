@@ -993,6 +993,12 @@
     'media.empty':
       'Không có ảnh hay video nào trong các thư mục đang tích. Mở “Tìm ở đâu” để thêm thư mục.',
     'media.excludedTitle': 'Những thư mục đã không tìm tới',
+    'media.overviewTotal': '{n} tệp · {size}',
+    'media.yearEmpty': '{year} · không có gì',
+    'media.showMore': 'thêm {n} mục',
+    'media.showFewer': 'thu gọn',
+    'media.removeFilter': 'Bỏ bộ lọc này',
+    'media.showingCount': 'Đang hiện {n} · {size}',
 
     /*
      * How sure the app is.

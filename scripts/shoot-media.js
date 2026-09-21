@@ -132,15 +132,30 @@ function buildLibrary(root) {
     fs.writeFileSync(full, bytes);
   };
 
+  // Spread across years so the histogram has a distribution to draw. A
+  // library that is all one year hides that card, correctly -- and then the
+  // screenshots never show it.
+  const backdate = (relative, year, month) => {
+    const full = path.join(root, relative);
+    const when = new Date(year, month, 12, 10, 30);
+    fs.utimesSync(full, when, when);
+  };
+
   for (let i = 0; i < 26; i++) {
-    write(`Camera Roll/IMG_${1000 + i}.png`, png(120, 90, i + 1));
+    const name = `Camera Roll/IMG_${1000 + i}.png`;
+    write(name, png(120, 90, i + 1));
+    // Weighted towards the recent end, which is what a real library looks like.
+    backdate(name, 2026 - Math.floor(i / 9), i % 12);
   }
   for (let i = 0; i < 18; i++) {
-    write(`Screenshots/Screenshot 2025-06-${String(1 + (i % 28)).padStart(2, '0')} 1637${String(i).padStart(2, '0')}.png`,
-      png(160, 90, i + 30));
+    const name = `Screenshots/Screenshot 2025-06-${String(1 + (i % 28)).padStart(2, '0')} 1637${String(i).padStart(2, '0')}.png`;
+    write(name, png(160, 90, i + 30));
+    backdate(name, 2025 - (i % 3), i % 12);
   }
   for (let i = 0; i < 9; i++) {
-    write(`Sent/IMG-2024081${i}-WA00${40 + i}.png`, png(100, 100, i + 60));
+    const name = `Sent/IMG-2024081${i}-WA00${40 + i}.png`;
+    write(name, png(100, 100, i + 60));
+    backdate(name, 2022 + (i % 3), i % 12);
   }
   for (let i = 0; i < 6; i++) {
     write(`Edited/export-${i}.png`, png(140, 70, i + 80));
@@ -240,9 +255,18 @@ app.whenReady().then(async () => {
       await js(`renderGrid()`);
       await wait(350);
 
-      const image = await win.webContents.capturePage();
+      // The first capture after a resize or a theme change occasionally comes
+      // back with nothing in it -- the compositor has not produced a frame at
+      // the new size yet, and `capturePage` returns what it has. It showed up
+      // as a zero-byte PNG, which is silent unless somebody opens the file.
+      let bytes = (await win.webContents.capturePage()).toPNG();
+      for (let attempt = 0; attempt < 4 && bytes.length === 0; attempt++) {
+        await wait(400);
+        bytes = (await win.webContents.capturePage()).toPNG();
+      }
       const file = path.join(OUT, `media-${width}-${theme}.png`);
-      fs.writeFileSync(file, image.toPNG());
+      if (bytes.length === 0) throw new Error(`the window never painted at ${width}px ${theme}`);
+      fs.writeFileSync(file, bytes);
 
       const cells = await js(`document.querySelectorAll('.media-cell').length`);
       const images = await js(`document.querySelectorAll('.media-img').length`);

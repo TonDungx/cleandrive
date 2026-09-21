@@ -37,6 +37,8 @@ const media = {
   anchor: null,
   scanning: false,
   excluded: [],
+  /** Whether the trait row is showing the ones that barely divide anything. */
+  traitsExpanded: false,
 };
 
 /* ------------------------------------------------------------------ layout */
@@ -61,28 +63,49 @@ const GAP = 10;
 /** Rows drawn above and below the viewport, so scrolling does not reveal gaps. */
 const OVERSCAN_ROWS = 3;
 
-/** The grid's own padding, which `clientWidth` includes and the cells cannot use. */
-const GRID_PADDING = 4;
+/**
+ * The page's scroller, which is also the grid's.
+ *
+ * The first version gave the grid `overflow-y: auto` and a height of
+ * `min(70vh, 720px)`. That is two nested scrollbars, and it caps the grid at a
+ * slot however much room the window has. It now scrolls with the page like
+ * everything else, so the overview above it scrolls away and the pictures get
+ * the rest -- which means the virtualisation has to read this element's scroll
+ * position and work out where the canvas sits inside it.
+ */
+const pageScroller = () => document.querySelector('main');
 
 function gridMetrics() {
   const grid = $('media-grid');
-  // `clientWidth` already excludes the scrollbar but still counts the padding.
-  // Not subtracting it loses a whole column at narrow widths, where columns are
-  // the scarcest thing on the screen.
-  const width = Math.max(CELL, (grid.clientWidth || 800) - GRID_PADDING);
+  const width = Math.max(CELL, grid.clientWidth || 800);
   const columns = Math.max(1, Math.floor((width + GAP) / (CELL + GAP)));
   const rows = Math.ceil(media.shown.length / columns);
   return { columns, rows, width };
 }
 
+/** Which slice of the canvas is on screen, in canvas coordinates. */
+function visibleBand() {
+  const scroller = pageScroller();
+  const canvas = $('media-canvas');
+  if (!scroller || !canvas) return { top: 0, height: 900 };
+
+  // Where the canvas begins, measured against the scroller rather than the
+  // document: the panel above it changes height as filters come and go.
+  const offset = canvas.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+  return {
+    top: Math.max(0, -offset),
+    height: scroller.clientHeight,
+  };
+}
+
 /* ------------------------------------------------------------------ filters */
 
 /**
- * The chips, each carrying what it holds.
+ * What the library is made of, by count and by bytes.
  *
- * Counts and totals are recomputed from the full set every time rather than
- * kept up to date incrementally: it is one pass over an array the renderer
- * already has, and an incremental count that drifts is worse than no count.
+ * Recomputed from the full set every time rather than kept up to date
+ * incrementally: it is one pass over an array the renderer already has, and an
+ * incremental count that drifts is worse than no count.
  */
 function facets() {
   const origin = new Map();
@@ -101,7 +124,7 @@ function facets() {
     bump(origin, file.origin, file.size);
     bump(year, file.year, file.size);
     // A file can wear several traits, so it is counted under each of them --
-    // the chips are filters, not a partition.
+    // these are filters, not a partition.
     for (const one of file.traits) bump(trait, one.key, file.size);
   }
 
@@ -119,9 +142,15 @@ function applyFilters() {
   });
 
   sortShown();
-  renderChips();
+  renderOverview();
+  renderTokens();
   renderGrid(true);
   updateSelection();
+}
+
+function clearFilters() {
+  media.filters = { origin: null, trait: null, year: null };
+  applyFilters();
 }
 
 function sortShown() {
@@ -146,7 +175,7 @@ function sortShown() {
   });
 }
 
-/* ------------------------------------------------------------------ chips */
+/* ------------------------------------------------------------------ labels */
 
 const ORIGIN_LABEL = {
   camera: ['media.origin.camera', 'From a camera'],
@@ -190,92 +219,324 @@ function labelFor(table, key) {
   return entry ? t(entry[0], entry[1]) : key;
 }
 
-function renderChips() {
-  const container = $('media-chips');
-  container.replaceChildren();
+/* ------------------------------------------------------------------ overview */
+
+/** How many trait chips are offered before "show more". */
+const TRAIT_VISIBLE = 7;
+
+/**
+ * Traits, ordered by how much they actually divide the library.
+ *
+ * The first version showed all seventeen, and the widest chip on screen read
+ * "Synced to the cloud 4,032 · 2.0 GB" out of a library of 4,062 -- ninety-nine
+ * per cent of it, and therefore no help at all in finding anything. A filter
+ * that matches almost everything, or almost nothing, splits nothing.
+ *
+ * So the ranking is the size of the *smaller* side of the split. A trait
+ * matching half the library scores highest; one matching all of it or one file
+ * of it scores near zero, and both fall to the bottom together. That is one
+ * expression rather than two thresholds, and it has no cliff -- an earlier
+ * attempt cut at "more than 2 and under 80%" and left a card holding a single
+ * chip on any small library, because almost everything fell off one edge or the
+ * other.
+ *
+ * Nothing is removed, only ordered: "show more" reveals the rest, because
+ * "which of my pictures record where they were taken" is a real question even
+ * when the answer is nearly all of them.
+ */
+function rankedTraits(traits, total) {
+  return [...traits.entries()].sort((a, b) => {
+    const split = (stat) => Math.min(stat.count, Math.max(0, total - stat.count));
+    return split(b[1]) - split(a[1]) || b[1].bytes - a[1].bytes;
+  });
+}
+
+/**
+ * Opacity for a segment of the origin bar.
+ *
+ * Seven weights of one accent rather than seven hues. This app rations colour
+ * -- green, amber and red are reserved for verdicts -- so a rainbow here would
+ * spend the one thing the interface is careful with on a chart legend. It also
+ * reads as one object rather than a pie, which is what it is: the library.
+ */
+function shadeFor(index, count) {
+  if (count <= 1) return 0.92;
+  const top = 0.92;
+  const bottom = 0.26;
+  return top - ((top - bottom) * index) / (count - 1);
+}
+
+function renderOverview() {
+  const panel = $('media-overview');
   if (media.files.length === 0) {
-    container.hidden = true;
+    panel.hidden = true;
     return;
   }
-  container.hidden = false;
+  panel.hidden = false;
+  panel.classList.toggle(
+    'is-filtered',
+    Boolean(media.filters.origin || media.filters.trait || media.filters.year !== null)
+  );
 
   const { origin, trait, year } = facets();
+  const totalBytes = media.files.reduce((n, f) => n + f.size, 0);
 
-  container.appendChild(
-    chipRow(
-      t('media.chip.origin', 'Where from'),
-      [...origin.entries()].sort((a, b) => b[1].count - a[1].count),
-      (key) => labelFor(ORIGIN_LABEL, key),
-      media.filters.origin,
-      (key) => {
-        media.filters.origin = media.filters.origin === key ? null : key;
-        applyFilters();
-      }
-    )
-  );
+  $('ov-total').textContent = t('media.overviewTotal', '{n} files · {size}', {
+    n: formatCount(media.files.length),
+    size: formatBytes(totalBytes),
+  });
 
-  container.appendChild(
-    chipRow(
-      t('media.chip.what', 'What it is'),
-      [...trait.entries()].sort((a, b) => b[1].count - a[1].count),
-      (key) => labelFor(TRAIT_LABEL, key),
-      media.filters.trait,
-      (key) => {
-        media.filters.trait = media.filters.trait === key ? null : key;
-        applyFilters();
-      }
-    )
-  );
+  renderOriginBar(origin, totalBytes);
+  renderYears(year);
+  renderTraits(trait);
+}
 
-  const years = [...year.entries()].filter(([key]) => key !== null).sort((a, b) => b[0] - a[0]);
-  if (years.length > 1) {
-    container.appendChild(
-      chipRow(
-        t('media.chip.year', 'Year'),
-        years,
-        (key) => String(key),
-        media.filters.year,
-        (key) => {
-          media.filters.year = media.filters.year === key ? null : key;
-          applyFilters();
-        }
-      )
-    );
+/**
+ * The library as one bar, divided by where its pictures came from.
+ *
+ * This replaces a row of chips, and carries more than they did: a chip says a
+ * source exists and how big it is, while a segment says what *share* of the
+ * library it is, which is the question somebody clearing space is actually
+ * asking. Sized by bytes rather than by count for the same reason -- 3,450
+ * screenshots at 674 MB matter less than 463 photographs at 1.3 GB.
+ */
+function renderOriginBar(origin, totalBytes) {
+  const bar = $('ov-origin-bar');
+  const legend = $('ov-origin-legend');
+  bar.replaceChildren();
+  legend.replaceChildren();
+
+  const entries = [...origin.entries()].sort((a, b) => b[1].bytes - a[1].bytes);
+  if (entries.length === 0 || totalBytes === 0) return;
+
+  entries.forEach(([key, stat], index) => {
+    const share = (stat.bytes / totalBytes) * 100;
+    const shade = shadeFor(index, entries.length);
+    const name = labelFor(ORIGIN_LABEL, key);
+    const active = media.filters.origin === key;
+    const detail = `${name} · ${formatCount(stat.count)} · ${formatBytes(stat.bytes)}`;
+
+    const seg = document.createElement('button');
+    seg.className = 'ov-seg';
+    seg.classList.toggle('is-active', active);
+    // A share below about a quarter of a per cent would otherwise be invisible;
+    // `min-width` in the stylesheet keeps it clickable.
+    seg.style.flex = `${Math.max(share, 0.25)} 1 0`;
+    seg.style.opacity = String(shade);
+    seg.title = detail;
+    seg.setAttribute('aria-label', detail);
+    seg.setAttribute('aria-pressed', String(active));
+    seg.addEventListener('click', () => pickOrigin(key));
+    bar.appendChild(seg);
+
+    const key1 = document.createElement('button');
+    key1.className = 'ov-key';
+    key1.classList.toggle('is-active', active);
+    key1.title = detail;
+
+    const dot = document.createElement('span');
+    dot.className = 'ov-dot';
+    dot.style.opacity = String(shade);
+
+    const text = document.createElement('span');
+    text.textContent = name;
+
+    const size = document.createElement('span');
+    size.className = 'ov-key-size';
+    size.textContent = formatBytes(stat.bytes);
+
+    key1.append(dot, text, size);
+    key1.addEventListener('click', () => pickOrigin(key));
+    legend.appendChild(key1);
+  });
+}
+
+/**
+ * The years as a histogram rather than as a row of chips.
+ *
+ * A year is a position on an axis, and nine chips in a row throw that away --
+ * they say which years exist but not what the library looks like over time.
+ * Bars say both, in less space, and the gap where a year has nothing is itself
+ * an answer.
+ */
+function renderYears(year) {
+  const card = $('ov-years-card');
+  const host = $('ov-years');
+  host.replaceChildren();
+
+  const entries = [...year.entries()]
+    .filter(([key]) => key !== null && Number.isFinite(key))
+    .sort((a, b) => a[0] - b[0]);
+
+  // One year is not a distribution; the card would be a single bar saying
+  // nothing the total does not already say.
+  if (entries.length < 2) {
+    card.hidden = true;
+    return;
+  }
+  card.hidden = false;
+
+  const first = entries[0][0];
+  const last = entries[entries.length - 1][0];
+  $('ov-years-note').textContent = `${first}–${last}`;
+
+  // Gaps are drawn, not skipped: a year with nothing in it is a fact about the
+  // library, and closing the gap would quietly redraw its history.
+  const byYear = new Map(entries);
+  const biggest = Math.max(...entries.map(([, stat]) => stat.bytes));
+  const span = last - first + 1;
+  // Every year gets a label when there is room; beyond that every other one,
+  // and the ends always. A short span gets the whole year written out, because
+  // "22 23 24" is a decade short of unambiguous and there is space for "2022".
+  const step = span <= 12 ? 1 : Math.ceil(span / 10);
+  const shortLabels = span > 8;
+
+  for (let y = first; y <= last; y++) {
+    const stat = byYear.get(y);
+    const active = media.filters.year === y;
+
+    const column = document.createElement('button');
+    column.className = 'ov-year';
+    column.classList.toggle('is-active', active);
+    column.setAttribute('aria-pressed', String(active));
+
+    const detail = stat
+      ? `${y} · ${formatCount(stat.count)} · ${formatBytes(stat.bytes)}`
+      : t('media.yearEmpty', '{year} · nothing', { year: y });
+    column.title = detail;
+    column.setAttribute('aria-label', detail);
+
+    // The bar lives in a track of its own rather than directly in the column.
+    // With the fill's percentage measured against the whole column, a
+    // full-height bar plus the label beneath it came to more than the column,
+    // and the last year's label was sliced off by the card's edge.
+    const track = document.createElement('span');
+    track.className = 'ov-year-track';
+
+    const fill = document.createElement('span');
+    fill.className = 'ov-year-fill';
+    fill.style.height = stat ? `${Math.max(4, (stat.bytes / biggest) * 100)}%` : '0';
+    track.appendChild(fill);
+
+    const label = document.createElement('span');
+    label.className = 'ov-year-label';
+    const show = y === first || y === last || (y - first) % step === 0;
+    label.textContent = show ? (shortLabels ? String(y % 100).padStart(2, '0') : String(y)) : '';
+
+    column.append(track, label);
+    if (stat) column.addEventListener('click', () => pickYear(y));
+    else column.disabled = true;
+    host.appendChild(column);
   }
 }
 
-function chipRow(title, entries, labelOf, active, onPick) {
-  const row = document.createElement('div');
-  row.className = 'chip-row';
+function renderTraits(trait) {
+  const card = $('ov-traits-card');
+  const host = $('ov-traits');
+  const more = $('ov-traits-more');
+  host.replaceChildren();
 
-  const heading = document.createElement('span');
-  heading.className = 'chip-row-label';
-  heading.textContent = title;
-  row.appendChild(heading);
+  const ranked = rankedTraits(trait, media.files.length);
+  if (ranked.length === 0) {
+    card.hidden = true;
+    return;
+  }
+  card.hidden = false;
 
-  for (const [key, stat] of entries) {
-    const chip = document.createElement('button');
-    chip.className = 'chip';
-    chip.classList.toggle('is-active', active === key);
-    chip.setAttribute('aria-pressed', String(active === key));
-    chip.dataset.chip = String(key);
-
-    const name = document.createElement('span');
-    name.className = 'chip-name';
-    name.textContent = labelOf(key);
-
-    // The count and the size together. A chip that only says "Screenshots" is
-    // a chip you have to click to find out whether it is worth clicking.
-    const meta = document.createElement('span');
-    meta.className = 'chip-meta';
-    meta.textContent = `${formatCount(stat.count)} · ${formatBytes(stat.bytes)}`;
-
-    chip.append(name, meta);
-    chip.addEventListener('click', () => onPick(key));
-    row.appendChild(chip);
+  const shown = media.traitsExpanded ? ranked : ranked.slice(0, TRAIT_VISIBLE);
+  for (const [key, stat] of shown) {
+    host.appendChild(
+      chip(labelFor(TRAIT_LABEL, key), stat, media.filters.trait === key, () => pickTrait(key))
+    );
   }
 
-  return row;
+  const hidden = ranked.length - shown.length;
+  more.hidden = hidden <= 0 && !media.traitsExpanded;
+  more.textContent = media.traitsExpanded
+    ? t('media.showFewer', 'Show fewer')
+    : t('media.showMore', '{n} more', { n: formatCount(hidden) });
+}
+
+function chip(name, stat, active, onPick) {
+  const el = document.createElement('button');
+  el.className = 'chip';
+  el.classList.toggle('is-active', active);
+  el.setAttribute('aria-pressed', String(active));
+
+  const label = document.createElement('span');
+  label.className = 'chip-name';
+  label.textContent = name;
+
+  // The count and the size together. A chip that does not say how much it holds
+  // is a chip you have to click to find out whether it was worth clicking.
+  const meta = document.createElement('span');
+  meta.className = 'chip-meta';
+  meta.textContent = `${formatCount(stat.count)} · ${formatBytes(stat.bytes)}`;
+
+  el.append(label, meta);
+  el.addEventListener('click', onPick);
+  return el;
+}
+
+/* ---- the active filters, in the pinned bar ---- */
+
+/**
+ * What is being looked at, kept in the one part of the screen that does not
+ * scroll away.
+ *
+ * The overview sets the filters and then scrolls out of sight, so without this
+ * somebody who has scrolled a few screens into a filtered grid has no way of
+ * telling it is filtered -- which is the sort of thing that ends with a
+ * selection nobody meant to make.
+ */
+function renderTokens() {
+  const host = $('media-tokens');
+  host.replaceChildren();
+
+  const add = (text, clear) => {
+    const token = document.createElement('button');
+    token.className = 'token';
+    token.title = t('media.removeFilter', 'Remove this filter');
+
+    const label = document.createElement('span');
+    label.textContent = text;
+
+    const x = document.createElement('span');
+    x.className = 'token-x';
+    x.textContent = '×';
+    x.setAttribute('aria-hidden', 'true');
+
+    token.append(label, x);
+    token.addEventListener('click', clear);
+    host.appendChild(token);
+  };
+
+  if (media.filters.origin) {
+    add(labelFor(ORIGIN_LABEL, media.filters.origin), () => pickOrigin(media.filters.origin));
+  }
+  if (media.filters.trait) {
+    add(labelFor(TRAIT_LABEL, media.filters.trait), () => pickTrait(media.filters.trait));
+  }
+  if (media.filters.year !== null) {
+    add(String(media.filters.year), () => pickYear(media.filters.year));
+  }
+}
+
+/* ---- picking, which always toggles ---- */
+
+function pickOrigin(key) {
+  media.filters.origin = media.filters.origin === key ? null : key;
+  applyFilters();
+}
+
+function pickTrait(key) {
+  media.filters.trait = media.filters.trait === key ? null : key;
+  applyFilters();
+}
+
+function pickYear(value) {
+  media.filters.year = media.filters.year === value ? null : value;
+  applyFilters();
 }
 
 /* ------------------------------------------------------------------ the grid */
@@ -289,18 +550,25 @@ let gridFrame = null;
  * scroll coalesces into one pass per frame rather than one per event.
  */
 function renderGrid(reset = false) {
-  const grid = $('media-grid');
   const canvas = $('media-canvas');
   const { columns, rows } = gridMetrics();
 
-  if (reset) grid.scrollTop = 0;
+  // Changing the filter changes what the grid is showing, so the reading
+  // position from the last set of results means nothing against the new one.
+  // The page is scrolled back to the panel's top rather than to the document's,
+  // so the overview stays where it was and only the results move.
+  if (reset) {
+    const scroller = pageScroller();
+    if (scroller) scroller.scrollTop = 0;
+  }
 
   // The canvas is the full height the whole list would occupy, so the scrollbar
   // is honest about how much there is even though the cells do not exist.
   canvas.style.height = `${Math.max(0, rows * (CELL_H + GAP) - GAP)}px`;
 
-  const first = Math.max(0, Math.floor(grid.scrollTop / (CELL_H + GAP)) - OVERSCAN_ROWS);
-  const visibleRows = Math.ceil(grid.clientHeight / (CELL_H + GAP)) + OVERSCAN_ROWS * 2;
+  const band = visibleBand();
+  const first = Math.max(0, Math.floor(band.top / (CELL_H + GAP)) - OVERSCAN_ROWS);
+  const visibleRows = Math.ceil(band.height / (CELL_H + GAP)) + OVERSCAN_ROWS * 2;
   const from = first * columns;
   const to = Math.min(media.shown.length, (first + visibleRows) * columns);
 
@@ -518,7 +786,13 @@ function updateSelection() {
 
   const status = $('media-selection');
   if (count === 0) {
-    status.textContent = t('app.nothingSelected', 'Nothing selected');
+    // With nothing chosen the bar is not empty and it is not a toolbar either:
+    // it says what is in front of you, which is the one thing worth knowing
+    // before you start picking.
+    status.textContent = t('media.showingCount', 'Showing {n} · {size}', {
+      n: formatCount(media.shown.length),
+      size: formatBytes(media.shown.reduce((n, f) => n + f.size, 0)),
+    });
   } else {
     status.textContent =
       t('app.selectedCount', '{n} selected · {size}', { n: formatCount(count), size: formatBytes(bytes) }) +
@@ -526,7 +800,16 @@ function updateSelection() {
         ? ` · ${t('media.selectedSynced', '{n} synced to the cloud', { n: formatCount(synced) })}`
         : '');
   }
+
   $('media-delete').disabled = count === 0;
+  $('media-delete').hidden = count === 0;
+  $('media-select-none').hidden = count === 0;
+  // "Select everything shown" is only an offer while there is something left
+  // to select; once everything is, it is a button that does nothing.
+  $('media-select-filtered').hidden = media.shown.length === 0 || count === media.shown.length;
+  // The bar exists only when there are results to act on. No results, no bar,
+  // and the screen is the pictures and nothing else.
+  $('media-actionbar').hidden = media.files.length === 0;
 
   const badge = $('media-badge');
   if (media.files.length > 0) {
@@ -825,11 +1108,14 @@ function reportScan(result) {
   }
   if (result.cancelled) parts.push(t('app.cancelledPartial', 'Cancelled — results are partial.'));
 
-  $('media-status').textContent = parts.join(' ');
+  // The headline count lives in the overview card, where it sits under the bar
+  // that divides it up. What is left for the bar is what the bar is for: what
+  // just happened, and anything that went wrong.
+  $('media-status').textContent = parts.slice(1).join(' ');
 
   const empty = result.files.length === 0;
   $('media-layout').hidden = empty;
-  $('media-toolbar').hidden = empty;
+  $('media-sort-field').hidden = empty;
   $('media-empty').hidden = !empty;
   if (empty) {
     $('media-empty').textContent = t(
@@ -904,8 +1190,13 @@ $('media-select-filtered').addEventListener('click', () => {
 
 $('media-select-none').addEventListener('click', () => {
   media.selected.clear();
+  media.focused = null;
   syncCells();
   updateSelection();
+  // Clearing the selection closes the detail panel with it, which hands the
+  // grid back three hundred pixels -- two more columns at the default width.
+  renderDetail(null);
+  renderGrid();
 });
 
 $('media-delete').addEventListener('click', async () => {
@@ -922,10 +1213,18 @@ $('media-delete').addEventListener('click', async () => {
   }, { context: 'media' });
 });
 
-$('media-grid').addEventListener(
+$('ov-traits-more').addEventListener('click', () => {
+  media.traitsExpanded = !media.traitsExpanded;
+  renderOverview();
+});
+
+// The page is the grid's scroller now, so this is where the virtualisation
+// listens. Coalesced to one pass per frame: a fling produces a scroll event per
+// frame and rebuilding the visible rows twice in one frame paints nothing extra.
+pageScroller().addEventListener(
   'scroll',
   () => {
-    if (gridFrame) return;
+    if (gridFrame || $('media-layout').hidden) return;
     gridFrame = requestAnimationFrame(() => {
       gridFrame = null;
       renderGrid();
@@ -934,12 +1233,30 @@ $('media-grid').addEventListener(
   { passive: true }
 );
 
-// A narrower window means fewer columns, which moves every cell. Rebuilding on
-// the observer rather than on `window.resize` catches the sidebar being dragged
-// as well, which does not fire a window resize at all.
+/**
+ * A narrower window means fewer columns, which moves every cell.
+ *
+ * Watched with an observer rather than `window.resize`, because the sidebar can
+ * be dragged narrower without the window changing size at all.
+ *
+ * **Width only, and deferred.** Once the grid stopped having a height of its
+ * own it grew with its canvas -- so `renderGrid` set the canvas height, which
+ * resized the grid, which woke the observer, which called `renderGrid`. Chromium
+ * breaks that cycle itself and says so: "ResizeObserver loop completed with
+ * undelivered notifications", which the smoke test counts as a renderer error
+ * and is right to. Columns depend on width and nothing else, so a height change
+ * has nothing to tell us.
+ */
 if (typeof ResizeObserver !== 'undefined') {
+  let lastWidth = 0;
   new ResizeObserver(() => {
-    if (!$('media-layout').hidden) renderGrid();
+    if ($('media-layout').hidden) return;
+    const width = $('media-grid').clientWidth;
+    if (width === lastWidth) return;
+    lastWidth = width;
+    // Out of the observer's own callback, so the relayout it causes belongs to
+    // the next frame rather than to this one.
+    requestAnimationFrame(() => renderGrid());
   }).observe($('media-grid'));
 }
 
@@ -958,6 +1275,19 @@ $('media-grid').addEventListener('keydown', (event) => {
     case 'ArrowUp': next = current - columns; break;
     case 'Home': next = 0; break;
     case 'End': next = media.shown.length - 1; break;
+    case 'Escape':
+      // The detail panel takes three hundred pixels of a screen whose width is
+      // columns of photographs, and until this there was no way to give them
+      // back: selecting anything opened it and nothing closed it.
+      media.selected.clear();
+      media.focused = null;
+      media.anchor = null;
+      syncCells();
+      updateSelection();
+      renderDetail(null);
+      renderGrid();
+      event.preventDefault();
+      return;
     case ' ':
       if (media.focused) {
         toggle(media.focused);
@@ -976,13 +1306,18 @@ $('media-grid').addEventListener('keydown', (event) => {
   if (!event.shiftKey) media.anchor = file.path;
 
   // Scroll the focused cell into view without jumping: only move if it is
-  // actually outside the viewport.
-  const grid = $('media-grid');
+  // actually outside the viewport. Measured against the page, which is what
+  // scrolls now -- and the canvas's own offset has to come into it, because
+  // the overview above changes height as filters come and go.
+  const scroller = pageScroller();
+  const canvas = $('media-canvas');
+  const canvasTop =
+    canvas.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop;
   const row = Math.floor(next / columns);
-  const top = row * (CELL_H + GAP);
-  if (top < grid.scrollTop) grid.scrollTop = top;
-  else if (top + CELL_H > grid.scrollTop + grid.clientHeight) {
-    grid.scrollTop = top + CELL_H - grid.clientHeight;
+  const top = canvasTop + row * (CELL_H + GAP);
+  if (top < scroller.scrollTop) scroller.scrollTop = top;
+  else if (top + CELL_H > scroller.scrollTop + scroller.clientHeight) {
+    scroller.scrollTop = top + CELL_H - scroller.clientHeight;
   }
 
   renderGrid();
@@ -994,7 +1329,8 @@ $('media-grid').addEventListener('keydown', (event) => {
 
 onLanguageChange(() => {
   renderRoots();
-  renderChips();
+  renderOverview();
+  renderTokens();
   renderExcluded();
   renderGrid();
   updateSelection();

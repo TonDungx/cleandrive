@@ -516,11 +516,18 @@ app.whenReady().then(async () => {
       status: document.getElementById('media-status').textContent,
       cells: document.querySelectorAll('.media-cell').length,
       canvasHeight: parseInt(document.getElementById('media-canvas').style.height, 10),
+      segments: document.querySelectorAll('.ov-seg').length,
+      segShares: [...document.querySelectorAll('.ov-seg')].map((e) => e.style.flex),
+      legend: document.querySelectorAll('.ov-key').length,
       chips: document.querySelectorAll('.chip').length,
       chipMeta: [...document.querySelectorAll('.chip .chip-meta')].map((e) => e.textContent),
+      traitsAvailable: new Set(media.files.flatMap((f) => f.traits.map((t) => t.key))).size,
+      barPinned: getComputedStyle(document.getElementById('media-bar')).position,
+      overviewPinned: getComputedStyle(document.getElementById('media-overview')).position,
+      gridScrolls: getComputedStyle(document.getElementById('media-grid')).overflowY,
       origins: [...new Set(media.files.map((f) => f.origin))].sort(),
       selected: media.selected.size,
-      deleteDisabled: document.getElementById('media-delete').disabled,
+      deleteHidden: document.getElementById('media-delete').hidden,
     })`);
     console.log(`    ${mediaUi.status}`);
 
@@ -535,13 +542,42 @@ app.whenReady().then(async () => {
       `${mediaUi.canvasHeight}px of canvas`);
 
     check('the classifier told them apart', mediaUi.origins.length >= 2, mediaUi.origins.join(', '));
+
+    /* -- the layout the first version got wrong ------------------------- */
+    //
+    // It put all three filter axes into the pinned bar as thirty-three chips,
+    // which took four hundred pixels that could never scroll away and left the
+    // pictures a slot. Each of these is now a shape the layout enforces rather
+    // than a judgement somebody has to keep making.
+
+    // Where a picture came from is a partition, so it is one proportional bar
+    // rather than a chip each -- and the segments carry the shares.
+    check('the origins are one proportional bar', mediaUi.segments === mediaUi.origins.length,
+      `${mediaUi.segments} segments for ${mediaUi.origins.length} origins`);
+    check('and every segment is sized by its share',
+      mediaUi.segShares.length > 0 && mediaUi.segShares.every((f) => /^[0-9.]+ /.test(f)),
+      mediaUi.segShares.slice(0, 3).join(' | '));
+    check('with a legend you can click instead', mediaUi.legend === mediaUi.segments);
+
+    // Only actions are pinned. Anything describing the library scrolls with it.
+    check('only the action bar is pinned', mediaUi.barPinned === 'sticky', mediaUi.barPinned);
+    check('the overview scrolls away with the results', mediaUi.overviewPinned === 'static',
+      mediaUi.overviewPinned);
+    // Two nested scrollbars was the other half of the problem.
+    check('the grid has no scrollbar of its own', mediaUi.gridScrolls === 'visible', mediaUi.gridScrolls);
+
+    // A filter that matches almost everything divides nothing. The first
+    // version's widest chip read "Synced to the cloud, 4,032 of 4,062".
+    check('the trait chips are a shortlist, not everything',
+      mediaUi.chips <= mediaUi.traitsAvailable,
+      `${mediaUi.chips} shown of ${mediaUi.traitsAvailable} traits present`);
     check('every chip says how much it holds',
       mediaUi.chips > 0 && mediaUi.chipMeta.every((text) => /·/.test(text)),
       mediaUi.chipMeta.slice(0, 3).join(' | '));
 
     // The rule this whole screen is built around.
     check('nothing is selected for the user', mediaUi.selected === 0);
-    check('and the delete button is off until they choose', mediaUi.deleteDisabled === true);
+    check('and there is no delete button until they choose', mediaUi.deleteHidden === true);
 
     /* -- the evidence behind a verdict ----------------------------------- */
 
@@ -568,17 +604,39 @@ app.whenReady().then(async () => {
 
     /* -- filtering -------------------------------------------------------- */
 
-    const mediaFiltered = await win.webContents.executeJavaScript(`
+    const mediaFiltered = await win.webContents.executeJavaScript(`(() => {
       const before = media.shown.length;
       document.querySelector('.chip').click();
       const after = media.shown.length;
       const activeText = document.querySelector('.chip.is-active .chip-name').textContent;
+      const tokens = document.querySelectorAll('#media-tokens .token').length;
       document.querySelector('.chip.is-active').click();
-      ({ before, after, restored: media.shown.length, activeText })
-    `);
+      return { before, after, restored: media.shown.length, activeText, tokens,
+               tokensAfter: document.querySelectorAll('#media-tokens .token').length };
+    })()`);
     check('a chip filters the grid', mediaFiltered.after < mediaFiltered.before,
       `${mediaFiltered.before} -> ${mediaFiltered.after} (${mediaFiltered.activeText})`);
     check('and clicking it again restores everything', mediaFiltered.restored === mediaFiltered.before);
+    // The overview scrolls away, so what is being looked at has to stay in the
+    // part that does not -- otherwise a filtered grid three screens down looks
+    // exactly like the whole library.
+    check('an active filter shows as a token in the pinned bar', mediaFiltered.tokens === 1,
+      `${mediaFiltered.tokens} tokens`);
+    check('and the token goes when the filter does', mediaFiltered.tokensAfter === 0);
+
+    // Clicking a segment of the origin bar is the same act as clicking a chip.
+    const mediaBar = await win.webContents.executeJavaScript(`(() => {
+      const before = media.shown.length;
+      document.querySelector('.ov-seg').click();
+      const after = media.shown.length;
+      const active = document.querySelectorAll('.ov-seg.is-active').length;
+      document.querySelector('.ov-seg.is-active').click();
+      return { before, after, active, restored: media.shown.length };
+    })()`);
+    check('a segment of the bar filters too', mediaBar.after < mediaBar.before,
+      `${mediaBar.before} -> ${mediaBar.after}`);
+    check('exactly one segment reads as chosen', mediaBar.active === 1);
+    check('and it releases when clicked again', mediaBar.restored === mediaBar.before);
 
     /* -- selection -------------------------------------------------------- */
 
