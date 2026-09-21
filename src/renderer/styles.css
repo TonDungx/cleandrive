@@ -2371,3 +2371,434 @@ html[data-i18n-pending] body {
   color: var(--text-2);
   cursor: default;
 }
+
+/* ==========================================================================
+   Photos & video
+   ==========================================================================
+
+   The one screen in this app that shows pictures rather than rows, and the one
+   whose files cannot be got back. Two things follow from that and are visible
+   in the rules below: nothing is ever pre-selected, so there is no styling for
+   a "suggested" state; and every cell that cannot be drawn says so rather than
+   sitting blank, because a blank square reads as the app still thinking.
+   ========================================================================== */
+
+/* ---- filter chips ---- */
+
+.chips {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0 0 12px;
+}
+
+.chip-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip-row-label {
+  flex: 0 0 auto;
+  min-width: 82px;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--text-2);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background var(--fast), border-color var(--fast), color var(--fast);
+}
+
+.chip:hover {
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+.chip.is-active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.chip-name {
+  font-weight: 600;
+}
+
+/* The count and the size, quieter than the name but always present: a chip
+   that does not say how much it holds is one you have to click to find out
+   whether it was worth clicking. */
+.chip-meta {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-3);
+}
+
+.chip.is-active .chip-meta {
+  color: var(--accent);
+  opacity: 0.85;
+}
+
+/* ---- the grid, and the panel beside it ---- */
+
+.media-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 16px;
+  align-items: start;
+}
+
+/*
+ * The grid scrolls inside itself rather than with the page.
+ *
+ * That is what makes virtualising it possible: the cells are positioned
+ * against this box, so "which rows are visible" is `scrollTop` here and not a
+ * calculation involving the panel, the sticky bar and the window.
+ */
+.media-grid {
+  position: relative;
+  overflow-y: auto;
+  overflow-x: hidden;
+  height: min(70vh, 720px);
+  padding: 2px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+  background: var(--bg-elevated);
+}
+
+.media-grid:focus-visible {
+  outline: 2px solid var(--accent-ring);
+  outline-offset: 1px;
+}
+
+/* Full height of everything, drawn or not, so the scrollbar tells the truth
+   about how much there is. */
+.media-canvas {
+  position: relative;
+  width: 100%;
+}
+
+.media-cell {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 148px;
+  cursor: pointer;
+  user-select: none;
+  /* Cells enter and leave as they scroll; skipping the paint for ones
+     positioned outside the box costs nothing here. */
+  content-visibility: auto;
+  contain-intrinsic-size: 148px 172px;
+}
+
+.media-frame {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 148px;
+  height: 148px;
+  overflow: hidden;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  transition: border-color var(--fast), box-shadow var(--fast);
+}
+
+.media-cell:hover .media-frame {
+  border-color: var(--border-strong);
+}
+
+.media-cell.is-focused .media-frame {
+  border-color: var(--accent);
+}
+
+.media-cell.is-selected .media-frame {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-ring);
+}
+
+.media-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.media-placeholder {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+.media-caption {
+  display: block;
+  padding: 4px 2px 0;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.media-duration,
+.media-cloud {
+  position: absolute;
+  padding: 1px 5px;
+  border-radius: var(--radius-pill);
+  background: light-dark(rgba(17, 21, 28, 0.72), rgba(0, 0, 0, 0.66));
+  color: #ffffff;
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.5;
+}
+
+.media-duration {
+  right: 5px;
+  bottom: 5px;
+}
+
+.media-cloud {
+  left: 5px;
+  top: 5px;
+  font-size: 11px;
+}
+
+/* The tick appears on selection only. There is no half-state and no
+   "suggested" state, because nothing here is ever selected for the user. */
+.media-tick {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border-strong);
+  background: light-dark(rgba(255, 255, 255, 0.82), rgba(12, 14, 18, 0.72));
+  opacity: 0;
+  transition: opacity var(--fast);
+}
+
+.media-cell:hover .media-tick {
+  opacity: 1;
+}
+
+.media-cell.is-selected .media-tick {
+  opacity: 1;
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.media-cell.is-selected .media-tick::after {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: 2px;
+  width: 4px;
+  height: 9px;
+  border: solid var(--on-accent);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+/* ---- the detail panel ---- */
+
+.media-detail {
+  position: sticky;
+  top: 0;
+  max-height: min(70vh, 720px);
+  overflow-y: auto;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.detail-preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 90px;
+  margin: 0 0 10px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  overflow: hidden;
+}
+
+.detail-preview img {
+  max-width: 100%;
+  max-height: 200px;
+  display: block;
+}
+
+.detail-name {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.detail-verdict {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 6px;
+}
+
+.detail-origin {
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+/* How sure the app is, said in words next to the verdict rather than implied
+   by leaving it out. A guess that looks like a conclusion is the failure this
+   whole screen is written against. */
+.detail-strength {
+  padding: 1px 7px;
+  border-radius: var(--radius-pill);
+  font-size: 10.5px;
+  font-weight: 600;
+}
+
+.detail-strength.is-certain {
+  background: var(--good-soft);
+  color: var(--good);
+}
+
+.detail-strength.is-strong {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.detail-strength.is-likely {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+
+.detail-strength.is-guess {
+  background: var(--surface-3);
+  color: var(--text-3);
+}
+
+/* The evidence. Never folded away behind a disclosure: the rule in this app is
+   that a conclusion arrives with its grounds, and grounds you have to click
+   for are grounds most people never read. */
+.detail-why {
+  margin: 0 0 12px;
+  padding: 0 0 0 16px;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--text-2);
+}
+
+.detail-why li {
+  margin: 0 0 3px;
+}
+
+.detail-facts {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 3px 10px;
+  margin: 0 0 12px;
+  font-size: 12px;
+}
+
+.detail-facts dt {
+  color: var(--text-3);
+}
+
+.detail-facts dd {
+  margin: 0;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.detail-traits {
+  margin: 0 0 12px;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+}
+
+.detail-traits li {
+  padding: 6px 0;
+  border-top: 1px solid var(--border-soft);
+  line-height: 1.5;
+}
+
+.detail-traits strong {
+  display: block;
+  color: var(--text);
+  font-size: 11.5px;
+}
+
+.detail-traits span {
+  color: var(--text-2);
+}
+
+.check-note {
+  display: block;
+  font-size: 11.5px;
+  color: var(--text-3);
+}
+
+.path-note {
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+.path-example {
+  display: block;
+  font-size: 11px;
+  color: var(--text-3);
+  overflow-wrap: anywhere;
+}
+
+/*
+ * Below this the detail panel has nowhere to sit beside the grid without
+ * squeezing both. It goes underneath instead and the grid takes the full
+ * width, which is worth more here than on any other screen: width is columns,
+ * and columns are how many pictures can be compared at once.
+ */
+@media (max-width: 1100px) {
+  .media-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .media-detail {
+    position: static;
+    max-height: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .chip-row-label {
+    min-width: 100%;
+  }
+
+  .media-grid {
+    height: min(60vh, 520px);
+  }
+}

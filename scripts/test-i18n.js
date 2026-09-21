@@ -56,6 +56,11 @@ const DYNAMIC_PREFIXES = [
   'reason.archiveStale.',
   'reason.installer.',
   'reason.log.',
+  // The photo screen's filter chips are a table in `media.js` rather than a
+  // call per label, because the same names are wanted in three places -- the
+  // chip, the detail panel's verdict, and the trait list under it.
+  'media.origin.',
+  'media.trait.label.',
 ];
 
 /* -------------------------------------------------------------------------- */

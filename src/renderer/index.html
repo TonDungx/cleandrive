@@ -64,6 +64,11 @@
             <svg class="tab-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3.2 4.6h9.6"/><path d="M6.4 4.6V3.3a.8.8 0 0 1 .8-.8h1.6a.8.8 0 0 1 .8.8v1.3"/><path d="M4.6 4.6l.5 8a1 1 0 0 0 1 .9h3.8a1 1 0 0 0 1-.9l.5-8"/></svg>
             <span class="tab-label" data-i18n="app.tab.cleanup">What to delete</span><span class="tab-badge" id="cleanup-badge" hidden></span>
           </button>
+          <button class="tab" data-tab="media" role="tab"
+            data-i18n-title="app.tab.media" title="Photos &amp; video">
+            <svg class="tab-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3.4" width="12" height="9.2" rx="1.8"/><circle cx="5.6" cy="6.6" r="1.1"/><path d="M2.4 11.2l3-2.8 2.4 2.2 2.6-2.9 3.2 3.5"/></svg>
+            <span class="tab-label" data-i18n="app.tab.media">Photos &amp; video</span><span class="tab-badge" id="media-badge" hidden></span>
+          </button>
           <button class="tab" data-tab="dupes" role="tab"
             data-i18n-title="app.tab.dupes" title="Duplicates">
             <svg class="tab-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="2.4" y="2.4" width="7.8" height="7.8" rx="1.6"/><rect x="5.8" y="5.8" width="7.8" height="7.8" rx="1.6"/></svg>
@@ -227,6 +232,92 @@
         </section>
 
         <p class="empty" id="cleanup-empty" data-i18n="cleanup.empty">Run a scan to see what is safe to remove.</p>
+      </section>
+
+      <!-- ------------------------------------------------ photos & video -->
+      <!--
+        Its own tab rather than a group inside "What to delete".
+
+        That screen's contract is a verdict, a reason and a safe/review badge,
+        and it carries a button that ticks everything marked safe. Photographs
+        have no verdict — nobody but their owner can say whether one is
+        disposable — and putting the least replaceable files in the app next to
+        a select-everything button is the wrong neighbourhood for them.
+      -->
+      <section class="panel" id="panel-media" role="tabpanel">
+        <div class="panel-bar" id="media-bar">
+          <div class="panel-actions">
+            <button class="btn btn-primary" id="media-scan" data-i18n="media.scan">Find photos &amp; video</button>
+            <button class="btn" id="media-cancel" hidden data-i18n="app.stop">Stop</button>
+            <button class="btn btn-sm" id="media-folders" data-i18n="media.whereToLook">Where to look…</button>
+            <span class="spacer"></span>
+            <span class="status" id="media-status" data-i18n="media.readyToScan">Ready to look through your photo folders.</span>
+          </div>
+
+          <div class="progress progress-walk" id="media-progress" hidden>
+            <span class="critters" aria-hidden="true"></span>
+            <span class="progress-track"><span class="progress-bar is-indeterminate"></span></span>
+          </div>
+
+          <!-- Filters, as chips that carry their own count and size. A chip
+               that does not say how much it holds is a chip you have to click
+               to find out about. -->
+          <div class="chips" id="media-chips" hidden></div>
+
+          <div class="panel-actions panel-actions-tight" id="media-toolbar" hidden>
+            <button class="btn btn-sm" id="media-select-filtered" data-i18n="media.selectShown">Select everything shown</button>
+            <button class="btn btn-sm" id="media-select-none" data-i18n="app.clearSelection">Clear selection</button>
+            <label class="field field-row">
+              <span data-i18n="media.sort">Sort</span>
+              <select id="media-sort">
+                <option value="size" data-i18n="media.sort.size">Largest first</option>
+                <option value="date" data-i18n="media.sort.date">Newest first</option>
+                <option value="dateAsc" data-i18n="media.sort.dateAsc">Oldest first</option>
+                <option value="name" data-i18n="media.sort.name">By name</option>
+                <option value="detail" data-i18n="media.sort.detail">Least detail first</option>
+              </select>
+            </label>
+            <span class="spacer"></span>
+            <span class="status" id="media-selection" data-i18n="app.nothingSelected">Nothing selected</span>
+            <button class="btn btn-danger btn-sm" id="media-delete" disabled data-i18n="app.moveSelected">Move selected to Recycle Bin</button>
+          </div>
+        </div>
+
+        <!-- Which folders are searched, and which are not. Collapsed by
+             default: it is the answer to "why is my photo missing", not
+             something to read every time. -->
+        <section class="card" id="media-roots-card" hidden>
+          <div class="card-head">
+            <h2 data-i18n="media.rootsTitle">Where this looks</h2>
+            <button class="btn btn-sm" id="media-roots-close" data-i18n="app.done">Done</button>
+          </div>
+          <p class="card-note" data-i18n="media.rootsNote">
+            Photo folders, not the whole drive. A drive-wide search finds tens of thousands of
+            interface icons from unpacked downloads and installed programs, and almost none of
+            them are anybody’s pictures. Add a folder if yours is somewhere else.
+          </p>
+          <div class="check-list" id="media-roots"></div>
+          <div class="panel-actions panel-actions-tight">
+            <button class="btn btn-sm" id="media-add-folder" data-i18n="media.addFolder">Add a folder…</button>
+          </div>
+          <ul class="path-list" id="media-excluded"></ul>
+        </section>
+
+        <div class="media-layout" id="media-layout" hidden>
+          <!-- The grid is virtualised: only the cells in view exist in the DOM.
+               A folder of twenty thousand photographs rendered in one pass is a
+               renderer that stops responding. -->
+          <div class="media-grid" id="media-grid" tabindex="0"
+            data-i18n-aria="media.gridLabel" aria-label="Photos and video" role="listbox" aria-multiselectable="true">
+            <div class="media-canvas" id="media-canvas"></div>
+          </div>
+
+          <!-- One picture's detail, including why it was filed where it was.
+               This app does not show a conclusion without its evidence. -->
+          <aside class="media-detail" id="media-detail" hidden></aside>
+        </div>
+
+        <p class="empty" id="media-empty" hidden></p>
       </section>
 
       <!-- ------------------------------------------------ duplicates -->
@@ -766,7 +857,8 @@
     <script src="sidebar.js"></script>
     <script src="critters.js"></script>
     <script src="app.js"></script>
-    <!-- All three share app.js's globals; must load after it. -->
+    <!-- All four share app.js's globals; must load after it. -->
+    <script src="media.js"></script>
     <script src="automatic.js"></script>
     <script src="trends.js"></script>
     <script src="updates.js"></script>

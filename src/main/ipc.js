@@ -1,10 +1,18 @@
 'use strict';
 
 const path = require('node:path');
-const { ipcMain, dialog, shell, app, BrowserWindow, nativeTheme } = require('electron');
+const { ipcMain, dialog, shell, app, BrowserWindow, nativeTheme, screen } = require('electron');
 
 const { scan } = require('./lib/scanner');
 const { findDuplicates } = require('./lib/duplicate');
+const { scanMedia } = require('./lib/media/scan');
+const { classifyOrigin } = require('./lib/media/origin');
+const { describeNature } = require('./lib/media/nature');
+const mediaRoots = require('./lib/media/roots');
+const cloud = require('./lib/media/cloud');
+const thumbs = require('./lib/media/thumbs');
+const perceptual = require('./lib/media/perceptual');
+const { MediaCache } = require('./lib/media/cache');
 const { planTrash, executeTrash, ESTIMATED_FILES_PER_SEC } = require('./lib/trash');
 const { CancelToken, formatBytes, formatDuration } = require('./lib/util');
 const { services } = require('./services');
@@ -22,7 +30,107 @@ const updater = require('./updater');
 const watcher = require('./watcher');
 
 // One in-flight job of each kind at a time; a new run supersedes the old one.
-const tokens = { scan: null, dupes: null, trash: null, auto: null };
+const tokens = { scan: null, dupes: null, trash: null, auto: null, media: null, thumbs: null };
+
+/**
+ * The size and time of every media file the last scan saw, by path.
+ *
+ * Kept because the cache key is `path | size | mtime` and the window does not
+ * carry those around -- it asks for thumbnails by path. Without this the
+ * analysis cache could not be consulted, and every scroll back over a folder
+ * would decode it again.
+ *
+ * Replaced wholesale by each scan rather than added to, so a file that has been
+ * deleted or moved stops being remembered.
+ */
+let mediaStats = new Map();
+
+/** Loaded once and kept: it is read on every thumbnail request. */
+let analysisCache = null;
+async function mediaAnalysisCache() {
+  if (!analysisCache) {
+    analysisCache = await new MediaCache(path.join(app.getPath('userData'), 'media-analysis.json')).load();
+  }
+  return analysisCache;
+}
+
+/**
+ * The resolutions of the screens attached to this machine, in real pixels.
+ *
+ * `size` is in device-independent pixels, so on a display at 150% scaling it
+ * reports 1280x720 for a screen that takes 1920x1080 screenshots. Multiplying
+ * by the scale factor is what makes "this image is exactly the size of your
+ * screen" true rather than nearly true.
+ */
+function displayResolutions() {
+  try {
+    return screen.getAllDisplays().map((d) => ({
+      width: Math.round(d.size.width * d.scaleFactor),
+      height: Math.round(d.size.height * d.scaleFactor),
+    }));
+  } catch {
+    // Before `app.whenReady`, or on a machine with no display at all. An empty
+    // list is handled everywhere: it costs the screenshot rule one signal.
+    return [];
+  }
+}
+
+/**
+ * A probe record, classified and cut down to what the window draws.
+ *
+ * The full record carries fields nothing on screen reads -- block counts, moov
+ * hop counts, EXIF exposure times -- and fifty thousand of them crossing the
+ * IPC boundary is a payload worth trimming. Everything kept here is either
+ * displayed or filtered on.
+ */
+function forDisplay(record, context) {
+  const origin = classifyOrigin(record, context);
+  const nature = describeNature(record, context);
+
+  // The year a photograph belongs to, in the order the user would mean it:
+  // when it was taken, else when it was recorded, else when the file was last
+  // written. A file copied off a camera has today's mtime and a capture date
+  // from years ago, and filing it under this year would be wrong.
+  const at = record.takenAt || record.recordedAt || record.mtimeMs;
+  mediaStats.set(record.path, {
+    path: record.path,
+    size: record.size,
+    mtimeMs: record.mtimeMs,
+    aspect: record.aspect || 0,
+  });
+
+  return {
+    path: record.path,
+    name: record.name,
+    ext: record.ext,
+    size: record.size,
+    kind: record.kind,
+    format: record.format || null,
+    width: record.width || 0,
+    height: record.height || 0,
+    megapixels: record.megapixels || 0,
+    bytesPerPixel: record.bytesPerPixel || 0,
+    aspect: record.aspect || 0,
+    camera: record.camera || null,
+    lens: record.lens || null,
+    software: record.software || null,
+    durationSec: record.durationSec ?? null,
+    bitrateKbps: record.bitrateKbps ?? null,
+    title: record.title || null,
+    cloudService: record.cloudService || null,
+    dehydrated: Boolean(record.dehydrated),
+    unread: record.unread || null,
+    takenAt: record.takenAt || null,
+    mtimeMs: record.mtimeMs,
+    at,
+    year: at ? new Date(at).getFullYear() : null,
+    origin: origin.origin,
+    app: origin.app,
+    strength: origin.strength,
+    why: origin.evidence,
+    traits: nature.traits,
+  };
+}
 
 /**
  * What the launch-time reconciliation found, held until a window asks.
@@ -209,6 +317,8 @@ function register() {
                 'This frees {size}. Items stay recoverable from the Recycle Bin.',
                 { size: formatBytes(planned.totalBytes) }
               ) +
+              binNote(options) +
+              cloudNote(planned) +
               skippedNote(planned) +
               (slow
                 ? `\n\nWindows moves about ${ESTIMATED_FILES_PER_SEC} files per second, so this will take ` +
@@ -714,6 +824,156 @@ function register() {
     })
   );
 
+  /* ---- photos and video -------------------------------------------------- */
+
+  /**
+   * Where the scan can look, and which of those are on by default.
+   *
+   * Sent rather than assumed by the window, because only this process knows
+   * where the known folders actually are -- on the machine this was written on
+   * `Pictures` resolves to `OneDrive\Hình ảnh`, and no amount of guessing in
+   * the renderer would find it.
+   */
+  ipcMain.handle('media:roots', () =>
+    guard(async () => {
+      const list = mediaRoots.candidateRoots(
+        {
+          home: app.getPath('home'),
+          pictures: safePath('pictures'),
+          videos: safePath('videos'),
+          downloads: safePath('downloads'),
+        },
+        (p) => require('node:fs').existsSync(p)
+      );
+
+      return list.map((entry) => ({
+        ...entry,
+        // So the chip can say "these are your OneDrive photos" before the user
+        // has scanned anything and found out the hard way.
+        cloudService: cloud.serviceForPath(entry.path),
+      }));
+    })
+  );
+
+  ipcMain.handle('media:scan', (event, roots, options = {}) =>
+    guard(async () => {
+      if (tokens.media) tokens.media.cancel();
+      const token = new CancelToken();
+      tokens.media = token;
+
+      const send = (channel, payload) => {
+        if (!event.sender.isDestroyed()) event.sender.send(channel, payload);
+      };
+
+      const context = { displays: displayResolutions() };
+      // Replaced rather than added to: a file that has been deleted or moved
+      // since the last scan must stop being remembered, or a thumbnail request
+      // would look it up under a size and time it no longer has.
+      mediaStats = new Map();
+
+      try {
+        const result = await scanMedia(
+          roots,
+          { ...options, cachePath: path.join(app.getPath('userData'), 'media-cache.json') },
+          {
+            token,
+            onProgress: (p) => send('media:progress', p),
+            // Batches go over as they are read, so the grid starts filling
+            // while the scan is still running rather than after it.
+            onBatch: (batch) => send('media:batch', batch.map((r) => forDisplay(r, context))),
+          }
+        );
+
+        return {
+          ...result,
+          files: result.files.map((r) => forDisplay(r, context)),
+          displays: context.displays,
+        };
+      } finally {
+        if (tokens.media === token) tokens.media = null;
+      }
+    })
+  );
+
+  ipcMain.handle('media:cancel', () => {
+    if (tokens.media) tokens.media.cancel();
+    return { ok: true };
+  });
+
+  /**
+   * Thumbnails for what is on screen.
+   *
+   * Asked for a screenful at a time by the grid as cells scroll into view, and
+   * never for the whole library: drawing one costs a full-resolution decode
+   * (measured at 71 ms a file) and no amount of concurrency changes that, so
+   * this is the one part of the subsystem that must stay lazy.
+   *
+   * The numbers taken from the pixels are cached; the pictures are not.
+   */
+  ipcMain.handle('media:thumbs', (event, paths, options = {}) =>
+    guard(async () => {
+      const list = (Array.isArray(paths) ? paths : [paths]).filter((p) => typeof p === 'string');
+      if (list.length === 0) return {};
+
+      // A new request supersedes the old one: the user has scrolled, and the
+      // cells the previous request was drawing are no longer on screen.
+      if (tokens.thumbs) tokens.thumbs.cancel();
+      const token = new CancelToken();
+      tokens.thumbs = token;
+
+      const cache = await mediaAnalysisCache();
+      const keyOf = (filePath) => {
+        const known = mediaStats.get(filePath);
+        return known ? MediaCache.keyOf(known) : null;
+      };
+
+      try {
+        const drawn = await thumbs.thumbnails(list, { cache, keyOf, ...options }, { token });
+        await cache.save();
+
+        const out = {};
+        for (const [filePath, thumb] of drawn) out[filePath] = thumb;
+        return out;
+      } finally {
+        if (tokens.thumbs === token) tokens.thumbs = null;
+      }
+    })
+  );
+
+  /**
+   * Pictures that are the same picture.
+   *
+   * Runs over whatever has been measured so far rather than forcing the rest to
+   * be measured: the answer improves as the user scrolls, and the alternative
+   * is a progress bar in front of a feature nobody asked to wait for.
+   */
+  ipcMain.handle('media:similar', () =>
+    guard(async () => {
+      const cache = await mediaAnalysisCache();
+      const items = [];
+
+      for (const [filePath, record] of mediaStats) {
+        const measured = cache.map.get(MediaCache.keyOf(record));
+        if (!measured || !measured.hash) continue;
+        items.push({
+          path: filePath,
+          hash: measured.hash,
+          aspect: record.aspect || 0,
+          size: record.size,
+          mtimeMs: record.mtimeMs,
+        });
+      }
+
+      const groups = perceptual.groupSimilar(items);
+      return {
+        groups,
+        measured: items.length,
+        // The honest denominator: how much of the library has been looked at.
+        known: mediaStats.size,
+      };
+    })
+  );
+
   /* ---- shell helpers --------------------------------------------------- */
 
   ipcMain.handle('shell:reveal', (event, target) =>
@@ -926,6 +1186,68 @@ async function confirmAutoDelete(win, selection, settings) {
 }
 
 /**
+ * The warning that matters most, in front of the one kind of file the Recycle
+ * Bin does not protect.
+ *
+ * Everywhere else in this app, "it goes to the Recycle Bin" is the whole safety
+ * story: nothing is permanent, everything is one restore away. For a file
+ * inside a sync folder that is not true. Deleting it here tells OneDrive or
+ * Dropbox to delete it on every device, and this machine's Recycle Bin has no
+ * say in what the other ones do. Somebody who has learned that this app is safe
+ * because everything is recoverable is exactly the person who needs telling.
+ *
+ * Computed here rather than passed in by the window, because the window is not
+ * the authority on where a file lives and this is not a warning to get wrong.
+ *
+ * It runs for *every* delete, not only from the photo screen: a synced file
+ * ticked in the cleanup list has precisely the same problem.
+ */
+function cloudNote(planned) {
+  const services = new Map();
+  for (const item of planned.plan) {
+    const service = cloud.serviceForPath(item.path);
+    if (service) services.set(service, (services.get(service) || 0) + 1);
+  }
+  if (services.size === 0) return '';
+
+  const total = [...services.values()].reduce((n, v) => n + v, 0);
+  const named = [...services.keys()].join(', ');
+
+  return (
+    '\n\n' +
+    t(
+      'dialog.confirmDelete.synced',
+      '{n} of these are in a folder synchronised with {service}. Deleting them here deletes them ' +
+        'on every device that syncs it, and this computer’s Recycle Bin cannot bring those copies back.',
+      { n: total.toLocaleString(language.current()), service: named }
+    )
+  );
+}
+
+/**
+ * The sentence the rest of the app already insists on, in front of the delete
+ * that most needs it.
+ *
+ * The line above this one says "This frees {size}", and for a move to the
+ * Recycle Bin that is not true until the bin is emptied -- the bin is on the
+ * same disk. The Automatic tab says so loudly in `auto.binNote` and the
+ * scheduled run's notification says it too. Photographs are where somebody is
+ * most likely to be deleting to make room, so the correction belongs here.
+ *
+ * [Inference] It is added for the photo screen only, rather than to every
+ * delete, because the existing wording is what the other tabs have always shown
+ * and changing it is a decision about those tabs rather than about this work.
+ */
+function binNote(options) {
+  if (options.context !== 'media') return '';
+  return `\n\n${t(
+    'dialog.confirmDelete.binNote',
+    'Moving them to the Recycle Bin does not free any disk space yet — the bin is on the same drive. ' +
+      'Nothing is actually reclaimed until it is emptied.'
+  )}`;
+}
+
+/**
  * Files the plan deliberately left out. Stating this in the confirmation is
  * what replaces Windows' per-file "administrator permission" prompt: the count
  * is known before the run starts, so nothing interrupts it half way through.
@@ -965,6 +1287,8 @@ function cancelAll() {
   if (tokens.scan) tokens.scan.cancel();
   if (tokens.dupes) tokens.dupes.cancel();
   if (tokens.trash) tokens.trash.cancel();
+  if (tokens.media) tokens.media.cancel();
+  if (tokens.thumbs) tokens.thumbs.cancel();
 }
 
 module.exports = { register, cancelAll, noteReconciliation };

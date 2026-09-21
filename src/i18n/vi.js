@@ -861,5 +861,217 @@
     'tray.open': 'Mở CleanDrive',
     'tray.snoozeFor': 'Tạm ngưng cảnh báo trong {n} phút',
     'tray.quit': 'Thoát',
+
+    /* ---- photos and video: where the scan looks --------------------------- */
+    'media.root.pictures': 'Thư mục Hình ảnh của bạn',
+    'media.root.videos': 'Thư mục Video của bạn',
+    'media.root.cameraRoll': 'Nơi Windows để ảnh nhập từ máy ảnh hoặc điện thoại',
+    'media.root.screenshots': 'Nơi phím chụp màn hình của Windows lưu ảnh',
+    'media.root.savedPictures': 'Ảnh được lưu lại từ các ứng dụng',
+    'media.root.captures': 'Nơi Game Bar của Windows quay lại màn hình chơi game',
+    'media.root.crossDevice': 'Ảnh mà Liên kết điện thoại chép sang từ điện thoại',
+    'media.root.zalo': 'Tệp nhận được trong Zalo',
+    'media.root.telegram': 'Ảnh và video Telegram Desktop lưu tạm',
+    'media.root.whatsapp': 'Ảnh và video nhận được trong WhatsApp',
+    'media.root.viber': 'Tệp nhận được trong Viber',
+    'media.root.downloads':
+      'Nơi các tệp tải về được lưu — thường là nguồn ảnh không phải của bạn nhiều nhất',
+
+    /* ---- photos and video: folders the scan refuses ----------------------- */
+    'media.skip.noise': 'Chứa dữ liệu của phần mềm, không phải ảnh chụp',
+    'media.skip.program': 'Thuộc về một ứng dụng đã cài',
+    'media.skip.assetDump':
+      '{n} ảnh ở đây và gần như tất cả đều rất nhỏ — đây là hình hoạ của một phần mềm, không phải album ảnh',
+
+    /* ---- photos and video: why a file was filed where it was --------------
+     *
+     * These are the sentences under a verdict, and they are written to be read
+     * as a list of facts rather than as a conclusion — the Vietnamese keeps the
+     * same grammar so several of them stacked still read as one argument.
+     */
+    'media.why.camera': 'Tệp tự khai là do {camera} chụp',
+    'media.why.takenAt': 'và mang sẵn ngày chụp của chính nó',
+    'media.why.lens': 'và có ghi ống kính đã dùng',
+    'media.why.alsoEdited': 'và về sau được {software} lưu lại',
+    'media.why.recorderSoftware': 'Do {software} tạo ra, đây là phần mềm quay màn hình',
+    'media.why.editorSoftware': 'Được {software} lưu lại',
+    'media.why.folder': 'Nằm trong thư mục tên “{folder}”',
+    'media.why.appFolder': 'là nơi {app} để những gì nhận được',
+    'media.why.downloadedFrom': 'Windows ghi lại rằng tệp này được tải về từ {host}',
+    'media.why.messagingHost': 'tức là {app}',
+    'media.why.noExif': 'và hoàn toàn không có thông tin máy ảnh nào',
+    'media.why.cameraNameNoExif':
+      'nhưng thông tin máy ảnh đã bị gỡ sạch — đúng như khi một tấm ảnh được gửi qua ứng dụng nhắn tin',
+    'media.why.windowTitle': 'Có ghi tên cửa sổ, “{title}” — máy ảnh thì không có cửa sổ',
+    'media.why.cloudOnly': 'Không có gì trong tệp cho biết nó từ đâu ra; nó đến qua {service}',
+    'media.why.nothing': 'Không có gì trong tệp lẫn trong tên tệp cho biết nó từ đâu ra',
+    'media.why.messagingName': 'Tên tệp theo đúng mẫu của {app}, dạng {what}',
+    'media.why.screenshotName': 'Tên tệp bắt đầu bằng “{what}”, đúng cách các công cụ chụp màn hình đặt tên',
+    'media.why.cameraName': 'Tên tệp theo quy ước máy ảnh dạng {what}',
+    'media.why.exactScreen': 'và đúng bằng {w}×{h}, tức là kích thước màn hình này',
+    'media.why.exactScreenLead': 'Đúng bằng {w}×{h}, tức là kích thước màn hình này',
+    'media.why.windowWidth':
+      'và rộng đúng bằng màn hình này ({w}px) nhưng thấp hơn, đúng hình dạng của một cửa sổ được chụp lại',
+    'media.why.windowWidthLead':
+      'Rộng đúng bằng màn hình này ({w}px) nhưng thấp hơn, đúng hình dạng của một cửa sổ được chụp lại',
+
+    /* ---- photos and video: what a file actually is ------------------------ */
+    'media.trait.mislabelled': 'Mang đuôi .{ext} nhưng nội dung thật là {actual}',
+    'media.trait.tiny': 'Chỉ {kb} KB — cỡ một biểu tượng hay một emoji, không phải ảnh chụp',
+    'media.trait.big': 'Thuộc nhóm tệp nặng nhất ở đây',
+    'media.trait.thumbnail': '{w}×{h} — quá nhỏ để từng là ảnh chụp của ai',
+    'media.trait.highres': '{mp} megapixel — độ phân giải đầy đủ của máy ảnh',
+    'media.trait.lowres': 'Chỉ {w}×{h} — nhỏ hơn cả màn hình điện thoại',
+    'media.trait.wide': 'Tỉ lệ {aspect}:1, rộng hơn là cao — ảnh toàn cảnh, hoặc một dải cắt ra từ màn hình',
+    'media.trait.tall':
+      'Tỉ lệ {aspect}:1, cao hơn là rộng — thường là ảnh chụp màn hình cuộn dài của một trang hay một cuộc trò chuyện',
+    'media.trait.rotated': 'Được lưu nằm ngang kèm thẻ đánh dấu chiều đúng của ảnh',
+    'media.trait.cloud': 'Đang đồng bộ với {service} — xoá ở đây là xoá trên mọi thiết bị',
+    'media.trait.onlineOnly':
+      'Chỉ lưu trên mạng — nội dung không nằm trên đĩa này, nên xoá đi cũng không giải phóng được gì ở đây',
+    'media.trait.located': 'Có ghi lại nơi chụp',
+    'media.trait.broken.empty': 'Không có byte nào — tệp vẫn còn đó nhưng bên trong rỗng',
+    'media.trait.broken.unrecognised':
+      'Mang đuôi .{ext} nhưng nội dung không khớp định dạng ảnh hay video nào — thường là một lần tải về hỏng',
+    'media.trait.broken.dehydrated': 'Chỉ lưu trên mạng, nên nội dung chưa được đọc',
+    'media.trait.broken.busy': 'Một chương trình khác đang mở tệp này',
+    'media.trait.broken.unreadable': 'Không đọc được',
+    'media.trait.screenSized': 'Đúng {w}×{h}, bằng kích thước màn hình này',
+    'media.trait.recompressed.app':
+      'Bị thu về {edge}px và gỡ sạch thông tin máy ảnh — đúng dạng {app} trả lại cho một tấm ảnh nó chuyển tiếp, ở mức {bpp} byte mỗi điểm ảnh',
+    'media.trait.recompressed.generic':
+      'Bị thu về đúng {edge}px và không còn thông tin máy ảnh, ở mức {bpp} byte mỗi điểm ảnh — một tấm ảnh đã đi qua đâu đó',
+    'media.trait.hardCompressed':
+      '{bpp} byte mỗi điểm ảnh — nén tay tới mức nhìn ra được. Ảnh có nhiều mảng phẳng vốn nén tốt như vậy một cách lành mạnh, nên hãy xem trước khi quyết định',
+    'media.trait.generous': '{bpp} byte mỗi điểm ảnh — gần như không nén, nên nặng so với kích thước của nó',
+    'media.trait.brief': 'Chỉ dài {n} giây',
+    'media.trait.long': 'Dài {n} phút',
+    'media.trait.noMetadata': 'Vỏ chứa của tệp không mang thời lượng lẫn độ phân giải',
+    'media.trait.uhd': '{w}×{h} — 4K',
+    'media.trait.lowBitrate': '{n} kbps — nén rất mạnh so với dung lượng',
+    'media.trait.silent': 'Hoàn toàn không có tiếng',
+
+    /* ---- photos and video: the screen ------------------------------------- */
+    'app.tab.media': 'Ảnh & video',
+    'app.done': 'Xong',
+    'media.scan': 'Tìm ảnh & video',
+    'media.whereToLook': 'Tìm ở đâu…',
+    'media.readyToScan': 'Sẵn sàng tìm trong các thư mục ảnh của bạn.',
+    'media.selectShown': 'Chọn tất cả đang hiện',
+    'media.gridLabel': 'Ảnh và video',
+    'media.sort': 'Sắp xếp',
+    'media.sort.size': 'Nặng nhất trước',
+    'media.sort.date': 'Mới nhất trước',
+    'media.sort.dateAsc': 'Cũ nhất trước',
+    'media.sort.name': 'Theo tên',
+    'media.sort.detail': 'Ít chi tiết nhất trước',
+    'media.rootsTitle': 'Chỗ này tìm ở đâu',
+    'media.rootsNote':
+      'Các thư mục ảnh, không phải cả ổ đĩa. Quét cả ổ sẽ lôi về hàng chục nghìn biểu tượng giao diện ' +
+      'từ các tệp giải nén và phần mềm đã cài, mà gần như không cái nào là ảnh của bạn. Nếu ảnh của bạn ' +
+      'ở chỗ khác thì thêm thư mục đó vào.',
+    'media.addFolder': 'Thêm một thư mục…',
+    'media.label.folders': 'Thư mục ảnh',
+    'media.label.scan': 'Lần quét ảnh',
+    'media.chip.origin': 'Từ đâu ra',
+    'media.chip.what': 'Là loại gì',
+    'media.chip.year': 'Năm',
+    'media.noPreview': 'không xem trước được',
+    'media.videoShort': 'video',
+    'media.cloudBadge': 'Đang đồng bộ với {service} — xoá ở đây là xoá trên mọi thiết bị',
+    'media.cloudRoot': 'Thư mục này đồng bộ với {service}',
+    'media.selectedSynced': '{n} mục đang đồng bộ đám mây',
+    'media.progress.walking': 'Đang duyệt thư mục… đã thấy {n} ảnh và video',
+    'media.progress.reading': 'Đang đọc {done} trên {total}…',
+    'media.noFolders': 'Chưa tích thư mục nào — mở “Tìm ở đâu” và chọn ít nhất một cái.',
+    'media.failed': 'Lần quét không hoàn tất được.',
+    'media.found': 'Tìm thấy {n} ảnh và video · {size}.',
+    'media.hiddenAssets': '{n} tệp nữa là hình hoạ của phần mềm nên không hiển thị.',
+    'media.onlineOnly':
+      '{n} tệp chỉ lưu trên mạng nên không được mở ra, tức là không có gì bị tải về.',
+    'media.unreadable': '{n} tệp không đọc được.',
+    'media.empty':
+      'Không có ảnh hay video nào trong các thư mục đang tích. Mở “Tìm ở đâu” để thêm thư mục.',
+    'media.excludedTitle': 'Những thư mục đã không tìm tới',
+
+    /*
+     * How sure the app is.
+     *
+     * Kept as four clearly different words rather than four shades of the same
+     * one: the whole reason this is on screen is so that "a guess" cannot be
+     * mistaken for "certain" by somebody skimming before they delete.
+     */
+    'media.strength.certain': 'chắc chắn',
+    'media.strength.strong': 'căn cứ vững',
+    'media.strength.likely': 'nhiều khả năng',
+    'media.strength.guess': 'chỉ là phỏng đoán',
+
+    /* ---- photos and video: the filter chips -------------------------------
+     *
+     * Reached through a table in `media.js` rather than written at the call
+     * site, so `test-i18n.js` knows about them through DYNAMIC_PREFIXES.
+     */
+    'media.origin.camera': 'Chụp từ máy ảnh',
+    'media.origin.screenshot': 'Ảnh chụp màn hình',
+    'media.origin.messaging': 'Nhận qua tin nhắn',
+    'media.origin.download': 'Tải về',
+    'media.origin.edited': 'Do phần mềm tạo hoặc chỉnh',
+    'media.origin.screenrecord': 'Quay màn hình',
+    'media.origin.gamecapture': 'Ghi hình game',
+    'media.origin.unknown': 'Không rõ từ đâu',
+
+    'media.trait.label.broken': 'Hỏng hoặc rỗng',
+    'media.trait.label.mislabelled': 'Sai đuôi tệp',
+    'media.trait.label.tiny': 'Cỡ biểu tượng',
+    'media.trait.label.thumbnail': 'Cỡ ảnh thu nhỏ',
+    'media.trait.label.big': 'Tệp nặng',
+    'media.trait.label.highres': 'Độ phân giải đầy đủ',
+    'media.trait.label.lowres': 'Độ phân giải thấp',
+    'media.trait.label.wide': 'Rất rộng',
+    'media.trait.label.tall': 'Rất cao',
+    'media.trait.label.rotated': 'Lưu nằm ngang',
+    'media.trait.label.screenSized': 'Bằng cỡ màn hình',
+    'media.trait.label.recompressed': 'Đã đi qua app nhắn tin',
+    'media.trait.label.hardCompressed': 'Nén tay',
+    'media.trait.label.generous': 'Gần như không nén',
+    'media.trait.label.cloud': 'Đồng bộ đám mây',
+    'media.trait.label.onlineOnly': 'Chỉ lưu trên mạng',
+    'media.trait.label.located': 'Có ghi vị trí',
+    'media.trait.label.brief': 'Rất ngắn',
+    'media.trait.label.long': 'Dài',
+    'media.trait.label.uhd': '4K',
+    'media.trait.label.lowBitrate': 'Bitrate thấp',
+    'media.trait.label.silent': 'Không tiếng',
+    'media.trait.label.noMetadata': 'Không có metadata',
+
+    /* ---- photos and video: the detail panel -------------------------------- */
+    'media.fact.size': 'Dung lượng',
+    'media.fact.dimensions': 'Kích thước',
+    'media.fact.megapixels': 'Megapixel',
+    'media.fact.duration': 'Thời lượng',
+    'media.fact.bitrate': 'Bitrate',
+    'media.fact.format': 'Định dạng',
+    'media.fact.camera': 'Máy ảnh',
+    'media.fact.lens': 'Ống kính',
+    'media.fact.software': 'Phần mềm',
+    'media.fact.taken': 'Ngày chụp',
+    'media.fact.modified': 'Sửa lần cuối',
+    'media.fact.bpp': 'Byte mỗi điểm ảnh',
+    'media.fact.cloud': 'Đồng bộ với',
+    'media.fact.detail': 'Độ chi tiết',
+
+    /* ---- the two warnings in front of a delete -----------------------------
+     *
+     * The first is the most important sentence in this whole subsystem: for a
+     * synced file the Recycle Bin is not the safety net the rest of the app has
+     * taught the user to rely on. The Vietnamese has to be as blunt as the
+     * English, not politer.
+     */
+    'dialog.confirmDelete.synced':
+      '{n} mục trong số này nằm trong thư mục đang đồng bộ với {service}. Xoá ở đây là xoá chúng trên ' +
+      'mọi thiết bị đang đồng bộ, và Thùng rác của máy này không lấy lại được những bản đó.',
+    'dialog.confirmDelete.binNote':
+      'Chuyển vào Thùng rác vẫn chưa giải phóng được dung lượng nào — Thùng rác nằm trên cùng ổ đĩa. ' +
+      'Chưa có gì thực sự được thu hồi cho tới khi dọn Thùng rác.',
   };
 });

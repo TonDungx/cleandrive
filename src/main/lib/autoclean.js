@@ -5,6 +5,7 @@ const path = require('node:path');
 const { execFile } = require('node:child_process');
 
 const { scan } = require('./scanner');
+const { CATEGORIES } = require('./advisor');
 const { planTrash, executeTrash } = require('./trash');
 const { fullestVolume } = require('./disk');
 const { findUserBins, purgeRecorded } = require('./recyclebin');
@@ -121,6 +122,22 @@ function selectFiles(cleanup, settings, now = Date.now()) {
     // this is the gate that actually deletes, so it re-checks the verdict here
     // rather than trusting a list that reached it through a JSON file.
     if (group.verdict !== 'safe' || !wanted.has(group.category)) {
+      skipped.category += group.count || 0;
+      continue;
+    }
+
+    // And the category name itself is checked against the advisor's own table,
+    // rather than only the verdict attached to it.
+    //
+    // Until this was written, a group could name any category at all and get
+    // through on the strength of `verdict: 'safe'` and a matching entry in the
+    // settings file. Nothing produced such a group -- the advisor's table is
+    // fixed and every category in it is one of these -- so the guarantee held
+    // by arrangement rather than by construction. That is a poor way to hold a
+    // guarantee that photographs can never be deleted by a task running at two
+    // in the morning, so it is now checked where the deleting happens.
+    const known = CATEGORIES[group.category];
+    if (!known || known.verdict !== 'safe') {
       skipped.category += group.count || 0;
       continue;
     }

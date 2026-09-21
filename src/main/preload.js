@@ -23,6 +23,13 @@ const api = {
   reveal: (target) => ipcRenderer.invoke('shell:reveal', target),
   open: (target) => ipcRenderer.invoke('shell:open', target),
 
+  /* photos and video */
+  mediaRoots: () => ipcRenderer.invoke('media:roots'),
+  scanMedia: (roots, options) => ipcRenderer.invoke('media:scan', roots, options),
+  cancelMediaScan: () => ipcRenderer.invoke('media:cancel'),
+  mediaThumbs: (paths, options) => ipcRenderer.invoke('media:thumbs', paths, options),
+  mediaSimilar: () => ipcRenderer.invoke('media:similar'),
+
   /* automatic cleanup */
   getSettings: () => ipcRenderer.invoke('settings:get'),
   saveSettings: (next) => ipcRenderer.invoke('settings:save', next),
@@ -67,6 +74,9 @@ const api = {
   onDuplicateProgress: (cb) => subscribe('dupes:progress', cb),
   onTrashProgress: (cb) => subscribe('trash:progress', cb),
   onAutoCleanProgress: (cb) => subscribe('autoclean:progress', cb),
+  onMediaProgress: (cb) => subscribe('media:progress', cb),
+  /** Files as they are read, so the grid fills while the scan is still running. */
+  onMediaBatch: (cb) => subscribe('media:batch', cb),
   onUpdateState: (cb) => subscribe('update:state', cb),
 
   /** Fires when a background run rewrites settings, the log or the history. */

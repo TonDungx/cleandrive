@@ -81,6 +81,41 @@ function file(p, size, mtimeMs = OLD, atimeMs = 0) {
       picked.files.length === 0, String(picked.files.length));
   }
 
+  console.log('\nautoclean: photographs are out of reach\n');
+
+  {
+    // The rule the photo subsystem was built under: an unattended run must
+    // never touch a picture. Structurally it already cannot -- an unattended
+    // run acts on `cleanup.groups`, which come from the advisor, and the media
+    // scan never goes near the advisor. But "it cannot happen because of how
+    // the code is arranged" is exactly the kind of guarantee that stops being
+    // true when somebody rearranges the code, so it is asserted rather than
+    // relied upon.
+    const { SAFE_CATEGORIES } = require('../src/main/lib/settings');
+    const mediaish = ['photo', 'photos', 'video', 'media', 'picture', 'screenshot', 'camera'];
+    check('no media category is on the unattended allowlist',
+      !SAFE_CATEGORIES.some((c) => mediaish.includes(c)), SAFE_CATEGORIES.join(', '));
+
+    // And if one were somehow named in a settings file, `coerceSettings`
+    // refuses it before it reaches the run.
+    const smuggled = coerceSettings({ autoClean: { categories: ['cache', 'photos', 'video'] } });
+    check('a settings file naming a photo category has it stripped out',
+      !smuggled.settings.autoClean.categories.includes('photos') &&
+        !smuggled.settings.autoClean.categories.includes('video'),
+      smuggled.settings.autoClean.categories.join(', '));
+    check('and the rest of the list survives',
+      smuggled.settings.autoClean.categories.includes('cache'));
+
+    // The last line of defence: even a group that reached `selectFiles` with a
+    // media-sounding category and a verdict of 'safe' is refused, because the
+    // category is not one the user enabled and cannot become one.
+    const cleanup = cleanupOf([group('photos', 'safe', [file(path.join(root, 'wedding.jpg'), 4e6)])]);
+    const forced = { ...S().autoClean, categories: ['cache', 'photos'] };
+    const picked = selectFiles(cleanup, forced, NOW);
+    check('a photo group is refused even with its category forced on',
+      picked.files.length === 0, `${picked.files.length} picked`);
+  }
+
   console.log('\nautoclean: the age gate\n');
 
   {

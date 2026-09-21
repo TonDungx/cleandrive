@@ -62,6 +62,94 @@ const check = (label, cond, detail = '') => {
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
+/**
+ * A small photo library, written byte by byte.
+ *
+ * The repository holds no binary assets, and a real photograph committed as a
+ * fixture would carry somebody's camera serial number into the git history for
+ * ever. These are real files of real formats with real headers -- enough for
+ * the scan to read dimensions from and for the classifier to reach a verdict
+ * about -- assembled here and deleted afterwards.
+ */
+/**
+ * Enough files that the grid has to virtualise.
+ *
+ * The first version of this built nine, which was enough to check the
+ * classifier and useless for checking the grid: nine cells fit on screen, so
+ * "only what is on screen is drawn" was trivially false and the assertion
+ * failed for the right reason. The bulk below are a few hundred bytes each.
+ */
+const MEDIA_FIXTURE_FILLER = 160;
+const MEDIA_FIXTURE_COUNT = 9 + MEDIA_FIXTURE_FILLER;
+
+function buildMediaFixtures(root) {
+  const u16be = (n) => { const b = Buffer.alloc(2); b.writeUInt16BE(n); return b; };
+  const u32be = (n) => { const b = Buffer.alloc(4); b.writeUInt32BE(n); return b; };
+
+  const png = (width, height, padTo) => {
+    const head = Buffer.concat([
+      Buffer.from([0x89]), Buffer.from('PNG\r\n\x1a\n', 'latin1'),
+      u32be(13), Buffer.from('IHDR', 'latin1'),
+      u32be(width), u32be(height), Buffer.from([8, 6, 0, 0, 0]), u32be(0),
+    ]);
+    const pad = Math.max(0, padTo - head.length - 12);
+    return Buffer.concat([head, u32be(pad), Buffer.from('tEXt', 'latin1'), Buffer.alloc(pad), u32be(0)]);
+  };
+
+  const jpeg = (width, height, padTo) => {
+    const seg = (marker, body) =>
+      Buffer.concat([Buffer.from([0xff, marker]), u16be(body.length + 2), body]);
+    const head = Buffer.concat([
+      Buffer.from([0xff, 0xd8]),
+      seg(0xc0, Buffer.concat([
+        Buffer.from([8]), u16be(height), u16be(width), Buffer.from([3]),
+        Buffer.from([1, 0x22, 0, 2, 0x11, 1, 3, 0x11, 1]),
+      ])),
+      seg(0xda, Buffer.from([3, 1, 0, 2, 0x11, 3, 0x11, 0, 63, 0])),
+    ]);
+    const tail = Buffer.from([0xff, 0xd9]);
+    return Buffer.concat([head, Buffer.alloc(Math.max(0, padTo - head.length - tail.length), 0x7f), tail]);
+  };
+
+  const write = (relative, bytes) => {
+    const full = path.join(root, relative);
+    fs.mkdirSync(path.dirname(full), { recursive: true });
+    fs.writeFileSync(full, bytes);
+  };
+
+  // A folder name the classifier knows, so these come back as camera photos.
+  write('Camera Roll/IMG_0001.jpg', jpeg(4032, 3024, 320 * 1024));
+  write('Camera Roll/IMG_0002.jpg', jpeg(4032, 3024, 300 * 1024));
+  write('Camera Roll/DSC_4410.jpg', jpeg(6000, 4000, 480 * 1024));
+
+  // Named the way every screenshot tool names them.
+  write('Screenshots/Screenshot 2025-06-23 163709.png', png(1920, 1080, 260 * 1024));
+  write('Screenshots/Screenshot 2025-06-24 161310.png', png(1920, 1080, 240 * 1024));
+
+  // The pattern nothing else on earth writes.
+  write('Sent/IMG-20240817-WA0042.jpg', jpeg(1600, 1200, 180 * 1024));
+
+  // Things the "what it is" axis has an opinion about.
+  write('Odds/tiny-icon.png', png(32, 32, 1400));
+  write('Odds/actually-a-png.jpg', png(800, 600, 40 * 1024));
+  write('Odds/broken.png', Buffer.alloc(0));
+
+  // Not media, and must not be counted as such.
+  write('Odds/notes.txt', Buffer.from('not a photograph'));
+
+  // The bulk, so the grid has more rows than fit on screen.
+  //
+  // Sized like photographs rather than like icons, and that is not padding for
+  // its own sake. A first attempt wrote 240 files of six hundred bytes into one
+  // folder, and the scan correctly filed the lot as a program's artwork and hid
+  // them -- which is exactly what that rule is for, and exactly what a folder
+  // of 240 tiny images is. The rule is judged on the median size of a folder,
+  // so a fixture standing in for an album has to look like one.
+  for (let i = 0; i < MEDIA_FIXTURE_FILLER; i++) {
+    write(`Album/DSC_${2000 + i}.png`, png(64, 48, 28 * 1024 + i));
+  }
+}
+
 /** Poll `fn` in the renderer until it returns truthy or the deadline passes. */
 async function until(win, expression, timeoutMs = 120000) {
   const deadline = Date.now() + timeoutMs;
@@ -382,6 +470,156 @@ app.whenReady().then(async () => {
       `);
       check('clear selection works', cleared.checked === 0 && cleared.disabled);
     }
+
+    /* -- photos and video ------------------------------------------------ */
+    //
+    // Driven against a tree this harness builds, not against whatever the
+    // tester's Pictures folder happens to hold: the assertions below are about
+    // counts and shapes, and a test whose result depends on the person running
+    // it is not a test. The same reasoning that points `userData` somewhere
+    // disposable.
+    console.log('\nPhotos & video:');
+
+    const mediaRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'cleandrive-smoke-media-'));
+    buildMediaFixtures(mediaRoot);
+
+    await win.webContents.executeJavaScript(`document.querySelector('.tab[data-tab="media"]').click()`);
+    check('the photo panel opens',
+      await win.webContents.executeJavaScript(
+        `document.getElementById('panel-media').classList.contains('is-active')`));
+
+    await until(win, `document.querySelectorAll('#media-roots .check').length > 0`);
+    const mediaOffered = await win.webContents.executeJavaScript(`({
+      roots: document.querySelectorAll('#media-roots .check').length,
+      names: [...document.querySelectorAll('#media-roots strong')].map((e) => e.textContent),
+      downloadsOff: [...document.querySelectorAll('#media-roots .check')]
+        .filter((r) => r.querySelector('strong').textContent === 'Downloads')
+        .every((r) => r.querySelector('input').checked === false),
+    })`);
+    check('photo folders are offered rather than the whole drive', mediaOffered.roots > 0, mediaOffered.names.join(', '));
+    // Downloads held 9,676 of the 10,185 "photos" found in a drive-wide walk of
+    // the development machine, nearly all of them interface sprites. It is
+    // offered, and it is off.
+    check('Downloads is offered but not ticked', mediaOffered.downloadsOff);
+
+    // Point the scan at the fixture tree only.
+    await win.webContents.executeJavaScript(`
+      for (const root of media.roots) root.on = false;
+      media.extraRoots = [{ path: ${JSON.stringify(mediaRoot)}, name: 'fixture', why: null, on: true }];
+      renderRoots();
+      document.getElementById('media-scan').click();
+    `);
+    await until(win, `document.getElementById('media-cancel').hidden === true && media.files.length > 0`);
+
+    const mediaUi = await win.webContents.executeJavaScript(`({
+      files: media.files.length,
+      status: document.getElementById('media-status').textContent,
+      cells: document.querySelectorAll('.media-cell').length,
+      canvasHeight: parseInt(document.getElementById('media-canvas').style.height, 10),
+      chips: document.querySelectorAll('.chip').length,
+      chipMeta: [...document.querySelectorAll('.chip .chip-meta')].map((e) => e.textContent),
+      origins: [...new Set(media.files.map((f) => f.origin))].sort(),
+      selected: media.selected.size,
+      deleteDisabled: document.getElementById('media-delete').disabled,
+    })`);
+    console.log(`    ${mediaUi.status}`);
+
+    check('the fixture photos are found', mediaUi.files === MEDIA_FIXTURE_COUNT,
+      `${mediaUi.files} of ${MEDIA_FIXTURE_COUNT}`);
+
+    // The whole reason the grid is virtualised. A folder of twenty thousand
+    // photographs rendered in one pass is a renderer that stops responding.
+    check('the grid draws only what is on screen', mediaUi.cells < mediaUi.files,
+      `${mediaUi.cells} cells for ${mediaUi.files} files`);
+    check('but the scrollbar is honest about how much there is', mediaUi.canvasHeight > 0,
+      `${mediaUi.canvasHeight}px of canvas`);
+
+    check('the classifier told them apart', mediaUi.origins.length >= 2, mediaUi.origins.join(', '));
+    check('every chip says how much it holds',
+      mediaUi.chips > 0 && mediaUi.chipMeta.every((text) => /·/.test(text)),
+      mediaUi.chipMeta.slice(0, 3).join(' | '));
+
+    // The rule this whole screen is built around.
+    check('nothing is selected for the user', mediaUi.selected === 0);
+    check('and the delete button is off until they choose', mediaUi.deleteDisabled === true);
+
+    /* -- the evidence behind a verdict ----------------------------------- */
+
+    const mediaDetail = await win.webContents.executeJavaScript(`
+      document.querySelector('.media-cell').click();
+      ({
+        name: document.querySelector('.detail-name').textContent,
+        origin: document.querySelector('.detail-origin').textContent,
+        strength: document.querySelector('.detail-strength').textContent,
+        why: [...document.querySelectorAll('.detail-why li')].map((e) => e.textContent),
+        facts: [...document.querySelectorAll('.detail-facts dt')].map((e) => e.textContent),
+        selection: document.getElementById('media-selection').textContent,
+      })
+    `);
+    console.log(`    ${mediaDetail.name}: ${mediaDetail.origin} (${mediaDetail.strength})`);
+    for (const line of mediaDetail.why) console.log(`      ${line}`);
+
+    // This app's standing rule, on the screen where it matters most.
+    check('a verdict never appears without its evidence', mediaDetail.why.length > 0,
+      `${mediaDetail.why.length} reasons given`);
+    check('and it says how sure it is', mediaDetail.strength.length > 0, mediaDetail.strength);
+    check('the facts behind it are listed', mediaDetail.facts.length >= 3, mediaDetail.facts.join(', '));
+    check('clicking one picture selects exactly one', /1/.test(mediaDetail.selection), mediaDetail.selection);
+
+    /* -- filtering -------------------------------------------------------- */
+
+    const mediaFiltered = await win.webContents.executeJavaScript(`
+      const before = media.shown.length;
+      document.querySelector('.chip').click();
+      const after = media.shown.length;
+      const activeText = document.querySelector('.chip.is-active .chip-name').textContent;
+      document.querySelector('.chip.is-active').click();
+      ({ before, after, restored: media.shown.length, activeText })
+    `);
+    check('a chip filters the grid', mediaFiltered.after < mediaFiltered.before,
+      `${mediaFiltered.before} -> ${mediaFiltered.after} (${mediaFiltered.activeText})`);
+    check('and clicking it again restores everything', mediaFiltered.restored === mediaFiltered.before);
+
+    /* -- selection -------------------------------------------------------- */
+
+    const mediaPicked = await win.webContents.executeJavaScript(`
+      document.getElementById('media-select-filtered').click();
+      ({
+        selected: media.selected.size,
+        shown: media.shown.length,
+        status: document.getElementById('media-selection').textContent,
+        enabled: document.getElementById('media-delete').disabled === false,
+      })
+    `);
+    check('"select everything shown" takes exactly what is shown',
+      mediaPicked.selected === mediaPicked.shown, `${mediaPicked.selected} of ${mediaPicked.shown}`);
+    check('the total selected is stated', /·/.test(mediaPicked.status), mediaPicked.status);
+    check('the delete button turns on', mediaPicked.enabled);
+
+    const mediaCleared = await win.webContents.executeJavaScript(`
+      document.getElementById('media-select-none').click();
+      ({ selected: media.selected.size, disabled: document.getElementById('media-delete').disabled })
+    `);
+    check('clearing the selection turns it off again', mediaCleared.selected === 0 && mediaCleared.disabled);
+
+    /* -- the guard that matters most -------------------------------------- */
+    //
+    // Nothing on this screen may delete without a confirmation, and the
+    // confirmation is composed in the main process. Here the delete is a dry
+    // run with the dialog switched off, which exercises the same vetting path
+    // without putting a modal in front of an unattended test.
+    const mediaDry = await win.webContents.executeJavaScript(`
+      window.cleandrive.trash(media.files.slice(0, 2).map((f) => f.path),
+        { dryRun: true, confirm: false, context: 'media' })
+    `);
+    check('a photo delete goes through the same guarded path', mediaDry.ok === true,
+      JSON.stringify(mediaDry.error || ''));
+    check('and a dry run moves nothing', mediaDry.data.dryRun === true &&
+      mediaDry.data.moved.every((m) => m.dryRun === true));
+    check('the fixture files are all still there',
+      fs.readdirSync(path.join(mediaRoot, 'Camera Roll')).length > 0);
+
+    fs.rmSync(mediaRoot, { recursive: true, force: true });
 
     /* -- trash (dry run) ------------------------------------------------- */
     console.log('\nTrash (dry run -- nothing is deleted):');

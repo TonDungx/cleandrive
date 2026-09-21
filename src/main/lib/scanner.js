@@ -156,6 +156,20 @@ function walk(root, options, handlers) {
             continue;
           }
 
+          // An extra refusal the caller supplies, on top of the built-in ones.
+          // The media scan uses it to stay out of AppData and out of the
+          // thousand-icon asset folders that an extracted archive leaves in
+          // Downloads -- exclusions that would be wrong for a disk-usage scan,
+          // whose whole job is to report where the space went. Unset by every
+          // existing caller, so their behaviour is exactly what it was.
+          if (opts.excludeDir) {
+            const refused = opts.excludeDir(name, full, entries);
+            if (refused) {
+              if (onSkip) onSkip(full, refused);
+              continue;
+            }
+          }
+
           // Everything under an immediate child of the root is attributed to
           // that child; files directly in the root carry top === null.
           queue.push({
@@ -170,6 +184,22 @@ function walk(root, options, handlers) {
 
         if (!entry.isFile()) continue;
         if (opts.ignoreHidden && isHiddenName(name)) continue;
+
+        // `statFiles: false` hands the entry over unmeasured.
+        //
+        // The disk-usage scan needs the size of every file and takes it here,
+        // one at a time, which is right when the work that follows is a running
+        // total. The media scan does not: it filters on the extension first and
+        // then opens the survivors anyway, so a stat taken here is a syscall
+        // spent on files it is about to discard -- and, worse, spent in a loop
+        // that is sequential *within a directory*. A folder of 3,343
+        // screenshots, which is a real folder on the machine this was written
+        // on, is therefore 3,343 stats deep on one worker while fifteen others
+        // have nothing to do.
+        if (opts.statFiles === false) {
+          onFile(full, null, top, tag, blockedHere);
+          continue;
+        }
 
         let stats;
         try {

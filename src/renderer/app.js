@@ -869,7 +869,7 @@ function formatDuration(ms) {
 
 /* ---- the shared progress panel, used by every delete path ---- */
 
-const DELETE_BUTTONS = ['delete-large', 'delete-dupes', 'delete-cleanup'];
+const DELETE_BUTTONS = ['delete-large', 'delete-dupes', 'delete-cleanup', 'media-delete'];
 
 const progressPanel = {
   show(title) {
@@ -934,6 +934,10 @@ const progressPanel = {
     for (const id of DELETE_BUTTONS) $(id).disabled = true; // re-enabled by selection state
     updateSelectionStatus();
     updateCleanupSelection();
+    // `media.js` loads after this file, so its updater may not exist yet -- a
+    // delete cannot have run before then, but guarding costs nothing and the
+    // alternative is a load-order dependency nobody would expect.
+    if (typeof updateSelection === 'function') updateSelection();
     $('delete-large').disabled = state.selectedLarge.size === 0;
   },
 };
@@ -950,14 +954,19 @@ $('dp-cancel').addEventListener('click', async () => {
  * Hand paths to the main process, which vets them and shows the native
  * confirmation dialog before anything moves to the Recycle Bin. Progress
  * arrives on trash:progress and drives the shared panel above.
+ *
+ * `options.context` reaches the confirmation dialog, which uses it to decide
+ * which warnings belong in front of this particular delete. It is a hint about
+ * where the request came from and never a permission: every guard in
+ * `trash.js`, and the cloud warning in `ipc.js`, applies whatever it says.
  */
-async function deleteSelected(paths, onDone) {
+async function deleteSelected(paths, onDone, options = {}) {
   if (paths.length === 0) return;
 
-  progressPanel.show('Checking what can be deleted');
+  progressPanel.show(t('delete.checking', 'Checking what can be deleted'));
   let result;
   try {
-    result = unwrap(await api.trash(paths), t('app.label.delete', 'Delete'));
+    result = unwrap(await api.trash(paths, options), t('app.label.delete', 'Delete'));
   } finally {
     progressPanel.hide();
   }

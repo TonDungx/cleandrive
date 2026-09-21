@@ -9,11 +9,12 @@ A capability inventory read off the source in `src/`. The measured figures
 quoted further down this file come from earlier runs on the author's machine
 and are not re-measured here.
 
-Six tabs — **Disk usage**, **What to delete**, **Duplicates**, **Trends**,
-**Automatic** and **Settings** — over one selected folder at a time, plus a
-scheduled cleanup that runs with no window open, a daily disk measurement that
-does the same, and an optional tray watcher. The interface reads in English or
-Vietnamese, and says so in whichever one you chose, notifications included.
+Seven tabs — **Disk usage**, **What to delete**, **Photos &amp; video**,
+**Duplicates**, **Trends**, **Automatic** and **Settings** — over one selected
+folder at a time, plus a scheduled cleanup that runs with no window open, a
+daily disk measurement that does the same, and an optional tray watcher. The
+interface reads in English or Vietnamese, and says so in whichever one you
+chose, notifications included.
 
 ### Application shell
 
@@ -344,6 +345,172 @@ The rules themselves, the three-level safety gate that narrows them inside
 application folders, and the real breakages that motivated each guard are
 documented under [What to delete](#what-to-delete) below.
 
+### Photos & video
+
+Its own tab, because the files on it are the only ones in this app that cannot
+be got back. Everything else here is a cache, an installer or a log — things the
+machine will rebuild or the internet will hand over again. A photograph is
+neither, and the whole screen is arranged around that: **nothing is ever
+selected for you**, not near-duplicates, not blank frames, not the folders of
+icons. The only bulk action is "select everything shown", which acts on a filter
+the user chose and can see the count of.
+
+Every file is described on two independent axes.
+
+**Where it came from** — a camera, a screenshot, a chat app, a download, a
+piece of software, a screen recorder, a game capture, or nothing we can tell.
+Signals are *ranked*, not scored, so a camera name written into the file by the
+camera cannot be outvoted by a filename: a photograph called
+`Screenshot of the beach.jpg` is still a photograph.
+
+| Rank | Evidence | Example |
+| --- | --- | --- |
+| 1 | metadata the device wrote itself | EXIF `Make`/`Model`, an MP4's `moov` device tags |
+| 2 | metadata an editor wrote | EXIF `Software` says Lightroom |
+| 3 | the folder it lives in | `Camera Roll`, `Zalo Received Files`, `Ảnh chụp màn hình` |
+| 4 | the download record Windows kept | `:Zone.Identifier` names `fbcdn.net` |
+| 5 | the filename's shape | `IMG-20240817-WA0042`, `PXL_20240101_120000` |
+| 6 | the shape of the picture | exactly the size of a monitor attached to this machine |
+
+**What it actually is** — read from the bytes rather than the extension: the
+real format against the declared one, pixel dimensions, aspect, bytes per pixel,
+icon-sized junk, pictures a chat app has resized and stripped, empty and
+unreadable files, and for video the duration, resolution, bitrate and whether it
+has a sound track. A file can wear several of these at once, so they are traits
+rather than a category.
+
+**Every verdict arrives with its evidence, and with how sure it is.** The app's
+standing rule, on the screen where it matters most. "Screenshot" is shown beside
+*"its name begins Screenshot" · "it carries no camera information at all" · "it
+is exactly 1920×1080, the size of this screen"* — and beside the word `strong`,
+`likely` or `a guess`, so a guess cannot be mistaken for a conclusion by
+somebody skimming before they delete.
+
+#### What the measurements changed
+
+Four decisions in this subsystem were made by measuring rather than by
+reasoning, and each one reversed the plan:
+
+- **The scan does not cover the whole drive.** A thirty-second walk of this
+  machine's home folder found 10,185 files with a picture extension, of which
+  **97% were under 20 KB** and **9,676 sat in two folders** — both the unpacked
+  contents of a download, full of a web application's interface assets. The
+  whole walk turned up 71 JPEGs and 11 videos that were anybody's media, and it
+  was still 41,925 directories from finishing. So the scan looks in photo
+  folders, every one of which is listed and can be turned off, plus anything the
+  user adds. Downloads is offered and is off by default.
+- **A video's `moov` box is at the *end* of the file.** Eleven of eleven real
+  MP4s here are laid out `ftyp, uuid, mdat, … moov`, so reading the first 64 KB
+  finds no metadata at all. The container's top-level boxes are a linked list,
+  so it is hopped header to header instead: three or four sixteen-byte reads per
+  file, measured at 480 videos a second.
+- **Cloud folders are kept, and warned about.** Excluding them was the cautious
+  -looking option and would have returned nothing: on this machine `Pictures`
+  resolves to `OneDrive\Hình ảnh` and `Documents` to `OneDrive\Documents`,
+  because Windows redirects the known folders there by default.
+- **There is no "blurry" group.** The one blur measure available without a
+  decoder is the variance of a Laplacian, and measured here it separates
+  *detailed* from *smooth*, which is a different question: sharp scanned
+  documents scored 390–550 while screen recordings of text scored 3,000–6,000.
+  A photograph of fog, of snow, or with a shallow depth of field lands where a
+  genuinely out-of-focus one lands. It ships as a sort order, "least detail
+  first", which is an honest description of what it ranks.
+
+#### Deleting from here
+
+Through the same `trash.js` that everything else goes through — same guards,
+same Recycle Bin, same ledger. Two sentences are added to the confirmation:
+
+- **The one that matters.** A file inside a sync folder is not protected by the
+  Recycle Bin at all: deleting it here tells OneDrive or Dropbox to delete it on
+  every device, and this machine's bin has no say in what the others do.
+  Somebody who has learned that this app is safe *because* everything is
+  recoverable is exactly the person who needs telling. Computed in the main
+  process from the vetted plan, never from what the window claims, and it
+  applies to **every** delete — a synced file ticked in the cleanup list has the
+  same problem.
+- Moving to the Recycle Bin frees no disk space until the bin is emptied. The
+  Automatic tab has said so for a long time; photographs are where somebody is
+  most likely to be deleting to make room.
+
+**Automatic cleanup cannot reach any of this.** `settings.js` holds a hardcoded
+allowlist of the six advisor categories that may ever run unattended, and the
+media subsystem produces none of them — it never goes through the advisor at
+all. `scripts/test-autoclean.js` asserts it.
+
+#### Speed
+
+Two phases, and only the first one touches every file.
+
+**Phase one** walks, then reads the first 64 KB of each picture and hops the box
+chain of each video. No image is decoded. Projected onto 50,000 media files by
+`npm run bench:media`:
+
+| | cold | scanned before |
+| --- | --- | --- |
+| first working version | 11.8 s | 6.6 s |
+| stat in the read pool rather than in the walk | 8.7 s | 0.4 s |
+| concurrency 48 rather than 24 | **5.5 s** | **0.4 s** |
+
+The first of those was the surprise. `walk` stats files one at a time *within* a
+directory, so a single folder of 3,343 screenshots pinned one worker for six
+seconds while fifteen others had nothing to do.
+
+There are **no worker threads**, which was the plan and did not survive the
+measurement: eight workers reach 26,201 files/s against the main thread's
+17,751, and the main thread already meets the budget. The real lesson in that
+table is the cliff between 8-way and 16-way concurrency, which is not about
+threads at all — `main.js` raises `UV_THREADPOOL_SIZE` to 16, and below that
+libuv's I/O threads simply sit idle.
+
+**Phase two** — the thumbnail and the numbers taken from its pixels — runs only
+on the cells that are on screen, and is the reason it must:
+
+| step | per file |
+| --- | --- |
+| reading the bytes | 5.2 ms |
+| `createFromPath` (read **and decode**) | 71.3 ms |
+| plus resize, JPEG encode and `getBitmap` | 80.4 ms |
+
+It is the decode, it is at full resolution, and it is synchronous: 13 files a
+second at one-way concurrency, 13 at four, 12 at eight. So the process is
+yielded between every file, and the numbers derived from the pixels are cached —
+a screenful costs about 800 ms the first time and single-digit milliseconds
+afterwards.
+
+`nativeImage.createThumbnailFromPath` is tried first because it reads the
+thumbnail cache Windows already keeps, and because it is the only thing here
+that can pull a frame out of a video without a decoder. It only *reads* that
+cache, though — it refused 270 of 400 files in a real Pictures folder, every one
+an ordinary JPEG that Explorer had never been asked to display — so
+`createFromPath` is the fallback, and a video the shell will not draw has no
+picture at all rather than a blank cell that looks like the app hanging.
+
+Thumbnails cross to the window as `data:` URIs, which the existing CSP already
+allows, so no protocol was registered and no policy was loosened. They are
+encoded as JPEG rather than through `toDataURL()`, which writes PNG: about 9 KB
+a thumbnail instead of 104 KB, and three hundred of those on screen is the
+difference between three megabytes crossing IPC and thirty.
+
+The grid is virtualised — only the rows in view exist in the DOM, over a canvas
+the full height of the whole list so the scrollbar stays honest.
+
+#### Near-duplicates
+
+Grouped on a difference hash of the thumbnail, at **four bits of sixty-four**
+and only between pictures of the same shape. Tight on purpose: on a screen where
+somebody deletes all but one copy, a group is a claim that these are the same
+picture, and missing a burst costs nothing but a missed opportunity.
+
+Closeness does not chain, and it took the benchmark to notice. Union-find joins
+anything reachable, so A four bits from B and B four bits from C put A and C —
+eight bits apart, plainly different pictures — in one group; the benchmark
+printed `widest gap in a group: 5, of 4 allowed`. Groups are now complete
+linkage: every pair inside one is within the threshold. The candidate sets are
+still found by indexing the hash in five bands, because two hashes differing in
+at most four bits must agree exactly on at least one of five bands, and 50,000
+photographs is 1.25 billion pairs otherwise.
+
 ### Duplicate finder
 
 Byte-identical files across the selected folder, found in three passes that
@@ -488,6 +655,10 @@ otherwise be guarding the wrong directory entirely.
 | `test-autoclean.js` | The gates that stop an unattended run: verdict, category, age (taking the *later* of atime and mtime), whitelist, path guards, per-run cap, disk threshold, and an open application |
 | `test-scheduler.js [--live]` | Task XML content, the interval repetition, schedule round-tripping and next-run arithmetic offline; with `--live`, registers a real task **under a suffixed name** and removes it again. The suffix is itself asserted: this suite used to run against the real task name and unregister whatever the person running it had configured |
 | `test-history.js` | Mostly assertions that *no* number is produced: one data point, five days of data, a flat disk, a shrinking disk, a disk too erratic to extrapolate, and a folder scanned only once. Plus which volume the chart opens on, and the sampler's half-hour coalescing |
+| `test-media-format.js` | The header parsers, against files the script assembles in memory -- no binary fixture is ever committed. Magic bytes against extensions, pixel dimensions out of six formats, an EXIF block written by hand in both byte orders, and an MP4 laid out the way a recorder writes one, with `moov` past the 64 KB the head read covers. Plus the hostile half: an IFD that points at itself, a string claiming to be four gigabytes, a box declaring a size of zero |
+| `test-media-scan.js` | The walk, the folder rules and the cache, against a tree it builds and removes. Most of it is about the cache being wrong at the right moments: a file edited, a file replaced by one of the same size, a corrupt cache, a cache written by a different record shape, and entries for files that no longer exist |
+| `test-media-classify.js` | Both classification axes, against records written out by hand. Half of it asserts that something is *not* concluded -- a photograph called `Screenshot of the beach.jpg` is still a photograph, a chat app's size with the camera data intact is not "recompressed", and nothing is ever labelled blurry |
+| `test-media-perceptual.js` | The difference hash, the detail figure and the grouping, over bitmaps the script paints. The section that matters is the last one: closeness does not chain, so a group is never wider than the threshold it claims |
 | `test-i18n.js` | The dictionary against the source: every key the app asks for has a translation, every translation keeps the placeholders its English has and invents none, nothing in the dictionary is dead, and *moved* and *freed* are still two different words in Vietnamese |
 | `test-monitor.js` | Ten consecutive readings above the threshold must yield one alert, not ten; rounding noise around the threshold must yield none; a level crossed during a snooze must not be announced when the snooze ends. Plus the runtime PNG encoder |
 | `test-scanner.js "C:\path"` | Scans any real folder from the CLI and prints the summary |
@@ -498,6 +669,8 @@ otherwise be guarding the wrong directory entirely.
 | `verify-trash.js` | Moves one throwaway probe file to the real Recycle Bin and verifies it left the filesystem |
 | `verify-autoclean.js` | The whole chain on real files: an unattended run takes them, they are found in the actual Recycle Bin under their original paths, exactly those are purged, and the free-space figure moves. Shows plainly that moving to the bin freed nothing |
 | `verify-monitor.js` | Starts the real tray against the real disk and prints what it costs in resident memory, so the figure quoted below is measured rather than claimed |
+| `bench-media.js` | What the photo scan costs, projected onto 50,000 files: walk and read rates, thumbnails drawn by the shell against ones Chromium had to decode, peak memory for each phase separately, and the near-duplicate grouping. Runs under Electron because phase two does |
+| `shoot-media.js` | The eight screenshots of the Photos & video tab -- four widths, both themes -- against a photo library it generates. The window is *shown*: `capturePage()` on a hidden one returns whatever was last composited, which produced a dark PNG of a window whose computed styles all said light |
 | `bench-trash.js` | Measures `shell.trashItem` throughput sequentially and 8-way concurrent, then purges exactly the files it created |
 | `bench-batch.ps1` | Measures batched `SHFileOperation` throughput via P/Invoke, for comparison |
 | `build.js` | Generates the .ico and packages the app into `dist/` |
