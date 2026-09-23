@@ -340,9 +340,19 @@ function fileRow(file, selection, onToggle, { meta = null, badge = null } = {}) 
     main.appendChild(metaEl);
   }
 
+  /*
+   * View first, then the two that leave.
+   *
+   * These rows exist so somebody can decide whether a file may go, and until
+   * now the only way to find out what was in one was Open -- which hands it to
+   * Word or Acrobat and puts the decision two applications away from the list
+   * it was being made in. Viewing is the common act, so it leads and it is the
+   * one drawn as a button; revealing and opening are the exits and stay quiet.
+   */
   const actions = document.createElement('span');
   actions.className = 'file-actions';
   actions.append(
+    linkButton(t('app.view', 'View'), () => openViewer(file.path), 'is-lead'),
     linkButton(t('app.reveal', 'Reveal'), () => api.reveal(file.path)),
     linkButton(t('app.open', 'Open'), async () =>
       unwrap(await api.open(file.path), t('app.open', 'Open'))
@@ -378,9 +388,9 @@ function makeBadge(verdict, text, title) {
   return el;
 }
 
-function linkButton(label, handler) {
+function linkButton(label, handler, extra = '') {
   const btn = document.createElement('button');
-  btn.className = 'link';
+  btn.className = extra ? `link ${extra}` : 'link';
   btn.textContent = label;
   btn.addEventListener('click', handler);
   return btn;

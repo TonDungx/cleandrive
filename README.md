@@ -34,7 +34,16 @@ chose, notifications included.
 
 The UI is plain HTML/CSS/JS with no framework and no build step. It runs with
 `contextIsolation: true`, `nodeIntegration: false`, `sandbox: true`, and a CSP
-of `default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:`.
+of `default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:
+cleandrive:; media-src cleandrive:; frame-src cleandrive:`.
+
+The `cleandrive:` scheme is the file viewer's, and it was widened deliberately.
+A `data:` URI is fine for a nine-kilobyte thumbnail and absurd for a forty-
+megabyte PDF, so large previews are streamed over the app's own protocol
+instead. The renderer never names a path: it is handed a random 16-byte token,
+the main process is the only side that can turn a token back into a file, and
+every token is revoked the moment the panel closes. `file:` is still not
+permitted anywhere.
 
 Its entire view of the system is the thirty-two functions on `window.cleandrive`:
 
@@ -658,9 +667,70 @@ Throughout:
 
 ### Working with individual files
 
-Every file row in every tab offers **Reveal** (show in Explorer) and **Open**
-(launch with the default program), and shows its size, elided path with the
-full path on hover, and an age line.
+Every file row in every tab leads with **View**, then offers **Reveal** (show in
+Explorer) and **Open** (launch with the default program), and shows its size,
+elided path with the full path on hover, and an age line.
+
+**View** is drawn loudest because it is the act these screens exist for. Every
+tab asks the same question -- should this go? -- and for anything that is not a
+cache or a log that question cannot be answered from a filename. Until the
+viewer existed the only answer was **Open**, which hands the file to Word or
+Acrobat and puts the decision two applications away from the list it was being
+made in.
+
+### The file viewer
+
+One panel over the whole window, from any file row in any tab.
+
+| Kind | What it shows |
+| --- | --- |
+| PDF | Chromium's own viewer -- pages, thumbnails, zoom, search, print |
+| Images | JPEG, PNG, GIF, WebP, BMP, TIFF, drawn contained rather than cropped |
+| Video, audio | Played in place; never autoplayed |
+| Text | ~90 extensions, plus anything whose bytes read as text under another name |
+| Word | Headings, real nested lists, tables with merged cells, inline pictures, hyperlinks (shown, inert) |
+| Excel | Sheet tabs in the workbook's order, lettered columns and real row numbers, dates as dates, merged ranges, formula results |
+| PowerPoint | Slides in the deck's order with titles, indented body text, pictures and speaker notes |
+| Archives | What is inside: names, sizes, dates |
+| Everything else | What it is and how big, and the program that owns it -- never a hex dump |
+
+### Two readers written here, and one installed
+
+A `.docx` is a ZIP of XML, Node already ships the decompression, and what was
+missing was the index format and the vocabulary — so all three were written
+first and then measured against real documents.
+[`scripts/compare-office.js`](scripts/compare-office.js) renders the same files
+with both readers, styled by one stylesheet, so the only difference on the page
+is what each one extracted.
+
+The answer was not the same for all three, and the app follows the answer.
+
+| Format | Read by | Why |
+| --- | --- | --- |
+| Word | `mammoth` | On a two-thousand-word specification the two agreed to within two words. What settled it was structure rather than text: mammoth emits real nested `<ol>` lists, which the browser numbers and restarts correctly by construction, where a reader computing its own markers only ever has the restart cases it has already met |
+| Excel | written here | The library hands back a grid with no row numbers and no column letters, so a reference in a conversation — "look at column F" — stops meaning anything |
+| PowerPoint | written here | No widely used library *renders* PowerPoint. The best available dropped three slides of a sixty-six slide deck and returned no picture bytes at all |
+| Archives | written here | The same ZIP reader Excel and PowerPoint already need |
+
+`mammoth` is therefore a deliberate exception to this project's rule against
+runtime dependencies, and the only one: 15 packages, 6.7 MB on disk. Changing a
+standing rule on evidence is the point of having measured it. The comparison
+still runs for the other two formats, and its libraries install with `--no-save`
+so that nothing the app ships depends on them.
+
+What mammoth returns is HTML, and it never reaches `innerHTML`. The window
+parses it with `DOMParser`, which runs nothing it reads, and rebuilds the page
+from an allowlist of about thirty tags and four attributes — these are documents
+the user did not write, and half of them are markup already.
+
+Three limits are deliberate. A workbook is drawn to 2,000 rows a sheet, because
+this is a preview for deciding whether a file can go and a 50,000-row DOM is a
+frozen window; it says so when it truncates. Pictures inside a document travel
+as `data:` URIs with a ceiling, so a report with sixty photographs degrades to a
+note rather than to a stall. And a format that cannot be read honestly says so
+and offers the program that owns it -- the older `.doc`/`.xls` binaries, a
+password-protected file, a rights-managed wrapper -- because "this file is
+damaged" and "this document is empty" lead to opposite decisions.
 
 ### Honest timestamps
 
@@ -696,7 +766,13 @@ otherwise be guarding the wrong directory entirely.
 
 | Script | What it does |
 | --- | --- |
-| `npm test` | Runs the twelve unit suites below in sequence |
+| `npm test` | Runs the unit suites below in sequence |
+| `test-preview.js` | Which viewer a file belongs to, and turning its bytes into characters -- including a Vietnamese `.txt` in Windows-1258, which is only distinguishable from UTF-8 because the first decode is run with `fatal: true` |
+| `test-office.js` | The ZIP reader, the XML scanner and the Excel and PowerPoint readers, against archives assembled byte by byte so each can be made to do the specific wrong thing — overstate how far it expands, list its sheets in an order the directory disagrees with. Word is absent because `mammoth` reads it, and testing a library here would be testing somebody else's code |
+| `compare-office.js` | Renders real spreadsheets and decks with the readers written here and with `SheetJS`/`officeparser` side by side, under one stylesheet. Needs `npm install --no-save xlsx officeparser` first; `--files=a.xlsx,b.pptx` picks the documents and `--fragment` emits a page body rather than a whole document. This is the harness the Word decision came out of too |
+| `shoot-viewer.js` | Screenshots the viewer against one real file per format, in both themes |
+| `probe-protocol.js` | The measurement that decided the CSP change: whether Chromium still uses its own PDF viewer when the file arrives over a custom scheme rather than `file:` |
+| `ooxml-fixture.js` | Not a test: assembles the archives the two suites above use, as documents Word itself would open. The repo carries no binary assets, so there are no sample `.docx` files to check in |
 | `test-duplicate.js --fixture` | Builds a tree where one pair is identical, one pair is same-size-different-bytes, and one file shares its first 64 KB but differs at the tail — so the partial pass must pass it and the full hash must reject it |
 | `test-advisor.js` | One file per classification rule, back-dated with `utimes` and made sparse so a large fixture costs no disk, then checks each landed in the right bucket |
 | `test-protection.js` | Eight real paths that must be guarded and several that must not, taken from a screenshot of the app suggesting exactly the wrong thing |
@@ -875,8 +951,8 @@ window's own header cannot drift apart.
 
 ### Auto-update
 
-Off the shelf, via `electron-updater` against GitHub Releases — the app's first
-and only runtime dependency, and its first network request. What that buys and
+Off the shelf, via `electron-updater` against GitHub Releases — one of the app's
+two runtime dependencies, and its first network request. What that buys and
 what it costs is set out under "What it deliberately does not do"; the rules it
 follows are:
 

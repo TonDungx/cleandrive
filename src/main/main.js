@@ -225,7 +225,20 @@ if (isSampleOnly) {
    */
   app.on('second-instance', () => revealWindow());
 
+  /*
+   * The preview scheme, declared before `ready` because Electron requires it.
+   *
+   * It is how the window shows a PDF, a picture at full size or a video
+   * without the renderer ever touching the filesystem: the main process vets a
+   * file, hands back an opaque token, and serves exactly that. Only the window
+   * mode registers it -- the scheduled run and the sampler have no window and
+   * nothing to show.
+   */
+  require('./lib/preview/serve').registerScheme();
+
   app.whenReady().then(async () => {
+    require('./lib/preview/serve').serve();
+
     ipc = require('./ipc');
     tray = require('./tray');
     updater = require('./updater');

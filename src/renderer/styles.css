@@ -2801,22 +2801,44 @@ html[data-i18n-pending] body {
 .media-duration { right: 5px; bottom: 5px; }
 .media-cloud { left: 5px; top: 5px; font-size: 11px; }
 
-/* The tick appears on selection only. There is no half-state and no
-   "suggested" state, because nothing here is ever selected for the user. */
+/* The tick is a real button and it toggles the selection. There is no
+   half-state and no "suggested" state, because nothing here is ever selected
+   for the user -- but once they have started choosing, every tick stays on
+   screen, so the way to add the next one is never hidden. */
 .media-tick {
   position: absolute;
   top: 5px;
   right: 5px;
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
+  padding: 0;
   border-radius: 50%;
   border: 1.5px solid var(--border-strong);
-  background: light-dark(rgba(255, 255, 255, 0.82), rgba(12, 14, 18, 0.72));
+  background: light-dark(rgba(255, 255, 255, 0.86), rgba(12, 14, 18, 0.76));
+  box-shadow: 0 1px 3px var(--shadow-edge);
   opacity: 0;
-  transition: opacity var(--fast);
+  cursor: pointer;
+  transition: opacity var(--fast), transform var(--fast), border-color var(--fast);
 }
 
 .media-cell:hover .media-tick { opacity: 1; }
+
+.media-tick:hover {
+  transform: scale(1.12);
+  border-color: var(--accent);
+}
+
+.media-tick:focus-visible {
+  opacity: 1;
+  outline: 2px solid var(--accent-ring);
+  outline-offset: 1px;
+}
+
+/* Once anything is chosen, every tick is visible: a grid where the way to add
+   the second picture only appears under the pointer is a grid that has to be
+   discovered twice. */
+.media-grid.is-choosing .media-tick { opacity: 0.75; }
+.media-grid.is-choosing .media-cell:hover .media-tick { opacity: 1; }
 
 .media-cell.is-selected .media-tick {
   opacity: 1;
@@ -3058,4 +3080,674 @@ html[data-i18n-pending] body {
     from { opacity: 0; transform: translateY(10px); }
     to { opacity: 1; transform: translateY(0); }
   }
+}
+
+/* ==========================================================================
+   The file viewer
+   ==========================================================================
+
+   Every screen in this app asks "should this go?", and a list of filenames
+   cannot answer it. Until this existed the only way to find out what was in a
+   file was the Open button, which hands it to Word or Acrobat and puts the
+   decision two applications away from the list it was being made in.
+
+   It is one panel over everything, not a pane inside a tab, because it serves
+   every tab and because a preview wants the room.
+   ========================================================================== */
+
+.viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  padding: 28px clamp(16px, 5vw, 64px) clamp(16px, 4vh, 48px);
+  background: light-dark(rgba(16, 20, 28, 0.42), rgba(0, 0, 0, 0.62));
+  backdrop-filter: blur(2px);
+  animation: viewer-in 140ms var(--ease);
+}
+
+@keyframes viewer-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .viewer { animation: none; }
+}
+
+.viewer-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-bottom: 0;
+  border-radius: var(--radius) var(--radius) 0 0;
+  background: var(--bg-elevated);
+}
+
+.viewer-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  max-width: 44ch;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* What it is, how big, how many lines, which encoding, when it changed. The
+   encoding only appears when it is not UTF-8 -- on every file it would be
+   noise, and "Windows-1258" is the one worth seeing because it explains the
+   accents. */
+.viewer-facts {
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.viewer-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 0 0 var(--radius) var(--radius);
+  background: var(--surface);
+}
+
+/* ---- text ---- */
+
+.viewer-text {
+  flex: 1 1 auto;
+  margin: 0;
+  padding: 14px 18px;
+  font-family: ui-monospace, "Cascadia Mono", Consolas, "Courier New", monospace;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--text);
+  white-space: pre;
+  overflow: auto;
+  tab-size: 4;
+}
+
+/* Something true about the file that the contents alone would not say -- a
+   .docx that is really XML, for instance. */
+.viewer-notice {
+  margin: 0;
+  padding: 9px 18px;
+  border-bottom: 1px solid var(--border-soft);
+  background: var(--warn-soft);
+  color: var(--warn);
+  font-size: 12px;
+}
+
+/* ---- pictures, film, sound ---- */
+
+.viewer-body.is-image,
+.viewer-body.is-video,
+.viewer-body.is-audio,
+.viewer-body.is-empty,
+.viewer-body.is-binary,
+.viewer-body.is-unreadable,
+.viewer-body.is-too-large,
+.viewer-body.is-legacy-office {
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+}
+
+/* Contained rather than filled: a preview that crops the picture to fit its
+   box is a preview that can hide the thing being judged. */
+.viewer-image {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: var(--radius-sm);
+}
+
+.viewer-video {
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: var(--radius-sm);
+  background: #000;
+}
+
+.viewer-audio { width: min(520px, 100%); }
+.viewer-audio audio { width: 100%; }
+
+/* ---- PDF ---- */
+
+/* Chromium's own viewer, in an iframe on the app's scheme. Measured before it
+   was built: pages, thumbnails, zoom, search and print, with no dependency. */
+.viewer-frame {
+  flex: 1 1 auto;
+  width: 100%;
+  border: 0;
+  border-radius: 0 0 var(--radius) var(--radius);
+  background: var(--surface-2);
+}
+
+/* ---- what cannot be shown ---- */
+
+/*
+ * Said plainly, with the way out.
+ *
+ * No hex dump. Nobody has ever answered "can I delete this" by reading one,
+ * and showing bytes as though they were content is exactly the false
+ * confidence this app is written against.
+ */
+.viewer-note {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  max-width: 46ch;
+  text-align: center;
+  color: var(--text-2);
+}
+
+.viewer-note-ext {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 68px;
+  padding: 10px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text-3);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.viewer-note p {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+
+/* ---- the row actions this panel is reached from ---- */
+
+/*
+ * Viewing leads; revealing and opening are the exits.
+ *
+ * These rows exist so somebody can decide whether a file may go, so the act
+ * they will do most is the one drawn loudest. The other two leave the app and
+ * stay quiet.
+ */
+.link.is-lead {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.link.is-lead:hover {
+  color: var(--accent-hover);
+}
+
+@media (max-width: 720px) {
+  .viewer { padding: 12px 12px 16px; }
+  .viewer-name { max-width: 100%; }
+}
+
+/* ==========================================================================
+   Documents inside the viewer: Word, Excel, PowerPoint, archives
+   ==========================================================================
+
+   These do not try to look like the programs that own them. There is no paper,
+   no page break, no margin, no font taken from the file. What there is, is a
+   reading view: the structure intact at the window's width, so somebody can
+   see what a document says and decide whether they still need it.
+
+   That is a choice and not a shortcut. A preview that half-imitates a page
+   invites the reader to think they are seeing the document, and where the
+   imitation gives out they have no way to know which part was missing.
+   ========================================================================== */
+
+/* A workbook manages its own scrolling, because its header row and its row
+   numbers have to stay put while the cells move under them. */
+.viewer-body.is-sheet { overflow: hidden; }
+
+.viewer-empty {
+  margin: 0;
+  padding: 24px 18px;
+  color: var(--text-3);
+  font-size: 12.5px;
+  text-align: center;
+}
+
+/* ---- Word ---- */
+
+/*
+   Word arrives as plain semantic HTML -- `h1`, `p`, `ol`, `table` -- so it is
+   styled by element rather than by class. That is why there is no `.doc-p`
+   here: an earlier version computed its own list markers and needed one, and
+   the browser numbering a real `<ol>` is both less code and more correct,
+   because it gets nesting and restarts right by construction.
+*/
+
+.doc {
+  width: 100%;
+  max-width: 82ch;
+  margin: 0 auto;
+  padding: 26px clamp(16px, 3vw, 34px) 60px;
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.68;
+}
+
+.doc:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+.doc p {
+  margin: 0 0 0.62em;
+  overflow-wrap: anywhere;
+}
+
+/* An empty paragraph is spacing somebody put there on purpose. Kept, but at a
+   fraction of a line, or the eight in a row before an appendix become eight
+   blank lines of nothing. */
+.doc p:empty { margin-bottom: 0; height: 0.5em; }
+
+.doc h1,
+.doc h2,
+.doc h3,
+.doc h4,
+.doc h5,
+.doc h6 {
+  margin: 1.5em 0 0.5em;
+  line-height: 1.32;
+  font-weight: 650;
+  text-wrap: balance;
+}
+
+.doc h1 { font-size: 1.62em; }
+.doc h2 { font-size: 1.34em; }
+.doc h3 { font-size: 1.16em; }
+.doc h4,
+.doc h5,
+.doc h6 { font-size: 1.02em; color: var(--text-2); }
+.doc > :first-child { margin-top: 0; }
+
+.doc blockquote {
+  margin: 0 0 0.62em;
+  padding-left: 14px;
+  border-left: 3px solid var(--border);
+  color: var(--text-2);
+}
+
+.doc pre,
+.doc code {
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 0.92em;
+}
+
+.doc pre {
+  margin: 0 0 0.8em;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  overflow-x: auto;
+}
+
+/* ---- lists ---- */
+
+/* Numbered by the browser from a real `<ol>`, so a sub-list restarts when its
+   parent moves on without anything here having to count. */
+.doc ul,
+.doc ol {
+  margin: 0 0 0.62em;
+  padding-left: 1.9em;
+}
+
+.doc li { margin-bottom: 0.25em; }
+.doc li > ul,
+.doc li > ol { margin: 0.25em 0 0; }
+.doc li::marker { color: var(--text-3); }
+
+/* ---- links, which do not go anywhere ---- */
+
+/* Drawn as a link so the document reads correctly, and inert so that reading a
+   file somebody sent cannot turn into visiting them. The address is in the
+   tooltip. */
+.doc-link {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: help;
+}
+
+/* ---- tables ---- */
+
+/* `.doc-table` is PowerPoint's, built here; `.doc table` is Word's, arriving as
+   markup. They are the same thing on screen. */
+.doc-table,
+.doc table {
+  width: 100%;
+  margin: 0 0 1em;
+  border-collapse: collapse;
+  font-size: 0.92em;
+}
+
+.doc-table td,
+.doc table td,
+.doc table th {
+  padding: 6px 9px;
+  border: 1px solid var(--border);
+  vertical-align: top;
+  text-align: left;
+}
+
+.doc table th { font-weight: 650; background: var(--surface-2); }
+.doc table td > p:last-child { margin-bottom: 0; }
+
+/* ---- pictures ---- */
+
+.doc-img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 10px 0;
+  border-radius: var(--radius-sm);
+}
+
+.doc-img-missing {
+  display: inline-block;
+  padding: 2px 8px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-3);
+  font-size: 0.88em;
+}
+
+/* ==========================================================================
+   Excel
+   ========================================================================== */
+
+.sheet {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+}
+
+.sheet-tabs {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-elevated);
+}
+
+.sheet-tab {
+  padding: 5px 12px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-2);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.sheet-tab:hover { background: var(--surface-2); color: var(--text); }
+
+.sheet-tab.is-on {
+  border-color: var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* A sheet hidden in Excel is often where the working is. Shown, and labelled,
+   because it is the sort of thing that changes whether a file can go. */
+.sheet-tab.is-hidden-sheet { font-style: italic; opacity: 0.72; }
+
+.sheet-grid {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+.sheet-table {
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.sheet-table th,
+.sheet-table td {
+  padding: 4px 8px;
+  border-right: 1px solid var(--border-soft);
+  border-bottom: 1px solid var(--border-soft);
+  white-space: nowrap;
+  max-width: 420px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The lettered strip and the numbered gutter stay put while the cells move,
+   which is the one thing a spreadsheet view has to do that a document does
+   not: without it, a scrolled-to column is a column of unlabelled figures. */
+.sheet-col,
+.sheet-row,
+.sheet-corner {
+  position: sticky;
+  background: var(--bg-elevated);
+  color: var(--text-3);
+  font-weight: 500;
+  text-align: center;
+}
+
+.sheet-col { top: 0; z-index: 2; }
+.sheet-row { left: 0; z-index: 2; }
+
+.sheet-corner {
+  top: 0;
+  left: 0;
+  z-index: 3;
+  min-width: 46px;
+}
+
+.sheet-table td { color: var(--text); text-align: left; }
+.sheet-table td.is-number,
+.sheet-table td.is-percent,
+.sheet-table td.is-date,
+.sheet-table td.is-datetime,
+.sheet-table td.is-time { text-align: right; }
+.sheet-table td.is-bool { text-align: center; color: var(--text-2); }
+.sheet-table td.is-error { text-align: center; color: var(--warn); }
+
+/* The cached result of a formula. Marked so it is not read as a typed figure;
+   what the formula was is deliberately not shown, because this is a reading
+   view rather than an audit. */
+.sheet-table td.is-formula::after {
+  content: "";
+  display: inline-block;
+  width: 4px;
+  height: 4px;
+  margin-left: 5px;
+  vertical-align: 2px;
+  border-radius: 50%;
+  background: var(--text-3);
+  opacity: 0.55;
+}
+
+/* ==========================================================================
+   PowerPoint
+   ========================================================================== */
+
+.deck {
+  width: 100%;
+  max-width: 78ch;
+  margin: 0 auto;
+  padding: 22px clamp(14px, 3vw, 30px) 60px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.slide {
+  padding: 16px 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-elevated);
+}
+
+.slide-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.slide-n {
+  flex: 0 0 auto;
+  min-width: 26px;
+  padding: 1px 7px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text-3);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.slide-title {
+  margin: 0;
+  font-size: 14.5px;
+  font-weight: 650;
+  line-height: 1.35;
+  color: var(--text);
+  white-space: pre-wrap;
+}
+
+.slide-title.is-untitled { color: var(--text-3); font-weight: 500; font-style: italic; }
+
+.slide-body { font-size: 13px; line-height: 1.6; color: var(--text-2); }
+
+.slide-p {
+  display: flex;
+  gap: 8px;
+  margin: 0 0 0.3em;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.slide-p.is-l1 { margin-left: 1.6em; }
+.slide-p.is-l2 { margin-left: 3.2em; }
+.slide-p.is-l3 { margin-left: 4.8em; }
+.slide-p.is-l4 { margin-left: 6.4em; }
+.slide-p.is-l5 { margin-left: 8em; }
+.slide-p.is-l6 { margin-left: 9.6em; }
+.slide-p.is-l7 { margin-left: 11.2em; }
+.slide-p.is-l8 { margin-left: 12.8em; }
+
+/* The pictures are shown as a strip rather than in place, because where they
+   were on the slide is layout this view does not reproduce -- and claiming a
+   position it did not read would be worse than admitting it did not. */
+.slide-images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.slide-images .doc-img {
+  max-width: 190px;
+  max-height: 140px;
+  object-fit: contain;
+  margin: 0;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+
+/* Frequently the only place the actual argument was written down, and the
+   first thing lost when a deck goes. Last, because it was not on the screen. */
+.slide-notes {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border);
+}
+
+.slide-notes-label {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--text-3);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.slide-notes p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--text-2);
+  white-space: pre-wrap;
+}
+
+/* ==========================================================================
+   Archives
+   ========================================================================== */
+
+.archive {
+  width: 100%;
+  padding: 16px clamp(14px, 3vw, 26px) 50px;
+}
+
+.archive-summary {
+  margin: 0 0 4px;
+  color: var(--text-2);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.archive-locked {
+  margin: 0 0 10px;
+  color: var(--warn);
+  font-size: 12px;
+}
+
+.archive-table {
+  width: 100%;
+  margin-top: 8px;
+  border-collapse: collapse;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.archive-table td {
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.archive-name {
+  color: var(--text);
+  max-width: 0;
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.archive-size,
+.archive-when {
+  color: var(--text-3);
+  text-align: right;
+  white-space: nowrap;
+}
+
+@media (max-width: 720px) {
+  .doc { padding: 18px 14px 40px; }
+  .deck { padding: 16px 12px 40px; }
 }

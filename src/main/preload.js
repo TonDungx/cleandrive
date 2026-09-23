@@ -23,6 +23,10 @@ const api = {
   reveal: (target) => ipcRenderer.invoke('shell:reveal', target),
   open: (target) => ipcRenderer.invoke('shell:open', target),
 
+  /* looking at a file without leaving the app */
+  preview: (target) => ipcRenderer.invoke('preview:open', target),
+  closePreview: () => ipcRenderer.invoke('preview:close'),
+
   /* photos and video */
   mediaRoots: () => ipcRenderer.invoke('media:roots'),
   scanMedia: (roots, options) => ipcRenderer.invoke('media:scan', roots, options),

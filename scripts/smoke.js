@@ -46,6 +46,11 @@ const PRODUCTION_USER_DATA = app.getPath('userData');
 const SANDBOX_USER_DATA = fs.mkdtempSync(path.join(os.tmpdir(), 'cleandrive-smoke-userdata-'));
 app.setPath('userData', SANDBOX_USER_DATA);
 
+// The viewer's scheme has to be privileged before the app is ready, exactly as
+// in main.js -- registering it afterwards is silently ignored, and the smoke
+// run would then check a viewer that could not load anything.
+require('../src/main/lib/preview/serve').registerScheme();
+
 // Read by scheduler.js when it derives the task names. Set before ipc.js is
 // required below, because that module requires the scheduler.
 process.env.CLEANDRIVE_TASK_SUFFIX = process.env.CLEANDRIVE_TASK_SUFFIX || 'smoke';
@@ -162,6 +167,7 @@ async function until(win, expression, timeoutMs = 120000) {
 }
 
 app.whenReady().then(async () => {
+  require('../src/main/lib/preview/serve').serve();
   ipc.register();
 
   const win = new BrowserWindow({
@@ -638,6 +644,59 @@ app.whenReady().then(async () => {
     check('exactly one segment reads as chosen', mediaBar.active === 1);
     check('and it releases when clicked again', mediaBar.restored === mediaBar.before);
 
+    /* -- choosing several ------------------------------------------------- */
+    //
+    // The tick was a decoration: drawn on hover because it looked right,
+    // `aria-hidden`, no handler of its own. It looked like a checkbox, people
+    // clicked it like one, and the click fell through to the cell -- whose
+    // plain-click behaviour is "clear the selection and take only this". Three
+    // ticks left one picture selected, which is how the bug was reported.
+    const mediaTicks = await win.webContents.executeJavaScript(`(() => {
+      media.selected.clear();
+      const ticks = [...document.querySelectorAll('.media-cell .media-tick')];
+      ticks[0].click();
+      const afterFirst = media.selected.size;
+      ticks[1].click();
+      ticks[2].click();
+      const afterThree = media.selected.size;
+      const choosing = document.getElementById('media-grid').classList.contains('is-choosing');
+      ticks[1].click();
+      return { afterFirst, afterThree, afterUntick: media.selected.size, choosing,
+               isButton: ticks[0].tagName === 'BUTTON' };
+    })()`);
+    check('the tick is a real button, not a decoration', mediaTicks.isButton === true);
+    check('ticking one picture chooses one', mediaTicks.afterFirst === 1, String(mediaTicks.afterFirst));
+    check('ticking three chooses three, not the last one',
+      mediaTicks.afterThree === 3, `${mediaTicks.afterThree} chosen`);
+    check('and ticking one again lets it go', mediaTicks.afterUntick === 2, String(mediaTicks.afterUntick));
+    // Once anything is chosen, every tick is on screen -- otherwise the way to
+    // add the second picture only exists under the pointer.
+    check('the grid shows its ticks once choosing has started', mediaTicks.choosing === true);
+
+    // Shift on a tick takes the whole run, which is what makes forty pictures
+    // bearable: tick the first, shift-tick the fortieth.
+    const mediaRun = await win.webContents.executeJavaScript(`(() => {
+      media.selected.clear();
+      media.anchor = null;
+      const ticks = [...document.querySelectorAll('.media-cell .media-tick')];
+      ticks[0].click();
+      ticks[4].dispatchEvent(new MouseEvent('click', { shiftKey: true, bubbles: true }));
+      return { chosen: media.selected.size };
+    })()`);
+    check('shift-ticking takes everything in between', mediaRun.chosen === 5,
+      `${mediaRun.chosen} chosen`);
+
+    // And a plain click on the picture is still "show me this one" rather than
+    // a fourth way to select, so inspecting never disturbs a selection by
+    // accident.
+    const mediaPlain = await win.webContents.executeJavaScript(`(() => {
+      document.querySelectorAll('.media-cell')[7].click();
+      return { chosen: media.selected.size, detail: Boolean(document.querySelector('.detail-name')) };
+    })()`);
+    check('clicking the picture itself still means "show me this one"',
+      mediaPlain.chosen === 1 && mediaPlain.detail === true,
+      `${mediaPlain.chosen} chosen, detail ${mediaPlain.detail}`);
+
     /* -- selection -------------------------------------------------------- */
 
     const mediaPicked = await win.webContents.executeJavaScript(`
@@ -677,6 +736,246 @@ app.whenReady().then(async () => {
     check('the fixture files are all still there',
       fs.readdirSync(path.join(mediaRoot, 'Camera Roll')).length > 0);
 
+    /* -- the file viewer ---------------------------------------------------- */
+    //
+    // The viewer is the answer to "what is in this thing", asked from a list
+    // that is about to delete it. So the checks here are about honesty: it
+    // shows what it can, and where it cannot it says so rather than showing
+    // bytes dressed up as content.
+    console.log('\nFile viewer:');
+
+    const serve = require('../src/main/lib/preview/serve');
+    const viewDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cleandrive-smoke-view-'));
+    const aFile = (name, body) => {
+      const full = path.join(viewDir, name);
+      fs.writeFileSync(full, body);
+      return full;
+    };
+    const textFile = aFile('notes.txt', 'dòng một\ndòng hai\ndòng ba\n');
+    const emptyFile = aFile('nothing.txt', '');
+    const binFile = aFile('thing.bin', Buffer.from([0x00, 0x01, 0x02, 0xff, 0x00, 0x7f, 0x00, 0x03]));
+    const imageFile = fs.readdirSync(path.join(mediaRoot, 'Camera Roll'))
+      .map((n) => path.join(mediaRoot, 'Camera Roll', n))
+      .find((p) => /\.(jpg|jpeg|png)$/i.test(p));
+
+    const open = async (target) => {
+      await win.webContents.executeJavaScript(`openViewer(${JSON.stringify(target)})`);
+      await wait(400);
+      return win.webContents.executeJavaScript(`(() => {
+        const body = document.getElementById('viewer-body');
+        const img = body.querySelector('.viewer-image');
+        return {
+          open: document.getElementById('viewer').hidden === false,
+          kind: (body.className.match(/is-([a-z-]+)/) || [])[1],
+          facts: document.getElementById('viewer-facts').textContent,
+          name: document.getElementById('viewer-name').textContent,
+          text: (body.querySelector('.viewer-text') || {}).textContent || '',
+          src: img ? img.getAttribute('src') : '',
+          note: (body.querySelector('.viewer-note') || {}).textContent || '',
+        };
+      })()`);
+    };
+
+    const vText = await open(textFile);
+    check('the viewer opens over the page', vText.open === true);
+    check('a text file is shown as its own characters', vText.kind === 'text',
+      String(vText.kind));
+    check('and the accents survive the round trip', vText.text.includes('dòng một'),
+      JSON.stringify(vText.text.slice(0, 24)));
+    check('the head names the file', vText.name.includes('notes.txt'), vText.name);
+    check('and states what it is, not just that it opened', /\d/.test(vText.facts), vText.facts);
+
+    const vEmpty = await open(emptyFile);
+    check('an empty file says it is empty rather than showing a blank page',
+      vEmpty.kind === 'empty' && vEmpty.note.length > 0, String(vEmpty.kind));
+
+    const vBin = await open(binFile);
+    check('a binary is refused in words', vBin.kind === 'binary' && vBin.note.length > 0,
+      String(vBin.kind));
+    /*
+     * No hex dump, ever.
+     *
+     * Showing bytes as though they were content is the false confidence this
+     * app is written against: it invites somebody to decide a file is
+     * disposable because its insides looked like noise.
+     */
+    check('and not as a wall of bytes', vBin.text === '', JSON.stringify(vBin.text.slice(0, 40)));
+
+    if (imageFile) {
+      const vImg = await open(imageFile);
+      check('a picture is drawn', vImg.kind === 'image', String(vImg.kind));
+      /*
+       * The renderer never learns the path.
+       *
+       * It is handed a one-shot token on the app's own scheme, and the main
+       * process is the only side that can turn that back into a file. A bug in
+       * the page cannot widen into "read anything on the disk".
+       */
+      check('over the app scheme, with a token instead of a path',
+        vImg.src.startsWith('cleandrive://') && !vImg.src.includes(':\\') &&
+        !vImg.src.toLowerCase().includes('camera'), vImg.src.slice(0, 48));
+
+      const token = vImg.src.replace(/^cleandrive:\/\//, '').replace(/\/.*$/, '');
+      check('the token resolves while the viewer is open', serve.pathFor(token) === imageFile);
+
+      await win.webContents.executeJavaScript('closeViewer()');
+      await wait(200);
+      check('and stops resolving the moment it closes', !serve.pathFor(token),
+        String(serve.pathFor(token)));
+    }
+
+    /* -- Word, Excel, PowerPoint and archives ------------------------------- */
+    //
+    // Drawn from archives built in this test rather than from whatever Office
+    // files happen to be on the machine, because on a machine with none the
+    // checks would silently pass by never running. What the readers make of
+    // real documents is `test-office.js`'s job; this is about the four views
+    // reaching the page with their structure intact.
+    const ooxml = require('./ooxml-fixture');
+    const wordFile = aFile('bao-cao.docx', ooxml.docxFixture());
+    const sheetFile = aFile('so-lieu.xlsx', ooxml.xlsxFixture());
+    const deckFile = aFile('trinh-chieu.pptx', ooxml.pptxFixture());
+    const zipFile = aFile('goi.zip', ooxml.zipFixture());
+
+    const vWord = await open(wordFile);
+    check('a Word document is read, not refused', vWord.kind === 'office', String(vWord.kind));
+    const word = await win.webContents.executeJavaScript(`(() => {
+      const doc = document.querySelector('.viewer-body .doc');
+      const topList = doc.querySelector('ol');
+      return {
+        headings: [...doc.querySelectorAll('h1')].map((h) => h.textContent),
+        bold: [...doc.querySelectorAll('strong')].map((b) => b.textContent),
+        items: [...doc.querySelectorAll('li')].length,
+        nested: Boolean(topList && topList.querySelector('li ol li')),
+        cells: [...doc.querySelectorAll('table td')].map((td) => td.textContent.trim()),
+        span: (doc.querySelector('table td[colspan]') || {}).colSpan || 0,
+        images: doc.querySelectorAll('img.doc-img').length,
+        imageIsData: (doc.querySelector('img.doc-img') || {}).src?.startsWith('data:image/') || false,
+        inlineStyles: doc.querySelectorAll('[style]').length,
+        scripts: doc.querySelectorAll('script, iframe, object, embed').length,
+      };
+    })()`);
+    check('its heading is a heading', word.headings.join('') === 'Báo cáo tháng', word.headings.join('|'));
+    check('the bold run is bold and the plain one is not',
+      word.bold.length === 1 && word.bold[0] === 'Đậm', JSON.stringify(word.bold));
+    /*
+     * A real list, numbered by the browser.
+     *
+     * The earlier reader computed its own markers, which meant getting every
+     * restart rule right from the cases it had met. An `<ol>` inside an `<li>`
+     * numbers and restarts correctly by construction, and that is most of why
+     * the library won for Word.
+     */
+    check('the list is a real list with a real sub-list', word.items === 3 && word.nested === true,
+      `${word.items} items, nested ${word.nested}`);
+    check('the table keeps its merged cell', word.span === 2, String(word.span));
+    check('and all of its cells', word.cells.join('|') === 'Gộp hai cột|trái|phải', word.cells.join('|'));
+    check('a picture inside the document is drawn', word.images === 1 && word.imageIsData === true,
+      `${word.images} images, data URI ${word.imageIsData}`);
+    /*
+     * The document is rebuilt from an allowlist, never assigned as innerHTML.
+     *
+     * The reader hands back HTML, and these are files the user did not write.
+     * Two things are checked here because both would be invisible otherwise: no
+     * element carries a `style` attribute, which the page's `style-src 'self'`
+     * policy would block anyway and which therefore would silently lose its
+     * layout in the shipped app; and nothing that could execute or embed got
+     * through the rebuild at all.
+     */
+    check('nothing reached the page as an inline style', word.inlineStyles === 0,
+      String(word.inlineStyles));
+    check('and nothing that could run or embed came with it', word.scripts === 0,
+      String(word.scripts));
+
+    const vSheet = await open(sheetFile);
+    check('a workbook is read', vSheet.kind === 'office', String(vSheet.kind));
+    const sheet = await win.webContents.executeJavaScript(`(() => {
+      const body = document.getElementById('viewer-body');
+      return {
+        tabs: [...body.querySelectorAll('.sheet-tab')].map((t) => t.textContent),
+        hiddenTab: body.querySelectorAll('.sheet-tab.is-hidden-sheet').length,
+        columns: [...body.querySelectorAll('.sheet-col')].map((c) => c.textContent),
+        rows: [...body.querySelectorAll('.sheet-row')].map((r) => r.textContent),
+        date: (body.querySelector('td.is-date') || {}).textContent || '',
+        number: (body.querySelector('td.is-number') || {}).textContent || '',
+        bool: (body.querySelector('td.is-bool') || {}).textContent || '',
+        error: (body.querySelector('td.is-error') || {}).textContent || '',
+      };
+    })()`);
+    // The tab order is the workbook's, and `sheet2.xml` being the first tab is
+    // ordinary; reading the archive instead would put them the other way round.
+    check('the sheet tabs are in the workbook\'s order', sheet.tabs.join(',') === 'Tháng 6,Nháp',
+      sheet.tabs.join(','));
+    check('a sheet hidden in Excel is shown and marked', sheet.hiddenTab === 1);
+    check('the lettered strip is drawn', sheet.columns.join('') === 'AB', sheet.columns.join(''));
+    check('and the row numbers are the sheet\'s own, gaps and all',
+      sheet.rows.join(',') === '1,2,4', sheet.rows.join(','));
+    /*
+     * The one that matters most on this screen: a date in a spreadsheet is
+     * stored as the number 45658, and only a formatting rule in another part of
+     * the archive makes it a date. Getting this wrong shows a column of
+     * five-digit numbers where the invoice dates should be.
+     */
+    check('a date is shown as a date, not as the number it is stored as',
+      /2025/.test(sheet.date) && !sheet.date.includes('45658'), sheet.date);
+    check('a number carries its thousands separators', /1.250.000|1,250,000/.test(sheet.number),
+      sheet.number);
+    check('a boolean and an error are said in words',
+      sheet.bool.length > 0 && sheet.error === '#N/A', `${sheet.bool} / ${sheet.error}`);
+
+    const vDeck = await open(deckFile);
+    check('a presentation is read', vDeck.kind === 'office', String(vDeck.kind));
+    const deck = await win.webContents.executeJavaScript(`(() => {
+      const body = document.getElementById('viewer-body');
+      return {
+        titles: [...body.querySelectorAll('.slide-title')].map((t) => t.textContent),
+        numbers: [...body.querySelectorAll('.slide-n')].map((n) => n.textContent),
+        body: [...body.querySelectorAll('.slide-p')].map((p) => p.textContent),
+        notes: [...body.querySelectorAll('.slide-notes p')].map((p) => p.textContent),
+      };
+    })()`);
+    // `slide10.xml` sorts before `slide2.xml` as a string, and slides keep
+    // their file name when reordered, so only the presentation knows the order.
+    check('the slides are in the deck\'s order, not the file names\'',
+      deck.titles.join(',') === 'Mở đầu,Kết luận', deck.titles.join(','));
+    check('each slide is numbered', deck.numbers.join(',') === '1,2', deck.numbers.join(','));
+    check('the body text is there, once', deck.body.join('|') === 'điểm một|điểm hai',
+      deck.body.join('|'));
+    check('speaker notes are shown', deck.notes.join('') === 'nhớ nói chậm', deck.notes.join('|'));
+
+    const vZip = await open(zipFile);
+    check('an archive is listed rather than refused', vZip.kind === 'archive', String(vZip.kind));
+    const archive = await win.webContents.executeJavaScript(`(() => {
+      const body = document.getElementById('viewer-body');
+      return {
+        names: [...body.querySelectorAll('.archive-name')].map((n) => n.textContent),
+        summary: (body.querySelector('.archive-summary') || {}).textContent || '',
+      };
+    })()`);
+    // The folder entry is not a file and is left out of the listing.
+    check('the members are listed and the folder entry is not',
+      archive.names.join(',') === 'readme.txt,data/report.csv', archive.names.join(','));
+    check('with a line saying how much it unpacks to', /\d/.test(archive.summary), archive.summary);
+
+    const vClosed = await win.webContents.executeJavaScript(`(() => {
+      closeViewer();
+      return { hidden: document.getElementById('viewer').hidden };
+    })()`);
+    check('closing puts the page back', vClosed.hidden === true);
+
+    // The button somebody actually reaches the viewer by. It leads on every
+    // file row in the app, not only on the photo screen.
+    const rowActions = await win.webContents.executeJavaScript(`(() => {
+      const row = document.querySelector('#largest-files .file-row');
+      const links = [...row.querySelectorAll('.file-actions .link')];
+      return { labels: links.map((l) => l.textContent), lead: links[0].classList.contains('is-lead') };
+    })()`);
+    check('View leads the actions on a file row', rowActions.lead === true,
+      rowActions.labels.join(' / '));
+    check('with Reveal and Open behind it', rowActions.labels.length === 3,
+      rowActions.labels.join(' / '));
+
+    fs.rmSync(viewDir, { recursive: true, force: true });
     fs.rmSync(mediaRoot, { recursive: true, force: true });
 
     /* -- trash (dry run) ------------------------------------------------- */

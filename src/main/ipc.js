@@ -13,6 +13,8 @@ const cloud = require('./lib/media/cloud');
 const thumbs = require('./lib/media/thumbs');
 const perceptual = require('./lib/media/perceptual');
 const { MediaCache } = require('./lib/media/cache');
+const { preview } = require('./lib/preview');
+const previewServe = require('./lib/preview/serve');
 const { planTrash, executeTrash, ESTIMATED_FILES_PER_SEC } = require('./lib/trash');
 const { CancelToken, formatBytes, formatDuration } = require('./lib/util');
 const { services } = require('./services');
@@ -971,6 +973,42 @@ function register() {
         // The honest denominator: how much of the library has been looked at.
         known: mediaStats.size,
       };
+    })
+  );
+
+  /* ---- preview ----------------------------------------------------------- */
+
+  /**
+   * Look at one file without leaving the app.
+   *
+   * Every screen here asks "should this go?", and for anything that is not a
+   * cache or a log that cannot be answered without seeing inside. The answer
+   * used to be the Open button, which puts the decision two applications away
+   * from the list it was made in.
+   *
+   * The reply carries either the contents (for text, which is small and wants
+   * to be searchable in the window) or a token (for anything streamed over the
+   * app's own protocol). The renderer never learns a path it did not already
+   * have, and never gets one it can turn into a fetch of its own.
+   */
+  ipcMain.handle('preview:open', (event, filePath) =>
+    guard(async () => {
+      if (typeof filePath !== 'string' || filePath.trim() === '') {
+        throw new Error(t('preview.error.noPath', 'No file was named'));
+      }
+      // One preview at a time: the last one's token stops working the moment
+      // this one is asked for, so a window that has moved on cannot still be
+      // fetching what it used to show.
+      previewServe.revokeAll();
+      return preview(filePath);
+    })
+  );
+
+  /** Closing the preview forgets the token with it. */
+  ipcMain.handle('preview:close', () =>
+    guard(async () => {
+      previewServe.revokeAll();
+      return true;
     })
   );
 

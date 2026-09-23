@@ -999,6 +999,75 @@
     'media.showFewer': 'thu gọn',
     'media.removeFilter': 'Bỏ bộ lọc này',
     'media.showingCount': 'Đang hiện {n} · {size}',
+    'media.tickHint': 'Thêm vào danh sách đang chọn (giữ Shift để lấy cả một dải)',
+
+    /* ---- the file viewer ---------------------------------------------------
+     *
+     * Mọi màn hình trong app này đều hỏi cùng một câu: có nên xoá không. Với
+     * thứ không phải cache hay log thì không nhìn vào là không trả lời được.
+     * Nên phần chữ ở đây phải nói rõ cái gì xem được, cái gì không, và vì sao —
+     * "không xem được" mà không nói lý do thì người dùng tưởng app hỏng.
+     */
+    'app.view': 'Xem',
+    'app.close': 'Đóng',
+    'viewer.title': 'Xem trước tệp',
+    'viewer.label': 'Xem trước',
+    'viewer.openWith': 'Mở bằng ứng dụng gốc',
+    'viewer.reading': 'Đang đọc…',
+    'viewer.lines': '{n} dòng',
+    'viewer.truncated': 'mới hiện {size} đầu tiên',
+    'viewer.noExtension': 'không có đuôi',
+    'viewer.note.unknown': 'Đây không phải định dạng app này hiển thị được.',
+    'preview.error.noPath': 'Chưa chỉ định tệp nào',
+    'preview.note.empty': 'Tệp này rỗng, không có gì bên trong.',
+    'preview.note.mislabelled':
+      'Mang đuôi .{ext} nhưng nội dung là văn bản thuần — cũng chính vì thế mà Word không mở được nó',
+    'preview.note.tooLarge': 'Quá lớn để hiện ở đây — hãy mở bằng ứng dụng gốc của nó.',
+    'preview.note.legacyOffice':
+      'Đây là định dạng Office đời cũ, lưu nội dung theo cách mà app này không đọc được nếu không thêm thư viện ngoài — thứ nó vốn không có. Hãy mở bằng ứng dụng gốc.',
+    'preview.note.binary': 'Không phải định dạng app này hiển thị được. Dung lượng và ngày tháng ở phía trên.',
+    'preview.note.missing': 'Tệp này không còn ở đó nữa.',
+    'preview.note.notAFile': 'Đây là thư mục, không phải tệp.',
+    'preview.note.busy': 'Một chương trình khác đang mở tệp này.',
+    'preview.note.unreadable': 'Không mở được tệp này.',
+
+    /*
+     * Vì sao một tệp mang tên tài liệu lại không đọc được như tài liệu.
+     *
+     * Tách thành từng câu riêng chứ không gộp thành một lời xin lỗi chung, vì
+     * mỗi lý do dẫn tới một việc khác nhau: tệp hỏng thì may ra cứu được, tệp
+     * khoá thì cần mật khẩu chứ không cần sửa, còn tệp quá lớn thì vẫn bình
+     * thường, chỉ là không hợp với một khung xem trước.
+     */
+    'preview.why.notADocument':
+      'Mang đuôi .{ext} nhưng bên trong không phải một tài liệu. Thứ tạo ra nó đã không tạo ra tài liệu thật.',
+    'preview.why.encrypted': 'Tệp này được đặt mật khẩu. Hãy mở bằng ứng dụng gốc của nó.',
+    'preview.why.damaged': 'Tệp này hỏng, không đọc được tới cuối.',
+    'preview.why.tooLarge': 'Quá lớn để mở ở đây — hãy mở bằng ứng dụng gốc của nó.',
+    'preview.why.unsupported': 'Bên trong tệp này có thứ mà app không đọc được.',
+
+    /* Word, Excel, PowerPoint và tệp nén, khi đã đọc được. */
+    'viewer.doc.empty': 'Tài liệu này không có chữ nào.',
+    'viewer.doc.truncated': 'Tệp này lớn — ở đây mới hiện phần đầu.',
+    'viewer.doc.droppedImages': '{n} ảnh quá lớn nên không hiện ở đây.',
+    'viewer.img.format': '[ảnh ở định dạng không hiển thị được: .{ext}]',
+    'viewer.img.skipped': '[ảnh quá lớn để hiện ở đây]',
+    'viewer.sheet.none': 'Bảng tính này không có trang nào.',
+    'viewer.sheet.empty': 'Trang này trống.',
+    'viewer.sheet.missing': 'Trang này được nhắc tới nhưng không có trong tệp.',
+    'viewer.sheet.hidden': 'Đang bị ẩn trong Excel',
+    'viewer.cell.true': 'ĐÚNG',
+    'viewer.cell.false': 'SAI',
+    'viewer.deck.empty': 'Bài trình chiếu này không có trang nào.',
+    'viewer.deck.untitled': 'Trang không tiêu đề',
+    'viewer.deck.notes': 'Ghi chú người trình bày',
+    'viewer.archive.summary': '{n} tệp · {size} khi giải nén',
+    'viewer.archive.encrypted': 'Một phần nội dung được đặt mật khẩu.',
+    'viewer.archive.more': 'Mới liệt kê {n} mục đầu tiên.',
+    'viewer.facts.sheets': '{n} trang tính',
+    'viewer.facts.slides': '{n} trang chiếu',
+    'viewer.facts.images': '{n} ảnh',
+    'viewer.facts.entries': '{n} tệp',
 
     /*
      * How sure the app is.

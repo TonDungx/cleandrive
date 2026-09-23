@@ -2,9 +2,26 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
+    <!--
+      The policy widens by exactly one scheme, and deliberately.
+
+      `cleandrive:` is served by this app's own main process and by nothing
+      else. It exists so a file can be looked at in place -- a PDF, a picture at
+      full size, a video -- without the renderer being handed the filesystem.
+      What makes it defensible is that **the renderer never names a path**: it
+      asks the main process to preview a file, gets back an opaque token, and
+      loads `cleandrive://<token>/`. There is no path in the request to tamper
+      with, and a token for a file nobody asked about does not exist.
+
+      Measured before it was built: an iframe on this scheme still gets
+      Chromium's own PDF viewer, with no console errors, under this policy.
+
+      Everything else is unchanged. No network, no inline script, no remote
+      anything.
+    -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:;"
+      content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: cleandrive:; media-src cleandrive:; frame-src cleandrive:;"
     />
     <title>CleanDrive</title>
     <link rel="stylesheet" href="styles.css" />
@@ -913,11 +930,35 @@
       <div class="dp-current" id="dp-current"></div>
     </div>
 
+    <!--
+      Looking at a file, in place.
+
+      Every screen in this app asks "should this go?", and for anything that is
+      not a cache or a log that cannot be answered without seeing inside. The
+      answer used to be the Open button, which puts the decision two
+      applications away from the list it was made in.
+    -->
+    <div class="viewer" id="viewer" hidden role="dialog" aria-modal="true"
+      data-i18n-aria="viewer.title" aria-label="File preview">
+      <div class="viewer-head">
+        <span class="viewer-name" id="viewer-name"></span>
+        <span class="viewer-facts" id="viewer-facts"></span>
+        <span class="spacer"></span>
+        <button class="btn btn-sm" id="viewer-reveal" data-i18n="app.reveal">Reveal</button>
+        <button class="btn btn-sm" id="viewer-open" data-i18n="viewer.openWith">Open in its own program</button>
+        <button class="btn btn-sm" id="viewer-close" data-i18n="app.close">Close</button>
+      </div>
+      <div class="viewer-body" id="viewer-body"></div>
+    </div>
+
     <div class="toast" id="toast" hidden></div>
 
     <script src="sidebar.js"></script>
     <script src="critters.js"></script>
     <script src="app.js"></script>
+    <!-- Loaded before the screens: every one of them opens a file row. -->
+    <script src="document.js"></script>
+    <script src="viewer.js"></script>
     <!-- All four share app.js's globals; must load after it. -->
     <script src="media.js"></script>
     <script src="automatic.js"></script>

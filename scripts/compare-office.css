@@ -1,0 +1,240 @@
+/* The stylesheet for scripts/compare-office.js.
+   Both columns are styled by this, so the only difference on the page is what
+   each reader extracted -- not how it was dressed. */
+
+:root {
+  color-scheme: light;
+  --border: #dfe3ea;
+  --soft: #eef1f5;
+  --text: #16181d;
+  --text-2: #4a5160;
+  --text-3: #858d9c;
+  --accent: #2563eb;
+  --more: #0d7a3f;
+  --more-bg: #e8f6ee;
+  --less: #9a5b00;
+  --less-bg: #fdf3e2;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  /* A side gutter of at least 16px at every width, including a phone. */
+  padding-block: 28px 80px;
+  padding-inline: clamp(16px, 4vw, 52px);
+  font: 14px/1.6 -apple-system, "Segoe UI", system-ui, sans-serif;
+  color: var(--text);
+  background: #fff;
+}
+
+h1 { font-size: 22px; margin: 0 0 6px; }
+.lede { margin: 0 0 22px; color: var(--text-2); max-width: 76ch; }
+.legend { margin: 8px 0 34px; color: var(--text-3); font-size: 12px; }
+.vs { color: var(--text-3); }
+
+/* ---- the numbers ---- */
+
+.stats {
+  border-collapse: collapse;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  width: 100%;
+}
+
+.stats th, .stats td {
+  padding: 6px 9px;
+  border-bottom: 1px solid var(--border);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.stats thead th { color: var(--text-3); font-weight: 600; text-align: right; }
+.stats tbody th {
+  text-align: left;
+  font-weight: 500;
+  max-width: 30ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.stats td.more { background: var(--more-bg); color: var(--more); }
+.stats td.less { background: var(--less-bg); color: var(--less); }
+
+/* ---- one file, two columns ---- */
+
+.file { margin: 0 0 46px; }
+.file h2 { font-size: 15px; margin: 0 0 2px; overflow-wrap: anywhere; }
+.file .meta { margin: 0 0 12px; color: var(--text-3); font-size: 12px; }
+
+.panes { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 1000px) { .panes { grid-template-columns: 1fr; } }
+
+.pane {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  background: #fff;
+  min-width: 0;
+}
+
+.pane > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 12px;
+  background: var(--soft);
+  border-bottom: 1px solid var(--border);
+}
+
+.tag { font-size: 12px; font-weight: 650; }
+.tag.mine { color: var(--more); }
+.tag.theirs { color: var(--accent); }
+.ms { color: var(--text-3); font-size: 11px; font-variant-numeric: tabular-nums; }
+
+.note {
+  margin: 0;
+  padding: 7px 12px;
+  background: var(--less-bg);
+  color: var(--less);
+  font-size: 11.5px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* A fixed height so two columns can be read against each other without one
+   pushing the other off the screen. */
+.render {
+  height: 560px;
+  overflow: auto;
+  padding: 14px 16px;
+  font-size: 13px;
+}
+
+.fail { color: #b3261e; font-weight: 600; }
+.muted { color: var(--text-3); }
+.plain { white-space: pre-wrap; font: 12px/1.5 ui-monospace, Consolas, monospace; margin: 0; }
+
+/* ==========================================================================
+   Below: the same rules the app uses, so both columns are dressed alike.
+   ========================================================================== */
+
+.doc { max-width: 100%; }
+.doc-p, .doc-h { margin: 0 0 0.6em; white-space: pre-wrap; overflow-wrap: anywhere; }
+.doc-h { line-height: 1.3; font-weight: 650; margin-top: 1.3em; }
+h1.doc-h { font-size: 1.5em; }
+h2.doc-h { font-size: 1.28em; }
+h3.doc-h { font-size: 1.12em; }
+.doc-p.is-center { text-align: center; }
+.doc-p.is-right { text-align: right; }
+.doc-p.is-both { text-align: justify; }
+.doc-p.is-blank { margin-bottom: 0; height: 0.5em; }
+
+.doc-li { display: flex; gap: 8px; margin-bottom: 0.3em; }
+.doc-marker { flex: 0 0 auto; min-width: 1.5em; color: var(--text-3); }
+.doc-li.is-l1 { margin-left: 2em; }
+.doc-li.is-l2 { margin-left: 4em; }
+.doc-li.is-l3 { margin-left: 6em; }
+.doc-li.is-l4 { margin-left: 8em; }
+
+.doc-link { color: var(--accent); text-decoration: underline; }
+
+.doc-table, .render table {
+  border-collapse: collapse;
+  font-size: 0.92em;
+  margin: 0 0 1em;
+  max-width: 100%;
+}
+
+.doc-table td, .render table td, .render table th {
+  border: 1px solid var(--border);
+  padding: 5px 8px;
+  vertical-align: top;
+}
+
+.doc-img { display: block; max-width: 100%; height: auto; margin: 8px 0; }
+.doc-img-missing {
+  display: inline-block; padding: 1px 7px; border: 1px dashed var(--border);
+  color: var(--text-3); font-size: 0.86em;
+}
+
+/* ---- sheets ---- */
+
+.tabname { margin: 14px 0 6px; font-size: 12px; color: var(--text-2); }
+.tabname:first-child { margin-top: 0; }
+.scroll { overflow: auto; max-width: 100%; }
+
+.sheet-table {
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.sheet-table th, .sheet-table td {
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  padding: 3px 7px;
+  white-space: nowrap;
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sheet-col, .sheet-row, .sheet-corner {
+  background: var(--soft);
+  color: var(--text-3);
+  font-weight: 500;
+  text-align: center;
+  position: sticky;
+}
+
+.sheet-col { top: 0; z-index: 2; }
+.sheet-row { left: 0; z-index: 2; }
+.sheet-corner { top: 0; left: 0; z-index: 3; }
+
+.sheet-table td.is-number,
+.sheet-table td.is-percent,
+.sheet-table td.is-date,
+.sheet-table td.is-datetime,
+.sheet-table td.is-time { text-align: right; }
+.sheet-table td.is-error { color: #b3261e; text-align: center; }
+
+/* ---- slides ---- */
+
+.slide { border: 1px solid var(--border); border-radius: 6px; padding: 12px 14px; margin-bottom: 12px; }
+.slide-head { display: flex; align-items: baseline; gap: 9px; margin-bottom: 8px; }
+.slide-n {
+  min-width: 22px; padding: 1px 6px; border-radius: 4px;
+  background: var(--soft); color: var(--text-3); font-size: 11px; text-align: center;
+}
+.slide-title { margin: 0; font-size: 13.5px; font-weight: 650; white-space: pre-wrap; }
+.slide-p { margin: 0 0 0.3em; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text-2); }
+.slide-p.is-l1 { margin-left: 1.6em; }
+.slide-p.is-l2 { margin-left: 3.2em; }
+.slide-p.is-l3 { margin-left: 4.8em; }
+.slide-images { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.slide-img { max-width: 150px; max-height: 110px; object-fit: contain; margin: 0; border: 1px solid var(--border); }
+.slide-notes { margin-top: 10px; padding-top: 8px; border-top: 1px dashed var(--border); }
+.slide-notes-label {
+  display: block; margin-bottom: 3px; color: var(--text-3);
+  font-size: 10px; font-weight: 650; letter-spacing: 0.04em; text-transform: uppercase;
+}
+.slide-notes p { margin: 0; font-size: 11.5px; color: var(--text-2); white-space: pre-wrap; }
+
+/* ---- the answer the page was made to find ---- */
+
+.verdict {
+  margin: 0 0 30px;
+  padding: 16px 20px;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--more);
+  border-radius: 8px;
+  background: var(--more-bg);
+  max-width: 84ch;
+}
+
+.verdict h2 { margin: 0 0 8px; font-size: 14px; color: var(--more); }
+.verdict p { margin: 0 0 8px; font-size: 13px; line-height: 1.62; }
+.verdict p:last-child { margin-bottom: 0; }
+.verdict code { font-family: ui-monospace, Consolas, monospace; font-size: 0.92em; }

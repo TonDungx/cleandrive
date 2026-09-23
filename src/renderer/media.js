@@ -657,9 +657,32 @@ function makeCell(file, index) {
     frame.appendChild(cloudBadge);
   }
 
-  const tick = document.createElement('span');
+  /*
+   * The tick is a button, and it toggles.
+   *
+   * It was a decoration -- `aria-hidden`, no handler -- drawn on hover because
+   * it looked right. It looked like a checkbox, so people clicked it like one,
+   * and the click fell through to the cell, whose plain-click behaviour is
+   * "clear the selection and take only this". Ticking three pictures left one
+   * selected. The affordance promised multi-select and the handler underneath
+   * it did the opposite.
+   *
+   * Clicking the picture still means "show me this one". Clicking the tick
+   * means "add this to what I am choosing", which is what every photo app on
+   * the machine already taught the user it means.
+   */
+  const tick = document.createElement('button');
   tick.className = 'media-tick';
-  tick.setAttribute('aria-hidden', 'true');
+  tick.type = 'button';
+  tick.tabIndex = -1;
+  tick.title = t('media.tickHint', 'Add to the selection (or shift-click to take a run of them)');
+  tick.setAttribute('aria-label', tick.title);
+  tick.addEventListener('click', (event) => {
+    // Stop it reaching the cell, or the cell would immediately replace the
+    // selection this just added to.
+    event.stopPropagation();
+    onTickClick(file, index, event);
+  });
   frame.appendChild(tick);
 
   const caption = document.createElement('span');
@@ -735,13 +758,39 @@ function requestThumbs(paths) {
 
 /* ------------------------------------------------------------------ selection */
 
+/**
+ * The tick: add this one, or everything between it and the last one ticked.
+ *
+ * Shift here extends without needing the keyboard to have been involved in the
+ * first click, which is the thing that makes choosing forty pictures bearable:
+ * tick the first, shift-tick the fortieth.
+ */
+function onTickClick(file, index, event) {
+  if (event.shiftKey && media.anchor !== null) {
+    extendTo(index);
+  } else {
+    toggle(file.path);
+    media.anchor = file.path;
+  }
+
+  media.focused = file.path;
+  syncCells();
+  updateSelection();
+  // Deliberately not touching the detail panel. Ticking is choosing, not
+  // looking, and having the panel jump about while somebody works down a row
+  // of pictures is the sort of movement that makes a screen feel unsteady.
+}
+
+function extendTo(index) {
+  const from = media.shown.findIndex((f) => f.path === media.anchor);
+  if (from < 0) return;
+  const [lo, hi] = from < index ? [from, index] : [index, from];
+  for (let i = lo; i <= hi; i++) media.selected.add(media.shown[i].path);
+}
+
 function onCellClick(file, index, event) {
   if (event.shiftKey && media.anchor !== null) {
-    const from = media.shown.findIndex((f) => f.path === media.anchor);
-    if (from >= 0) {
-      const [lo, hi] = from < index ? [from, index] : [index, from];
-      for (let i = lo; i <= hi; i++) media.selected.add(media.shown[i].path);
-    }
+    extendTo(index);
   } else if (event.ctrlKey || event.metaKey) {
     toggle(file.path);
     media.anchor = file.path;
@@ -800,6 +849,10 @@ function updateSelection() {
         ? ` · ${t('media.selectedSynced', '{n} synced to the cloud', { n: formatCount(synced) })}`
         : '');
   }
+
+  // Once anything is chosen the whole grid shows its ticks, so adding the next
+  // one is never a thing you have to go hunting for under the pointer.
+  $('media-grid').classList.toggle('is-choosing', count > 0);
 
   $('media-delete').disabled = count === 0;
   $('media-delete').hidden = count === 0;
@@ -954,6 +1007,7 @@ function renderDetail(file) {
   const actions = document.createElement('div');
   actions.className = 'panel-actions panel-actions-tight';
   actions.append(
+    linkButton(t('app.view', 'View'), () => openViewer(file.path), 'is-lead'),
     linkButton(t('app.reveal', 'Reveal'), () => api.reveal(file.path)),
     linkButton(t('app.open', 'Open'), async () => unwrap(await api.open(file.path), t('app.open', 'Open')))
   );
