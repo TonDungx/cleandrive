@@ -4,8 +4,11 @@
  * The licence this process is running under.
  *
  * There is no licence storage yet -- activation, trials and `license.dat` are
- * Phase 6 -- so a release build is `free`. Nothing that exists today is behind
- * a paid feature, so that changes nothing a user can see.
+ * Phase 6. Until then a release build has **Pro open to everyone**: decided on
+ * 2026-09-24, before the first Pro feature (the snapshot comparison) shipped,
+ * over locking it behind a purchase that cannot yet be made. Pro·Dev and
+ * Business stay closed; whether they open too is still to be decided. Phase 6
+ * has to take this back, and must say so to whoever has been using it.
  *
  * A checkout is different: it opens every feature by default, so a developer
  * sees the whole app, and `CLEANDRIVE_ENTITLEMENTS` narrows it to test one
@@ -27,6 +30,9 @@ const PRESETS = Object.freeze({
   free: { state: 'free' },
 });
 
+/** What a release build runs under until licences exist (see above). */
+const OPEN_PRO = Object.freeze({ state: 'active', tier: 'pro', addons: [] });
+
 /**
  * @param {object} [options]  injectable, for the harness
  * @param {string} [options.channel]
@@ -38,7 +44,7 @@ function currentLicense({ channel = BUILD_CHANNEL, env = process.env } = {}) {
     const preset = PRESETS[wanted] || PRESETS.all;
     return Object.freeze({ ...preset, source: 'dev' });
   }
-  return Object.freeze({ ...entitlements.FREE, source: 'none' });
+  return Object.freeze({ ...OPEN_PRO, source: 'open' });
 }
 
 /** A `can` bound to the current licence, for the registry and the pipeline. */
@@ -47,4 +53,4 @@ function canNow(options) {
   return (feature) => entitlements.can(lic, feature);
 }
 
-module.exports = { currentLicense, canNow, PRESETS };
+module.exports = { currentLicense, canNow, PRESETS, OPEN_PRO };

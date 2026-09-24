@@ -492,15 +492,33 @@ function treeResult(root, tree, opts) {
 }
 
 /**
- * What the walk was told to skip, as a short hash.
+ * How the walk counts, as a number that goes up whenever that changes.
+ *
+ * The options and the skip lists are not the whole of it. Two scanners with
+ * the same rules can still count different things: until revision 2 a
+ * directory entry that called OneDrive's folder a link made the walk skip all
+ * of OneDrive (12 GB on the machine this was written on), and Electron's own
+ * `fs` made it skip every `.asar`. A comparison across that fix would have
+ * reported twelve gigabytes of growth that was a change of scanner. Bump this
+ * with any change to what the walk counts, and older snapshots stop being
+ * compared with newer ones instead of lying about them.
+ *
+ *   1  the first snapshots
+ *   2  OneDrive's folder and `.asar` archives counted (lib/real-fs.js)
+ */
+const SCANNER_REVISION = 2;
+
+/**
+ * What the walk was told to skip, and how it counts, as a short hash.
  *
  * A scan that skipped hidden folders and one that did not measure different
  * things, and so do two versions of the app with different lists of noise
  * folders. A snapshot carries this so a comparison between two such scans can
  * refuse itself instead of reporting the difference in rules as growth.
  */
-function rulesFingerprint(opts) {
+function rulesFingerprint(opts, revision = SCANNER_REVISION) {
   const basis = JSON.stringify({
+    revision,
     followSymlinks: Boolean(opts.followSymlinks),
     ignoreHidden: Boolean(opts.ignoreHidden),
     excludeSystem: Boolean(opts.excludeSystem),
@@ -553,4 +571,4 @@ async function collectFiles(rootPaths, options = {}, handlers = {}) {
   return { files, errors, cancelled };
 }
 
-module.exports = { scan, walk, collectFiles, DEFAULTS };
+module.exports = { scan, walk, collectFiles, rulesFingerprint, DEFAULTS, SCANNER_REVISION };

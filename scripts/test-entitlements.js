@@ -86,11 +86,19 @@ check('a checkout opens everything by default', currentLicense({ channel: 'dev',
 check('and the override narrows it for testing a tier',
   currentLicense({ channel: 'dev', env: { CLEANDRIVE_ENTITLEMENTS: 'free' } }).state === 'free' &&
     currentLicense({ channel: 'dev', env: { CLEANDRIVE_ENTITLEMENTS: 'pro' } }).tier === 'pro');
-check('a release build ignores the override completely',
-  currentLicense({ channel: 'stable', env: { CLEANDRIVE_ENTITLEMENTS: 'all' } }).state === 'free' &&
-    currentLicense({ channel: 'beta', env: { CLEANDRIVE_ENTITLEMENTS: 'business' } }).state === 'free');
-check('so nothing paid unlocks in a release by setting a variable',
-  !canNow({ channel: 'stable', env: { CLEANDRIVE_ENTITLEMENTS: 'all' } })('pro.diff'));
+{
+  // Decided 2026-09-24: until licences exist (Phase 6) a release build has Pro
+  // open to everyone, and Pro·Dev and Business closed.
+  const stable = currentLicense({ channel: 'stable', env: { CLEANDRIVE_ENTITLEMENTS: 'all' } });
+  const beta = currentLicense({ channel: 'beta', env: { CLEANDRIVE_ENTITLEMENTS: 'free' } });
+  check('a release build has Pro open, whatever the override says',
+    stable.state === 'active' && stable.tier === 'pro' && stable.addons.length === 0 && stable.source === 'open' &&
+      beta.tier === 'pro' && beta.state === 'active', `${stable.state} ${stable.tier}`);
+  const can = canNow({ channel: 'stable', env: { CLEANDRIVE_ENTITLEMENTS: 'all' } });
+  check('so the snapshot comparison runs there', can('pro.diff') && can('pro.quarantine'));
+  check('but nothing past Pro unlocks in a release by setting a variable',
+    !can('pro.dev') && !can('biz.cli') && !can('biz.audit'));
+}
 check('and nothing the app does today is paid', registry.list().every((a) => a.feature === 'free'));
 
 console.log('\nentitlements: what the window learns\n');

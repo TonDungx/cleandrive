@@ -4,6 +4,9 @@ const fsp = require('node:fs/promises');
 const path = require('node:path');
 
 const { pathKey } = require('./util');
+// Every refusal below is shown in the window, so it is a message the window
+// words in its own language rather than an English sentence.
+const { message: m } = require('../../i18n');
 
 /**
  * What the disk looked like, over time.
@@ -389,12 +392,22 @@ const CONFIDENCE = {
 function growth(series) {
   const n = series.length;
   if (n < 2) {
-    return { ok: false, n, spanDays: 0, reason: 'Only one measurement so far — trends need at least two.' };
+    return {
+      ok: false,
+      n,
+      spanDays: 0,
+      reason: m('trends.reason.one', 'Only one measurement so far — trends need at least two.'),
+    };
   }
 
   const fit = fitLine(series, (p) => p.usedBytes);
   if (!fit) {
-    return { ok: false, n, spanDays: 0, reason: 'All measurements were taken at the same moment.' };
+    return {
+      ok: false,
+      n,
+      spanDays: 0,
+      reason: m('trends.reason.sameMoment', 'All measurements were taken at the same moment.'),
+    };
   }
 
   if (fit.n < CONFIDENCE.minPoints || fit.spanDays < CONFIDENCE.minSpanDays) {
@@ -404,9 +417,11 @@ function growth(series) {
       spanDays: fit.spanDays,
       bytesPerDay: fit.slopePerDay,
       r2: fit.r2,
-      reason:
-        `Too little history to be worth reporting: ${fit.n} measurement(s) over ` +
-        `${fit.spanDays.toFixed(1)} day(s). A week of data is the minimum.`,
+      reason: m(
+        'trends.reason.tooLittle',
+        'Too little history to be worth reporting: {n} measurement(s) over {days} day(s). A week of data is the minimum.',
+        { n: fit.n, days: fit.spanDays.toFixed(1) }
+      ),
     };
   }
 
@@ -436,7 +451,7 @@ function predictFull(series) {
     return {
       ok: false,
       n: trend.n,
-      reason: 'Usage is flat or falling, so there is nothing to extrapolate.',
+      reason: m('trends.reason.flat', 'Usage is flat or falling, so there is nothing to extrapolate.'),
       bytesPerDay: trend.bytesPerDay,
     };
   }
@@ -445,16 +460,18 @@ function predictFull(series) {
     return {
       ok: false,
       n: trend.n,
-      reason:
-        `Usage moves too erratically to extrapolate (the trend explains only ` +
-        `${Math.round(trend.r2 * 100)}% of the variation).`,
+      reason: m(
+        'trends.reason.erratic',
+        'Usage moves too erratically to extrapolate (the trend explains only {pct}% of the variation).',
+        { pct: Math.round(trend.r2 * 100) }
+      ),
       bytesPerDay: trend.bytesPerDay,
     };
   }
 
   const days = latest.freeBytes / trend.bytesPerDay;
   if (!Number.isFinite(days) || days <= 0) {
-    return { ok: false, n: trend.n, reason: 'The volume already reports no free space.' };
+    return { ok: false, n: trend.n, reason: m('trends.reason.full', 'The volume already reports no free space.') };
   }
 
   if (days > CONFIDENCE.maxHorizonDays) {
@@ -462,7 +479,7 @@ function predictFull(series) {
       ok: false,
       n: trend.n,
       beyondHorizon: true,
-      reason: 'At this rate the disk does not fill within two years.',
+      reason: m('trends.reason.notSoon', 'At this rate the disk does not fill within two years.'),
       bytesPerDay: trend.bytesPerDay,
     };
   }
@@ -491,7 +508,7 @@ function folderTrends(history) {
 
     if (series.length < 2) {
       out.push({ root, bytes: last ? last.bytes : 0, samples: series.length, ok: false,
-        reason: 'Scanned once — scan it again later to see a trend.' });
+        reason: m('trends.reason.scannedOnce', 'Scanned once — scan it again later to see a trend.') });
       continue;
     }
 
@@ -504,7 +521,10 @@ function folderTrends(history) {
       spanDays: fit ? fit.spanDays : 0,
       bytesPerMonth: fit ? fit.slopePerDay * 30 : 0,
       ok: Boolean(fit) && fit.spanDays >= 1,
-      reason: fit && fit.spanDays < 1 ? 'All scans of this folder happened on the same day.' : undefined,
+      reason:
+        fit && fit.spanDays < 1
+          ? m('trends.reason.sameDay', 'All scans of this folder happened on the same day.')
+          : undefined,
     });
   }
 

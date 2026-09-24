@@ -13,6 +13,8 @@ const path = require('node:path');
 const { History, growth, predictFull, folderTrends, savings, report, defaultVolume, CONFIDENCE } =
   require('../src/main/lib/history');
 const { sample, volumeTargets } = require('../src/main/lib/sampler');
+// The refusals are messages the window words; the checks read the English.
+const text = (reason) => require('../src/i18n').render(reason);
 
 let failures = 0;
 function check(label, cond, detail = '') {
@@ -47,14 +49,14 @@ function ramp(days, perDay, startUsed, jitter = 0) {
     check('one measurement is not a trend', growth(ramp(1, GB, 100 * GB)).ok === false);
 
     const twoPoints = growth(ramp(2, GB, 100 * GB));
-    check('two points is below the minimum sample count', twoPoints.ok === false, twoPoints.reason);
-    check('and it says how much history there is', /2 measurement/.test(twoPoints.reason), twoPoints.reason);
+    check('two points is below the minimum sample count', twoPoints.ok === false, text(twoPoints.reason));
+    check('and it says how much history there is', /2 measurement/.test(text(twoPoints.reason)), text(twoPoints.reason));
 
     const shortSpan = growth(ramp(5, GB, 100 * GB));
-    check('five daily points still span less than a week', shortSpan.ok === false, shortSpan.reason);
+    check('five daily points still span less than a week', shortSpan.ok === false, text(shortSpan.reason));
 
     const enough = growth(ramp(14, GB, 100 * GB));
-    check('two weeks of daily points is enough', enough.ok === true, enough.reason || '');
+    check('two weeks of daily points is enough', enough.ok === true, text(enough.reason) || '');
     check('the rate is right', Math.abs(enough.bytesPerDay - GB) < GB * 0.01,
       `${(enough.bytesPerDay / GB).toFixed(3)} GB/day`);
     check('the monthly figure follows from it',
@@ -66,24 +68,24 @@ function ramp(days, perDay, startUsed, jitter = 0) {
 
   {
     const flat = predictFull(ramp(30, 0, 100 * GB));
-    check('a flat disk yields no prediction', flat.ok === false, flat.reason);
-    check('and says the usage is not rising', /flat or falling/.test(flat.reason), flat.reason);
+    check('a flat disk yields no prediction', flat.ok === false, text(flat.reason));
+    check('and says the usage is not rising', /flat or falling/.test(text(flat.reason)), text(flat.reason));
 
     const shrinking = predictFull(ramp(30, -GB, 300 * GB));
-    check('a shrinking disk yields no prediction', shrinking.ok === false, shrinking.reason);
+    check('a shrinking disk yields no prediction', shrinking.ok === false, text(shrinking.reason));
 
     // Noise far larger than the trend: the classic case where a naive fit still
     // returns a slope and a confident-looking answer.
     const noisy = predictFull(ramp(30, 0.05 * GB, 100 * GB, 20 * GB));
-    check('an erratic disk yields no prediction', noisy.ok === false, noisy.reason);
-    check('and quantifies how poorly the line fits', /% of the variation/.test(noisy.reason || ''), noisy.reason);
+    check('an erratic disk yields no prediction', noisy.ok === false, text(noisy.reason));
+    check('and quantifies how poorly the line fits', /% of the variation/.test(text(noisy.reason) || ''), text(noisy.reason));
 
     const slow = predictFull(ramp(30, GB / 1000, 100 * GB));
-    check('a disk that will not fill for years says so', slow.ok === false, slow.reason);
+    check('a disk that will not fill for years says so', slow.ok === false, text(slow.reason));
     check('and is flagged as beyond the horizon', slow.beyondHorizon === true);
 
     const real = predictFull(ramp(30, 2 * GB, 400 * GB));
-    check('a genuine trend does produce a prediction', real.ok === true, real.reason || '');
+    check('a genuine trend does produce a prediction', real.ok === true, text(real.reason) || '');
     const expectedDays = (TOTAL - (400 * GB + 2 * GB * 29)) / (2 * GB);
     check('and the date is arithmetically right',
       Math.abs(real.days - expectedDays) < 1, `${real.days.toFixed(1)} vs ${expectedDays.toFixed(1)} days`);
@@ -218,11 +220,11 @@ function ramp(days, perDay, startUsed, jitter = 0) {
     const dl = trends.find((t) => t.root === path.resolve(downloads));
     const us = trends.find((t) => t.root === path.resolve(users));
 
-    check('a folder scanned three times gets a rate', dl && dl.ok === true, dl ? dl.reason : 'missing');
+    check('a folder scanned three times gets a rate', dl && dl.ok === true, dl ? text(dl.reason) : 'missing');
     check('and the rate is per-folder, not the disk total',
       dl && Math.abs(dl.bytesPerMonth - (4 * GB / 14) * 30) < GB, dl ? `${(dl.bytesPerMonth / GB).toFixed(2)} GB/mo` : '');
     check('a folder scanned once gets no rate', us && us.ok === false, us ? String(us.ok) : 'missing');
-    check('and is told how to get one', us && /scan it again/i.test(us.reason), us ? us.reason : '');
+    check('and is told how to get one', us && /scan it again/i.test(text(us.reason)), us ? text(us.reason) : '');
     check('the 200 GB folder does not outrank the growing one on size alone',
       trends[0].root === path.resolve(downloads), trends[0].root);
   }
@@ -259,7 +261,7 @@ function ramp(days, perDay, startUsed, jitter = 0) {
     check('the report picks a volume', r.volume !== null, String(r.volume));
     check('the series is the whole history', r.series.length === 20, String(r.series.length));
     check('growth is reported', r.growth.ok === true);
-    check('a prediction is reported', r.prediction.ok === true, r.prediction.reason || '');
+    check('a prediction is reported', r.prediction.ok === true, text(r.prediction.reason) || '');
     check('savings are present even with no events', r.savings.movedBytes === 0 && r.savings.freedBytes === 0);
   }
 

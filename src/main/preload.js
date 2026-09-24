@@ -30,6 +30,10 @@ const api = {
   cancelSystem: () => ipcRenderer.invoke('system:cancel'),
   handoff: (key) => ipcRenderer.invoke('system:handoff', key),
 
+  /* what changed in a folder between two of its scans */
+  snapshotList: () => ipcRenderer.invoke('snapshot:list'),
+  snapshotDiff: (root, older, newer) => ipcRenderer.invoke('snapshot:diff', { root, older, newer }),
+
   /* the Restore Center: what the app did, and putting it back */
   journalSessions: () => ipcRenderer.invoke('journal:sessions'),
   journalItems: (sessionId) => ipcRenderer.invoke('journal:items', sessionId),

@@ -125,7 +125,7 @@ Thời lượng tương đối chỉ mang tính minh hoạ. [Speculation] Tôi k
 | --- | --- | --- | --- |
 | A1 | Bóc tách dung lượng hệ thống | P1 | ✅ Đã code xong (2026-09-24) |
 | A3 | Treemap / Sunburst | P1 | ✅ Đã code xong (2026-09-24) — chỉ Treemap, Sunburst đã bỏ |
-| A5 | Snapshot diff | P1 | |
+| A5 | Snapshot diff | P1 | ✅ Đã code xong (2026-09-25) — lịch chụp hằng tuần dời sang G3 |
 | B1 | Quarantine sang ổ khác | P1 | |
 | B3 | OneDrive "Free up space" | P1 | |
 | D4 | Cache app phổ biến | P1 | |
@@ -466,6 +466,7 @@ export const canRead = (lic, feature) => can(lic, feature) || lic.state === 'exp
 > - `can()` đã được gắn vào registry analyzer và pipeline `execute()`. Renderer chỉ nhận `license:entitlements` dạng `[{ feature, allowed, reason }]`.
 > - Harness kiểm tra tĩnh rằng journal, ledger, purge, trash, handler recycle và hộp thoại xác nhận **không hề nạp** module license.
 > - ~~⚠️ Cần quyết định trước tính năng Pro đầu tiên.~~ **Đã chốt (2026-09-24): mở cho mọi người** ở `stable` trước Giai đoạn 6. Code (`license/state.js` cho kênh không phải `dev`) sẽ đổi cùng tính năng Pro đầu tiên (A5). Giai đoạn 6 phải tính tới việc khoá lại thứ đã mở.
+> - **Đã đổi ở A5 (2026-09-25):** kênh không phải `dev` chạy với Pro `active` (`OPEN_PRO`, `source: 'open'`), Pro·Dev và Business vẫn khoá.
 
 ### 4.5. Elevated Helper
 
@@ -520,7 +521,7 @@ Mỗi lần quét lưu một snapshot đã nén của cây thư mục, dùng cho
 > - Có `index.json` cho từng gốc; mất hoặc hỏng thì dựng lại từ các file. Chính sách giữ bản: 12 bản mới nhất + bản mới nhất của từng tháng trong 12 tháng (≤ 24 file mỗi gốc). Giá trị giữ bản được đọc lại mỗi lần lưu, và 0.7 đưa nó vào Settings.
 > - Snapshot nằm ở `%LOCALAPPDATA%\<tên app>\snapshots\`. Khi harness chuyển `userData` vào thư mục tạm, snapshot tự đi theo vào `<userData>\local\` (`localDataDir()` trong `services.js`), nên smoke test không bao giờ ghi vào profile thật (có kiểm tra).
 > - Cây chỉ ở lại main process, không gửi sang renderer (có kiểm tra).
-> - Chưa có IPC `snapshot:list`/`snapshot:diff`: chúng đi cùng A5.
+> - ~~Chưa có IPC `snapshot:list`/`snapshot:diff`: chúng đi cùng A5.~~ Đã có từ A5 (2026-09-25). `rules` còn chứa `SCANNER_REVISION`, để thay đổi cách đếm của scanner không bị đọc thành tăng trưởng.
 > - Đo thật: `D:\personal_projects` (15.350 file, 5.960 thư mục, 6,3 GB) → 3.744 dòng, snapshot **30,7 KB** sau gzip. [Inference] Với 500 nghìn file thì cỡ vài trăm KB. Con số này là ngoại suy, chưa đo.
 
 ### 4.6b. Settings schema v2 (hạng mục 0.7)
@@ -739,6 +740,19 @@ helper.request
 | Lần quét bị dừng giữa chừng | "Lần quét ngày … bị dừng sớm, so sánh sẽ sai lệch." (vẫn cho xem nhưng gắn nhãn `guess`) |
 
 **Tự động:** có tuỳ chọn *"Chụp snapshot thư mục X mỗi tuần"*, chạy trong scheduled task hiện có (chỉ đọc).
+
+> **✅ Đã code xong (2026-09-25).** Code ở `src/main/snapshots/diff.js` (`diffSnapshots`, `defaultPair`), IPC `snapshot:list` và `snapshot:diff` trong `ipc.js` (phần diff đi qua `can('pro.diff')`), card `src/renderer/changes.js` trong Trends, liên kết `renderChangesLink` trong `trends.js`, `SCANNER_REVISION` trong `lib/scanner.js`, và `license/state.js`. Harness: `scripts/test-snapshot-diff.js` (32 kiểm tra), 18 kiểm tra mới trong `smoke.js` (mục "What changed in a folder"), ảnh chụp `npm run shoot:changes`. Khác với đặc tả ở trên:
+> - Là **một card trong Trends** (đã chốt), nằm ngay dưới "Folders, by how fast they grow". Mỗi thư mục trong danh sách đó đã được quét từ 2 lần trở lên có thêm link "What changed?".
+> - **Thư mục tăng/giảm** không liệt kê theo từng thư mục, vì như vậy một con số sẽ lặp lại ở mọi cấp. Thay vào đó, thay đổi được chia thành những chỗ không chồng lên nhau, mỗi chỗ gọi tên ở thư mục sâu nhất còn giữ ít nhất một nửa thay đổi. Phép chia tính theo phần tệp *riêng* của từng thư mục, nên một tệp chuyển từ `Documents` vào `Documents\Archive` hiện ở cả hai phía. Bản đầu tính theo tổng và bỏ sót đúng trường hợp này; ảnh chụp đã bắt được lỗi đó. Tăng và giảm cộng lại đúng bằng thay đổi ròng (có test).
+> - **Thêm hai mục đặc tả không có:** "tệp lớn đã tăng / đã nhỏ lại" (cùng đường dẫn, khác kích thước, ví dụ một tệp đĩa ảo phình ra) và "đã chuyển chỗ" (cùng tên, kích thước và mtime nhưng ở thư mục khác). Nhờ vậy một lần di chuyển không bị báo thành một tệp mất và một tệp mới.
+> - **Quy tắc "biến mất":** chỉ gọi một tệp là biến mất khi lần quét **sau** lẽ ra đã ghi tên nó nếu nó vẫn ở đó với kích thước ấy: thư mục không còn tệp nào, danh sách chưa đủ 10, hoặc tệp lớn hơn tệp nhỏ nhất được giữ. "Tệp mới" dùng cùng quy tắc nhưng xét lần quét **trước**. Trường hợp còn lại ghi là "không rõ", kèm số tệp và dung lượng. Ghi chú audit trước đây đặt điều kiện "biến mất" lên "lần trước"; đã sửa lại cho đúng logic.
+> - Mặc định chọn bản mới nhất (ưu tiên bản đã quét xong) và bản gần mốc 7 ngày trước nhất mà so được với nó. Card ghi khoảng cách thật giữa hai lần quét (phút, giờ hoặc ngày).
+> - **Từ chối** theo bảng trên, thêm trường hợp "hai thư mục khác nhau". Nếu hai lần quét dùng quy tắc chọn tệp lớn khác nhau thì vẫn so thư mục nhưng không so tệp. `comparable()` giờ biết cả khi cách đếm của scanner thay đổi: `SCANNER_REVISION` (= 2, tính từ bản sửa OneDrive/`.asar` ở A1) nằm trong dấu vân tay `rules`.
+> - Liên kết từ Trends chỉ hiện khi Growth có số và số đó dương. Câu liên kết ghi rõ thư mục, khoảng cách giữa hai lần quét và rằng đó không phải cả ổ. Nếu trên ổ đó chưa có thư mục nào được quét hai lần, card hiện một câu RefusalNote hướng dẫn cách có dữ liệu.
+> - **Không làm lịch chụp hằng tuần**; phần này dời sang G3 (đã chốt).
+> - **Pro mở ở `stable`/`beta`** (đã chốt): `currentLicense()` trả về Pro `active`, không kèm addon. Pro·Dev và Business vẫn khoá (có kiểm trong `test-entitlements.js`). Đây là lần đầu `UpgradeHint` được dùng thật; trước đó `loadEntitlements()` chưa bao giờ được gọi, nên nó luôn trả `null`.
+> - **Sửa kèm:** (1) các câu từ chối của Trends viết cứng tiếng Anh trong `history.js` và hiện nguyên như vậy trên giao diện tiếng Việt; giờ chúng là message i18n. (2) Tốc độ tăng/giảm của thư mục trong Trends đang dùng màu vàng/xanh vốn dành cho verdict; giờ phân biệt bằng độ đậm của chữ.
+> - **Chưa kiểm được trên snapshot thật của người dùng:** máy test chưa có snapshot nào. Mọi kiểm chứng đều chạy trên thư mục dựng, quét bằng scanner thật.
 
 ---
 

@@ -637,7 +637,9 @@ earlier measurements of *the same folder*, and one scanned a single time says
   worth seeing and is invisible on a full-height axis.
 - **In use · Growth per month · When it fills**, each carrying the number of
   measurements and the span behind it.
-- **Folders, by how fast they are growing.**
+- **Folders, by how fast they are growing.** Each one scanned twice has a
+  **What changed?** link to the comparison below.
+- **What changed in a folder** — see below.
 - **Moved to the bin, and actually freed** — two columns, by month, never
   summed.
 - **Where these measurements come from**, listed plainly: a daily Windows task
@@ -664,6 +666,39 @@ plausible lie the app could tell.
 
 Trends need history and history starts empty. A fresh install shows "not enough
 measurements" for roughly the first week, and there is no way around that.
+
+### What changed in a folder
+
+The chart can say the disk is growing and how fast; it measures the volume, so
+it cannot say where. Every scan leaves a snapshot of the folder it read, and
+two of those can. Pick a folder and two of its scans — it opens on the newest
+and the one nearest a week before it, and says how far apart they really are —
+and the card shows:
+
+- **Where it grew, and where it shrank**, each change named at the deepest
+  folder that holds it: `AppData\Local\Docker\wsl\disk +800 MB`, not "AppData
+  grew", "Local grew", "Docker grew" printed as three facts. The places do not
+  overlap, and what grew and what shrank add up to the net change exactly. A
+  folder that held no files before is marked *new*; one that holds none now,
+  *empty now*.
+- **Large files that grew, appeared, went, or moved.** A file gone from one
+  folder that arrived in another with the same name, size and date is reported
+  once, as moved, rather than as one loss and one gain.
+- **What it cannot see, counted rather than guessed.** A snapshot names only a
+  folder's ten largest files of 10 MB or more. A file missing from the later
+  scan is only called gone when that scan would have named it had it still
+  been there at that size; one that was merely pushed out of its folder's ten
+  by bigger files is counted under *could not tell*, with its size.
+
+It refuses, with the reason, when there is nothing honest to show: a folder
+scanned once, two scans that measured in different ways (a different scanner,
+different rules about what to skip, or a version of the app that counts
+differently), and it compares a scan that was stopped early only as *a guess*.
+
+When the volume is growing, a line under the figures links to it — *C:\ is
+growing +6.2 GB/month. See what grew in C:\Users\you — two scans of that
+folder, five days apart, not the whole of C:\.* The scope is in the sentence
+because the two numbers measure different things.
 
 ---
 
@@ -1065,6 +1100,11 @@ was put back is no longer the app's to remove.
   machine; several Windows installations, a drive BitLocker is still encrypting,
   Storage Spaces and ReFS have not been tried.
 - **Trends need about a week** before they say anything.
+- **Comparing two scans sees only what a snapshot keeps**: every folder's size,
+  and its ten largest files of 10 MB or more. A change among smaller files shows
+  as its folder growing or shrinking, never by name. Scans are not taken on a
+  timetable yet, so there is only something to compare once a folder has been
+  scanned twice.
 - **The scheduled task only fires while somebody is logged on.** A machine left
   at the login screen at 02:00 runs the cleanup at the next opportunity instead.
 - **Moving the app** relocates the executable the scheduled task points at. The
@@ -1089,7 +1129,7 @@ The interface is plain HTML, CSS and JavaScript — no framework and no build st
 so what is in `src/renderer/` is what runs. All filesystem work happens in a
 separate process; the interface has no access to the disk, the network or Node at
 all, and reaches the system only through a fixed list of named operations —
-fifty-two of them, written down in `src/main/ipc-manifest.js`. A handler for a
+fifty-four of them, written down in `src/main/ipc-manifest.js`. A handler for a
 channel not in that file throws at startup, and `npm run test:ipc` holds the
 preload, the handlers and the manifest to the same list.
 
@@ -1107,7 +1147,10 @@ CLEANDRIVE_ENTITLEMENTS=free npm start        # narrow a checkout to one tier: f
 ```
 
 A checkout opens every feature by default; a built installer ignores
-`CLEANDRIVE_ENTITLEMENTS` entirely. Nothing the app does today is a paid feature.
+`CLEANDRIVE_ENTITLEMENTS` entirely. One feature so far belongs to the paid tier
+— comparing two scans of a folder — and until licences exist a built installer
+has that tier open to everyone. The developer add-on and the business tier stay
+closed.
 
 A few paths need an administrator. They go through a **helper**: the same
 executable started with `--helper` through a UAC prompt the user answered,
@@ -1131,10 +1174,11 @@ Everything else, including the ZIP, Excel, PowerPoint, image and video readers,
 the charts and the tray icon, is written here. There are no binary assets in the
 repository; the icons are drawn in code.
 
-Test harnesses live in [`scripts/`](scripts/) — thirty suites in
+Test harnesses live in [`scripts/`](scripts/) — thirty-one suites in
 `npm test`, plus the Electron ones, covering the classification rules, the
 candidate contract, the action pipeline, the map of the folder and what the
-window may ask of it, the journal (including two processes
+window may ask of it, what two scans of a folder can honestly say changed, the
+journal (including two processes
 writing it at once), the deletion guards, the unattended-run gates, the Recycle
 Bin purge and the restore both written from the attacker's side, the
 entitlement matrix, the elevated helper's handshake, the settings migration
@@ -1142,4 +1186,4 @@ against the released code, the translation dictionary, and an end-to-end run
 that boots the real application and reads its rendered interface back out.
 `npm run verify:restore` puts throwaway files back from the real Recycle Bin.
 `npm run shoot:lists`, `shoot:media`, `shoot:viewer`, `shoot:restore`,
-`shoot:system` and `shoot:treemap` take screenshots of the real screens.
+`shoot:system`, `shoot:treemap` and `shoot:changes` take screenshots of the real screens.

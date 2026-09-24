@@ -501,6 +501,81 @@
       'Mỗi thư mục chỉ được so với các lần quét trước của chính nó. Quét hai lần thì có tốc độ; quét ' +
       'một lần thì nó nói thẳng là chưa đủ, chứ không đoán.',
     'trends.folders.none': 'Chưa quét thư mục nào.',
+    'trends.reason.one': 'Mới có một lần đo — cần ít nhất hai lần mới có xu hướng.',
+    'trends.reason.sameMoment': 'Mọi lần đo đều diễn ra cùng một thời điểm.',
+    'trends.reason.tooLittle':
+      'Lịch sử còn quá ít để đáng báo: {n} lần đo trong {days} ngày. Cần dữ liệu ít nhất một tuần.',
+    'trends.reason.flat': 'Dung lượng dùng đang đi ngang hoặc giảm, nên không có gì để ngoại suy.',
+    'trends.reason.erratic':
+      'Dung lượng dùng dao động quá thất thường để ngoại suy (đường xu hướng chỉ giải thích được {pct}% mức biến thiên).',
+    'trends.reason.full': 'Ổ đĩa đã báo không còn dung lượng trống.',
+    'trends.reason.notSoon': 'Với tốc độ này, ổ đĩa không đầy trong vòng hai năm.',
+    'trends.reason.scannedOnce': 'Mới quét một lần — hãy quét lại sau để thấy xu hướng.',
+    'trends.reason.sameDay': 'Mọi lần quét thư mục này đều diễn ra trong cùng một ngày.',
+
+    // What changed in a folder between two of its scans (Trends).
+    'changes.title': 'Thay đổi trong một thư mục',
+    'changes.note':
+      'Hai lần quét của cùng một thư mục, đặt cạnh nhau. Mỗi lần quét giữ dung lượng của từng thư mục và mười ' +
+      'tệp lớn nhất từ 10 MB trở lên của nó, nên phép so sánh chỉ thấy được tới đó.',
+    'changes.folder': 'Thư mục',
+    'changes.from': 'Từ',
+    'changes.to': 'Đến',
+    'changes.label': 'Thay đổi',
+    'changes.stopped': 'dừng sớm',
+    'changes.none':
+      'Chưa quét thư mục nào. Hãy quét một thư mục ở tab Dung lượng đĩa, rồi quét lại sau, để thấy cái gì đã thay đổi trong đó.',
+    'changes.onlyOne': 'Mới quét một lần — cần ít nhất hai lần quét cùng thư mục.',
+    'changes.upgrade': 'So sánh hai lần quét của một thư mục là tính năng của CleanDrive Pro.',
+    'changes.pickTwo': 'Hãy chọn hai lần quét khác nhau để so.',
+    'changes.differentRoot': 'Đây là hai lần quét của hai thư mục khác nhau nên không so được.',
+    'changes.differentRules': 'Hai lần quét dùng cách đo khác nhau nên không so được.',
+    'changes.elsewhere': 'Chỗ khác trong {folder}',
+    'changes.elsewhereHint': 'Tệp nằm ngay trong {path}, và các thư mục con quá nhỏ để liệt kê riêng',
+    'changes.tag.new': 'mới',
+    'changes.tag.newHint': 'Không chứa tệp nào ở lần quét trước',
+    'changes.tag.empty': 'giờ trống',
+    'changes.tag.emptyHint': 'Không chứa tệp nào ở lần quét sau — đã bị xoá, hoặc đã được dọn trống',
+    'changes.morePlaces': 'và {n} chỗ khác, tổng cộng {size}',
+    'changes.inFolder': 'trong {folder}',
+    'changes.span': 'Từ {from} đến {to}, cách nhau {span}. Chỉ đo trong {folder}, không phải cả ổ {volume}.',
+    'changes.incomplete':
+      'Lần quét ngày {date} bị dừng sớm, so sánh sẽ sai lệch: kết quả dưới đây {guess}, và một phần trông như đã mất ' +
+      'có thể chỉ là chưa được đọc.',
+    'changes.grew': 'Tăng',
+    'changes.shrank': 'Giảm',
+    'changes.noGrowth': 'Không có gì tăng từ 1 MB trở lên.',
+    'changes.noShrink': 'Không có gì giảm từ 1 MB trở lên.',
+    'changes.filesRefused': 'Hai lần quét chọn tệp lớn theo quy tắc khác nhau, nên không so sánh tệp.',
+    'changes.files.grew': 'Tệp lớn đã tăng',
+    'changes.files.appeared': 'Tệp lớn mới',
+    'changes.files.appearedNote':
+      'Không nằm trong các tệp lớn của thư mục ở lần quét trước: là tệp mới, hoặc đã lớn quá 10 MB kể từ đó.',
+    'changes.files.vanished': 'Tệp lớn không còn ở đó',
+    'changes.files.vanishedNote':
+      'Lần quét sau lẽ ra đã ghi tên các tệp này nếu chúng vẫn còn ở đó với kích thước này. Đã xoá, đã chuyển đi, ' +
+      'hay đã nhỏ lại — hai lần quét không cho biết là trường hợp nào.',
+    'changes.files.moved': 'Đã chuyển chỗ',
+    'changes.files.movedNote': 'Mất khỏi một thư mục và xuất hiện ở thư mục khác với cùng tên, kích thước và ngày sửa.',
+    'changes.files.shrank': 'Tệp lớn đã nhỏ lại',
+    'changes.moreFiles': 'và {n} tệp khác',
+    'changes.files.none': 'Hai lần quét không thấy tệp nào từ 10 MB trở lên thay đổi.',
+    'changes.files.unknown':
+      'Không rõ: {n} {files} lớn ({size}) đã vào hoặc ra khỏi nhóm mười tệp lớn nhất của một thư mục, nên hai lần ' +
+      'quét này không cho biết chúng có thay đổi hay không.',
+    'changes.day.one': 'ngày',
+    'changes.day.other': 'ngày',
+    'changes.hour.one': 'giờ',
+    'changes.hour.other': 'giờ',
+    'changes.minute.one': 'phút',
+    'changes.minute.other': 'phút',
+    'changes.underMinute': 'chưa tới một phút',
+    'changes.link.row': 'Có gì thay đổi?',
+    'changes.link.none':
+      'Để biết cái gì đang tăng trên {volume}, hãy quét một thư mục của ổ này ngay bây giờ và quét lại sau.',
+    'changes.link.lead': '{volume} đang tăng {rate}.',
+    'changes.link.go': 'Xem cái gì đã tăng trong {folder}',
+    'changes.link.scope': '— hai lần quét của thư mục đó, cách nhau {span}, không phải cả ổ {volume}.',
     'trends.folders.atLastScan': '{size} ở lần quét gần nhất',
     'trends.folders.rateHint': 'hiện {size}, qua {samples} lần quét trải {days} ngày',
 

@@ -171,7 +171,7 @@ function renderFolderTrends(folders) {
     if (!folder.ok) {
       rate.className = 'trend-rate is-unknown';
       rate.textContent = `${folder.samples} ${word(folder.samples, 'trends.scan', 'scan', 'scans')}`;
-      rate.title = folder.reason || '';
+      rate.title = tm(folder.reason);
     } else {
       const up = folder.bytesPerMonth > 0;
       rate.className = `trend-rate ${up ? 'is-up' : 'is-down'}`;
@@ -184,8 +184,58 @@ function renderFolderTrends(folders) {
     }
 
     row.append(name, rate);
+    // Two scans of this folder make a comparison: what grew in it, by name.
+    if (window.Changes && window.Changes.has(folder.root)) {
+      row.append(linkButton(t('changes.link.row', 'What changed?'), () => window.Changes.open(folder.root), 'trend-changes-row'));
+    }
     list.append(row);
   }
+}
+
+/**
+ * The growth figure is the whole volume's; this says where on it, if two
+ * scans of one of its folders can. The link names the folder and how far
+ * apart the scans are, because "C: grew 6 GB" and "this folder grew 2 GB in
+ * three days" are different measurements and must not read as one.
+ */
+function renderChangesLink(report) {
+  const host = $('trend-changes');
+  host.replaceChildren();
+  const growing = report.growth && report.growth.ok && report.growth.bytesPerMonth > 0 && report.volume;
+  if (!growing || !window.Changes) {
+    host.hidden = true;
+    return;
+  }
+  host.hidden = false;
+  const volume = report.volume.toUpperCase();
+  const target = window.Changes.rootOn(report.volume);
+  if (!target) {
+    host.append(
+      RefusalNote(t('changes.link.none', 'To see what is growing on {volume}, scan one of its folders now and again later.', { volume }))
+    );
+    return;
+  }
+  if (!window.Changes.allowed()) {
+    const hint = UpgradeHint('pro.diff', t('changes.upgrade', 'Comparing two scans of a folder is part of CleanDrive Pro.'));
+    if (hint) host.append(hint);
+    else host.hidden = true;
+    return;
+  }
+  const lead = document.createElement('span');
+  lead.textContent = t('changes.link.lead', '{volume} is growing {rate}.', { volume, rate: formatRate(report.growth.bytesPerMonth) });
+  const go = linkButton(
+    t('changes.link.go', 'See what grew in {folder}', { folder: elide(target.root, 48) }),
+    () => window.Changes.open(target.root),
+    'trend-changes-go'
+  );
+  go.title = target.root;
+  const scope = document.createElement('span');
+  scope.className = 'trend-changes-scope';
+  scope.textContent = t('changes.link.scope', '— two scans of that folder, {span} apart, not the whole of {volume}.', {
+    span: window.Changes.span(target.days),
+    volume,
+  });
+  host.append(lead, ' ', go, ' ', scope);
 }
 
 function renderSavings(savings) {
@@ -442,7 +492,7 @@ function applyTrends(report) {
     });
   } else {
     $('tstat-growth').textContent = t('trends.notYet', 'not yet');
-    $('tstat-growth').title = report.growth.reason || '';
+    $('tstat-growth').title = tm(report.growth.reason);
   }
 
   if (report.prediction.ok) {
@@ -455,7 +505,7 @@ function applyTrends(report) {
     $('tstat-full').textContent = report.prediction.beyondHorizon
       ? t('trends.notSoon', 'not soon')
       : t('trends.unknown', 'unknown');
-    $('tstat-full').title = report.prediction.reason || '';
+    $('tstat-full').title = tm(report.prediction.reason);
   }
 
   $('tstat-freed').textContent = formatBytes(report.savings.freedBytes);
@@ -468,8 +518,8 @@ function applyTrends(report) {
   // The caveat under the chart is the one place the honest limitation is spelled
   // out in full rather than hidden in a tooltip.
   const caveat = [];
-  if (!report.growth.ok && report.growth.reason) caveat.push(report.growth.reason);
-  else if (!report.prediction.ok && report.prediction.reason) caveat.push(report.prediction.reason);
+  if (!report.growth.ok && report.growth.reason) caveat.push(tm(report.growth.reason));
+  else if (!report.prediction.ok && report.prediction.reason) caveat.push(tm(report.prediction.reason));
   if (report.series.length >= 2) {
     caveat.push(
       t('trends.axisCaveat', 'The vertical axis is scaled to the data, not to 0–100%, so small changes are visible.')
@@ -479,6 +529,7 @@ function applyTrends(report) {
 
   renderSampling(report);
   renderFolderTrends(report.folders);
+  renderChangesLink(report);
   renderSavings(report.savings);
 
   $('trend-status').textContent =

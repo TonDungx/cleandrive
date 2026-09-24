@@ -12,7 +12,7 @@
   "scripts": {
     "start": "electron .",
     "dev": "electron . --dev",
-    "test": "node scripts/test-duplicate.js --fixture && node scripts/test-advisor.js && node scripts/test-protection.js && node scripts/test-appsafety.js && node scripts/test-trash.js && node scripts/test-trash-progress.js && node scripts/test-settings.js && node scripts/test-recyclebin.js && node scripts/test-autoclean.js && node scripts/test-scheduler.js && node scripts/test-history.js && node scripts/test-monitor.js && node scripts/test-media-format.js && node scripts/test-media-scan.js && node scripts/test-media-classify.js && node scripts/test-media-perceptual.js && node scripts/test-preview.js && node scripts/test-office.js && node scripts/test-i18n.js && node scripts/test-contract.js && node scripts/test-actions.js && node scripts/test-ipc-manifest.js && node scripts/test-journal.js && node scripts/test-entitlements.js && node scripts/test-helper.js && node scripts/test-snapshots.js && node scripts/test-settings-migration.js && node scripts/test-restore.js && node scripts/test-system.js && node scripts/test-treemap.js",
+    "test": "node scripts/test-duplicate.js --fixture && node scripts/test-advisor.js && node scripts/test-protection.js && node scripts/test-appsafety.js && node scripts/test-trash.js && node scripts/test-trash-progress.js && node scripts/test-settings.js && node scripts/test-recyclebin.js && node scripts/test-autoclean.js && node scripts/test-scheduler.js && node scripts/test-history.js && node scripts/test-monitor.js && node scripts/test-media-format.js && node scripts/test-media-scan.js && node scripts/test-media-classify.js && node scripts/test-media-perceptual.js && node scripts/test-preview.js && node scripts/test-office.js && node scripts/test-i18n.js && node scripts/test-contract.js && node scripts/test-actions.js && node scripts/test-ipc-manifest.js && node scripts/test-journal.js && node scripts/test-entitlements.js && node scripts/test-helper.js && node scripts/test-snapshots.js && node scripts/test-settings-migration.js && node scripts/test-restore.js && node scripts/test-system.js && node scripts/test-treemap.js && node scripts/test-snapshot-diff.js",
     "test:scanner": "node scripts/test-scanner.js",
     "test:duplicate": "node scripts/test-duplicate.js --fixture",
     "test:advisor": "node scripts/test-advisor.js",
@@ -46,6 +46,7 @@
     "test:restore": "node scripts/test-restore.js",
     "test:system": "node scripts/test-system.js",
     "test:treemap": "node scripts/test-treemap.js",
+    "test:diff": "node scripts/test-snapshot-diff.js",
     "verify:helper": "electron scripts/verify-helper.js",
     "verify:restore": "electron scripts/verify-restore.js",
     "capture:system": "electron scripts/capture-system.js",
@@ -68,7 +69,8 @@
     "shoot:lists": "electron scripts/shoot-lists.js",
     "shoot:restore": "electron scripts/shoot-restore.js",
     "shoot:system": "electron scripts/shoot-system.js",
-    "shoot:treemap": "electron scripts/shoot-treemap.js"
+    "shoot:treemap": "electron scripts/shoot-treemap.js",
+    "shoot:changes": "electron scripts/shoot-changes.js"
   },
   "devDependencies": {
     "electron": "^33.2.0",

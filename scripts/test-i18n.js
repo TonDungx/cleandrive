@@ -67,6 +67,10 @@ const DYNAMIC_PREFIXES = [
   'restore.session.',
   // The map of the folder counts folders through `word()`.
   'map.folder.',
+  // The snapshot comparison says how far apart two scans are the same way.
+  'changes.day.',
+  'changes.hour.',
+  'changes.minute.',
 ];
 
 /* -------------------------------------------------------------------------- */

@@ -554,6 +554,9 @@
           </div>
         </div>
 
+        <!-- The volume is growing; where? Filled by trends.js from changes.js. -->
+        <p class="trend-changes" id="trend-changes" hidden></p>
+
         <div class="grid">
           <section class="card card-wide">
             <div class="card-head">
@@ -601,6 +604,35 @@
               twice and it gets a rate; scan it once and it says so rather than guessing.
             </p>
             <ul class="path-list" id="trend-folders"></ul>
+          </section>
+
+          <!--
+            What changed in a folder between two of its scans (A5). The volume
+            chart says the disk is growing; this says where, as far as two
+            snapshots of one folder can: every folder's total, and each
+            folder's ten largest files of 10 MB or more. changes.js draws it.
+          -->
+          <section class="card card-wide changes-card" id="changes-card">
+            <h2 data-i18n="changes.title">What changed in a folder</h2>
+            <p class="card-note" data-i18n="changes.note">
+              Two scans of the same folder, compared. Each scan keeps every folder's size and its ten
+              largest files of 10 MB or more, so that is as far as a comparison can see.
+            </p>
+            <div class="changes-pick">
+              <label class="field">
+                <span data-i18n="changes.folder">Folder</span>
+                <select id="changes-root"></select>
+              </label>
+              <label class="field">
+                <span data-i18n="changes.from">From</span>
+                <select id="changes-older"></select>
+              </label>
+              <label class="field">
+                <span data-i18n="changes.to">To</span>
+                <select id="changes-newer"></select>
+              </label>
+            </div>
+            <div class="changes-body" id="changes-body"></div>
           </section>
 
           <section class="card">
@@ -1105,6 +1137,7 @@
     <script src="media.js"></script>
     <script src="automatic.js"></script>
     <script src="trends.js"></script>
+    <script src="changes.js"></script>
     <script src="updates.js"></script>
     <script src="snapshots.js"></script>
     <script src="restore.js"></script>

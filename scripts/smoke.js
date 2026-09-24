@@ -2288,6 +2288,158 @@ app.whenReady().then(async () => {
       }
     }
 
+    /* -- what changed in a folder ------------------------------------------- */
+    // Two scans of a folder this harness builds and changes in between, then
+    // the Trends card that compares them, and every way into it.
+    console.log('\nWhat changed in a folder (Trends):');
+    {
+      const diffBase = fs.mkdtempSync(path.join(os.tmpdir(), 'cleandrive-smoke-diff-'));
+      const diffRoot = path.join(diffBase, 'home');
+      const onceRoot = path.join(diffBase, 'once');
+      const make = (full, bytes) => {
+        fs.mkdirSync(path.dirname(full), { recursive: true });
+        const fd = fs.openSync(full, 'w');
+        fs.ftruncateSync(fd, bytes);
+        fs.closeSync(fd);
+      };
+      const MB = 1024 * 1024;
+      make(path.join(diffRoot, 'Docker', 'wsl', 'disk.vhdx'), 50 * MB);
+      make(path.join(diffRoot, 'Downloads', 'big.iso'), 40 * MB);
+      make(path.join(diffRoot, 'Downloads', 'note.txt'), 100);
+      make(path.join(onceRoot, 'a.bin'), 11 * MB);
+      const js = (expr) => win.webContents.executeJavaScript(expr);
+      try {
+        const scans = await js(`
+          (async () => {
+            const a = await window.cleandrive.scan(${JSON.stringify(diffRoot)});
+            const once = await window.cleandrive.scan(${JSON.stringify(onceRoot)});
+            return a.ok && once.ok;
+          })()
+        `);
+        // What happened in between: a disk image grew, a download went.
+        fs.truncateSync(path.join(diffRoot, 'Docker', 'wsl', 'disk.vhdx'), 90 * MB);
+        fs.rmSync(path.join(diffRoot, 'Downloads', 'big.iso'));
+        make(path.join(diffRoot, 'New', 'fresh.bin'), 25 * MB);
+        await wait(50);
+        const again = await js(`window.cleandrive.scan(${JSON.stringify(diffRoot)}).then((r) => r.ok)`);
+        check('two scans of the folder, with changes between them', scans && again);
+
+        const protocol = await js(`
+          (async () => {
+            const api = window.cleandrive;
+            const list = (await api.snapshotList()).data;
+            const mine = list.roots.find((r) => r.root.toLowerCase() === ${JSON.stringify(diffRoot.toLowerCase())});
+            const once = list.roots.find((r) => r.root.toLowerCase() === ${JSON.stringify(onceRoot.toLowerCase())});
+            const [newer, older] = mine.snapshots.map((s) => s.file);
+            const diff = (await api.snapshotDiff(mine.root, older, newer)).data;
+            const refused = {
+              unknownRoot: await api.snapshotDiff(${JSON.stringify(path.join(diffBase, 'nowhere'))}, older, newer),
+              otherRootsFile: await api.snapshotDiff(mine.root, older, once.snapshots[0].file),
+              traversal: await api.snapshotDiff(mine.root, '..\\\\..\\\\settings.json', newer),
+              sameTwice: await api.snapshotDiff(mine.root, newer, newer),
+              notString: await api.snapshotDiff(mine.root, 42, newer),
+            };
+            return {
+              allowed: list.allowed,
+              count: mine.snapshots.length,
+              pair: mine.pair,
+              onceCount: once.snapshots.length,
+              oncePair: once.pair,
+              ok: diff.ok,
+              change: diff.total.change,
+              grew: diff.grew.places.map((p) => p.rel),
+              shrank: diff.shrank.places.map((p) => p.rel),
+              filesGrew: diff.files.grew.items.map((f) => f.name),
+              appeared: diff.files.appeared.items.map((f) => f.name),
+              vanished: diff.files.vanished.items.map((f) => f.name),
+              refused: Object.fromEntries(Object.entries(refused).map(([k, r]) => [k, r.ok === false ? r.code || 'refused' : 'ANSWERED'])),
+            };
+          })()
+        `);
+        check('the list offers the folder, and opens on its two scans', protocol.count === 2 && protocol.pair.ok === true,
+          `${protocol.count} snapshots`);
+        check('and says of a folder scanned once that there is nothing to pair', protocol.onceCount === 1 &&
+          protocol.oncePair.ok === false && protocol.oncePair.reason === 'onlyOne');
+        check('the comparison is open on a checkout, as on a release (Pro is open until licences exist)', protocol.allowed === true);
+        check('it names the disk image where it grew, and the new folder',
+          protocol.ok && protocol.grew.includes(path.join('Docker', 'wsl')) && protocol.grew.includes('New'), protocol.grew.join(', '));
+        check('and the download that went', protocol.shrank.includes('Downloads') && protocol.vanished.includes('big.iso'),
+          protocol.shrank.join(', '));
+        check('file by file', protocol.filesGrew.includes('disk.vhdx') && protocol.appeared.includes('fresh.bin'));
+        check('the window cannot ask for a folder the store does not hold, another folder\'s scan, a path, the same scan twice or a non-string',
+          Object.values(protocol.refused).every((code) => code !== 'ANSWERED'), JSON.stringify(protocol.refused));
+
+        // Through the screen.
+        await js(`document.querySelector('.tab[data-tab="trends"]').click()`);
+        await js(`window.Changes.load()`);
+        await until(win, `!!document.querySelector('#changes-body .changes-cols')`, 20000);
+        await js(`window.Changes.open(${JSON.stringify(diffRoot)})`);
+        await until(win, `window.Changes.debug().root && window.Changes.debug().root.toLowerCase() === ${JSON.stringify(diffRoot.toLowerCase())} && !!document.querySelector('#changes-body .changes-cols')`, 20000);
+        const screen = await js(`
+          (() => {
+            const body = document.getElementById('changes-body');
+            const text = body.textContent;
+            const colours = [...body.querySelectorAll('*')].map((el) => getComputedStyle(el).color);
+            return {
+              head: (body.querySelector('.changes-head') || {}).textContent || '',
+              scope: text,
+              grewRows: body.querySelectorAll('.changes-cols .changes-col:first-child .changes-row').length,
+              fileSections: body.querySelectorAll('.changes-files').length,
+              older: document.getElementById('changes-older').options.length,
+              reveal: body.querySelectorAll('.changes-files button').length,
+              roots: document.getElementById('changes-root').options.length,
+            };
+          })()
+        `);
+        check('the card shows before, after and the change', /→/.test(screen.head) && /\+/.test(screen.head), screen.head);
+        check('and says it measured this folder only, not the whole drive', /not the whole of/.test(screen.scope));
+        check('with the places that grew, and the large files in sections of their own',
+          screen.grewRows >= 2 && screen.fileSections >= 2, `${screen.grewRows} places, ${screen.fileSections} sections`);
+        check('the two scans can be chosen, and what exists now can be revealed', screen.older === 2 && screen.reveal >= 1);
+
+        const once = await js(`
+          (async () => {
+            const select = document.getElementById('changes-root');
+            select.value = [...select.options].find((o) => o.value.toLowerCase() === ${JSON.stringify(onceRoot.toLowerCase())}).value;
+            select.dispatchEvent(new Event('change'));
+            await new Promise((r) => setTimeout(r, 300));
+            return (document.querySelector('#changes-body .refusal-note') || {}).textContent || '';
+          })()
+        `);
+        check('a folder scanned once gets a sentence, not a comparison', /only once/.test(once), once);
+
+        const links = await js(`
+          (async () => {
+            const volume = ${JSON.stringify(path.parse(diffRoot).root.toLowerCase())};
+            renderChangesLink({ growth: { ok: true, bytesPerMonth: 6 * 1024 ** 3 }, volume });
+            const host = document.getElementById('trend-changes');
+            const go = host.querySelector('.trend-changes-go');
+            const shown = { hidden: host.hidden, text: host.textContent };
+            if (go) go.click();
+            await new Promise((r) => setTimeout(r, 500));
+            const opened = window.Changes.debug().root;
+            renderChangesLink({ growth: { ok: true, bytesPerMonth: 6 * 1024 ** 3 }, volume: 'q:\\\\' });
+            const none = host.textContent;
+            renderChangesLink({ growth: { ok: false }, volume });
+            const quiet = host.hidden;
+            await refreshTrends();
+            const rowLinks = document.querySelectorAll('#trend-folders .trend-changes-row').length;
+            return { shown, opened, none, quiet, rowLinks };
+          })()
+        `);
+        check('a growing volume links to what grew, naming the folder and saying it is not the whole drive',
+          links.shown.hidden === false && /See what grew in/.test(links.shown.text) && /not the whole of/.test(links.shown.text),
+          links.shown.text.slice(0, 100));
+        check('and the link opens the card on that folder', links.opened && links.opened.toLowerCase() === diffRoot.toLowerCase());
+        check('a volume with no folder scanned twice says how to get one, rather than linking to nothing',
+          /scan one of its folders/.test(links.none), links.none.slice(0, 80));
+        check('no growth, no link', links.quiet === true);
+        check('each folder with two scans has its own "what changed?" in the growth list', links.rowLinks >= 1, String(links.rowLinks));
+      } finally {
+        fs.rmSync(diffBase, { recursive: true, force: true });
+      }
+    }
+
     /* -- console cleanliness --------------------------------------------- */
     console.log('\nConsole:');
     check('no renderer errors', rendererErrors.length === 0, rendererErrors.join(' | '));

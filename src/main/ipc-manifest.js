@@ -34,6 +34,9 @@ const INVOKE = Object.freeze([
   'system:cancel',
   'system:handoff',
 
+  'snapshot:list',
+  'snapshot:diff',
+
   'journal:sessions',
   'journal:items',
   'journal:restore',

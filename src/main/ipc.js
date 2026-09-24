@@ -18,10 +18,11 @@ const restoreEngine = require('./actions/restore');
 const systemMeasure = require('./system/measure');
 const systemBreakdown = require('./system/breakdown');
 const { ScanTree } = require('./analyzers/scan-tree');
+const snapshotDiff = require('./snapshots/diff');
 const { HelperClient, appLauncher } = require('./helper/client');
 const licenseState = require('./license/state');
 const entitlements = require('./license/entitlements');
-const { CancelToken, formatBytes, formatDuration } = require('./lib/util');
+const { CancelToken, formatBytes, formatDuration, pathKey } = require('./lib/util');
 const { services } = require('./services');
 const scheduler = require('./lib/scheduler');
 const { runAutoClean } = require('./lib/autoclean');
@@ -494,6 +495,55 @@ function register() {
         { journal: services().journal, source: 'manual', runId: 'manual', can: licenseState.canNow(), deps: handoffDeps }
       )
     )
+  );
+
+  /* ---- what changed in a folder (snapshot diff) -------------------------- */
+
+  /*
+   * Every folder with snapshots, and which two of each a comparison opens on.
+   * Reading the list is free -- it is what tells the window there is anything
+   * to compare; comparing is `pro.diff`.
+   */
+  handle('snapshot:list', () =>
+    guard(async () => {
+      const store = services().snapshots;
+      const roots = [];
+      for (const root of await store.roots()) {
+        const list = await store.list(root);
+        roots.push({
+          root,
+          volume: path.parse(root).root,
+          snapshots: list
+            .map(({ file, takenAt, complete, totals }) => ({ file, takenAt, complete, totals }))
+            .sort((a, b) => Date.parse(b.takenAt) - Date.parse(a.takenAt)),
+          pair: snapshotDiff.defaultPair(list),
+        });
+      }
+      return { roots, allowed: licenseState.canNow()('pro.diff') };
+    })
+  );
+
+  /*
+   * Two snapshots of one folder, compared. The window names a folder the store
+   * holds and two files its index lists; anything else is refused, and nothing
+   * it sends becomes a path on its own.
+   */
+  handle('snapshot:diff', (_event, request = {}) =>
+    guard(async () => {
+      if (!licenseState.canNow()('pro.diff')) return { ok: false, locked: 'pro.diff' };
+      const store = services().snapshots;
+      const asked = request && typeof request.root === 'string' ? request.root : null;
+      const root = asked ? (await store.roots()).find((r) => pathKey(r) === pathKey(asked)) : null;
+      const refuse = () => {
+        throw Object.assign(new Error('No such snapshot'), { code: 'ENOENT', quiet: true });
+      };
+      if (!root) refuse();
+      const listed = new Set((await store.list(root)).map((s) => s.file));
+      const names = [request.older, request.newer];
+      if (!names.every((name) => typeof name === 'string' && listed.has(name)) || names[0] === names[1]) refuse();
+      const [a, b] = await Promise.all(names.map((name) => store.load(root, name)));
+      return snapshotDiff.diffSnapshots(a, b, { files: names });
+    })
   );
 
   /* ---- the Restore Center ------------------------------------------------ */
