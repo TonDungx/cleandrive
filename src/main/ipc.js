@@ -17,6 +17,7 @@ const { execute } = require('./actions/execute');
 const restoreEngine = require('./actions/restore');
 const systemMeasure = require('./system/measure');
 const systemBreakdown = require('./system/breakdown');
+const { ScanTree } = require('./analyzers/scan-tree');
 const { HelperClient, appLauncher } = require('./helper/client');
 const licenseState = require('./license/state');
 const entitlements = require('./license/entitlements');
@@ -37,6 +38,24 @@ const watcher = require('./watcher');
 
 // One in-flight job of each kind at a time; a new run supersedes the old one.
 const tokens = { scan: null, dupes: null, trash: null, auto: null, media: null, thumbs: null, system: null };
+
+/* ---- the Disk usage map's state -------------------------------------------- */
+
+/**
+ * The last scan's folder tree, which the window reads one level at a time
+ * through `scan:children` (see analyzers/scan-tree.js for why never whole).
+ * Named by an id the scan's reply carries, so a window still drawing an
+ * earlier scan is told so rather than handed another folder's contents.
+ */
+let scanTree = null;
+let scanTreeSerial = 0;
+
+/**
+ * The kinds of action that take a file out of the folder it was in. After one
+ * of these the map stops drawing what moved; a restore puts files back and is
+ * not one of them.
+ */
+const LEAVES_ITS_FOLDER = new Set(['recycle']);
 
 /* ---- the System screen's state ------------------------------------------- */
 
@@ -174,7 +193,9 @@ async function guard(fn) {
     return { ok: true, data: await fn() };
   } catch (err) {
     if (err && err.code === 'ECANCELLED') return { ok: false, cancelled: true, error: 'Cancelled' };
-    console.error('[ipc]', err);
+    // A refusal the handler meant -- "that scan was replaced" -- is an answer,
+    // not a fault, and a stack trace for each one would bury the real ones.
+    if (!(err && err.quiet)) console.error('[ipc]', err);
     return { ok: false, error: err.message || String(err), code: err.code };
   }
 }
@@ -220,7 +241,11 @@ function register() {
 
   /* ---- scan ------------------------------------------------------------ */
 
-  handle('scan:run', (event, folder, options = {}) =>
+  // The window names a folder and nothing else. It used to be able to pass
+  // scanner options through as well -- follow links, stop skipping system
+  // folders, name every file in the tree -- and nothing in the window ever
+  // did, so nothing it sends is read.
+  handle('scan:run', (event, folder) =>
     guard(async () => {
       if (tokens.scan) tokens.scan.cancel();
       const token = new CancelToken();
@@ -233,12 +258,12 @@ function register() {
       try {
         const collected = await analyzers.collect(
           'scan',
-          { root: folder, options: { ...options, collectTree: true } },
+          { root: folder, options: { collectTree: true } },
           { token, onProgress: send, can: licenseState.canNow() }
         );
-        // The tree is for the snapshot store and stays in this process: it is
-        // a row per folder, and the window draws none of it.
-        const { tree, ...summary } = collected.summary;
+        // The tree stays in this process: the snapshot store keeps it, and the
+        // window reads it a level at a time through scan:children.
+        const { tree, treeFiles, ...summary } = collected.summary;
 
         // A cancelled scan reports partial totals; recording those as a point
         // on the trend would put a dip in the series that never happened.
@@ -246,7 +271,23 @@ function register() {
         // The snapshot keeps even a stopped scan, marked incomplete: comparing
         // against it later is allowed, and labelled a guess.
         if (tree) await saveTreeSnapshot({ ...summary, tree });
-        return { ...summary, candidates: collected.candidates };
+
+        let treeId = null;
+        if (tree) {
+          treeId = `t${++scanTreeSerial}`;
+          scanTree = {
+            id: treeId,
+            tree: new ScanTree({
+              root: summary.root,
+              rows: tree,
+              files: treeFiles,
+              complete: !summary.cancelled,
+              scannedAt: summary.scannedAt,
+              accessTimes: summary.accessTimes,
+            }),
+          };
+        }
+        return { ...summary, treeId, candidates: collected.candidates };
       } finally {
         if (tokens.scan === token) tokens.scan = null;
       }
@@ -257,6 +298,19 @@ function register() {
     if (tokens.scan) tokens.scan.cancel();
     return { ok: true };
   });
+
+  // One folder of the last scan, and what is under it to a few levels -- never
+  // the whole tree. The limits are this process's, not the window's to set.
+  handle('scan:children', (event, treeId, rel) =>
+    guard(async () => {
+      if (!scanTree || typeof treeId !== 'string' || treeId !== scanTree.id) {
+        throw Object.assign(new Error('That scan has been replaced by a newer one'), { code: 'ESTALE', quiet: true });
+      }
+      const level = typeof rel === 'string' ? scanTree.tree.level(rel) : null;
+      if (!level) throw Object.assign(new Error('The scan has no such folder'), { code: 'ENOENT', quiet: true });
+      return { ...level, treeId };
+    })
+  );
 
   /* ---- duplicates ------------------------------------------------------ */
 
@@ -336,6 +390,11 @@ function register() {
             confirm: confirmWanted ? (description, planned) => confirmAction(win, description, planned, options) : null,
           }
         );
+
+        // What left its folder leaves the map too, whichever screen moved it.
+        if (!result.dryRun && result.moved.length > 0 && scanTree && LEAVES_ITS_FOLDER.has(kind)) {
+          scanTree.tree.remove(result.moved);
+        }
 
         if (!result.dryRun && result.moved.length > 0) {
           // Recorded as *moved*, never as freed: these bytes are in the Recycle

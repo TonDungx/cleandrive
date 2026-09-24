@@ -124,7 +124,7 @@ Thời lượng tương đối chỉ mang tính minh hoạ. [Speculation] Tôi k
 | Mã | Tính năng | Ưu tiên | Trạng thái |
 | --- | --- | --- | --- |
 | A1 | Bóc tách dung lượng hệ thống | P1 | ✅ Đã code xong (2026-09-24) |
-| A3 | Treemap / Sunburst | P1 | |
+| A3 | Treemap / Sunburst | P1 | ✅ Đã code xong (2026-09-24) — chỉ Treemap, Sunburst đã bỏ |
 | A5 | Snapshot diff | P1 | |
 | B1 | Quarantine sang ổ khác | P1 | |
 | B3 | OneDrive "Free up space" | P1 | |
@@ -686,6 +686,18 @@ helper.request
 - Ô quá nhỏ (dưới vài pixel) được gộp thành *"(n mục nhỏ)"*, không bị bỏ đi.
 
 **Accessibility:** mọi thao tác trên treemap đều có tương đương trên danh sách. Treemap có vai trò `tree` với điều hướng bằng phím mũi tên.
+
+> **✅ Đã code xong (2026-09-24).** Code ở `src/main/analyzers/scan-tree.js` (`ScanTree`: cây của lần quét cuối, giữ ở main process), `src/renderer/treemap-layout.js` (thuật toán squarified, nạp được cả trong trang lẫn trong harness), `src/renderer/treemap.js` (card "Dung lượng nằm ở đâu"), phần `treeFiles` trong `lib/scanner.js`, `fileCandidate` trong `analyzers/scan.js`. IPC mới: `scan:children`. Harness: `scripts/test-treemap.js` (48 kiểm tra), 25 kiểm tra mới trong `smoke.js` (mục "Map of the folder"), ảnh chụp `npm run shoot:treemap`. Khác với đặc tả ở trên:
+> - **Không có Sunburst, không tô theo loại file** (đã chốt). Màu là các sắc độ của một màu accent, nhạt dần theo độ sâu. Ô gộp nhạt hơn nữa và có viền nét đứt. Phần tô màu Pro (theo tuổi, verdict, nguồn) và "lọc" dời lại. Đặc tả gắn chúng với key `pro.scan.multiroot`, nhưng đó là key của A4, nên khi làm lại cần một key riêng.
+> - Tab con là **Bản đồ · Danh sách**, thay cho "Thanh · Treemap · Sunburst". Mặc định là Bản đồ, và app nhớ lựa chọn cuối cùng (localStorage). Danh sách là tương đương của bản đồ: cùng tầng, cùng cách đi sâu, cùng menu, và không còn chỉ là 12 thư mục ở tầng đầu.
+> - **Cây không bao giờ sang cửa sổ nguyên vẹn.** `scan:children(treeId, rel)` trả về một thư mục và tối đa 3 tầng bên dưới, tối đa 1.500 nút, tối đa 300 thư mục mỗi tầng (phần dư gộp thành ô "(n thư mục khác)"), điền theo chiều rộng. Đo trên thư mục Home (377.710 tệp): cả cây là 5,3 MB JSON, reply cho tầng gốc là 101,6 KB. Dựng cây mất 738 ms và 20,1 MB heap; mỗi tầng mất tối đa 5,3 ms. [Đo bằng Node 24, chưa đo trong Electron.] Cửa sổ gọi thư mục bằng đường dẫn tương đối do main trả về, nên không có đường nào để thoát ra ngoài cây. Id của lần quét cũ bị từ chối (`ESTALE`).
+> - **Tệp nào có ô riêng** theo đúng quy tắc của snapshot (≥ 10 MB, 10 tệp mỗi thư mục). Ở thư mục Home đó là 781 tệp, chiếm 78,4% dung lượng. Hạ ngưỡng xuống ≥ 1 MB chỉ lên được 84,8% mà số tệp tăng gấp 6, nên giữ nguyên. Phần còn lại của mỗi thư mục là một ô "(n tệp nhỏ hơn)". Ô nhỏ hơn 40 px² gộp thành "(n mục nhỏ)".
+> - **Verdict trên ô tệp:** scanner giữ thêm verdict của các tệp có tên, nhưng chỉ trong bộ nhớ (`treeFiles`), nên định dạng snapshot không đổi. Ô tệp là candidate đã qua `validateCandidate`, cùng id với dòng tương ứng trong Largest files, nên "Thêm vào lựa chọn" dùng chung thanh chọn của Largest files.
+> - Bấm vào ô thư mục thì đi sâu. Bấm vào ô tệp thì mở menu (Xem / Mở thư mục chứa / Thêm vào lựa chọn). Chuột phải mở menu cho cả thư mục (Mở thư mục này / Mở thư mục chứa). Tooltip hiện cả khi focus bằng bàn phím.
+> - Bàn phím dùng role=tree trên một lớp phần tử đặt chồng lên canvas: ↑/↓ đi giữa các ô cùng cấp, → vào thư mục đang vẽ lồng (hoặc đi sâu thêm một tầng), ← ra ngoài, Enter mở thư mục hoặc xem tệp, Space chọn tệp, Backspace lên một tầng, phím menu hoặc Shift+F10 mở menu. Có đủ `aria-level`, `aria-setsize`, `aria-posinset`, `aria-expanded`, `aria-selected`.
+> - **Sau khi xoá:** mỗi lần `action:execute` kind `recycle` thành công, dù gọi từ màn nào, main trừ các tệp đã chuyển đi khỏi cây trong bộ nhớ. Card ghi rõ "đã chuyển vào Thùng rác kể từ lần quét này… chưa giải phóng". Snapshot trên đĩa giữ nguyên. Khôi phục thì không cộng lại vào cây; muốn thấy lại thì quét lại.
+> - Chưa làm: canvas chưa theo `forced-colors` (để I2 làm).
+> - **Sửa kèm:** (1) "(no extension)" và chữ "files" ở By file type bị viết cứng tiếng Anh, vì tham số `t` của arrow function che mất hàm `t()` (`app.js`); `test:i18n` không bắt được lỗi này. (2) `scan:run` trước đây nhận options của scanner từ cửa sổ (đi theo symlink, bỏ loại trừ hệ thống…), dù cửa sổ chưa bao giờ dùng; giờ main không đọc options đó nữa. (3) Những lần IPC từ chối có chủ đích (`quiet`) không còn in stack trace vào log.
 
 ---
 

@@ -11,8 +11,10 @@ const api = {
   pickFolder: () => ipcRenderer.invoke('dialog:pickFolder'),
   knownPaths: () => ipcRenderer.invoke('app:paths'),
 
-  scan: (folder, options) => ipcRenderer.invoke('scan:run', folder, options),
+  scan: (folder) => ipcRenderer.invoke('scan:run', folder),
   cancelScan: () => ipcRenderer.invoke('scan:cancel'),
+  /* one folder of the last scan's tree, a few levels deep -- never all of it */
+  scanChildren: (treeId, rel) => ipcRenderer.invoke('scan:children', treeId, rel),
 
   findDuplicates: (roots, options) => ipcRenderer.invoke('dupes:run', roots, options),
   cancelDuplicates: () => ipcRenderer.invoke('dupes:cancel'),

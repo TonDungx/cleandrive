@@ -122,6 +122,16 @@ function plainCandidate(file) {
 }
 
 /**
+ * A file the scan recorded with the advisor's verdict beside it -- a row of
+ * the largest list, or a tile on the map of the folder -- as a candidate.
+ */
+function fileCandidate(file, accessTimes) {
+  return file.category && file.verdict !== 'keep'
+    ? cleanupCandidate(file, file.category, file.verdict, accessTimes)
+    : plainCandidate(file);
+}
+
+/**
  * Every file either screen can act on, once each.
  *
  * @returns {{candidates: object[], cleanupIds: Map<string, string[]>, largestIds: string[]}}
@@ -148,12 +158,7 @@ function toCandidates(result) {
   const largestIds = [];
   for (const file of result.largestFiles || []) {
     const id = candidateId(ID, file.path);
-    if (!byId.has(id)) {
-      const candidate = file.category && file.verdict !== 'keep'
-        ? cleanupCandidate(file, file.category, file.verdict, accessTimes)
-        : plainCandidate(file);
-      byId.set(id, candidate);
-    }
+    if (!byId.has(id)) byId.set(id, fileCandidate(file, accessTimes));
     largestIds.push(id);
   }
 
@@ -197,4 +202,4 @@ const analyzer = {
   },
 };
 
-module.exports = { analyzer, confidenceFor, toCandidates, ID };
+module.exports = { analyzer, confidenceFor, toCandidates, fileCandidate, ID };

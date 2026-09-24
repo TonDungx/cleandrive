@@ -65,6 +65,8 @@ const DYNAMIC_PREFIXES = [
   // session count goes through `word()`.
   'restore.state.',
   'restore.session.',
+  // The map of the folder counts folders through `word()`.
+  'map.folder.',
 ];
 
 /* -------------------------------------------------------------------------- */

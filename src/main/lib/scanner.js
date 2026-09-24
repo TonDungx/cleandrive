@@ -338,6 +338,17 @@ async function scan(rootPath, options = {}, handlers = {}) {
       types.set(ext, { size, count: 1 });
     }
 
+    const record = {
+      path: full,
+      name: path.basename(full),
+      ext,
+      size,
+      mtimeMs: stats.mtimeMs,
+      atimeMs: stats.atimeMs,
+    };
+
+    const verdict = advisor.add(record, tag, blocked || 'none');
+
     if (tree) {
       const dir = path.dirname(full);
       let row = tree.get(dir);
@@ -349,21 +360,15 @@ async function scan(rootPath, options = {}, handlers = {}) {
       row.files++;
       if (size >= opts.treeBigFileBytes) {
         if (!row.big) row.big = [];
-        row.big.push([path.basename(full), size, stats.mtimeMs]);
+        // The access time and the verdict ride along for the window's map of
+        // the folder, where a file is a tile somebody can select, and so has
+        // to arrive as a candidate. The snapshot drops both (treeRows): it is
+        // a record of what was on the disk, not of what this version of the
+        // rules thought of it.
+        row.big.push([path.basename(full), size, stats.mtimeMs, stats.atimeMs, verdict]);
         if (row.big.length > opts.treeBigPerDir * 4) trimBig(row, opts.treeBigPerDir);
       }
     }
-
-    const record = {
-      path: full,
-      name: path.basename(full),
-      ext,
-      size,
-      mtimeMs: stats.mtimeMs,
-      atimeMs: stats.atimeMs,
-    };
-
-    const verdict = advisor.add(record, tag, blocked || 'none');
 
     largest.push({
       path: full,
@@ -419,7 +424,9 @@ async function scan(rootPath, options = {}, handlers = {}) {
   }
 
   const byType = [...types.entries()]
-    .map(([ext, v]) => ({ ext: ext || '(no extension)', size: v.size, count: v.count }))
+    // `none` so the window can say "(no extension)" in the reader's language;
+    // `ext` keeps the English, which is what the history file has always held.
+    .map(([ext, v]) => ({ ext: ext || '(no extension)', none: !ext, size: v.size, count: v.count }))
     .sort((a, b) => b.size - a.size)
     .slice(0, 25);
 
@@ -442,9 +449,7 @@ async function scan(rootPath, options = {}, handlers = {}) {
     // that refused them -- two snapshots are only comparable if both match.
     excluded,
     rules: rulesFingerprint(opts),
-    ...(tree
-      ? { tree: treeRows(root, tree, opts.treeBigPerDir), bigFileBytes: opts.treeBigFileBytes, bigPerDir: opts.treeBigPerDir }
-      : {}),
+    ...(tree ? treeResult(root, tree, opts) : {}),
   };
 }
 
@@ -454,18 +459,36 @@ function trimBig(row, keep) {
 }
 
 /**
- * The tree as a snapshot stores it: one row per folder that holds files,
+ * The tree, twice over.
+ *
+ * `tree` is what a snapshot stores: one row per folder that holds files,
  * `[relativePath, bytes, files, [[name, size, mtimeMs], …]]`, largest first.
+ *
+ * `treeFiles` is what only this process keeps: for every file named in
+ * `tree`, the access time and the advisor's verdict, by full path. The map of
+ * the folder needs them to offer a tile as a candidate; a snapshot has no use
+ * for an opinion the next version of the rules may not share.
  */
-function treeRows(root, tree, keep) {
+function treeResult(root, tree, opts) {
   const rows = [];
+  const files = new Map();
   for (const [dir, row] of tree) {
-    if (row.big) trimBig(row, keep);
-    const rel = path.relative(root, dir);
-    rows.push([rel, row.bytes, row.files, row.big || []]);
+    if (row.big) trimBig(row, opts.treeBigPerDir);
+    const big = [];
+    for (const [name, size, mtimeMs, atimeMs, verdict] of row.big || []) {
+      big.push([name, size, mtimeMs]);
+      files.set(path.join(dir, name), {
+        atimeMs,
+        verdict: verdict ? verdict.verdict : 'keep',
+        reason: verdict ? verdict.reason : null,
+        category: verdict ? verdict.category : null,
+        source: verdict ? verdict.source : null,
+      });
+    }
+    rows.push([path.relative(root, dir), row.bytes, row.files, big]);
   }
   rows.sort((a, b) => b[1] - a[1]);
-  return rows;
+  return { tree: rows, treeFiles: files, bigFileBytes: opts.treeBigFileBytes, bigPerDir: opts.treeBigPerDir };
 }
 
 /**

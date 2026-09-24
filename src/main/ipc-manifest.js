@@ -21,6 +21,7 @@ const INVOKE = Object.freeze([
 
   'scan:run',
   'scan:cancel',
+  'scan:children',
   'dupes:run',
   'dupes:cancel',
 

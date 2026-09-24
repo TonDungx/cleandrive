@@ -234,12 +234,40 @@ Total size · file count · folder count · how long the scan took.
 
 ### Where the space went
 
-Every immediate child folder with its byte total, file count and share of the
-whole, drawn as bars, largest first. The top twelve are shown.
+A **map of the folder**: every folder in it is a tile sized by what it holds,
+and the folders inside those are drawn inside them, three levels deep where
+there is room. **Click a folder to go into it**; the path above the map goes
+back up. Point at a tile for its full path, its size, how many files it holds
+and its share of the folder around it, and — for a file the app has an opinion
+about — the verdict and how sure it is. Right-click for **View**, **Reveal**
+and **Add to selection**, which ticks the file into the same floating bar the
+largest files use.
 
-Files sitting loose in the root are collected into their own **(files in this
-folder)** row rather than being silently dropped — otherwise the percentages do
-not add up and nobody can tell why.
+It is drawn in weights of one colour: the top level at full strength, each
+level inside a step paler. Nothing is coloured by file type — green, amber and
+red mean verdicts in this app, and a palette of types would be nine more
+colours that say nothing about whether a file can go.
+
+What gets a tile of its own follows the rule the scan's snapshot keeps: files
+of **10 MB or more, the ten largest per folder**. Everything else in a folder
+is one tile, **(n smaller files)**, so the sizes add up and nobody wonders
+where the rest went. On the machine this was built on that rule names 781
+files in a home folder of 377,000 — and they hold 78% of its bytes. A folder
+with more than three hundred folders in it shows the three hundred largest and
+one **(n more folders)** tile, and tiles too small to see are folded into
+**(n small items)** rather than dropped.
+
+**List** shows the same level as rows: the same drill-down, the same menu on
+every folder and file. The map is also a tree to the keyboard — the arrow keys
+move between tiles and in and out of the folders drawn inside, Enter opens a
+folder or views a file, Space ticks a file, Backspace goes up, and the
+context-menu key opens the menu.
+
+The window never holds the whole tree. It asks the main process for the folder
+it is showing and at most three levels under it — about a hundred kilobytes,
+where the home folder's whole tree is five megabytes of names. A file moved to
+the Recycle Bin from any screen leaves the map, and the card says how much has
+gone since the scan, without calling it freed.
 
 ### By file type
 
@@ -1025,7 +1053,10 @@ was put back is no longer the app's to remove.
 - **The installer is unsigned**, so Windows SmartScreen warns on first run.
 - **One folder at a time** for Disk usage and Duplicates.
 - **Display caps**: 300 duplicate groups, 50 largest files, 50 protected-location
-  rows, 100 files per cleanup category. The last is flagged on screen.
+  rows, 100 files per cleanup category. The last is flagged on screen. The map
+  of the folder gives its own tile only to files of 10 MB or more, ten per
+  folder, and to the 300 largest folders in any one folder; the rest are
+  counted in a tile that says how many.
 - **Scanning `C:\` under-reports it**, because protected system locations are
   excluded by design. The status line says how many were left out; the System
   screen measures the whole drive.
@@ -1058,7 +1089,7 @@ The interface is plain HTML, CSS and JavaScript — no framework and no build st
 so what is in `src/renderer/` is what runs. All filesystem work happens in a
 separate process; the interface has no access to the disk, the network or Node at
 all, and reaches the system only through a fixed list of named operations —
-fifty-one of them, written down in `src/main/ipc-manifest.js`. A handler for a
+fifty-two of them, written down in `src/main/ipc-manifest.js`. A handler for a
 channel not in that file throws at startup, and `npm run test:ipc` holds the
 preload, the handlers and the manifest to the same list.
 
@@ -1100,14 +1131,15 @@ Everything else, including the ZIP, Excel, PowerPoint, image and video readers,
 the charts and the tray icon, is written here. There are no binary assets in the
 repository; the icons are drawn in code.
 
-Test harnesses live in [`scripts/`](scripts/) — twenty-nine suites in
+Test harnesses live in [`scripts/`](scripts/) — thirty suites in
 `npm test`, plus the Electron ones, covering the classification rules, the
-candidate contract, the action pipeline, the journal (including two processes
+candidate contract, the action pipeline, the map of the folder and what the
+window may ask of it, the journal (including two processes
 writing it at once), the deletion guards, the unattended-run gates, the Recycle
 Bin purge and the restore both written from the attacker's side, the
 entitlement matrix, the elevated helper's handshake, the settings migration
 against the released code, the translation dictionary, and an end-to-end run
 that boots the real application and reads its rendered interface back out.
 `npm run verify:restore` puts throwaway files back from the real Recycle Bin.
-`npm run shoot:lists`, `shoot:media`, `shoot:viewer`, `shoot:restore` and
-`shoot:system` take screenshots of the real screens.
+`npm run shoot:lists`, `shoot:media`, `shoot:viewer`, `shoot:restore`,
+`shoot:system` and `shoot:treemap` take screenshots of the real screens.

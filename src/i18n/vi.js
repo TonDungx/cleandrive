@@ -160,6 +160,40 @@
     'usage.unreadable': 'Bỏ qua {n} mục không đọc được.',
     'usage.protectedExcluded': 'Đã loại trừ {n} {locations} hệ thống được bảo vệ — xem tab “Nên xoá gì”.',
     'usage.empty': 'Không tìm thấy tệp nào đọc được trong thư mục này.',
+    'usage.typeRow': '{ext} · {n} {files}',
+    'usage.noExtension': '(không có đuôi)',
+
+    // The map of the folder on Disk usage.
+    'map.view.aria': 'Hiển thị thư mục dạng',
+    'map.view.map': 'Bản đồ',
+    'map.view.list': 'Danh sách',
+    'map.crumbs': 'Thư mục',
+    'map.label': 'Bản đồ',
+    'map.tree': 'Dung lượng nằm ở đâu trong {folder}',
+    'map.rest': '({n} {files} nhỏ hơn)',
+    'map.others': '({n} {folders} khác)',
+    'map.folder.one': 'thư mục',
+    'map.folder.other': 'thư mục',
+    'map.small': '({n} mục nhỏ)',
+    'map.share': '{share} của {parent}',
+    'map.aria.folder': '{name}: {size}, {share} của {parent}, {n} {files}',
+    'map.aria.item': '{name}: {size}, {share} của {parent}',
+    'map.restHint':
+      'Tệp dưới 10 MB, và các tệp nằm ngoài mười tệp lớn nhất, được đếm chung ở đây thay vì vẽ từng tệp.',
+    'map.menu.open': 'Mở thư mục này',
+    'map.menu.select': 'Thêm vào lựa chọn',
+    'map.menu.deselect': 'Bỏ khỏi lựa chọn',
+    'map.menu.aria': 'Thao tác với {name}',
+    'map.stale': 'Bản đồ này thuộc một lần quét trước. Hãy quét lại để vẽ.',
+    'map.empty': 'Không có gì trong thư mục này chiếm dung lượng.',
+    'map.partial': 'Lần quét đã dừng sớm, nên đây chỉ là những gì đã đọc được tới lúc đó.',
+    'map.movedSince':
+      'Đã chuyển vào Thùng rác kể từ lần quét này, nên không còn được vẽ: {n} {files} ({size}). ' +
+      'Chưa giải phóng cho tới khi dọn Thùng rác.',
+    'map.hint':
+      'Mỗi ô lớn theo dung lượng nó chứa. Tệp từ 10 MB trở lên có ô riêng; phần còn lại của một thư mục ' +
+      'dùng chung một ô. Bấm vào thư mục để đi vào, hoặc bấm chuột phải vào một ô để xem thêm.',
+    'map.listHint': 'Tệp từ 10 MB trở lên được liệt kê từng tệp; phần còn lại của một thư mục được đếm chung.',
 
     /* ---- what to delete ----------------------------------------------- */
     'cleanup.safe': 'An toàn để xoá',

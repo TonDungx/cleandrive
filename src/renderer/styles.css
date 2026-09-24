@@ -1373,6 +1373,314 @@ main {
   transition: width var(--medium);
 }
 
+/* A short list across a wide card: two or three columns rather than one line
+   of bars stretched the width of the window. */
+.bars-columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr));
+  gap: 13px 28px;
+}
+
+/* ==========================================================================
+   the map of the folder (Disk usage)
+   ==========================================================================
+
+   Painted on a canvas in weights of one accent, deepest palest; the elements
+   laid over it are what can be focused, hovered and right-clicked. Green,
+   amber and red appear only in the tooltip's verdict pill, which is a verdict. */
+
+.spacemap-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  margin: 0 0 10px;
+}
+
+.spacemap-head h2 {
+  margin: 0;
+}
+
+.spacemap-switch {
+  --switch-count: 2;
+}
+
+.spacemap-crumbs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  margin: 0 0 10px;
+  font-size: 12px;
+}
+
+.spacemap-crumbs ol {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.spacemap-crumbs li {
+  min-width: 0;
+}
+
+.spacemap-crumbs li + li::before {
+  content: '›';
+  margin: 0 6px;
+  color: var(--text-3);
+}
+
+.spacemap-crumb-here {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.spacemap-total {
+  margin-left: auto;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.spacemap {
+  position: relative;
+  height: clamp(260px, 52vh, 560px);
+  overflow: hidden;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.spacemap canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+}
+
+.spacemap-tree {
+  position: absolute;
+  inset: 0;
+}
+
+.spacemap-item {
+  position: absolute;
+  box-sizing: border-box;
+  overflow: hidden;
+  outline: none;
+}
+
+.spacemap-item.is-folder {
+  cursor: zoom-in;
+}
+
+.spacemap-item.is-file {
+  cursor: pointer;
+}
+
+/* The inner tiles cover their parent's box; only the tiles themselves take
+   the pointer, so the parent's name strip still belongs to the parent. */
+.spacemap-group {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.spacemap-group > .spacemap-item {
+  pointer-events: auto;
+}
+
+.spacemap-item.is-hover {
+  box-shadow: inset 0 0 0 1px var(--text);
+}
+
+.spacemap-item:focus-visible {
+  z-index: 1;
+  box-shadow: inset 0 0 0 2px var(--text), inset 0 0 0 4px var(--surface);
+}
+
+.spacemap-item.is-selected::after {
+  content: '✓';
+  position: absolute;
+  top: 3px;
+  right: 4px;
+  display: grid;
+  place-items: center;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: var(--text);
+  color: var(--surface);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.spacemap-item.is-selected {
+  box-shadow: inset 0 0 0 2px var(--text);
+}
+
+.spacemap-probe {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+  transition: none !important;
+}
+
+.spacemap-tip {
+  position: fixed;
+  z-index: 50;
+  max-width: min(440px, calc(100vw - 16px));
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow);
+  color: var(--text);
+  font-size: 12px;
+  pointer-events: none;
+}
+
+.spacemap-tip-path {
+  color: var(--text-2);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.spacemap-tip-line {
+  margin-top: 4px;
+  font-variant-numeric: tabular-nums;
+}
+
+.spacemap-tip-line .badge {
+  margin-right: 6px;
+}
+
+.spacemap-tip-line.is-quiet {
+  color: var(--text-2);
+}
+
+.spacemap-menu {
+  position: fixed;
+  z-index: 60;
+  min-width: 190px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow);
+}
+
+.spacemap-menu-head {
+  max-width: 320px;
+  padding: 6px 10px 7px;
+  margin: 0 0 4px;
+  border-bottom: 1px solid var(--border-soft);
+  overflow: hidden;
+  color: var(--text-2);
+  font-size: 11.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.spacemap-menu [role='menuitem'] {
+  display: block;
+  width: 100%;
+  padding: 7px 10px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.spacemap-menu [role='menuitem']:hover,
+.spacemap-menu [role='menuitem']:focus-visible {
+  outline: none;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.spacemap-row-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.spacemap-row-end {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.spacemap-open {
+  appearance: none;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.spacemap-open:hover {
+  text-decoration: underline;
+}
+
+.spacemap-row.is-rest .bar-name,
+.spacemap-row.is-others .bar-name {
+  color: var(--text-2);
+  font-style: italic;
+}
+
+.spacemap-row.is-rest .bar-fill,
+.spacemap-row.is-others .bar-fill {
+  background: color-mix(in srgb, var(--accent) 34%, var(--surface));
+}
+
+.spacemap-row.is-selected .bar-name::before {
+  content: '✓ ';
+  font-weight: 700;
+}
+
+.spacemap-more {
+  appearance: none;
+  width: 24px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text-2);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.spacemap-more:hover {
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+
+.spacemap-evidence {
+  list-style: none;
+  margin: -6px 0 0;
+}
+
+.spacemap-note {
+  margin: 10px 0 0;
+}
+
 /* ==========================================================================
    file rows
    ========================================================================== */

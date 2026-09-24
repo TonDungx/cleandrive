@@ -10,8 +10,13 @@ const state = {
   cleanup: null,
   accessTimes: null,
   selectedDupes: new Set(),
+  // The Disk usage screen's selection, by path. The largest list and the map
+  // of the folder tick into the same set, so one bar acts on both.
   selectedLarge: new Set(),
   selectedCleanup: new Set(),
+  // Every file the map has offered, path -> view, so that bar can find the
+  // ones that are not also in the largest list.
+  mapViews: new Map(),
 };
 
 /* ------------------------------------------------------------------ format */
@@ -262,14 +267,22 @@ function renderScan(result) {
     return;
   }
 
-  const max = result.topFolders.length ? result.topFolders[0].size : 1;
-  renderBars($('top-folders'), result.topFolders.slice(0, 12), max, (f) => f.name);
+  // Shown before the map is asked for, so it is laid out at its real width.
+  $('scan-results').hidden = false;
+  window.SpaceMap.show(result);
 
   const maxType = result.byType.length ? result.byType[0].size : 1;
-  renderBars($('by-type'), result.byType.slice(0, 12), maxType, (t) => `.${t.ext} · ${formatCount(t.count)} files`);
+  // The item is `type`, not `t`: named `t`, it hid the translation function,
+  // which is how " files" stayed English in a Vietnamese window.
+  renderBars($('by-type'), result.byType.slice(0, 12), maxType, (type) =>
+    t('usage.typeRow', '{ext} · {n} {files}', {
+      ext: type.none ? t('usage.noExtension', '(no extension)') : `.${type.ext}`,
+      n: formatCount(type.count),
+      files: word(type.count, 'app.file', 'file', 'files'),
+    })
+  );
 
   renderLargest(result.largestFiles);
-  $('scan-results').hidden = false;
 }
 
 function renderBars(list, items, max, labelFn) {
@@ -313,7 +326,7 @@ const bars = {
     root: $('large-actionbar'),
     readout: $('large-selection'),
     buttons: { recycle: $('delete-large') },
-    selected: () => (state.scan ? state.scan.largestFiles.filter((f) => state.selectedLarge.has(f.path)) : []),
+    selected: () => selectedOnUsage(),
   }),
   cleanup: ActionBar({
     root: $('cleanup-actionbar'),
@@ -328,6 +341,22 @@ const bars = {
     selected: () => selectedIn(state.dupes && state.dupes.groups, state.selectedDupes),
   }),
 };
+
+/** What is ticked on Disk usage, from the largest list and from the map, each once. */
+function selectedOnUsage() {
+  const out = [];
+  const seen = new Set();
+  for (const file of state.scan ? state.scan.largestFiles : []) {
+    if (state.selectedLarge.has(file.path)) {
+      seen.add(file.path);
+      out.push(file);
+    }
+  }
+  for (const [file, view] of state.mapViews) {
+    if (state.selectedLarge.has(file) && !seen.has(file)) out.push(view);
+  }
+  return out;
+}
 
 /** The selected rows of a grouped screen, each once. */
 function selectedIn(groups, selection) {
@@ -364,7 +393,10 @@ function renderLargest(files) {
   lists.largest = CandidateList($('largest-files'), {
     rows: files.slice(0, 50),
     selection: state.selectedLarge,
-    onChange: () => bars.largest.update(),
+    onChange: () => {
+      bars.largest.update();
+      window.SpaceMap.syncSelection();
+    },
     meta: (file) => (file.verdict !== 'keep' && file.reason ? `${timeLabel(file)} · ${tm(file.reason)}` : timeLabel(file)),
     // Only a row the app has an opinion about carries a pill. A file no rule
     // matched says nothing, rather than wearing a "keep" on every row.
@@ -410,6 +442,7 @@ $('delete-large').addEventListener('click', async () => {
     // stay, ticked off, looking as though it was still on the disk.
     const gone = new Set(moved.map((m) => m.path));
     state.selectedLarge.clear();
+    for (const file of gone) state.mapViews.delete(file);
     if (state.scan) {
       state.scan.largestFiles = state.scan.largestFiles.filter((f) => !gone.has(f.path));
       renderLargest(state.scan.largestFiles);
@@ -1007,6 +1040,10 @@ async function deleteSelected(paths, onDone, options = {}) {
   if (!result) return;
 
   const moved = result.moved.length;
+
+  // Whatever screen this came from, the main process has taken what moved off
+  // the map of the folder; the map asks again so it stops drawing it.
+  if (moved > 0 && !result.dryRun && window.SpaceMap) window.SpaceMap.refresh();
 
   // A stop part-way through still moved everything up to that point.
   if (result.cancelled) {

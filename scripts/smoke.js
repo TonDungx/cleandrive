@@ -380,12 +380,16 @@ app.whenReady().then(async () => {
       const reply = await win.webContents.executeJavaScript(`
         window.cleandrive.scan(${JSON.stringify(picked.path)}).then((r) => ({
           ok: r.ok,
-          hasTree: Boolean(r.data && 'tree' in r.data),
+          hasTree: Boolean(r.data && ('tree' in r.data || 'treeFiles' in r.data)),
+          treeId: r.data ? r.data.treeId : null,
           candidates: r.data && Array.isArray(r.data.candidates) ? r.data.candidates.length : -1,
           everyOneHasEvidence: Boolean(r.data) && r.data.candidates.every((c) => c.evidence.length > 0 && c.confidence),
         }))
       `);
-      check('and the tree never reached the window', reply.ok && reply.hasTree === false);
+      // The map of the folder reads it a level at a time (scan:children); the
+      // "Map of the folder" section below holds every reply to that.
+      check('the scan reply carries no tree, only an id to ask for one level of it by',
+        reply.ok && reply.hasTree === false && typeof reply.treeId === 'string', String(reply.treeId));
       check('what did reach it is candidates, each with evidence and a confidence',
         reply.candidates > 0 && reply.everyOneHasEvidence, `${reply.candidates} candidates`);
     }
@@ -2029,6 +2033,260 @@ app.whenReady().then(async () => {
       !fs.existsSync(path.join(PRODUCTION_USER_DATA, 'settings.json')) ||
         !fs.readFileSync(path.join(PRODUCTION_USER_DATA, 'settings.json'), 'utf8').includes('cleandrive-smoke-auto'),
       'the harness\'s configuration must not appear in the real file');
+
+    /* -- the map of the folder ---------------------------------------------- */
+    // Last, because it scans a folder of its own and the sections above read
+    // the Downloads scan. Built here, so the shapes it has to handle are
+    // there: deeper than a reply goes, wider than a level carries, more big
+    // files than a folder names, and one file the advisor calls safe.
+    console.log('\nMap of the folder (Disk usage):');
+    {
+      const mapBase = fs.mkdtempSync(path.join(os.tmpdir(), 'cleandrive-smoke-map-'));
+      const mapRoot = path.join(mapBase, 'home');
+      const make = (relative, bytes) => {
+        const full = path.join(mapRoot, relative);
+        fs.mkdirSync(path.dirname(full), { recursive: true });
+        const fd = fs.openSync(full, 'w');
+        fs.ftruncateSync(fd, bytes);
+        fs.closeSync(fd);
+        return full;
+      };
+      make(path.join('Deep', 'a', 'b', 'c', 'd', 'e', 'f', 'deep.bin'), 1024);
+      for (let i = 0; i < 320; i++) make(path.join('Wide', `w${String(i).padStart(3, '0')}`, 'x.bin'), (i + 1) * 100);
+      for (let i = 0; i < 12; i++) make(path.join('Big', `big${i}.bin`), 10 * 1024 * 1024 + i * 1000);
+      make(path.join('Temp', 'cache.tmp'), 11 * 1024 * 1024);
+      for (let i = 0; i < 6; i++) make(path.join('Photos', `200${i}`, `p${i}.jpg`), (3 + i) * 1024 * 1024);
+      const throwaway = make(path.join('Scratch', 'cleandrive-smoke-map-throwaway.bin'), 4096);
+      make('loose.bin', 5);
+
+      const js = (expr) => win.webContents.executeJavaScript(expr);
+      try {
+        // What the window can and cannot get, asked of the IPC directly.
+        const protocol = await js(`
+          (async () => {
+            const api = window.cleandrive;
+            const first = (await api.scan(${JSON.stringify(mapRoot)})).data;
+            const top = await api.scanChildren(first.treeId, '');
+            const nodes = [];
+            const walk = (folder, depth) => {
+              for (const item of folder.children || []) {
+                nodes.push({ kind: item.kind, depth, rel: item.rel || '' });
+                if (item.kind === 'folder') walk(item, depth + 1);
+              }
+            };
+            if (top.ok) walk(top.data, 1);
+            const wide = top.ok ? top.data.children.find((c) => c.name === 'Wide') : null;
+            const refusals = {
+              unknown: await api.scanChildren(first.treeId, 'Nowhere'),
+              escape: await api.scanChildren(first.treeId, '..'),
+              absolute: await api.scanChildren(first.treeId, ${JSON.stringify(path.join(mapRoot, 'Big'))}),
+              notString: await api.scanChildren(first.treeId, 42),
+              noId: await api.scanChildren(undefined, ''),
+            };
+            const second = (await api.scan(${JSON.stringify(mapRoot)})).data;
+            const stale = await api.scanChildren(first.treeId, '');
+            return {
+              ok: top.ok,
+              bytes: top.ok ? top.data.bytes : 0,
+              totalSize: first.totalSize,
+              nodes: nodes.length,
+              deepest: Math.max(...nodes.map((n) => n.depth)),
+              hasDeepFolder: nodes.some((n) => /e.f$/.test(n.rel)),
+              wideFolders: wide && wide.children ? wide.children.filter((c) => c.kind === 'folder').length : -1,
+              wideOthers: wide && wide.children ? (wide.children.find((c) => c.kind === 'others') || {}).count : -1,
+              files: nodes.filter((n) => n.kind === 'file').length,
+              bytesSent: JSON.stringify(top.data || {}).length,
+              refused: Object.fromEntries(Object.entries(refusals).map(([k, r]) => [k, r.ok === false ? r.code || 'refused' : 'ANSWERED'])),
+              stale: stale.ok === false ? stale.code : 'ANSWERED',
+              renewed: second.treeId !== first.treeId,
+            };
+          })()
+        `);
+        console.log(`    one level: ${protocol.nodes} nodes, ${protocol.bytesSent.toLocaleString('en-US')} bytes`);
+        check('a level adds up to the scan', protocol.ok && protocol.bytes === protocol.totalSize,
+          `${protocol.bytes} of ${protocol.totalSize}`);
+        check('and reaches at most three levels down, so the seven-deep folder is not in it',
+          protocol.deepest <= 3 && protocol.hasDeepFolder === false, `deepest ${protocol.deepest}`);
+        check('a folder of 320 folders arrives as 300 and one tile for the rest',
+          protocol.wideFolders === 300 && protocol.wideOthers === 20, `${protocol.wideFolders} + ${protocol.wideOthers}`);
+        check('the window cannot ask for a folder the scan never saw, a way out of it, an absolute path, or a non-string',
+          Object.values(protocol.refused).every((code) => code !== 'ANSWERED'), JSON.stringify(protocol.refused));
+        check('and a map from an earlier scan is told it is stale rather than handed this one',
+          protocol.renewed && protocol.stale === 'ESTALE', protocol.stale);
+
+        // Now through the screen itself.
+        await js(`document.querySelector('.tab[data-tab="usage"]').click()`);
+        await js(`setFolder(${JSON.stringify(mapRoot)})`);
+        await until(win, `document.getElementById('run-scan').disabled === false`);
+        await js(`document.getElementById('run-scan').click()`);
+        await until(win, `document.getElementById('run-scan').disabled === false && window.SpaceMap.debug().tiles.length > 0 && window.SpaceMap.debug().level && window.SpaceMap.debug().level.path === ${JSON.stringify(mapRoot)}`, 60000);
+        await wait(300);
+
+        const drawn = await js(`
+          (() => {
+            const canvas = document.getElementById('spacemap-canvas');
+            const ctx = canvas.getContext('2d');
+            const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+            const colours = new Set();
+            for (let i = 0; i < data.length; i += 4 * 97) colours.add((data[i] << 16) | (data[i + 1] << 8) | data[i + 2]);
+            const tree = document.getElementById('spacemap-tree');
+            const items = [...tree.querySelectorAll('[role="treeitem"]')];
+            const debug = window.SpaceMap.debug();
+            return {
+              view: debug.view,
+              mapShown: !document.getElementById('spacemap').hidden,
+              listHidden: document.getElementById('top-folders').hidden,
+              canvas: [canvas.width, canvas.height],
+              colours: colours.size,
+              role: tree.getAttribute('role'),
+              items: items.length,
+              labelled: items.every((el) => el.getAttribute('aria-label') && el.getAttribute('aria-level')),
+              levels: [...new Set(items.map((el) => el.getAttribute('aria-level')))].sort(),
+              tabStops: items.filter((el) => el.tabIndex === 0).length,
+              tiles: debug.tiles.length,
+              nested: debug.tiles.filter((t) => t.depth > 1).length,
+              kinds: [...new Set(debug.tiles.map((t) => t.kind))].sort(),
+              crumbs: [...document.querySelectorAll('#spacemap-crumbs li')].map((li) => li.textContent),
+            };
+          })()
+        `);
+        console.log(`    ${drawn.tiles} tiles (${drawn.nested} nested), levels ${drawn.levels.join('/')}, ${drawn.colours} colours sampled`);
+        check('the map is what the card opens on', drawn.view === 'map' && drawn.mapShown && drawn.listHidden);
+        check('and it is painted, not left blank', drawn.canvas[0] > 0 && drawn.colours >= 3, `${drawn.canvas.join('x')}, ${drawn.colours} colours`);
+        check('every tile is a treeitem in a tree, named and levelled',
+          drawn.role === 'tree' && drawn.items === drawn.tiles && drawn.labelled, `${drawn.items} items`);
+        check('with folders drawn inside folders', drawn.nested > 0 && drawn.levels.includes('2'));
+        check('and exactly one of them in the tab order', drawn.tabStops === 1, String(drawn.tabStops));
+        check('folders, named files and the "smaller files" tiles are all there',
+          ['file', 'folder', 'rest'].every((k) => drawn.kinds.includes(k)), drawn.kinds.join(', '));
+        check('the path above the map starts at the scanned folder', drawn.crumbs.length === 1 && drawn.crumbs[0] === 'home',
+          drawn.crumbs.join(' > '));
+
+        const keys = await js(`
+          (async () => {
+            const tree = document.getElementById('spacemap-tree');
+            const key = (k, extra = {}) => document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, ...extra }));
+            const settle = () => new Promise((r) => setTimeout(r, 250));
+            const level1 = [...tree.children];
+            level1[0].focus();
+            const start = document.activeElement.dataset.key;
+            key('ArrowDown');
+            const down = document.activeElement.dataset.key;
+            const nestedFolder = level1.find((el) => el.classList.contains('is-folder') && el.getAttribute('aria-expanded') === 'true');
+            nestedFolder.focus();
+            key('ArrowRight');
+            const inside = { level: document.activeElement.getAttribute('aria-level') };
+            key('ArrowLeft');
+            const back = document.activeElement === nestedFolder;
+            const goingInto = nestedFolder.dataset.key;
+            key('Enter');
+            await settle();
+            const crumbsIn = document.querySelectorAll('#spacemap-crumbs li').length;
+            const focusIn = document.activeElement && document.activeElement.getAttribute('aria-level');
+            key('Backspace');
+            await settle();
+            return {
+              moved: start !== down,
+              inside,
+              back,
+              crumbsIn,
+              focusIn,
+              crumbsOut: document.querySelectorAll('#spacemap-crumbs li').length,
+              focusBack: document.activeElement && document.activeElement.dataset.key === goingInto,
+            };
+          })()
+        `);
+        check('arrow keys move between tiles', keys.moved);
+        check('right goes into a folder drawn inside, left comes back out', keys.inside.level === '2' && keys.back);
+        check('Enter opens the folder, and focus lands on its first tile', keys.crumbsIn === 2 && keys.focusIn === '1',
+          `${keys.crumbsIn} crumbs`);
+        check('Backspace goes up again, back onto the folder it came from', keys.crumbsOut === 1 && keys.focusBack);
+
+        const menu = await js(`
+          (async () => {
+            const settle = () => new Promise((r) => setTimeout(r, 250));
+            const big = [...document.querySelectorAll('#spacemap-tree .spacemap-item.is-folder')].find((el) => /^Big:/.test(el.getAttribute('aria-label')));
+            big.click();
+            await settle();
+            const file = document.querySelector('#spacemap-tree .spacemap-item.is-file');
+            const r = file.getBoundingClientRect();
+            file.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: r.left + 5, clientY: r.top + 5 }));
+            const tip = document.querySelector('.spacemap-tip');
+            const tipText = tip.hidden ? '' : tip.textContent;
+            file.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: r.left + 5, clientY: r.top + 5 }));
+            const menuEl = document.querySelector('.spacemap-menu');
+            const items = [...menuEl.querySelectorAll('[role="menuitem"]')].map((b) => b.textContent);
+            const focusedInMenu = menuEl.contains(document.activeElement);
+            menuEl.querySelectorAll('[role="menuitem"]')[2].click();
+            await settle();
+            return {
+              crumbs: [...document.querySelectorAll('#spacemap-crumbs li')].map((li) => li.textContent),
+              tipText,
+              items,
+              focusedInMenu,
+              menuClosed: menuEl.hidden,
+              selected: file.isConnected ? file.getAttribute('aria-selected') : document.querySelector('#spacemap-tree .spacemap-item.is-file.is-selected') ? 'true' : 'false',
+              bar: !document.getElementById('large-actionbar').hidden,
+              readout: document.getElementById('large-selection').textContent,
+            };
+          })()
+        `);
+        check('clicking a folder goes into it', menu.crumbs.join(' > ') === 'home > Big', menu.crumbs.join(' > '));
+        check('pointing at a tile shows its path and size', /big\d+\.bin/.test(menu.tipText) && /MB/.test(menu.tipText),
+          menu.tipText.slice(0, 80));
+        check('right-clicking a file offers View, Reveal and Add to selection, with focus in the menu',
+          menu.items.join('|') === 'View|Reveal|Add to selection' && menu.focusedInMenu, menu.items.join(', '));
+        check('adding it ticks the tile and brings up the same bar the largest list uses',
+          menu.menuClosed && menu.selected === 'true' && menu.bar && /1 selected/.test(menu.readout), menu.readout);
+
+        const listed = await js(`
+          (async () => {
+            const settle = () => new Promise((r) => setTimeout(r, 250));
+            document.querySelector('#spacemap-crumbs button').click();
+            await settle();
+            document.querySelector('[data-map-view="list"]').click();
+            await settle();
+            const rows = [...document.querySelectorAll('#top-folders .spacemap-row')];
+            const level = window.SpaceMap.debug().level;
+            let stored = null;
+            try { stored = localStorage.getItem('cleandrive.spacemap.view'); } catch {}
+            const out = {
+              listShown: !document.getElementById('top-folders').hidden,
+              mapHidden: document.getElementById('spacemap').hidden,
+              rows: rows.length,
+              children: level.children.length,
+              folderButtons: document.querySelectorAll('#top-folders .spacemap-open').length,
+              menuButtons: document.querySelectorAll('#top-folders .spacemap-more').length,
+              stored,
+            };
+            document.querySelector('#top-folders .spacemap-open').click();
+            await settle();
+            out.crumbsAfter = document.querySelectorAll('#spacemap-crumbs li').length;
+            document.querySelector('#spacemap-crumbs button').click();
+            await settle();
+            document.querySelector('[data-map-view="map"]').click();
+            await settle();
+            return out;
+          })()
+        `);
+        check('the list shows the same level, one row per tile', listed.listShown && listed.mapHidden && listed.rows === listed.children,
+          `${listed.rows} rows for ${listed.children} tiles`);
+        check('with every folder a button that goes into it, and a menu on every folder and file',
+          listed.folderButtons > 0 && listed.menuButtons > 0 && listed.crumbsAfter === 2);
+        check('and the choice of view is remembered', listed.stored === 'list');
+
+        const before = await js(`window.SpaceMap.debug().level.bytes`);
+        await js(`deleteSelected([${JSON.stringify(throwaway)}], () => {}, { confirm: false })`);
+        await until(win, `window.SpaceMap.debug().level && window.SpaceMap.debug().level.removed.files === 1`, 15000);
+        const after = await js(`({ bytes: window.SpaceMap.debug().level.bytes, note: document.getElementById('spacemap-note').textContent })`);
+        check('a file moved to the bin from any screen leaves the map, by exactly its size',
+          before - after.bytes === 4096 && !fs.existsSync(throwaway), `${before} -> ${after.bytes}`);
+        check('and the map says so, without calling it freed', /Moved to the Recycle Bin since this scan/.test(after.note) &&
+          /Not freed/.test(after.note), after.note.slice(0, 90));
+      } finally {
+        fs.rmSync(mapBase, { recursive: true, force: true });
+      }
+    }
 
     /* -- console cleanliness --------------------------------------------- */
     console.log('\nConsole:');

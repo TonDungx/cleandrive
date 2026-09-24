@@ -198,14 +198,35 @@
         </div>
 
         <div class="grid" id="scan-results" hidden>
-          <section class="card">
-            <h2 data-i18n="usage.whereSpaceWent">Where the space went</h2>
-            <ul class="bars" id="top-folders"></ul>
+          <!-- Where the space went: a map of the folder, or the same thing as
+               a list. The main process hands it one folder at a time
+               (scan:children); treemap.js draws it. -->
+          <section class="card card-wide spacemap-card" id="spacemap-card">
+            <div class="spacemap-head">
+              <h2 data-i18n="usage.whereSpaceWent">Where the space went</h2>
+              <div
+                class="segmented spacemap-switch"
+                id="spacemap-view"
+                role="group"
+                data-i18n-aria="map.view.aria"
+                aria-label="Show the folder as"
+              >
+                <button class="segmented-option is-active" type="button" data-map-view="map" aria-pressed="true" data-i18n="map.view.map">Map</button>
+                <button class="segmented-option" type="button" data-map-view="list" aria-pressed="false" data-i18n="map.view.list">List</button>
+              </div>
+            </div>
+            <nav class="spacemap-crumbs" id="spacemap-crumbs" data-i18n-aria="map.crumbs" aria-label="Folder"></nav>
+            <div class="spacemap" id="spacemap">
+              <canvas id="spacemap-canvas" aria-hidden="true"></canvas>
+              <div class="spacemap-tree" id="spacemap-tree" role="tree" aria-multiselectable="true"></div>
+            </div>
+            <ul class="bars spacemap-list" id="top-folders" hidden></ul>
+            <p class="card-note spacemap-note" id="spacemap-note" hidden></p>
           </section>
 
-          <section class="card">
+          <section class="card card-wide">
             <h2 data-i18n="usage.byType">By file type</h2>
-            <ul class="bars" id="by-type"></ul>
+            <ul class="bars bars-columns" id="by-type"></ul>
           </section>
 
           <section class="card card-wide">
@@ -1077,6 +1098,9 @@
     <!-- Loaded before the screens: every one of them opens a file row. -->
     <script src="document.js"></script>
     <script src="viewer.js"></script>
+    <!-- The Disk usage map: its arithmetic, then the card that uses it. -->
+    <script src="treemap-layout.js"></script>
+    <script src="treemap.js"></script>
     <!-- All four share app.js's globals; must load after it. -->
     <script src="media.js"></script>
     <script src="automatic.js"></script>
