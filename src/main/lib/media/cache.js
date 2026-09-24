@@ -3,6 +3,8 @@
 const fsp = require('node:fs/promises');
 const path = require('node:path');
 
+const { renameRetrying } = require('../atomic');
+
 /**
  * What the last scan learned about each file, so the next one need not read it
  * again.
@@ -141,7 +143,7 @@ class MediaCache {
         JSON.stringify({ version: RECORD_VERSION, entries: Object.fromEntries(entries) }),
         'utf8'
       );
-      await fsp.rename(temp, this.file);
+      await renameRetrying(temp, this.file);
 
       this.dirty = false;
       return true;

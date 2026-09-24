@@ -2,6 +2,8 @@
 
 const fsp = require('node:fs/promises');
 const path = require('node:path');
+
+const { renameRetrying } = require('./atomic');
 const { execFile } = require('node:child_process');
 
 const { scan } = require('./scanner');
@@ -476,7 +478,7 @@ class RunLog {
     await fsp.mkdir(path.dirname(this.filePath), { recursive: true });
     const temp = `${this.filePath}.${process.pid}.tmp`;
     await fsp.writeFile(temp, `${JSON.stringify({ version: 1, runs: this.runs }, null, 2)}\n`, 'utf8');
-    await fsp.rename(temp, this.filePath);
+    await renameRetrying(temp, this.filePath);
     return run;
   }
 

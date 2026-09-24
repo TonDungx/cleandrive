@@ -3,6 +3,8 @@
 const fsp = require('node:fs/promises');
 const path = require('node:path');
 
+const { renameRetrying } = require('./atomic');
+
 const { pathKey } = require('./util');
 
 /**
@@ -356,7 +358,7 @@ async function writeAtomic(filePath, payload) {
   } finally {
     if (handle) await handle.close();
   }
-  await fsp.rename(temp, filePath);
+  await renameRetrying(temp, filePath);
 }
 
 module.exports = { TrashLedger, SCHEMA_VERSION, MAX_ENTRIES, MAX_AGE_DAYS };

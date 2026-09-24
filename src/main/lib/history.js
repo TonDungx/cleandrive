@@ -3,6 +3,8 @@
 const fsp = require('node:fs/promises');
 const path = require('node:path');
 
+const { renameRetrying } = require('./atomic');
+
 const { pathKey } = require('./util');
 // Every refusal below is shown in the window, so it is a message the window
 // words in its own language rather than an English sentence.
@@ -321,7 +323,7 @@ async function writeAtomic(filePath, payload) {
   } finally {
     if (handle) await handle.close();
   }
-  await fsp.rename(temp, filePath);
+  await renameRetrying(temp, filePath);
 }
 
 /* -------------------------------------------------------------------------- */

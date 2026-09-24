@@ -1235,7 +1235,7 @@ Everything else, including the ZIP, Excel, PowerPoint, image and video readers,
 the charts and the tray icon, is written here. There are no binary assets in the
 repository; the icons are drawn in code.
 
-Test harnesses live in [`scripts/`](scripts/) — thirty-two suites in
+Test harnesses live in [`scripts/`](scripts/) — thirty-three suites in
 `npm test`, plus the Electron ones, covering the classification rules, the
 candidate contract, the action pipeline, the map of the folder and what the
 window may ask of it, what two scans of a folder can honestly say changed, the

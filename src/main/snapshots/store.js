@@ -31,6 +31,7 @@ const path = require('node:path');
 const zlib = require('node:zlib');
 const { promisify } = require('node:util');
 
+const { renameRetrying } = require('../lib/atomic');
 const { pathKey } = require('../lib/util');
 
 const gzip = promisify(zlib.gzip);
@@ -52,7 +53,7 @@ function fileNameFor(takenAt) {
 async function writeAtomic(file, data) {
   const temp = `${file}.${process.pid}.tmp`;
   await fsp.writeFile(temp, data);
-  await fsp.rename(temp, file);
+  await renameRetrying(temp, file);
 }
 
 class SnapshotStore {

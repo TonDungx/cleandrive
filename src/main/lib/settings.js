@@ -4,6 +4,8 @@ const fs = require('node:fs');
 const fsp = fs.promises;
 const path = require('node:path');
 
+const { renameRetrying } = require('./atomic');
+
 const i18n = require('../../i18n');
 const { ALLOWED_ADVISOR_NAMES } = require('../automatic/allowed-categories');
 
@@ -780,7 +782,7 @@ class SettingsStore {
       if (handle) await handle.close();
     }
 
-    await fsp.rename(temp, this.filePath);
+    await renameRetrying(temp, this.filePath);
   }
 }
 

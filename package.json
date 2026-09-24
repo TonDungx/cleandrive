@@ -12,7 +12,7 @@
   "scripts": {
     "start": "electron .",
     "dev": "electron . --dev",
-    "test": "node scripts/test-duplicate.js --fixture && node scripts/test-advisor.js && node scripts/test-protection.js && node scripts/test-appsafety.js && node scripts/test-trash.js && node scripts/test-trash-progress.js && node scripts/test-settings.js && node scripts/test-recyclebin.js && node scripts/test-autoclean.js && node scripts/test-scheduler.js && node scripts/test-history.js && node scripts/test-monitor.js && node scripts/test-media-format.js && node scripts/test-media-scan.js && node scripts/test-media-classify.js && node scripts/test-media-perceptual.js && node scripts/test-preview.js && node scripts/test-office.js && node scripts/test-i18n.js && node scripts/test-contract.js && node scripts/test-actions.js && node scripts/test-ipc-manifest.js && node scripts/test-journal.js && node scripts/test-entitlements.js && node scripts/test-helper.js && node scripts/test-snapshots.js && node scripts/test-settings-migration.js && node scripts/test-restore.js && node scripts/test-system.js && node scripts/test-treemap.js && node scripts/test-snapshot-diff.js && node scripts/test-dehydrate.js",
+    "test": "node scripts/test-duplicate.js --fixture && node scripts/test-advisor.js && node scripts/test-protection.js && node scripts/test-appsafety.js && node scripts/test-trash.js && node scripts/test-trash-progress.js && node scripts/test-settings.js && node scripts/test-atomic.js && node scripts/test-recyclebin.js && node scripts/test-autoclean.js && node scripts/test-scheduler.js && node scripts/test-history.js && node scripts/test-monitor.js && node scripts/test-media-format.js && node scripts/test-media-scan.js && node scripts/test-media-classify.js && node scripts/test-media-perceptual.js && node scripts/test-preview.js && node scripts/test-office.js && node scripts/test-i18n.js && node scripts/test-contract.js && node scripts/test-actions.js && node scripts/test-ipc-manifest.js && node scripts/test-journal.js && node scripts/test-entitlements.js && node scripts/test-helper.js && node scripts/test-snapshots.js && node scripts/test-settings-migration.js && node scripts/test-restore.js && node scripts/test-system.js && node scripts/test-treemap.js && node scripts/test-snapshot-diff.js && node scripts/test-dehydrate.js",
     "test:scanner": "node scripts/test-scanner.js",
     "test:duplicate": "node scripts/test-duplicate.js --fixture",
     "test:advisor": "node scripts/test-advisor.js",
@@ -28,6 +28,7 @@
     "bench:batch": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/bench-batch.ps1",
     "test:appsafety": "node scripts/test-appsafety.js",
     "test:settings": "node scripts/test-settings.js",
+    "test:atomic": "node scripts/test-atomic.js",
     "test:recyclebin": "node scripts/test-recyclebin.js",
     "test:autoclean": "node scripts/test-autoclean.js",
     "test:scheduler": "node scripts/test-scheduler.js",
