@@ -28,6 +28,8 @@ const {
   looksLikeAppData,
 } = require('./advisor');
 const { message: m } = require('../../i18n');
+const cloudState = require('./cloud-state');
+const { looksDehydrated } = require('./media/cloud');
 
 const DEFAULTS = {
   followSymlinks: false,
@@ -50,6 +52,11 @@ const DEFAULTS = {
   // few hundred kilobytes rather than a list of every file in it.
   treeBigFileBytes: 10 * 1024 * 1024,
   treeBigPerDir: 10,
+  // OneDrive files whose contents are on this disk, for "free up space" (B3).
+  // Off unless asked for, like the tree; asked for by the window's scan only.
+  cloudFiles: false,
+  cloudMinBytes: 1024 * 1024,
+  cloudMaxFiles: 5000,
 };
 
 // Backstop against reparse-point loops when maxDepth is unlimited. A real
@@ -293,6 +300,15 @@ async function scan(rootPath, options = {}, handlers = {}) {
   const tree = opts.collectTree ? new Map() : null;
   let excluded = 0;
 
+  // OneDrive's folders, and what in them is on this disk. Whether each file is
+  // in sync is asked of Windows afterwards, in one go (cloud-state.js).
+  const oneDrive = opts.cloudFiles ? cloudState.oneDriveRoots() : [];
+  const cloudFiles = oneDrive.length > 0 ? { onDisk: [], onlineOnly: { count: 0, bytes: 0 } } : null;
+  const trimCloud = () => {
+    cloudFiles.onDisk.sort((a, b) => b.size - a.size);
+    cloudFiles.onDisk.length = Math.min(cloudFiles.onDisk.length, opts.cloudMaxFiles);
+  };
+
   // All ages in one scan are measured against a single instant, so two files
   // written a millisecond apart cannot land on different sides of a threshold.
   const advisor = new Advisor({ now: started, keepPerCategory: opts.keepPerCategory });
@@ -348,6 +364,22 @@ async function scan(rootPath, options = {}, handlers = {}) {
     };
 
     const verdict = advisor.add(record, tag, blocked || 'none');
+
+    if (cloudFiles && size >= opts.cloudMinBytes && cloudState.oneDriveRootOf(full, oneDrive)) {
+      if (looksDehydrated(stats)) {
+        cloudFiles.onlineOnly.count++;
+        cloudFiles.onlineOnly.bytes += size;
+      } else {
+        cloudFiles.onDisk.push({
+          path: full,
+          size,
+          allocated: Number.isFinite(stats.blocks) ? stats.blocks * 512 : size,
+          mtimeMs: stats.mtimeMs,
+          atimeMs: stats.atimeMs,
+        });
+        if (cloudFiles.onDisk.length > opts.cloudMaxFiles * 2) trimCloud();
+      }
+    }
 
     if (tree) {
       const dir = path.dirname(full);
@@ -450,6 +482,7 @@ async function scan(rootPath, options = {}, handlers = {}) {
     excluded,
     rules: rulesFingerprint(opts),
     ...(tree ? treeResult(root, tree, opts) : {}),
+    ...(cloudFiles ? { cloudFiles: (trimCloud(), cloudFiles) } : {}),
   };
 }
 

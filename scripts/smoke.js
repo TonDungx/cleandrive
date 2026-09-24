@@ -2440,6 +2440,120 @@ app.whenReady().then(async () => {
       }
     }
 
+    /* -- OneDrive "free up space" ----------------------------------------- */
+    // A folder this harness builds stands in for OneDrive, and what Windows
+    // and OneDrive would say is stood in for through the harness hook -- the
+    // screen, the IPC, the pipeline and the journal are the real ones.
+    // scripts/verify-dehydrate.js is the check against a real OneDrive.
+    console.log('\nAvailable in the cloud (What to delete, OneDrive stood in for):');
+    {
+      const cloudLib = require('../src/main/lib/media/cloud');
+      const cs = require('../src/main/lib/cloud-state');
+      const cloudBase = fs.mkdtempSync(path.join(os.tmpdir(), 'cleandrive-smoke-cloud-'));
+      const odRoot = path.join(cloudBase, 'OneDrive');
+      const MB = 1024 * 1024;
+      const make = (full, bytes) => {
+        fs.mkdirSync(path.dirname(full), { recursive: true });
+        const fd = fs.openSync(full, 'w');
+        fs.ftruncateSync(fd, bytes);
+        fs.closeSync(fd);
+        return full;
+      };
+      const report = make(path.join(odRoot, 'Docs', 'report.pdf'), 3 * MB);
+      const kept = make(path.join(odRoot, 'Docs', 'kept.pdf'), 2 * MB);
+      const trip = make(path.join(odRoot, 'Video', 'trip.mp4'), 5 * MB);
+      const vmdk = make(path.join(odRoot, 'VM', 'disk.vmdk'), 4 * MB);
+      const states = new Map([
+        [report, cs.describe(0x420, cs.STATE.PLACEHOLDER | cs.STATE.IN_SYNC)],
+        [kept, cs.describe(0x420 | cs.ATTR.PINNED, cs.STATE.PLACEHOLDER | cs.STATE.IN_SYNC)],
+        [trip, cs.describe(0x420, cs.STATE.PLACEHOLDER | cs.STATE.IN_SYNC)],
+        [vmdk, cs.describe(0x20, 0)],
+      ]);
+      const fake = { running: true, made: [] };
+      const deps = {
+        running: async () => fake.running,
+        query: async (paths) => ({ ok: true, states: new Map(paths.map((p) => [p, states.get(p) || cs.describe(0x20, 0)])) }),
+        makeOnlineOnly: async (file) => {
+          fake.made.push(file);
+        },
+        allocated: async (file) => (fake.made.includes(file) ? 0 : fs.statSync(file).size),
+        watchMs: 2000,
+        stepMs: 50,
+      };
+      const savedOneDrive = process.env.OneDrive;
+      process.env.OneDrive = odRoot;
+      cloudLib.reset();
+      ipc.setCloudDepsForHarness(deps);
+      const js = (expr) => win.webContents.executeJavaScript(expr);
+      try {
+        await js(`document.querySelector('.tab[data-tab="usage"]').click()`);
+        await js(`setFolder(${JSON.stringify(cloudBase)})`);
+        await until(win, `document.getElementById('run-scan').disabled === false`);
+        await js(`document.getElementById('run-scan').click()`);
+        await until(win, `document.getElementById('run-scan').disabled === false && window.CloudCard.debug().summary !== null`, 60000);
+        await js(`document.querySelector('.tab[data-tab="cleanup"]').click()`);
+        await wait(300);
+
+        const shown = await js(`
+          (() => {
+            const card = document.getElementById('cloud-card');
+            const rows = [...document.querySelectorAll('#cloud-files .file-row')];
+            document.getElementById('select-safe').click();
+            const afterSafe = { cloud: window.CloudCard.debug().selected, cleanup: [...state.selectedCleanup] };
+            document.getElementById('cloud-select-all').click();
+            const bar = document.getElementById('cloud-actionbar');
+            return {
+              visible: !card.hidden,
+              rows: rows.map((r) => r.dataset.path.split(/[\\\\/]/).pop()).sort(),
+              pills: rows.map((r) => (r.querySelector('.badge') || {}).textContent),
+              status: document.getElementById('cloud-status').textContent,
+              afterSafe,
+              selected: window.CloudCard.debug().selected,
+              barShown: !bar.hidden,
+              badge: (bar.querySelector('.frees-badge') || {}).textContent,
+              buttons: [...bar.querySelectorAll('button')].map((b) => b.id),
+              cleanupBarHidden: document.getElementById('cleanup-actionbar').hidden,
+            };
+          })()
+        `);
+        check('the card lists the OneDrive files in sync and on the disk, and no other',
+          shown.visible && JSON.stringify(shown.rows) === JSON.stringify(['kept.pdf', 'report.pdf', 'trip.mp4']), shown.rows.join(', '));
+        check('and says what it left out: a file never uploaded', /Never uploaded/.test(shown.status), shown.status.slice(0, 80));
+        check('"Select everything marked safe" does not reach it', shown.afterSafe.cloud === 0 &&
+          !shown.afterSafe.cleanup.some((p) => p.toLowerCase().startsWith(odRoot.toLowerCase())));
+        check('its own selection brings up its own bar, with its own words and no Recycle Bin',
+          shown.selected === 3 && shown.barShown && shown.badge === 'Frees the space, deletes nothing' &&
+            JSON.stringify(shown.buttons) === JSON.stringify(['cloud-dehydrate']) && shown.cleanupBarHidden, shown.badge);
+
+        fake.running = false;
+        await js(`window.CloudCard.run({ confirm: false })`);
+        const offToast = await js(`document.getElementById('toast').textContent`);
+        check('OneDrive not running: refused with the reason, and nothing touched',
+          /OneDrive is not running/.test(offToast) && fake.made.length === 0, offToast.slice(0, 80));
+
+        fake.running = true;
+        await js(`window.CloudCard.run({ confirm: false })`);
+        const done = await js(`({ toast: document.getElementById('toast').textContent, left: window.CloudCard.debug().files })`);
+        check('with OneDrive running, all three go, and the receipt says what was measured',
+          fake.made.length === 3 && /Handed 3 files to OneDrive/.test(done.toast) && /as measured: 10\.0 MB/.test(done.toast), done.toast.slice(0, 100));
+        check('and they leave the card', done.left === 0);
+
+        const { services } = require('../src/main/services');
+        const sessions = await services().journal.sessions();
+        const session = sessions.find((s) => s.kind === 'dehydrate');
+        check('the journal has the session, file by file, with the measured figure as freed',
+          session && session.items.length === 3 && session.end.freedOnSource === 10 * MB);
+        const listed = await js(`window.cleandrive.journalSessions().then((r) => r.data.map((s) => s.kind))`);
+        check('and the Restore tab does not offer to put back what never moved', !listed.includes('dehydrate'));
+      } finally {
+        ipc.setCloudDepsForHarness(null);
+        if (savedOneDrive === undefined) delete process.env.OneDrive;
+        else process.env.OneDrive = savedOneDrive;
+        cloudLib.reset();
+        fs.rmSync(cloudBase, { recursive: true, force: true });
+      }
+    }
+
     /* -- console cleanliness --------------------------------------------- */
     console.log('\nConsole:');
     check('no renderer errors', rendererErrors.length === 0, rendererErrors.join(' | '));

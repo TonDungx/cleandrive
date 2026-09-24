@@ -152,7 +152,10 @@ async function listSessions(journal, { deps } = {}) {
     bySession.get(record.session).push(record);
   }
   // A handoff opened a Windows page and touched no file: nothing to put back.
-  return sessions.filter((s) => s.kind !== 'handoff').map((s) => summarise(s, bySession.get(s.id) || [], status));
+  // A file made online-only never moved; opening it brings its contents back.
+  return sessions
+    .filter((s) => s.kind !== 'handoff' && s.kind !== 'dehydrate')
+    .map((s) => summarise(s, bySession.get(s.id) || [], status));
 }
 
 /** One session's items and where each is now. For `journal:items`. */

@@ -28,6 +28,11 @@ for (const name of Object.keys(ADVISOR_CATEGORIES)) declare(`cleanup.${name}`, {
 // "Disk usage": a large file the advisor had nothing to say about.
 declare('usage.file', { screen: 'usage' });
 
+// "What to delete", in a group of its own: a OneDrive file whose contents are
+// in the cloud and on this disk, which can be made online-only (B3). Never a
+// thing to delete, never on the automatic whitelist.
+declare('cloud.dehydrate', { screen: 'cleanup' });
+
 // "Duplicates": one copy in a group of byte-identical files.
 declare('dupes.copy', { screen: 'duplicates' });
 

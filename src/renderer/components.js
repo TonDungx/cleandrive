@@ -65,18 +65,34 @@
    * a button that says "Move to Recycle Bin" next to a total in gigabytes
    * reads as a promise of gigabytes. This says otherwise, every time.
    */
-  function FreesBadge(freesOnVolume) {
+  function FreesBadge(freesOnVolume, kind = null) {
     const el = document.createElement('span');
     el.className = freesOnVolume ? 'frees-badge is-frees' : 'frees-badge is-not-freed';
-    el.textContent = freesOnVolume
-      ? t('frees.yes', 'Frees the space')
-      : t('frees.bin', 'Not freed until the bin is emptied');
-    el.title = freesOnVolume
-      ? t('frees.yesHint', 'The space comes back to this drive as soon as this finishes.')
-      : t(
-          'frees.binHint',
-          'The Recycle Bin is on the same drive, so moving files there frees nothing until it is emptied.'
+    const word = () => {
+      if (kind === 'dehydrate') {
+        // OneDrive frees it, after, and the app measures what it did -- so the
+        // badge does not say "as soon as this finishes".
+        el.textContent = t('frees.cloud', 'Frees the space, deletes nothing');
+        el.title = t(
+          'frees.cloudHint',
+          'OneDrive takes the contents off this drive shortly after and keeps them in the cloud; the app reports what it measured.'
         );
+        return;
+      }
+      el.textContent = freesOnVolume
+        ? t('frees.yes', 'Frees the space')
+        : t('frees.bin', 'Not freed until the bin is emptied');
+      el.title = freesOnVolume
+        ? t('frees.yesHint', 'The space comes back to this drive as soon as this finishes.')
+        : t(
+            'frees.binHint',
+            'The Recycle Bin is on the same drive, so moving files there frees nothing until it is emptied.'
+          );
+    };
+    word();
+    // The action bars are built once, at load; the sentence beside their
+    // button has to follow a change of language like everything else.
+    if (typeof onLanguageChange === 'function') onLanguageChange(word);
     return el;
   }
 
@@ -87,7 +103,7 @@
    * moves bytes between two places on the same drive, freeing nothing and
    * taking nothing, so its button carries no badge rather than a misleading one.
    */
-  const FREES = { recycle: false, restore: null };
+  const FREES = { recycle: false, restore: null, dehydrate: true };
 
   /* ------------------------------------------------------------ action bar */
 
@@ -110,7 +126,7 @@
     const badges = {};
     for (const [kind, button] of Object.entries(buttons)) {
       if (FREES[kind] === null) continue;
-      badges[kind] = FreesBadge(FREES[kind] === true);
+      badges[kind] = FreesBadge(FREES[kind] === true, kind);
       button.before(badges[kind]);
     }
 

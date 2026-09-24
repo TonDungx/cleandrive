@@ -416,6 +416,69 @@
     'frees.bin': 'Chưa giải phóng cho tới khi dọn Thùng rác',
     'frees.yesHint': 'Dung lượng trở lại ổ này ngay khi việc này xong.',
     'frees.binHint': 'Thùng rác nằm trên cùng ổ đĩa, nên chuyển tệp vào đó không giải phóng gì cho tới khi dọn nó.',
+    'frees.cloud': 'Giải phóng dung lượng, không xoá gì',
+    'frees.cloudHint':
+      'Ngay sau đó OneDrive gỡ nội dung khỏi ổ này và giữ nó trên đám mây; app báo con số đo được thật.',
+
+    // OneDrive "free up space" (B3), on What to delete.
+    'cloud.title': 'Có sẵn trên đám mây',
+    'cloud.note':
+      'OneDrive đã giữ các tệp này trên đám mây, và chúng cũng đang nằm trên ổ này. Chỉ giữ chúng trên đám mây sẽ ' +
+      'giải phóng chỗ ở đây mà không xoá gì: chúng vẫn nằm trong thư mục cũ, và được tải về khi bạn mở.',
+    'cloud.go': 'Chỉ giữ trên đám mây',
+    'cloud.label': 'Giải phóng dung lượng',
+    'cloud.selectAll': 'Chọn cả {n} tệp · {size} trên ổ này',
+    'cloud.none': 'Trong thư mục này không có tệp OneDrive nào từ 1 MB trở lên vừa đồng bộ xong vừa còn nằm trên ổ.',
+    'cloud.onDrive': 'trên ổ này',
+    'cloud.unavailable':
+      'Không hỏi được Windows xem tệp OneDrive nào đã đồng bộ ở máy này, nên không đề xuất tệp nào.',
+    'cloud.notRunning':
+      'OneDrive đang không chạy. Chính OneDrive mới giải phóng được dung lượng, nên hãy mở OneDrive trước khi dùng chức năng này.',
+    'cloud.notSynced':
+      'Chưa từng được tải lên nên không được đề xuất: {n} {files} ({size}) trong OneDrive không có bản nào trên đám mây. ' +
+      'Chuyển chúng sang chỉ trên đám mây cũng không giải phóng được gì.',
+    'cloud.pending': 'Đang chờ OneDrive tải lên vì đã thay đổi: {n} {files} ({size}).',
+    'cloud.onlineOnly': 'Đã chỉ trên đám mây từ trước: {n} {files} ({size}).',
+    'cloud.checking': 'Đang hỏi OneDrive về các tệp',
+    'cloud.refused.off':
+      'OneDrive đang không chạy nên lúc này không giải phóng được gì. Hãy mở OneDrive rồi thử lại — chưa có gì bị thay đổi.',
+    'cloud.refused.check': 'Không hỏi được Windows về các tệp này, nên chưa có gì bị thay đổi.',
+    'cloud.refused.notSynced': 'chưa có trên đám mây',
+    'cloud.refused.pending': 'đang chờ đồng bộ',
+    'cloud.refused.onlineOnly': 'đã chỉ trên đám mây',
+    'cloud.refused.changed': 'đã thay đổi từ lúc quét',
+    'cloud.cancelled': 'Đã huỷ — chưa có gì bị thay đổi.',
+    'cloud.nothing': 'Không tệp nào được chuyển sang chỉ trên đám mây. {reason}',
+    'cloud.done': 'Đã giao {n} {files} cho OneDrive. Dung lượng đã giải phóng trên ổ này, theo số đo: {freed}.',
+    'cloud.stillPending':
+      'Lúc app thôi theo dõi, OneDrive vẫn chưa giải phóng {n} tệp trong số đó; nó sẽ làm sau, theo nhịp của nó.',
+    'cloud.skipped': '{n} tệp được để nguyên.',
+    'cloud.progress.handing': 'Đang giao tệp cho OneDrive',
+    'cloud.progress.waiting': 'Đang chờ OneDrive giải phóng dung lượng',
+    'cloud.progress.handed': '{done} / {total}',
+    'cloud.progress.freed': 'Đã giải phóng {done} / {total} · đo được {freed}',
+    'evidence.cloud.inSync': 'Windows báo tệp đã đồng bộ với OneDrive, và nội dung của nó đang nằm trên ổ này',
+    'evidence.cloud.alsoInCloud':
+      'Tệp này cũng nằm trong OneDrive và đã đồng bộ: “Chỉ giữ trên đám mây”, ở card riêng trong màn Nên xoá gì, ' +
+      'giải phóng cùng dung lượng mà không xoá nó trên mọi thiết bị',
+    'evidence.cloud.pinned':
+      'Đã có người chọn “Luôn giữ trên thiết bị này” cho tệp — chuyển sang chỉ trên đám mây sẽ bỏ lựa chọn đó',
+    'evidence.cloud.notOpened': 'Không được mở trong {days} ngày',
+    'evidence.cloud.notChanged': 'Không thay đổi trong {days} ngày (Windows không ghi lại lúc tệp được mở ở máy này)',
+    'dialog.dehydrate.title': 'Giải phóng dung lượng với OneDrive',
+    'dialog.dehydrate.message': 'Chỉ giữ {n} tệp trên đám mây?',
+    'dialog.dehydrate.detail':
+      'Không có gì bị xoá. Các tệp vẫn nằm nguyên chỗ, giữ tên và kích thước; OneDrive gỡ bản nội dung của chúng trên ổ ' +
+      'này, tổng cộng {size}, và giữ trên đám mây.',
+    'dialog.dehydrate.network':
+      'Sau này mở một tệp trong số đó sẽ cần kết nối internet để OneDrive tải lại. Nếu OneDrive bị đăng xuất, các tệp ' +
+      'sẽ không mở được cho tới khi đăng nhập lại.',
+    'dialog.dehydrate.measured':
+      'OneDrive tự giải phóng dung lượng ngay sau đó. App theo dõi và báo con số thật sự đo được.',
+    'dialog.dehydrate.pinned': '{n} tệp trong số này đang đặt “Luôn giữ trên thiết bị này”; thao tác này bỏ lựa chọn đó.',
+    'dialog.dehydrate.refused':
+      '{n} tệp trong số đã chọn được để nguyên: chưa đồng bộ với OneDrive, hoặc đã chỉ trên đám mây.',
+    'dialog.dehydrate.go': 'Chỉ giữ trên đám mây',
     'evidence.head': 'Vì sao — {confidence}',
     'evidence.open': 'Vì sao: {reasons}',
     'dupes.identical': 'giống hệt',

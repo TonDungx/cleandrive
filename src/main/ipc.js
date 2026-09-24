@@ -58,6 +58,16 @@ let scanTreeSerial = 0;
  */
 const LEAVES_ITS_FOLDER = new Set(['recycle']);
 
+/**
+ * What "free up space" (B3) asks Windows and OneDrive with. A harness supplies
+ * its own, so it can drive the screen without a real OneDrive; the app never
+ * sets these.
+ */
+let cloudDeps = null;
+function setCloudDepsForHarness(deps) {
+  cloudDeps = deps || null;
+}
+
 /* ---- the System screen's state ------------------------------------------- */
 
 /**
@@ -259,7 +269,8 @@ function register() {
       try {
         const collected = await analyzers.collect(
           'scan',
-          { root: folder, options: { collectTree: true } },
+          // cloudFiles: which OneDrive files could be made online-only (B3).
+          { root: folder, options: { collectTree: true, cloudFiles: true }, deps: cloudDeps ? { cloud: cloudDeps } : undefined },
           { token, onProgress: send, can: licenseState.canNow() }
         );
         // The tree stays in this process: the snapshot store keeps it, and the
@@ -383,6 +394,7 @@ function register() {
             can: licenseState.canNow(),
             source: 'manual',
             runId: 'manual',
+            deps: kind === 'dehydrate' && cloudDeps ? cloudDeps : undefined,
             // Every item is journalled as it moves. Nothing is purged because
             // of that -- the purge has its own switch, its own grace period and
             // its own corroboration against the bin -- but without the record
@@ -402,7 +414,10 @@ function register() {
           // Bin, which is on the same disk.
           await services()
             .history.addEvent({
-              movedBytes: result.movedBytes,
+              // "Moved to the bin" is the Recycle Bin's column; making a file
+              // online-only moved nothing there, and its freed figure is the
+              // one it measured.
+              movedBytes: kind === 'recycle' ? result.movedBytes : 0,
               freedBytes: result.freedBytes,
               files: result.moved.length,
               source: 'manual',
@@ -1470,7 +1485,50 @@ function volumesOf(entries) {
  * confirmed, and so does not run -- the dialog for quarantine or relocation
  * arrives with the handler that needs it.
  */
+/**
+ * The confirmation in front of making files online-only (B3).
+ *
+ * Nothing is deleted, and it says so first -- somebody who has learned that
+ * this app's buttons delete things is owed that sentence before any other.
+ * Then what the choice costs: the file needs a connection to open, and a
+ * signed-out OneDrive cannot open it at all. And what the number means: space
+ * comes back when OneDrive takes the contents, which the app then measures.
+ */
+async function confirmDehydrate(win, description) {
+  const n = (v) => Number(v || 0).toLocaleString(language.current());
+  const lines = [
+    t('dialog.dehydrate.detail', 'Nothing is deleted. The files stay where they are, with their names and sizes; OneDrive takes the copies of their contents on this drive, {size} of it, and keeps them in the cloud.', {
+      size: formatBytes(description.onDiskBytes),
+    }),
+    t('dialog.dehydrate.network', 'Opening one of them afterwards needs an internet connection, while OneDrive downloads it again. If OneDrive is signed out, they will not open until it is signed back in.'),
+    t('dialog.dehydrate.measured', 'OneDrive frees the space itself, shortly after. The app watches for it and reports what it actually measured.'),
+  ];
+  if (description.pinned > 0) {
+    lines.push(
+      t('dialog.dehydrate.pinned', '{n} of them were set to “Always keep on this device”; this undoes that.', { n: n(description.pinned) })
+    );
+  }
+  if (description.refused > 0) {
+    lines.push(
+      t('dialog.dehydrate.refused', '{n} of the files chosen are left as they are: not in sync with OneDrive, or already online-only.', {
+        n: n(description.refused),
+      })
+    );
+  }
+  const { response } = await dialog.showMessageBox(win, {
+    type: 'question',
+    buttons: [t('dialog.dehydrate.go', 'Keep only in the cloud'), t('app.cancel', 'Cancel')],
+    defaultId: 1,
+    cancelId: 1,
+    title: t('dialog.dehydrate.title', 'Free up space with OneDrive'),
+    message: t('dialog.dehydrate.message', 'Keep {n} file(s) only in the cloud?', { n: n(description.count) }),
+    detail: lines.join('\n\n'),
+  });
+  return response === 0;
+}
+
 async function confirmAction(win, description, planned, options) {
+  if (description.kind === 'dehydrate') return confirmDehydrate(win, description);
   if (description.kind !== 'recycle') return false;
 
   const count = description.count;
@@ -1743,4 +1801,5 @@ module.exports = {
   setSystemTargetForHarness,
   setHelperClientForHarness,
   setHandoffDepsForHarness,
+  setCloudDepsForHarness,
 };

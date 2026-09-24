@@ -448,6 +448,50 @@ a millisecond apart cannot land on opposite sides of a threshold.
 within one category, and *clear selection*. A live readout shows `n selected ·
 total size`, and the delete button stays disabled until something is ticked.
 
+### Available in the cloud
+
+When the folder scanned includes OneDrive, a card below the groups lists the
+files OneDrive already has in the cloud and that are on this drive too — the
+ones Explorer's *Free up space* would take. **Keep only in the cloud** makes
+them online-only: nothing is deleted, they stay in their folders with their
+names and sizes, and they come back down when opened.
+
+It is built to be unlike the rest of the screen, because a OneDrive file moved
+to the Recycle Bin is deleted on every device. It has its own selection and its
+own button; *Select everything marked safe* cannot reach it, the delete button
+never sees it, and its totals are not in *Safe to delete*. Its button says
+*Frees the space, deletes nothing*.
+
+- **Only files Windows says are in sync.** Being in the OneDrive folder is not
+  enough: on the machine this was built on, 10 GB of it had never been uploaded
+  — there was no copy in the cloud, and making it online-only would have freed
+  nothing. The card says how much that is, rather than offering it. Files
+  waiting to upload, and ones already online-only, are counted the same way.
+- **Asked of Windows, not guessed.** Node cannot see a file's sync state, so the
+  app asks Windows' own Cloud Files API through Windows PowerShell, from a
+  fixed script that reads each file's directory entry and never opens a file —
+  reading one would make OneDrive download it. Where PowerShell cannot compile
+  that small piece of code (a machine locked down with AppLocker or WDAC), the
+  card says it could not check and offers nothing.
+- **OneDrive has to be running**, because OneDrive is what frees the space. If
+  it is not, the button refuses, says why, and changes nothing.
+- **What it frees is measured.** OneDrive takes the contents away a moment after
+  it is asked; the app watches what each file takes on the disk for up to half
+  a minute and reports the drop it saw, and says so when OneDrive has not got to
+  some of them yet. Tried on real OneDrive with three files of the app's own:
+  6.00 MB on the disk before, nothing after, 6.00 MB reported.
+- A file somebody set to *Always keep on this device* is offered too, but as
+  *review*, and the confirmation says the choice is being undone.
+- A synced file that a delete group also lists — *large and untouched*, say —
+  keeps its place there, and its reasons add that this card frees the same space
+  without deleting it on every device.
+
+The confirmation says what it costs: opening one of these files afterwards needs
+a connection, and a signed-out OneDrive cannot open them at all. Nothing here
+goes to the Restore tab — nothing moved — and none of it can ever be part of an
+automatic cleanup. Dropbox and Google Drive are not offered: nothing has checked
+that they behave the same way.
+
 ---
 
 ## Screen 4 — Photos & video
@@ -959,9 +1003,11 @@ sentence the app printed.
 
 Every screen's delete, the manual cleanup and the 02:00 run go through the same
 sequence — vet, probe, confirm, record, act — in `src/main/actions/`. Moving to
-the Recycle Bin, and putting back from it, are the actions today; each one the
-roadmap adds is another handler in the same sequence rather than a path of its
-own. The window can ask
+the Recycle Bin, putting back from it, and making OneDrive files online-only are
+the actions today; each one the roadmap adds is another handler in the same
+sequence rather than a path of its own. What an action frees is the handler's
+own figure: for the Recycle Bin that is nothing, and for OneDrive it is what the
+disk was measured to give back. The window can ask
 for a dry run; it cannot ask to skip the confirmation. That used to be possible
 by passing `confirm: false` from the page, and is now something only the main
 process can switch off, for the test harness.
@@ -1105,6 +1151,12 @@ was put back is no longer the app's to remove.
   as its folder growing or shrinking, never by name. Scans are not taken on a
   timetable yet, so there is only something to compare once a folder has been
   scanned twice.
+- **Keeping files only in the cloud is OneDrive only**, for files of 1 MB or
+  more, and needs OneDrive running and Windows PowerShell able to compile a few
+  lines of C#. OneDrive frees the space in its own time: the app reports what
+  it measured within half a minute, and a OneDrive just started after a long
+  time off can take minutes to catch up before it will touch anything new — six
+  minutes, the one time that was measured.
 - **The scheduled task only fires while somebody is logged on.** A machine left
   at the login screen at 02:00 runs the cleanup at the next opportunity instead.
 - **Moving the app** relocates the executable the scheduled task points at. The
@@ -1152,6 +1204,15 @@ A checkout opens every feature by default; a built installer ignores
 has that tier open to everyone. The developer add-on and the business tier stay
 closed.
 
+Three Windows programs are run for OneDrive's *Free up space*, each by its
+absolute path in `System32`: `tasklist` to see whether OneDrive is running,
+Windows PowerShell with a fixed script (the file paths go in on its input, never
+into the script) to read each file's sync state through the Cloud Files API,
+and `attrib +U -P` — the command Microsoft documents for Files On-Demand — to
+make a file online-only. `npm run verify:dehydrate` checks the real OneDrive
+reading only; with `-- --write` it makes three small files of its own
+online-only, measures it, and deletes them again.
+
 A few paths need an administrator. They go through a **helper**: the same
 executable started with `--helper` through a UAC prompt the user answered,
 answering only a fixed, read-only list of requests over a named pipe that both
@@ -1174,7 +1235,7 @@ Everything else, including the ZIP, Excel, PowerPoint, image and video readers,
 the charts and the tray icon, is written here. There are no binary assets in the
 repository; the icons are drawn in code.
 
-Test harnesses live in [`scripts/`](scripts/) — thirty-one suites in
+Test harnesses live in [`scripts/`](scripts/) — thirty-two suites in
 `npm test`, plus the Electron ones, covering the classification rules, the
 candidate contract, the action pipeline, the map of the folder and what the
 window may ask of it, what two scans of a folder can honestly say changed, the
@@ -1186,4 +1247,4 @@ against the released code, the translation dictionary, and an end-to-end run
 that boots the real application and reads its rendered interface back out.
 `npm run verify:restore` puts throwaway files back from the real Recycle Bin.
 `npm run shoot:lists`, `shoot:media`, `shoot:viewer`, `shoot:restore`,
-`shoot:system`, `shoot:treemap` and `shoot:changes` take screenshots of the real screens.
+`shoot:system`, `shoot:treemap`, `shoot:changes` and `shoot:cloud` take screenshots of the real screens.

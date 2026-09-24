@@ -127,7 +127,7 @@ Thời lượng tương đối chỉ mang tính minh hoạ. [Speculation] Tôi k
 | A3 | Treemap / Sunburst | P1 | ✅ Đã code xong (2026-09-24) — chỉ Treemap, Sunburst đã bỏ |
 | A5 | Snapshot diff | P1 | ✅ Đã code xong (2026-09-25) — lịch chụp hằng tuần dời sang G3 |
 | B1 | Quarantine sang ổ khác | P1 | |
-| B3 | OneDrive "Free up space" | P1 | |
+| B3 | OneDrive "Free up space" | P1 | ✅ Đã code xong (2026-09-25) — đã kiểm trên OneDrive thật |
 | D4 | Cache app phổ biến | P1 | |
 | I1 | Restore Center | P1 | ✅ Đã code xong (2026-09-24) |
 | I2 | Accessibility (high-contrast, bàn phím, screen reader) | P1 | |
@@ -823,6 +823,20 @@ helper.request
 **An toàn:** hộp thoại xác nhận nói rõ file sẽ cần mạng để mở, và nếu OneDrive bị đăng xuất thì file sẽ không mở được cho tới khi đăng nhập lại.
 
 **Mở rộng:** Dropbox, Google Drive for desktop. [Unverified] Cần kiểm tra từng app có dùng Cloud Files API không. Chỉ bật app nào đã có harness pass.
+
+> **✅ Đã code xong (2026-09-25).** Code ở `src/main/lib/cloud-state.js` (hỏi Windows trạng thái đồng bộ, kiểm OneDrive có chạy không, gọi `attrib`), handler `src/main/actions/dehydrate.js`, phần `cloudFiles` trong `lib/scanner.js` và `cloudFindings` trong `analyzers/scan.js`, category `cloud.dehydrate`, `confirmDehydrate` trong `ipc.js`, card `src/renderer/cloud.js` trong What to delete. Harness: `scripts/test-dehydrate.js` (44 kiểm tra; OneDrive giả lập, còn pipeline, journal, analyzer và một lượt hỏi Windows thật đều là thật), `scripts/verify-dehydrate.js` (OneDrive thật: mặc định chỉ đọc; thêm `--write` để thử trên tệp của chính nó), 9 kiểm tra mới trong `smoke.js`, ảnh chụp `npm run shoot:cloud`. Khác với đặc tả ở trên:
+> - **Không phải một nhóm trong "Nên xoá gì" mà là một card riêng** trong màn đó, có lựa chọn riêng và nút riêng. "Chọn mọi mục an toàn" không với tới card này, nút Thùng rác không thấy nó, tổng "An toàn để xoá" không tính nó; `actions` chỉ có `['dehydrate']`, `unattendedEligible: false`. Lý do: chuyển một tệp OneDrive vào Thùng rác là xoá nó trên mọi thiết bị.
+> - **Trạng thái đồng bộ lấy từ Windows** (đã chốt: PowerShell + Add-Type), gọi `CfGetPlaceholderStateFromFindData` qua `FindFirstFileW`. Cách này không mở tệp nên không kéo tệp về. Node không biết được trạng thái này: Dirent không đánh dấu tệp placeholder, còn `attrib` in theo code page OEM nên làm hỏng tên tiếng Việt. Script là văn bản cố định (`-EncodedCommand`); đường dẫn đi qua stdin dạng UTF-8 và không bao giờ nằm trong script. Mọi exe đều gọi bằng đường dẫn tuyệt đối trong System32. Nếu không hỏi được Windows thì card ghi là không kiểm được và không đề xuất gì.
+> - **Đo thật trên máy test** (lúc OneDrive tắt, có 566 tệp ≥ 1 MB): chỉ 391 tệp, 1,30 GB là đã đồng bộ và đang nằm trên máy; 153 tệp, 10,3 GB chưa từng được tải lên (các `.vmdk`, `.iso`); 22 tệp đã chỉ trên đám mây. Card đếm và nói rõ các tệp chưa tải lên, không đề xuất chúng.
+> - **OneDrive không chạy thì từ chối** (đã chốt), nói rõ lý do và không đổi thuộc tính của tệp nào.
+> - **Cơ chế:** `attrib +U -P`, lệnh Microsoft ghi trong tài liệu Files On-Demand. **Đã kiểm trên OneDrive thật** (`verify-dehydrate.js --write`, người dùng đồng ý và tự mở OneDrive): 3 tệp × 2 MB do harness tạo trong thư mục riêng. OneDrive mất **358 giây** mới tải chúng lên, vì vừa bật lại và đang đồng bộ bù. Sau đó allocation của mỗi tệp từ 2,00 MB về 0, app báo 6,00 MB đúng bằng phần đo được, Windows báo là online-only, tên và kích thước giữ nguyên. Thư mục đã được dọn.
+> - **Dung lượng giải phóng là số đo được, không phải giả định:** handler theo dõi allocation tối đa 30 giây sau khi giao cho OneDrive, và báo số tệp OneDrive chưa kịp xử lý. `execute()` dùng `measuredFreedBytes` của handler nếu có (`freedBy()`), đây là bước đầu của việc tính theo từng mục mà B1 cần. Cột "vào Thùng rác" của Trends không cộng dehydrate.
+> - **Trước khi làm, kiểm lại trạng thái** cả lô (chống TOCTOU); tệp đã hết đồng bộ, đổi kích thước/ngày, hoặc OneDrive vừa tắt đều bị bỏ qua và ghi rõ lý do.
+> - Chỉ đề xuất tệp từ **1 MB** trở lên, và **chỉ OneDrive** (thư mục lấy từ biến môi trường của OneDrive); Dropbox và Google Drive chưa bật. Tệp "Luôn giữ trên thiết bị này" vẫn được đề xuất nhưng là `review · likely`, và hộp thoại nói rõ lựa chọn đó sẽ bị bỏ.
+> - Bằng chứng mức 1 ghi "Windows báo tệp đã đồng bộ với OneDrive, và nội dung đang nằm trên ổ này" thay cho "Đã đồng bộ lên OneDrive", vì đó đúng là điều đã kiểm.
+> - Restore Center ẩn các session dehydrate: tệp không đi đâu cả, mở tệp là OneDrive tải lại.
+> - **Sửa kèm:** nhãn FreesBadge trên thanh chọn (cả nhãn "Chưa giải phóng…" của Thùng rác) không đổi theo ngôn ngữ khi chuyển tiếng lúc app đang chạy; ảnh chụp tiếng Việt đã bắt được lỗi này.
+> - **Trùng với nhóm xoá (đã chốt):** cùng một tệp OneDrive lớn, lâu không mở vẫn có thể nằm trong nhóm cũ "Large and untouched" (verdict `review`, nút Thùng rác, kèm cảnh báo cloud có sẵn). Nhóm cũ giữ nguyên, nhưng candidate đó có thêm một dòng bằng chứng (`evidence.cloud.alsoInCloud`) trỏ sang cách giải phóng mà không xoá. Đã cân nhắc và không chọn hai phương án: bỏ hẳn tệp khỏi nhóm xoá, hoặc để nguyên.
 
 ---
 

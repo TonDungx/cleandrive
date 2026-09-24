@@ -15,12 +15,13 @@
 const path = require('node:path');
 
 const { scan } = require('../lib/scanner');
-const { extOf } = require('../lib/util');
+const { extOf, pathKey } = require('../lib/util');
 const { message: m } = require('../../i18n');
 const { candidateId, evidence } = require('./contract');
 const { isAllowedUnattended } = require('../automatic/allowed-categories');
 const { all } = require('./categories');
 const { streamWhile } = require('./channel');
+const cloudState = require('../lib/cloud-state');
 
 const ID = 'scan';
 
@@ -166,8 +167,8 @@ function toCandidates(result) {
 }
 
 /** Everything the two screens draw that is not a row: totals, folders, types. */
-function toSummary(result, cleanupIds, largestIds) {
-  const { largestFiles, cleanup, ...rest } = result;
+function toSummary(result, cleanupIds, largestIds, cloudSummary) {
+  const { largestFiles, cleanup, cloudFiles, ...rest } = result;
   return {
     ...rest,
     largest: largestIds,
@@ -175,14 +176,117 @@ function toSummary(result, cleanupIds, largestIds) {
       ...cleanup,
       groups: cleanup.groups.map(({ files, ...group }) => ({ ...group, ids: cleanupIds.get(group.category) || [] })),
     },
+    ...(cloudSummary ? { cloud: cloudSummary } : {}),
   };
+}
+
+/* ---- OneDrive: what "free up space" could free (B3) ------------------------ */
+
+const DAY = 24 * 60 * 60 * 1000;
+
+const IN_SYNC = m(
+  'evidence.cloud.inSync',
+  'Windows reports it in sync with OneDrive, with its contents on this disk'
+);
+const ALSO_IN_CLOUD = m(
+  'evidence.cloud.alsoInCloud',
+  'It is also in OneDrive, in sync: “Keep only in the cloud”, in its own card on What to delete, frees the same space without deleting it on every device'
+);
+const PINNED = m(
+  'evidence.cloud.pinned',
+  'Somebody chose “Always keep on this device” for it — making it online-only undoes that choice'
+);
+
+/**
+ * A OneDrive file that can be made online-only, as a candidate.
+ *
+ * Its own id space: the same file can be a row in the largest list, where the
+ * action is the Recycle Bin, and here, where it is not. Two decisions, two
+ * candidates. The only action is `dehydrate`, so no bulk "select everything
+ * safe" and no delete button can ever reach it.
+ */
+function cloudCandidate(file, state, accessTimes, now) {
+  const tracked = accessTimes && accessTimes.tracked === true;
+  const since = tracked && file.atimeMs ? file.atimeMs : file.mtimeMs;
+  const days = Math.max(0, Math.floor((now - since) / DAY));
+  const age = tracked
+    ? m('evidence.cloud.notOpened', 'Not opened for {days} days', { days })
+    : m('evidence.cloud.notChanged', 'Not changed for {days} days (Windows is not recording when files are opened here)', { days });
+  const list = state.pinned ? [evidence(1, PINNED), evidence(2, IN_SYNC), evidence(3, age)] : [evidence(1, IN_SYNC), evidence(2, age)];
+  return {
+    id: candidateId(`${ID}:cloud`, file.path),
+    path: file.path,
+    kind: 'file',
+    bytes: file.size,
+    bytesOnDisk: file.allocated,
+    category: 'cloud.dehydrate',
+    verdict: state.pinned ? 'review' : 'safe',
+    confidence: state.pinned ? 'likely' : 'strong',
+    evidence: list,
+    actions: ['dehydrate'],
+    unattendedEligible: false,
+    meta: { mtimeMs: file.mtimeMs, atimeMs: file.atimeMs, pinned: state.pinned },
+  };
+}
+
+/**
+ * Ask Windows which of the OneDrive files on this disk are in sync, and make
+ * candidates of those. Everything else is counted for the screen to say so:
+ * files never uploaded (making them online-only frees nothing), files still
+ * waiting to sync, and files already online-only.
+ */
+async function cloudFindings(cloudFiles, accessTimes, now, deps = {}) {
+  const query = deps.query || cloudState.query;
+  const running = deps.running || cloudState.oneDriveRunning;
+  const summary = {
+    ids: [],
+    bytes: 0,
+    onDisk: 0,
+    notSynced: { count: 0, bytes: 0 },
+    pending: { count: 0, bytes: 0 },
+    onlineOnly: { ...cloudFiles.onlineOnly },
+    unavailable: null,
+    running: false,
+  };
+  const candidates = [];
+  if (cloudFiles.onDisk.length === 0) {
+    summary.running = await running();
+    return { candidates, summary };
+  }
+  const [reply, isRunning] = await Promise.all([query(cloudFiles.onDisk.map((f) => f.path)), running()]);
+  summary.running = isRunning;
+  if (!reply.ok) {
+    summary.unavailable = reply.reason || 'unavailable';
+    return { candidates, summary };
+  }
+  for (const file of cloudFiles.onDisk) {
+    const state = reply.states.get(file.path);
+    if (!state || state.missing) continue;
+    if (!state.placeholder) {
+      summary.notSynced.count++;
+      summary.notSynced.bytes += file.size;
+    } else if (!state.onDisk) {
+      summary.onlineOnly.count++;
+      summary.onlineOnly.bytes += file.size;
+    } else if (!state.inSync) {
+      summary.pending.count++;
+      summary.pending.bytes += file.size;
+    } else {
+      const candidate = cloudCandidate(file, state, accessTimes, now);
+      candidates.push(candidate);
+      summary.ids.push(candidate.id);
+      summary.bytes += file.size;
+      summary.onDisk += file.allocated;
+    }
+  }
+  return { candidates, summary };
 }
 
 const analyzer = {
   id: ID,
   feature: 'free',
   requiresElevation: false,
-  categories: all().filter((c) => c.startsWith('cleanup.') || c === 'usage.file'),
+  categories: all().filter((c) => c.startsWith('cleanup.') || c === 'usage.file' || c === 'cloud.dehydrate'),
 
   /**
    * @param {object} ctx  { root, options, deps: { scan } }
@@ -197,9 +301,28 @@ const analyzer = {
     );
 
     const { candidates, cleanupIds, largestIds } = toCandidates(result);
+
+    // Only when the folder scanned holds OneDrive files at all: a scan of
+    // Downloads has nothing to say about OneDrive, and says nothing.
+    let found = null;
+    const cloudFiles = result.cloudFiles;
+    if (cloudFiles && (cloudFiles.onDisk.length > 0 || cloudFiles.onlineOnly.count > 0) && !token.cancelled) {
+      found = await cloudFindings(cloudFiles, result.accessTimes, result.scannedAt || Date.now(), ctx.deps && ctx.deps.cloud);
+      // A file offered for the Recycle Bin here -- "large and untouched", say
+      // -- that is also a synced OneDrive file says so, where the reasons are:
+      // there is a way to get the same space back without deleting it
+      // everywhere. Decided 2026-09-25, over dropping it from the groups.
+      const inCloud = new Set(found.candidates.map((c) => pathKey(c.path)));
+      for (const candidate of candidates) {
+        if (inCloud.has(pathKey(candidate.path))) {
+          candidate.evidence.push(evidence(candidate.evidence.length + 1, ALSO_IN_CLOUD));
+        }
+      }
+    }
     for (const candidate of candidates) yield { type: 'candidate', candidate };
-    yield { type: 'summary', summary: toSummary(result, cleanupIds, largestIds) };
+    if (found) for (const candidate of found.candidates) yield { type: 'candidate', candidate };
+    yield { type: 'summary', summary: toSummary(result, cleanupIds, largestIds, found ? found.summary : null) };
   },
 };
 
-module.exports = { analyzer, confidenceFor, toCandidates, fileCandidate, ID };
+module.exports = { analyzer, confidenceFor, toCandidates, fileCandidate, cloudCandidate, cloudFindings, ID };

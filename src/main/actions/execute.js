@@ -24,6 +24,20 @@
 const HANDLERS = require('./handlers');
 const { CancelToken } = require('../lib/util');
 
+/**
+ * What an action gave back to the drive it acted on.
+ *
+ * A handler that measured it says so (`measuredFreedBytes`: OneDrive frees a
+ * file's space some time after it is asked, and only the drop in what the file
+ * takes on the disk counts). Otherwise the handler's declaration decides: all
+ * of what moved, or none of it. B1 needs this per item; this is where it goes.
+ */
+function freedBy(result, description) {
+  if (!result) return 0;
+  if (Number.isFinite(result.measuredFreedBytes)) return result.measuredFreedBytes;
+  return description.freesOnVolume ? result.freedBytes : 0;
+}
+
 /** For a caller with nothing to record into -- the test harnesses. */
 const NO_JOURNAL = Object.freeze({
   begin: async () => null,
@@ -144,7 +158,7 @@ async function execute(request, ctx = {}) {
       skipped: result ? result.remaining || 0 : planned.plan.length,
       cancelled: result ? Boolean(result.cancelled) : false,
       movedBytes: result ? result.freedBytes : 0,
-      freedOnSource: result && description.freesOnVolume ? result.freedBytes : 0,
+      freedOnSource: freedBy(result, description),
       error: result ? result.recordError || null : 'apply threw',
     });
   }
@@ -159,8 +173,9 @@ async function execute(request, ctx = {}) {
     // what actually came back to the disk. For the Recycle Bin the second is
     // zero, because the bin is on the same volume.
     movedBytes,
-    freedBytes: description.freesOnVolume ? movedBytes : 0,
+    freedBytes: freedBy(result, description),
     freesOnVolume: description.freesOnVolume,
+    pendingCount: result.pendingCount || 0,
     cancelled: result.cancelled,
     remaining: result.remaining,
     durationMs: result.durationMs,
@@ -169,4 +184,4 @@ async function execute(request, ctx = {}) {
   };
 }
 
-module.exports = { execute, handlerFor };
+module.exports = { execute, handlerFor, freedBy };

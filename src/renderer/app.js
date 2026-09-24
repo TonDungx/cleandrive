@@ -209,6 +209,9 @@ $('run-scan').addEventListener('click', async () => {
   state.scan = hydrateScan(result);
   state.selectedLarge.clear();
   renderScan(state.scan);
+  // The OneDrive card reads the reply before it is flattened: its rows are
+  // candidates of their own, named in `cloud.ids`.
+  window.CloudCard.show(result);
 });
 
 /**
@@ -623,6 +626,9 @@ function syncCleanupCheckboxes() {
 }
 
 function updateCleanupSelection() {
+  // One selection on the screen at a time: the OneDrive card has a floating
+  // bar of its own, and two would sit on top of each other.
+  if (state.selectedCleanup.size > 0 && window.CloudCard) window.CloudCard.clearSelection();
   bars.cleanup.update();
 }
 
@@ -927,7 +933,7 @@ function formatDuration(ms) {
 
 /* ---- the shared progress panel, used by every delete path ---- */
 
-const DELETE_BUTTONS = ['delete-large', 'delete-dupes', 'delete-cleanup', 'media-delete', 'restore-selected'];
+const DELETE_BUTTONS = ['delete-large', 'delete-dupes', 'delete-cleanup', 'media-delete', 'restore-selected', 'cloud-dehydrate'];
 
 const progressPanel = {
   show(title) {
@@ -976,6 +982,27 @@ const progressPanel = {
       $('dp-eta').textContent = '';
       $('dp-current').textContent = '';
       fill.style.width = '100%';
+      return;
+    }
+
+    // Making files online-only moves nothing and deletes nothing: its words
+    // are its own, and what it counts as freed is what it measured.
+    if (p.phase === 'dehydrating' || p.phase === 'waitingForOneDrive') {
+      $('dp-title').textContent =
+        p.phase === 'dehydrating'
+          ? t('cloud.progress.handing', 'Handing files to OneDrive')
+          : t('cloud.progress.waiting', 'Waiting for OneDrive to free the space');
+      $('dp-count').textContent =
+        p.phase === 'dehydrating'
+          ? t('cloud.progress.handed', '{done} of {total}', { done: formatCount(p.done), total: formatCount(p.total) })
+          : t('cloud.progress.freed', '{done} of {total} freed · {freed} measured so far', {
+              done: formatCount(p.done),
+              total: formatCount(p.total),
+              freed: formatBytes(p.freedBytes),
+            });
+      $('dp-rate').textContent = '';
+      $('dp-eta').textContent = '';
+      $('dp-current').textContent = p.currentPath ? elide(p.currentPath, 78) : '';
       return;
     }
 

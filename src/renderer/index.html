@@ -319,6 +319,33 @@
           <button class="btn btn-danger btn-sm" id="delete-cleanup" disabled data-i18n="app.moveSelected">Move selected to Recycle Bin</button>
         </div>
 
+        <!--
+          Available in the cloud (B3): OneDrive files whose contents are in the
+          cloud and on this drive. Its own card, selection and button, so that
+          "Select everything marked safe" and the Recycle Bin button can never
+          reach a synced file -- binning one deletes it on every device.
+          cloud.js draws it.
+        -->
+        <section class="card cloud-card" id="cloud-card" hidden>
+          <div class="card-head">
+            <h2 data-i18n="cloud.title">Available in the cloud</h2>
+            <button class="link" type="button" id="cloud-select-all" hidden></button>
+          </div>
+          <p class="card-note" data-i18n="cloud.note">
+            OneDrive already keeps these in the cloud, and they are on this drive too. Keeping them
+            only in the cloud frees the space here and deletes nothing: they stay in their folders,
+            and come back down when you open them.
+          </p>
+          <p class="card-note" id="cloud-status" hidden></p>
+          <ul class="files" id="cloud-files"></ul>
+        </section>
+
+        <div class="actionbar" id="cloud-actionbar" hidden>
+          <span class="actionbar-count" id="cloud-selection" data-i18n="app.nothingSelected">Nothing selected</span>
+          <span class="actionbar-gap"></span>
+          <button class="btn btn-primary btn-sm" id="cloud-dehydrate" disabled data-i18n="cloud.go">Keep only in the cloud</button>
+        </div>
+
         <section class="card" id="protected-card" hidden>
           <h2 data-i18n="cleanup.neverDeleted">Never deleted</h2>
           <p class="card-note" data-i18n="cleanup.neverDeletedNote">
@@ -1133,6 +1160,8 @@
     <!-- The Disk usage map: its arithmetic, then the card that uses it. -->
     <script src="treemap-layout.js"></script>
     <script src="treemap.js"></script>
+    <!-- What to delete's OneDrive card. -->
+    <script src="cloud.js"></script>
     <!-- All four share app.js's globals; must load after it. -->
     <script src="media.js"></script>
     <script src="automatic.js"></script>

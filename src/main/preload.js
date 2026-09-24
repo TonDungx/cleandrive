@@ -21,6 +21,8 @@ const api = {
 
   /* acting on files -- every kind through the one pipeline */
   trash: (paths, options) => ipcRenderer.invoke('action:execute', { kind: 'recycle', items: paths, options }),
+  /* OneDrive "free up space": online-only, nothing deleted */
+  dehydrate: (paths, options) => ipcRenderer.invoke('action:execute', { kind: 'dehydrate', items: paths, options }),
   cancelTrash: () => ipcRenderer.invoke('action:stop'),
 
   /* the System screen: where the system drive's space went */
