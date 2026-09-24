@@ -1,0 +1,6 @@
+vssadmin 1.1 - Volume Shadow Copy Service administrative command-line tool
+(C) Copyright 2001-2013 Microsoft Corp.
+
+Error: You don't have the correct permissions to run this command.  Please run this utility from a command
+window that has elevated administrator privileges.
+ 

@@ -135,7 +135,9 @@ class ActionJournal {
       t: iso(Number.isFinite(item.trashedAt) ? item.trashedAt : this.now()),
       session: session.id,
       op: 'item',
-      from: path.resolve(item.path),
+      // A handoff's item is what was opened -- `ms-settings:storagesense` or a
+      // program with its arguments -- not a path to resolve.
+      from: session.kind === 'handoff' ? String(item.path) : path.resolve(item.path),
       to: item.to || null,
       bytes: Number.isFinite(item.size) ? item.size : 0,
       mtime: iso(item.mtimeMs),

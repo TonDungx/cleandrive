@@ -1595,6 +1595,204 @@ main {
 }
 
 /* ==========================================================================
+   system — where all of the system drive went
+   ========================================================================== */
+
+/* One bar for the whole drive. Weights of the accent, never a palette: green,
+   amber and red mean verdicts here, and a share of a disk is not a verdict.
+   What is free is left plain; what nothing explains is hatched, so it reads as
+   a gap rather than as another kind of content. */
+.system-bar {
+  display: flex;
+  height: 22px;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--surface-2);
+  border: 1px solid var(--border-soft);
+}
+
+.system-seg {
+  flex: 1 1 0;
+  min-width: 2px;
+}
+
+.system-seg-yours { background: var(--accent); }
+.system-seg-programs { background: color-mix(in srgb, var(--accent) 62%, var(--surface)); }
+.system-seg-windows { background: color-mix(in srgb, var(--accent) 34%, var(--surface)); }
+.system-seg-free { background: var(--surface-2); }
+.system-seg-unexplained {
+  background: repeating-linear-gradient(135deg, var(--border-strong) 0 3px, var(--surface-2) 3px 8px);
+}
+
+.system-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 22px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+}
+
+.system-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.system-swatch {
+  width: 11px;
+  height: 11px;
+  border-radius: 3px;
+  border: 1px solid var(--border);
+  flex: none;
+}
+
+.system-legend-size {
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.system-note p {
+  margin: 8px 0 0;
+}
+
+.system-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  margin-top: 18px;
+}
+
+.system-group-title {
+  margin: 0 0 10px;
+  font-family: var(--font-display);
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+.system-group {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 12px;
+  /* Each card as tall as what it says, not as the tallest in its row. */
+  align-items: start;
+}
+
+.system-group-title {
+  grid-column: 1 / -1;
+}
+
+.system-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 16px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  min-width: 0;
+}
+
+.system-row-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+}
+
+.system-row-head strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.system-row-size {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-2);
+  font-size: 12.5px;
+  margin-right: auto;
+}
+
+.system-row-what,
+.system-row-then {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--text-2);
+}
+
+.system-row-then {
+  color: var(--text-3);
+}
+
+.system-parts {
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 11.5px;
+}
+
+.system-parts li {
+  display: flex;
+  gap: 10px;
+  padding: 2px 0;
+  min-width: 0;
+}
+
+.system-part-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono, ui-monospace, monospace);
+}
+
+.system-part-size,
+.system-part-more {
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.system-command {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  border: 1px solid var(--border-soft);
+  min-width: 0;
+}
+
+/* A command has to be read whole before it is run, so it wraps rather than
+   scrolling out of sight behind the Copy button. */
+.system-command code {
+  flex: 1;
+  min-width: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 11.5px;
+  line-height: 1.5;
+  user-select: all;
+}
+
+.system-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.badge-keep {
+  background: var(--surface-2);
+  border-color: var(--border);
+  color: var(--text-2);
+}
+
+/* ==========================================================================
    restore — one card per session in the journal
    ========================================================================== */
 

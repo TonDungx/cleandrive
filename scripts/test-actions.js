@@ -68,8 +68,9 @@ function fakeJournal(log, { failAt = -1 } = {}) {
 
   console.log('\nactions: what can run\n');
 
-  check('only the Recycle Bin has a handler in this phase',
-    ACTION_KINDS.filter((k) => handlerFor(k)).join(',') === 'recycle');
+  check('the kinds with a handler so far: the Recycle Bin, and handing over to Windows (A1)',
+    ACTION_KINDS.filter((k) => handlerFor(k)).join(',') === 'recycle,handoff',
+    ACTION_KINDS.filter((k) => handlerFor(k)).join(','));
 
   {
     const shell = fakeShell();

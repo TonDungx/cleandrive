@@ -27,6 +27,12 @@ const INVOKE = Object.freeze([
   'action:execute',
   'action:stop',
 
+  'system:facts',
+  'system:measure',
+  'system:measureElevated',
+  'system:cancel',
+  'system:handoff',
+
   'journal:sessions',
   'journal:items',
   'journal:restore',
@@ -81,6 +87,7 @@ const EVENTS = Object.freeze([
   'scan:progress',
   'dupes:progress',
   'action:progress',
+  'system:progress',
   'autoclean:progress',
   'media:progress',
   'media:batch',

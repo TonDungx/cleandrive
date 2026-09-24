@@ -21,6 +21,13 @@ const api = {
   trash: (paths, options) => ipcRenderer.invoke('action:execute', { kind: 'recycle', items: paths, options }),
   cancelTrash: () => ipcRenderer.invoke('action:stop'),
 
+  /* the System screen: where the system drive's space went */
+  systemFacts: () => ipcRenderer.invoke('system:facts'),
+  measureSystem: () => ipcRenderer.invoke('system:measure'),
+  measureSystemElevated: () => ipcRenderer.invoke('system:measureElevated'),
+  cancelSystem: () => ipcRenderer.invoke('system:cancel'),
+  handoff: (key) => ipcRenderer.invoke('system:handoff', key),
+
   /* the Restore Center: what the app did, and putting it back */
   journalSessions: () => ipcRenderer.invoke('journal:sessions'),
   journalItems: (sessionId) => ipcRenderer.invoke('journal:items', sessionId),
@@ -86,6 +93,7 @@ const api = {
   onScanProgress: (cb) => subscribe('scan:progress', cb),
   onDuplicateProgress: (cb) => subscribe('dupes:progress', cb),
   onTrashProgress: (cb) => subscribe('action:progress', cb),
+  onSystemProgress: (cb) => subscribe('system:progress', cb),
   onAutoCleanProgress: (cb) => subscribe('autoclean:progress', cb),
   onMediaProgress: (cb) => subscribe('media:progress', cb),
   /** Files as they are read, so the grid fills while the scan is still running. */

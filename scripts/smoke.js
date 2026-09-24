@@ -390,6 +390,49 @@ app.whenReady().then(async () => {
         reply.candidates > 0 && reply.everyOneHasEvidence, `${reply.candidates} candidates`);
     }
 
+    /* -- an .asar archive is a file ---------------------------------------- */
+    // Only reproducible inside Electron, which is why it is here: Electron's
+    // `fs` calls an `.asar` a folder, and the scan used to drop every one.
+    console.log('\nAn .asar archive, as Electron sees it and as the disk has it:');
+    {
+      const realFs = require('original-fs');
+      const asarRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'cleandrive-smoke-asar-'));
+      const asar = path.join(asarRoot, 'resources', 'app.asar');
+      // A real archive: a pickled size, a pickled JSON header, then the data.
+      const body = Buffer.alloc(50000, 0x61);
+      const json = Buffer.from(JSON.stringify({ files: { 'main.js': { size: body.length, offset: '0' } } }));
+      const pad = (4 - (json.length % 4)) % 4;
+      const header = Buffer.alloc(8 + json.length + pad);
+      header.writeUInt32LE(4 + json.length + pad, 0);
+      header.writeUInt32LE(json.length, 4);
+      json.copy(header, 8);
+      const size = Buffer.alloc(8);
+      size.writeUInt32LE(4, 0);
+      size.writeUInt32LE(header.length, 4);
+      realFs.mkdirSync(path.dirname(asar), { recursive: true });
+      realFs.writeFileSync(asar, Buffer.concat([size, header, body]));
+      const bytes = realFs.statSync(asar).size;
+
+      check('the fixture reproduces it: Electron\'s own fs calls the archive a folder',
+        fs.lstatSync(asar).isDirectory() === true && realFs.lstatSync(asar).isFile() === true);
+      const { scan } = require('../src/main/lib/scanner');
+      const scanned = await scan(asarRoot, {}, {});
+      check('the scan counts it as one file, at its real size', scanned.totalFiles === 1 && scanned.totalSize === bytes,
+        `${scanned.totalFiles} files, ${scanned.totalSize} of ${bytes} bytes`);
+      const { measureTree } = require('../src/main/system/walk');
+      const walked = await measureTree(asarRoot);
+      check('and the system walk adds up real allocation, not NaN',
+        walked.buckets.all && walked.buckets.all.logical === bytes && Number.isFinite(walked.buckets.all.allocated) &&
+          walked.buckets.all.allocated >= bytes, walked.buckets.all ? JSON.stringify(walked.buckets.all) : 'nothing');
+      // Electron keeps the archive open once its own fs has looked inside it,
+      // so it may refuse to go until this process exits.
+      try {
+        realFs.rmSync(asarRoot, { recursive: true, force: true });
+      } catch {
+        /* a 50 KB file left in %TEMP% */
+      }
+    }
+
     /* -- cleanup advice --------------------------------------------------- */
     console.log('\nWhat to delete:');
     await win.webContents.executeJavaScript(`document.querySelector('.tab[data-tab="cleanup"]').click()`);
@@ -1311,6 +1354,135 @@ app.whenReady().then(async () => {
     }
 
     fs.rmSync(probeDir, { recursive: true, force: true });
+
+    /* -- the System screen (A1) ------------------------------------------- */
+    // A "drive" this harness builds, laid out like one, so every row can be
+    // asserted exactly; and a stand-in for the elevated helper that answers
+    // with the real tool output captured on this machine. No UAC prompt, and
+    // no Windows page actually opens: the handoffs are recorded.
+    console.log('\nSystem (a fixture drive, and the elevated pass with captured tool output):');
+    {
+      const driveRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'cleandrive-smoke-drive-'));
+      const put = (rel, bytes) => {
+        const full = path.join(driveRoot, rel);
+        fs.mkdirSync(path.dirname(full), { recursive: true });
+        fs.writeFileSync(full, Buffer.alloc(bytes, 1));
+      };
+      const MB = 1024 * 1024;
+      put('Users/Me/Documents/report.docx', 3 * MB);
+      put('Users/Me/.cache/model.bin', 2 * MB);
+      put('Users/Me/work/app/node_modules/pkg/index.js', 1 * MB);
+      put('Users/Public/readme.txt', 64 * 1024);
+      put('Program Files/App/app.exe', 4 * MB);
+      put('ProgramData/App/cache.db', 1 * MB);
+      put('Windows/WinSxS/amd64_component/file.dll', 2 * MB);
+      put('Windows/Installer/setup.msi', 2 * MB);
+      put('Windows/System32/kernel.dll', 1 * MB);
+      put('Vmware/disk.vmdk', 5 * MB);
+
+      const FIX = path.join(__dirname, 'fixtures', 'system');
+      const text = (name) => fs.readFileSync(path.join(FIX, name), 'latin1');
+      const { measureTree } = require('../src/main/system/walk');
+      const asked = [];
+      ipc.setSystemTargetForHarness({ drive: `${driveRoot}\\`, home: path.join(driveRoot, 'Users', 'Me') });
+      ipc.setHelperClientForHarness(() => ({
+        start: async () => {},
+        stop: () => asked.push('stop'),
+        async request(op, args) {
+          asked.push(op);
+          if (op === 'ping') return { pid: 1, integrity: 'high', elevated: true };
+          if (op === 'system.breakdown') {
+            const sums = [];
+            for (const dir of args.dirs) {
+              const out = await measureTree(dir);
+              const all = out.buckets.all || { allocated: 0, logical: 0, files: 0 };
+              sums.push({ dir, allocated: all.allocated, logical: all.logical, files: all.files, denied: out.deniedCount });
+            }
+            return { sums, ms: 1 };
+          }
+          const files = {
+            'shadowstorage.query': 'vssadmin-list-shadowstorage.en.txt',
+            'ntfs.info': 'fsutil-fsinfo-ntfsinfo.en.txt',
+            'storagereserve.query': 'fsutil-storagereserve-query.en.txt',
+            'dism.analyze': 'dism-analyzecomponentstore.en.txt',
+          };
+          return { exitCode: 0, text: text(files[op]), ms: 1 };
+        },
+      }));
+      const opened = [];
+      ipc.setHandoffDepsForHarness({ openExternal: async (uri) => opened.push(uri), spawn: (exe, args) => opened.push([exe, ...args].join(' ')) });
+
+      await win.webContents.executeJavaScript(`document.querySelector('.tab[data-tab="system"]').click()`);
+      await until(win, `document.getElementById('sstat-total').textContent !== '–'`, 30000);
+      const before = await win.webContents.executeJavaScript(`({
+        total: document.getElementById('sstat-total').textContent,
+        bar: document.getElementById('system-bar-card').hidden,
+        status: document.getElementById('system-status').textContent,
+        order: [...document.querySelectorAll('.tab[data-tab]')].map((b) => b.dataset.tab).slice(0, 3).join(','),
+      })`);
+      check('the System tab sits between Disk usage and What to delete', before.order === 'usage,system,cleanup', before.order);
+      check('it shows the drive\'s size at once, and waits for a click before reading every folder',
+        /\d/.test(before.total) && before.bar === true && /can be stopped/.test(before.status), before.status);
+
+      await win.webContents.executeJavaScript(`document.getElementById('system-measure').click()`);
+      await until(win, `document.getElementById('system-bar-card').hidden === false && !document.getElementById('system-measure').disabled`, 60000);
+      const measured = await win.webContents.executeJavaScript(`(() => {
+        const rows = Object.fromEntries([...document.querySelectorAll('.system-row')].map((r) => [r.dataset.key, {
+          size: r.querySelector('.system-row-size').textContent,
+          pill: (r.querySelector('.badge') || {}).textContent || '',
+          parts: [...r.querySelectorAll('.system-part-name')].map((p) => p.textContent),
+          handoff: (r.querySelector('[data-handoff]') || {}).dataset ? r.querySelector('[data-handoff]').dataset.handoff : null,
+        }]));
+        return {
+          rows,
+          segments: [...document.querySelectorAll('#system-bar .system-seg')].map((s) => s.className.replace('system-seg system-seg-', '')),
+          unexplained: document.getElementById('sstat-unexplained').textContent,
+          verdictColours: [...document.querySelectorAll('.system-seg, .system-swatch')].some((el) => /good|warn|danger/.test(getComputedStyle(el).backgroundColor)),
+        };
+      })()`);
+      const r = measured.rows;
+      check('every byte of the fixture lands in its row: profile, what the scans skip, programs, Windows',
+        r.profile && /3\.\d MB/.test(r.profile.size) && r.profileSkipped && r.programs && r.winsxs && r.installer && r.windows,
+        Object.keys(r).join(', '));
+      check('what the other scans skip is named, largest first', r.profileSkipped && r.profileSkipped.parts[0] === '.cache',
+        r.profileSkipped ? r.profileSkipped.parts.join(', ') : 'no row');
+      check('a folder at the top of the drive is named', r.otherFolders && r.otherFolders.parts.includes('Vmware'));
+      check('before administrator rights, restore points say they need them', r.restorePoints && /administrator/.test(r.restorePoints.size),
+        r.restorePoints ? r.restorePoints.size : 'no row');
+      check('each row carries a verdict and how sure the app is', Object.values(r).every((row) => /·/.test(row.pill)));
+      check('one bar for the drive, and "not explained" is a number, not hidden',
+        measured.segments.includes('yours') && measured.segments.includes('free') && measured.segments.includes('unexplained') && /\d/.test(measured.unexplained),
+        measured.segments.join(','));
+      check('and the bar is in weights of the accent, with no verdict colour in it', measured.verdictColours === false);
+
+      await win.webContents.executeJavaScript(`document.getElementById('system-elevated').click()`);
+      await until(win, `!!document.querySelector('.system-row[data-key="ntfsMetadata"]') && !/administrator/.test(document.querySelector('.system-row[data-key="restorePoints"] .system-row-size').textContent)`, 60000);
+      const lifted = await win.webContents.executeJavaScript(`(() => {
+        const size = (k) => (document.querySelector('.system-row[data-key="' + k + '"] .system-row-size') || {}).textContent || '';
+        return { restore: size('restorePoints'), mft: size('ntfsMetadata'), note: document.getElementById('system-note').textContent,
+          command: (document.querySelector('.system-row[data-key="winsxs"] .system-command code') || {}).textContent || '' };
+      })()`);
+      check('the elevated pass asked only what its button says, and let the helper go',
+        asked[0] === 'ping' && asked.includes('system.breakdown') && asked.includes('dism.analyze') && asked[asked.length - 1] === 'stop', asked.join(' > '));
+      check('restore points and the MFT come from the tools\' real output: 8.9 GB and 1.8 GB',
+        /8\.9 GB/.test(lifted.restore) && /1\.8 GB/.test(lifted.mft), `${lifted.restore} / ${lifted.mft}`);
+      check('the screen says it was measured with administrator rights', /administrator rights/.test(lifted.note));
+      check('WinSxS offers DISM\'s own cleanup as a command to copy, never runs it', /StartComponentCleanup/.test(lifted.command), lifted.command);
+
+      await win.webContents.executeJavaScript(`document.querySelector('.system-row[data-key="restorePoints"] [data-handoff]').click()`);
+      await until(win, `true`, 2000);
+      await wait(500);
+      check('a row\'s button opens the Windows tool that owns it, from the fixed table', opened.length === 1 &&
+        /SystemPropertiesProtection\.exe$/i.test(opened[0]), opened.join(' | '));
+      const { services } = require('../src/main/services');
+      const handoffs = (await services().journal.sessions()).filter((s) => s.kind === 'handoff');
+      check('and it is in the journal, as what was opened', handoffs.length === 1 && /SystemPropertiesProtection/.test(handoffs[0].items[0].from));
+
+      ipc.setSystemTargetForHarness(null);
+      ipc.setHelperClientForHarness(null);
+      ipc.setHandoffDepsForHarness(null);
+      fs.rmSync(driveRoot, { recursive: true, force: true });
+    }
 
     /* -- automatic cleanup ------------------------------------------------ */
     // This section writes to the real settings file, so it takes a copy first

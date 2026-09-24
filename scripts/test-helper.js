@@ -11,6 +11,7 @@
 
 const fs = require('node:fs');
 const net = require('node:net');
+const os = require('node:os');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
 
@@ -177,13 +178,83 @@ const withTimeout = (promise, ms, label) =>
   console.log('\nhelper: what it is allowed to do\n');
 
   {
-    const source = fs.readFileSync(path.join(__dirname, '..', 'src', 'main', 'helper', 'ops.js'), 'utf8');
-    const writes = source.match(/\b(writeFile|appendFile|rm|rmdir|unlink|rename|copyFile|mkdir|truncate|spawn|exec)\s*\(/g) || [];
-    check('ops.js calls nothing that writes, deletes or runs a command it was given', writes.length === 0, writes.join(', '));
-    check('its one child process is whoami, from System32 by absolute path, with fixed arguments',
-      /execFile\(system32\('whoami\.exe'\), \['\/groups', '\/fo', 'csv', '\/nh'\]/.test(source) &&
-        !/execFile\('/.test(source));
-    check('the list is what this phase ships', JSON.stringify(Object.keys(OPS)) === '["ping"]', Object.keys(OPS).join(', '));
+    // Everything that runs elevated: ops.js and the walk it measures folders with.
+    const elevatedFiles = ['src/main/helper/ops.js', 'src/main/system/walk.js', 'src/main/lib/real-fs.js'];
+    const sources = Object.fromEntries(elevatedFiles.map((rel) => [rel, fs.readFileSync(path.join(__dirname, '..', rel), 'utf8')]));
+    // Comments stripped first: they talk about links and renames, and a check
+    // that reads prose as calls cries wolf until somebody stops listening.
+    const code = (src) => src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
+    const writes = Object.entries(sources).flatMap(([rel, src]) => [
+      ...(code(src).match(/\.(writeFile|appendFile|rm|rmdir|unlink|rename|copyFile|mkdir|truncate|symlink|link|chmod|utimes|open|createWriteStream)\s*\(/g) || []),
+      ...(code(src).match(/\b(spawn|exec|execSync|execFileSync)\s*\(/g) || []),
+    ].map((w) => `${rel}: ${w}`));
+    check('nothing that runs elevated writes, deletes, opens for writing or runs a command it was given', writes.length === 0,
+      writes.join(', '));
+
+    const source = sources['src/main/helper/ops.js'];
+    const requires = [...source.matchAll(/require\('([^']+)'\)/g)].map((m) => m[1]);
+    check('and it loads nothing else of the app\'s', requires.every((r) => r.startsWith('node:') || r === '../system/walk'),
+      requires.join(', '));
+
+    const calls = source.match(/execFile\(/g) || [];
+    check('its child processes are started in exactly two places, each by System32 path',
+      calls.length === 2 && /execFile\(system32\('whoami\.exe'\), \['\/groups', '\/fo', 'csv', '\/nh'\]/.test(source) &&
+        /execFile\(\s*system32\(tool\.exe\),\s*tool\.args\(\)/.test(source) && !/execFile\('/.test(source));
+
+    const { TOOLS, systemDrive } = require('../src/main/helper/ops');
+    const drive = systemDrive();
+    const expected = {
+      shadowstorage: ['vssadmin.exe', ['list', 'shadowstorage']],
+      dism: ['Dism.exe', ['/Online', '/Cleanup-Image', '/AnalyzeComponentStore', '/English']],
+      ntfsinfo: ['fsutil.exe', ['fsinfo', 'ntfsinfo', drive]],
+      storagereserve: ['fsutil.exe', ['storagereserve', 'query', drive]],
+    };
+    const table = Object.fromEntries(Object.entries(TOOLS).map(([k, t]) => [k, [t.exe, t.args()]]));
+    check('the tools and every argument they get are the fixed table, and only read',
+      JSON.stringify(table) === JSON.stringify(expected), JSON.stringify(table));
+    check('the drive letter comes from the environment and is a drive letter', /^[A-Z]:$/.test(drive), drive);
+
+    check('the list is what this phase ships',
+      JSON.stringify(Object.keys(OPS)) === JSON.stringify(['ping', 'system.breakdown', 'shadowstorage.query', 'dism.analyze', 'ntfs.info', 'storagereserve.query']),
+      Object.keys(OPS).join(', '));
+  }
+
+  console.log('\nhelper: which folders it will measure\n');
+
+  {
+    const { acceptableDir, MAX_DIRS, systemDrive } = require('../src/main/helper/ops');
+    const d = systemDrive();
+    check('a normal folder on the system drive', acceptableDir(`${d}\\Windows\\System32`));
+    check('not one that climbs out with ..', !acceptableDir(`${d}\\Windows\\..\\Users`));
+    check('not another drive', !acceptableDir(`${d === 'Z:' ? 'Y:' : 'Z:'}\\Data`));
+    check('not a relative path, nor a pattern', !acceptableDir('Windows') && !acceptableDir(`${d}\\Win*`));
+    let refused = null;
+    try {
+      await OPS['system.breakdown']({ dirs: [`${d === 'Z:' ? 'Y:' : 'Z:'}\\Data`] });
+    } catch (err) {
+      refused = err.message;
+    }
+    check('asked for one anyway, it refuses the whole request', refused !== null, refused);
+    let tooMany = null;
+    try {
+      await OPS['system.breakdown']({ dirs: new Array(MAX_DIRS + 1).fill(`${d}\\Windows`) });
+    } catch (err) {
+      tooMany = err.message;
+    }
+    check(`and more than ${MAX_DIRS} folders in one request`, tooMany !== null);
+    // A folder of its own on the system drive, with two files of known size.
+    const probe = fs.mkdtempSync(path.join(os.tmpdir(), 'cleandrive-helper-measure-'))
+      .replace(/^[a-z]:/, (m) => m.toUpperCase());
+    fs.writeFileSync(path.join(probe, 'secret-name-a.bin'), Buffer.alloc(8192, 1));
+    fs.mkdirSync(path.join(probe, 'inner'));
+    fs.writeFileSync(path.join(probe, 'inner', 'secret-name-b.bin'), Buffer.alloc(8192, 2));
+    const one = await OPS['system.breakdown']({ dirs: [probe] }).catch((err) => ({ error: err.message }));
+    const onSystemDrive = probe.slice(0, 2) === d;
+    check('what it hands back is a sum per folder, and never a name inside one',
+      !onSystemDrive || (one.sums && one.sums.length === 1 && one.sums[0].files === 2 && one.sums[0].logical === 16384 &&
+        Object.keys(one.sums[0]).join(',') === 'dir,allocated,logical,files,denied' && !JSON.stringify(one).includes('secret-name')),
+      onSystemDrive ? JSON.stringify(one).slice(0, 160) : 'the temporary folder is not on the system drive; skipped');
+    fs.rmSync(probe, { recursive: true, force: true });
   }
 
   console.log('\nhelper: the UAC launch, as a command\n');

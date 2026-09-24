@@ -1,8 +1,11 @@
 'use strict';
 
 const crypto = require('node:crypto');
-const fs = require('node:fs');
-const fsp = fs.promises;
+// Not `node:fs`: inside Electron that one calls every `.asar` archive a folder,
+// and this scan used to skip them all as "not a file"; and a directory entry
+// calls OneDrive's folder a link, so a scan of the home folder skipped all of
+// OneDrive. See real-fs.js.
+const { fs, fsp, entryKind } = require('./real-fs');
 const path = require('node:path');
 
 const {
@@ -156,9 +159,12 @@ function walk(root, options, handlers) {
         const name = entry.name;
         const full = path.join(dir, name);
 
-        if (entry.isSymbolicLink() && !opts.followSymlinks) continue;
+        // What the entry is, asked of the file when the entry says "link":
+        // OneDrive's folder is a reparse point that is not a link.
+        const kind = await entryKind(entry, full);
+        if (kind === 'link' && !opts.followSymlinks) continue;
 
-        if (entry.isDirectory()) {
+        if (kind === 'dir') {
           if (depth + 1 > depthLimit) continue;
 
           const skip = skipReason(name, full, opts);
@@ -193,7 +199,7 @@ function walk(root, options, handlers) {
           continue;
         }
 
-        if (!entry.isFile()) continue;
+        if (kind !== 'file') continue;
         if (opts.ignoreHidden && isHiddenName(name)) continue;
 
         // `statFiles: false` hands the entry over unmeasured.

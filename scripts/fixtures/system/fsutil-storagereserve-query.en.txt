@@ -1,0 +1,15 @@
+
+Reserve ID:       1
+Flags:            0x00000001
+Space Guarantee:  0x1407b1000       (5127 MB)
+Space Used:       0x239af4000       (9114 MB)
+
+Reserve ID:       2
+Flags:            0x000000a0
+Space Guarantee:  0x60000000        (1536 MB)
+Space Used:       0x30dc51000       (12508 MB)
+
+Reserve ID:       3
+Flags:            0x00000001
+Space Guarantee:  0x0               (0 MB)
+Space Used:       0x0               (0 MB)

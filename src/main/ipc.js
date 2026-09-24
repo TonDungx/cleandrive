@@ -15,6 +15,9 @@ const previewServe = require('./lib/preview/serve');
 const { ESTIMATED_FILES_PER_SEC } = require('./lib/trash');
 const { execute } = require('./actions/execute');
 const restoreEngine = require('./actions/restore');
+const systemMeasure = require('./system/measure');
+const systemBreakdown = require('./system/breakdown');
+const { HelperClient, appLauncher } = require('./helper/client');
 const licenseState = require('./license/state');
 const entitlements = require('./license/entitlements');
 const { CancelToken, formatBytes, formatDuration } = require('./lib/util');
@@ -33,7 +36,51 @@ const updater = require('./updater');
 const watcher = require('./watcher');
 
 // One in-flight job of each kind at a time; a new run supersedes the old one.
-const tokens = { scan: null, dupes: null, trash: null, auto: null, media: null, thumbs: null };
+const tokens = { scan: null, dupes: null, trash: null, auto: null, media: null, thumbs: null, system: null };
+
+/* ---- the System screen's state ------------------------------------------- */
+
+/**
+ * The last walk of the system drive, and what the elevated pass added to it.
+ * Kept because the elevated pass measures exactly the folders the walk was
+ * refused, and because coming back to the tab should not mean two minutes of
+ * walking again.
+ */
+let systemState = null;
+
+/** Which drive and profile the screen measures. A harness points it at a fixture. */
+let systemOverride = null;
+function systemTarget() {
+  return systemOverride || { drive: systemBreakdown.driveOf(), home: require('node:os').homedir() };
+}
+function setSystemTargetForHarness(target) {
+  systemOverride = target;
+  systemState = null;
+}
+
+/** The elevated helper, through UAC -- or, for a harness, whatever it supplies. */
+let helperFactory = null;
+function helperClientFor() {
+  if (helperFactory) return helperFactory();
+  return new HelperClient({
+    launch: appLauncher({ execPath: process.execPath, appPath: app.getAppPath(), isPackaged: app.isPackaged }),
+  });
+}
+function setHelperClientForHarness(factory) {
+  helperFactory = factory;
+}
+
+/** What a handoff launches with. A harness records instead of opening windows. */
+let handoffDeps = {};
+function setHandoffDepsForHarness(deps) {
+  handoffDeps = deps || {};
+}
+
+async function presentSystem() {
+  const model = await systemMeasure.model({ walk: systemState.walk, elevated: systemState.elevated, ledger: services().ledger });
+  const { candidates, summary } = await analyzers.collect('system', { model }, { can: licenseState.canNow() });
+  return { candidates, summary };
+}
 
 /**
  * The size and time of every media file the last scan saw, by path.
@@ -314,6 +361,81 @@ function register() {
     if (tokens.trash) tokens.trash.cancel();
     return { ok: true };
   });
+
+  /* ---- the System screen (A1) -------------------------------------------- */
+
+  /*
+   * Where the system drive's space went.
+   *
+   * Two channels with fixed jobs rather than one that forwards requests to the
+   * elevated helper: the window can ask for "measure" and for "measure with
+   * administrator rights", and never for a helper operation of its choosing.
+   * The second is the only thing in the app that raises a UAC prompt, and it
+   * runs only when the button that says so was pressed.
+   */
+  handle('system:facts', () =>
+    guard(async () => {
+      const target = systemTarget();
+      const facts = await systemMeasure.facts(target.drive);
+      return { ...facts, last: systemState ? await presentSystem() : null };
+    })
+  );
+
+  handle('system:measure', (event) =>
+    guard(async () => {
+      if (tokens.system) tokens.system.cancel();
+      const token = new CancelToken();
+      tokens.system = token;
+      const send = (payload) => {
+        if (!event.sender.isDestroyed()) event.sender.send('system:progress', payload);
+      };
+      try {
+        const target = systemTarget();
+        const walk = await systemMeasure.walk({ drive: target.drive, home: target.home, token, onProgress: send });
+        systemState = { walk, elevated: null };
+        return await presentSystem();
+      } finally {
+        if (tokens.system === token) tokens.system = null;
+      }
+    })
+  );
+
+  handle('system:measureElevated', (event) =>
+    guard(async () => {
+      const send = (payload) => {
+        if (!event.sender.isDestroyed()) event.sender.send('system:progress', payload);
+      };
+      if (!systemState) {
+        const token = new CancelToken();
+        tokens.system = token;
+        const target = systemTarget();
+        const walk = await systemMeasure.walk({ drive: target.drive, home: target.home, token, onProgress: send });
+        if (tokens.system === token) tokens.system = null;
+        systemState = { walk, elevated: null };
+        if (walk.cancelled) return await presentSystem();
+      }
+      const elevated = await systemMeasure.elevate(systemState.walk, { client: helperClientFor(), onProgress: send });
+      if (elevated.declined) return { declined: true, ...(await presentSystem()) };
+      systemState.elevated = elevated;
+      return await presentSystem();
+    })
+  );
+
+  handle('system:cancel', () => {
+    if (tokens.system) tokens.system.cancel();
+    return { ok: true };
+  });
+
+  // Opening the Windows tool that owns a row. The key must be in the fixed
+  // table in actions/handoff.js; nothing else is opened.
+  handle('system:handoff', (_event, key) =>
+    guard(async () =>
+      execute(
+        { kind: 'handoff', items: [typeof key === 'string' ? key : ''] },
+        { journal: services().journal, source: 'manual', runId: 'manual', can: licenseState.canNow(), deps: handoffDeps }
+      )
+    )
+  );
 
   /* ---- the Restore Center ------------------------------------------------ */
 
@@ -1501,6 +1623,15 @@ function cancelAll() {
   if (tokens.trash) tokens.trash.cancel();
   if (tokens.media) tokens.media.cancel();
   if (tokens.thumbs) tokens.thumbs.cancel();
+  if (tokens.system) tokens.system.cancel();
 }
 
-module.exports = { register, cancelAll, noteReconciliation, allowUnconfirmedForHarness };
+module.exports = {
+  register,
+  cancelAll,
+  noteReconciliation,
+  allowUnconfirmedForHarness,
+  setSystemTargetForHarness,
+  setHelperClientForHarness,
+  setHandoffDepsForHarness,
+};

@@ -35,6 +35,16 @@ declare('dupes.copy', { screen: 'duplicates' });
 declare('media.image', { screen: 'media' });
 declare('media.video', { screen: 'media' });
 
+// "System": one per row of the drive's breakdown (A1). None of them is ever on
+// the automatic whitelist; the app only explains these and opens Windows' tools.
+for (const key of [
+  'profile', 'profileSkipped', 'otherFolders', 'otherAccounts', 'recycleBin', 'programs', 'programData', 'windows',
+  'winsxs', 'driverStore', 'installer', 'updateCache', 'deliveryOptimization', 'windowsOld', 'upgrade', 'recovery',
+  'systemHidden', 'hiberfil', 'pagefile', 'swapfile', 'restorePoints', 'reservedStorage', 'ntfsMetadata',
+]) {
+  declare(`system.${key}`, { screen: 'system' });
+}
+
 function isDeclared(id) {
   return DECLARED.has(id);
 }

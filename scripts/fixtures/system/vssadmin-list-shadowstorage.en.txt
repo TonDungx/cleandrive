@@ -1,0 +1,10 @@
+vssadmin 1.1 - Volume Shadow Copy Service administrative command-line tool
+(C) Copyright 2001-2013 Microsoft Corp.
+
+Shadow Copy Storage association
+   For volume: (C:)\\?\Volume{00000000-0000-0000-0000-000000000000}\
+   Shadow Copy Storage volume: (C:)\\?\Volume{00000000-0000-0000-0000-000000000000}\
+   Used Shadow Copy Storage space: 8,60 GB (1%)
+   Allocated Shadow Copy Storage space: 8,90 GB (1%)
+   Maximum Shadow Copy Storage space: 9,49 GB (1%)
+

@@ -14,6 +14,7 @@ const BUILT_IN = [
   require('./scan').analyzer,
   require('./duplicates').analyzer,
   require('./media').analyzer,
+  require('./system').analyzer,
 ];
 
 for (const analyzer of BUILT_IN) {

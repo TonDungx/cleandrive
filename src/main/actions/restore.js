@@ -151,7 +151,8 @@ async function listSessions(journal, { deps } = {}) {
     if (!bySession.has(record.session)) bySession.set(record.session, []);
     bySession.get(record.session).push(record);
   }
-  return sessions.map((s) => summarise(s, bySession.get(s.id) || [], status));
+  // A handoff opened a Windows page and touched no file: nothing to put back.
+  return sessions.filter((s) => s.kind !== 'handoff').map((s) => summarise(s, bySession.get(s.id) || [], status));
 }
 
 /** One session's items and where each is now. For `journal:items`. */

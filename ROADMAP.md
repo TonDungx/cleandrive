@@ -123,7 +123,7 @@ Thời lượng tương đối chỉ mang tính minh hoạ. [Speculation] Tôi k
 
 | Mã | Tính năng | Ưu tiên | Trạng thái |
 | --- | --- | --- | --- |
-| A1 | Bóc tách dung lượng hệ thống | P1 | |
+| A1 | Bóc tách dung lượng hệ thống | P1 | ✅ Đã code xong (2026-09-24) |
 | A3 | Treemap / Sunburst | P1 | |
 | A5 | Snapshot diff | P1 | |
 | B1 | Quarantine sang ổ khác | P1 | |
@@ -137,6 +137,8 @@ Thời lượng tương đối chỉ mang tính minh hoạ. [Speculation] Tôi k
 Thứ tự làm (chốt 2026-09-24): I1 → A1 → A3 → A5 → B3 → D4 → B1 → I2 → I4 → I3. Giai đoạn 0 được commit riêng trước (`37179d8`).
 
 **Hoàn thành khi:** trên máy test, tổng của "đã giải thích được" (thư mục người dùng + A1) cộng với dung lượng trống lệch không quá một ngưỡng nhất định so với dung lượng volume. Phần còn lại phải được hiện rõ thành một dòng *"chưa giải thích được: X GB"*, không được che đi.
+
+> **Ngưỡng đã chốt (2026-09-24, khi làm A1):** chưa giải thích được ≤ 1% dung lượng đang dùng, tính sau lượt đo có quyền quản trị. Máy test đạt 0,33% (xem ghi chú A1). `npm run verify:system -- --elevated` kiểm tiêu chí này.
 
 > **Quyết định đã chốt trước khi code Giai đoạn 1 (2026-09-24):**
 > - Tính năng Pro ở bản `stable` trước Giai đoạn 6: **mở cho mọi người** (phương án a). Giai đoạn 6 sẽ phải khoá lại. Chưa quyết cho Pro·Dev và Business: hỏi lại trước Giai đoạn 2 và 5.
@@ -617,6 +619,34 @@ helper.request
 **Kiểm thử:** `scripts/analyzer-system.mjs` kiểm tra với fixture output của `vssadmin`/`DISM` ở cả tiếng Anh lẫn tiếng Việt.
 
 **Hoàn thành khi:** trên ba máy test thật, dòng "Chưa giải thích được" nhỏ hơn một ngưỡng đo được và ghi vào báo cáo harness.
+
+> **✅ Đã code xong (2026-09-24).** Code ở `src/main/system/` (`walk.js` đi hết ổ chỉ để cộng dung lượng, `parse.js` đọc output của công cụ Windows, `breakdown.js` xếp từng byte vào một dòng, `measure.js` là trình tự chung cho IPC và harness), `src/main/analyzers/system.js`, `src/main/actions/handoff.js`, `src/main/lib/real-fs.js`. Helper có thêm op `system.breakdown`, `shadowstorage.query`, `dism.analyze`, `ntfs.info`, `storagereserve.query`. IPC mới: `system:facts`, `system:measure`, `system:measureElevated`, `system:cancel`, `system:handoff`, sự kiện `system:progress`. Màn hình ở `src/renderer/system.js`. Harness: `scripts/test-system.js` (58 kiểm tra; parser chạy trên output thật), phần mới trong `test-helper.js`, 15 kiểm tra mới trong `smoke.js` cho màn System (một "ổ" giả, và một helper giả trả về output thật đã ghi) và 3 cho `.asar`, `scripts/capture-system.js` (ghi fixture, cần UAC), `scripts/verify-system.js` (ổ C: thật; thêm `--elevated` cho lượt có UAC), ảnh chụp bằng `scripts/shoot-system.js`.
+>
+> **Đo thật trên máy test (máy duy nhất; ổ C: 475 GiB, dùng 413 GiB):**
+> - Chưa có quyền admin: chưa giải thích được **35,5 GiB = 8,6%** dung lượng đang dùng, chủ yếu nằm trong 153 thư mục bị từ chối.
+> - Sau lượt có admin, chạy qua đúng đường của nút trong app (người dùng bấm UAC): **1,4 GiB = 0,33%**. 11 thư mục vẫn bị từ chối kể cả với admin, trong đó có System Volume Information.
+> - Đi hết ổ: 1,11 triệu tệp mất 73–135 s, tuỳ cache của đĩa. 152 thư mục bị từ chối, đo lại có admin mất 14 s. DISM mất 80 s.
+> - **Ngưỡng đã chốt (2026-09-24):** chưa giải thích được ≤ **1% dung lượng đang dùng**, tính sau lượt có admin. Ngưỡng này đủ rộng cho tệp tạm sinh ra và mất đi trong lúc đi ổ. Nó vẫn bắt được mọi lỗi bỏ sót cả một khối: lỗi OneDrive vừa sửa lớn cỡ 3%. `verify-system.js --elevated` kiểm tiêu chí này (mặc định 1%, đổi được bằng `--threshold <n>`). Máy test đạt 0,33%.
+>
+> **Khác đặc tả ở trên:**
+> - **Thêm dòng** (đã duyệt): chương trình đã cài (Program Files và WindowsApps), ProgramData, phần còn lại của Windows, phần bị các lần quét khác bỏ qua (thư mục tên bắt đầu bằng `.`/`$`, `node_modules`, `.git`…; ở máy này là 28,2 GB, riêng `.ollama` 14,3 GB), tài khoản khác, thư mục ở gốc ổ (có tên từng thư mục). Thêm cả bộ đệm Windows Installer (11,1 GB ở đây), Recovery (5,2 GB), phần sót lại của nâng cấp, MFT, reserved storage (chỉ hiện khi có phần giữ trống) và System Volume Information.
+> - **Không có `helper:request` dạng chung** (đã duyệt): cửa sổ chỉ gọi được "đo" và "đo với quyền quản trị". Helper chỉ chạy công cụ trong một bảng cố định: exe trong System32, tham số là hằng số, ký tự ổ lấy từ `SystemDrive`. Nó chỉ trả tổng dung lượng, không trả tên tệp. `test-helper.js` đọc mã nguồn các file chạy với quyền admin để kiểm điều này.
+> - `hiberfil.sys`/`swapfile.sys` lấy kích thước qua `dir /a /-c`, vì `fs.stat` bị EPERM. Trên máy này `pagefile.sys` nằm ở D:, nên không có dòng này cho C:.
+> - Điểm khôi phục lấy con số "allocated" của vssadmin (8,90 GiB), không lấy "used" (8,60), vì allocated mới là phần ổ đã cấp ra. vssadmin và fsutil in số theo định dạng vùng (vi-VN: `8,60 GB`, `995.551.231`) dù chữ là tiếng Anh, nên parser đọc số theo hình dạng. DISM chạy với `/English`.
+> - WinSxS lấy con số "actual size" của DISM. Phần chênh lệch được chuyển ra khỏi dòng "Windows", tổng không đổi. Lý do: walk chỉ đếm một lần các tệp có nhiều tên, ở chỗ nó gặp trước, nên con số WinSxS của walk phụ thuộc thứ tự đọc thư mục.
+> - Reserved storage: [Inference, suy từ tài liệu của Microsoft] phần bị giữ trống = tổng của max(0, guarantee − used). Máy này có used lớn hơn guarantee, nên không có dòng này.
+> - DriverStore chỉ đo kích thước thư mục, chưa dùng `pnputil` (dời lại). Windows.old không có trên máy này, nên dòng đó chỉ được kiểm bằng logic.
+> - Thùng rác tách riêng phần app đưa vào (bản ghi của app đối chiếu với metadata của bin) để trỏ sang tab Khôi phục.
+> - Thanh tỷ lệ có 5 phần thay vì 4: tệp của bạn, chương trình, Windows và hệ thống, trống, chưa giải thích được. Dùng các sắc độ của một màu accent, không dùng màu verdict.
+> - Việc đi hết ổ chỉ chạy khi bấm nút, không tự chạy khi mở tab (mất cỡ 2 phút), và dừng được giữa chừng.
+> - Handoff đi qua `execute()` và được ghi vào journal thành session `handoff` (ghi lại thứ đã mở). Không có hộp thoại xác nhận vì mở một trang cài đặt không thay đổi gì. Restore Center ẩn các session này. Các URI `ms-settings:` đã đối chiếu với trang "Launch Windows Settings" của Microsoft Learn; các exe đã đối chiếu với System32 của máy này.
+> - Fixture: chỉ dùng output tiếng Anh thật (đã duyệt), gồm cả output lúc bị từ chối. Hai nhánh máy này không tạo ra được (reserve chưa đầy, không có shadow copy) dùng dữ liệu dựng, có ghi chú rõ trong test.
+> - **Sửa hai lỗi có sẵn của scanner, tìm ra khi đo:**
+>   1. `readdir` gắn cờ link cho **mọi** reparse point, nên thư mục OneDrive (reparse kiểu cloud, không phải link) bị bỏ qua toàn bộ. Trên máy này đó là 12,2 GiB, gồm cả Documents, Pictures và Desktop, khi quét thư mục Home.
+>   2. Trong Electron, `fs` coi tệp `.asar` là thư mục, nên mọi `.asar` (VS Code, Zalo, Postman…) bị bỏ qua.
+>
+>   Cả hai sửa ở `lib/real-fs.js` (`entryKind()` hỏi lại `lstat`; dùng `original-fs`), có kiểm tra trong `test-system.js` và `smoke.js`.
+> - Chưa kiểm được trên máy này: nhiều bản Windows, BitLocker đang mã hoá dở, Storage Spaces, ReFS (khi đó fsutil ntfsinfo sẽ báo không đọc được và dòng MFT ghi như vậy).
 
 ---
 

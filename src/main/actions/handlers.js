@@ -28,4 +28,5 @@
 module.exports = Object.freeze({
   recycle: require('./recycle'),
   restore: require('./restore'),
+  handoff: require('./handoff'),
 });

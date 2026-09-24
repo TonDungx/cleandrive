@@ -1,0 +1,15 @@
+ Volume in drive C is Windows-SSD
+ Volume Serial Number is 0000-0000
+
+ Directory of C:\
+
+24/09/2026  06:56 CH        6749417472 hiberfil.sys
+
+ Directory of C:\
+
+
+ Directory of C:\
+
+24/09/2026  06:56 CH         268435456 swapfile.sys
+               2 File(s)     7017852928 bytes
+               0 Dir(s)     66284912640 bytes free

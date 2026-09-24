@@ -76,6 +76,11 @@
             <svg class="tab-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="5.6"/><path d="M8 8V2.4"/><path d="M8 8l4.1 3.8"/></svg>
             <span class="tab-label" data-i18n="app.tab.usage">Disk usage</span>
           </button>
+          <button class="tab" data-tab="system" role="tab"
+            data-i18n-title="app.tab.system" title="System">
+            <svg class="tab-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="2.2" y="3.2" width="11.6" height="9.6" rx="1.6"/><path d="M2.2 9.4h11.6"/><path d="M10.6 11.1h1.2"/></svg>
+            <span class="tab-label" data-i18n="app.tab.system">System</span>
+          </button>
           <button class="tab" data-tab="cleanup" role="tab"
             data-i18n-title="app.tab.cleanup" title="What to delete">
             <svg class="tab-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3.2 4.6h9.6"/><path d="M6.4 4.6V3.3a.8.8 0 0 1 .8-.8h1.6a.8.8 0 0 1 .8.8v1.3"/><path d="M4.6 4.6l.5 8a1 1 0 0 0 1 .9h3.8a1 1 0 0 0 1-.9l.5-8"/></svg>
@@ -221,6 +226,44 @@
         </div>
 
         <p class="empty" id="scan-empty" hidden></p>
+      </section>
+
+      <!-- ------------------------------------------------ system -->
+      <!--
+        Where all of the system drive went, including what every other screen
+        leaves out on purpose: Windows, programs, hidden folders, and what only
+        Windows' own tools can see. What nothing accounts for is shown as a
+        number, "Not explained", never hidden. The app changes nothing here;
+        each row can open the Windows tool that owns it.
+      -->
+      <section class="panel" id="panel-system" role="tabpanel">
+        <div class="panel-actions">
+          <button class="btn btn-primary" id="system-measure" data-i18n="system.measure">Measure this drive</button>
+          <button class="btn" id="system-cancel" hidden data-i18n="app.stop">Stop</button>
+          <button class="btn" id="system-elevated" data-i18n="system.measureElevated">Measure with administrator rights…</button>
+          <span class="status" id="system-status"></span>
+        </div>
+
+        <div class="progress progress-walk" id="system-progress" hidden>
+          <span class="critters" aria-hidden="true"></span>
+          <span class="progress-track"><span class="progress-bar is-indeterminate"></span></span>
+        </div>
+
+        <div class="stats">
+          <div class="stat"><span class="stat-value" id="sstat-total">–</span><span class="stat-label"><span id="system-drive">C:\</span> <span data-i18n="system.size">size</span></span></div>
+          <div class="stat"><span class="stat-value" id="sstat-used">–</span><span class="stat-label" data-i18n="system.used">In use</span></div>
+          <div class="stat"><span class="stat-value" id="sstat-free">–</span><span class="stat-label" data-i18n="system.free">Free</span></div>
+          <div class="stat"><span class="stat-value" id="sstat-unexplained">–</span><span class="stat-label" data-i18n="system.unexplained">Not explained</span></div>
+        </div>
+
+        <section class="card card-wide system-bar-card" id="system-bar-card" hidden>
+          <h2 data-i18n="system.barTitle">Where the space on this drive went</h2>
+          <div class="system-bar" id="system-bar" role="img"></div>
+          <ul class="system-legend" id="system-legend"></ul>
+          <div class="card-note system-note" id="system-note"></div>
+        </section>
+
+        <div class="system-groups" id="system-groups"></div>
       </section>
 
       <!-- ------------------------------------------------ cleanup -->
@@ -1041,5 +1084,6 @@
     <script src="updates.js"></script>
     <script src="snapshots.js"></script>
     <script src="restore.js"></script>
+    <script src="system.js"></script>
   </body>
 </html>

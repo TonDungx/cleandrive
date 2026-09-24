@@ -21,13 +21,14 @@ and the notifications.
 - [The shell everything sits in](#the-shell-everything-sits-in)
 - [Choosing what to look at](#choosing-what-to-look-at)
 - [Screen 1 — Disk usage](#screen-1--disk-usage)
-- [Screen 2 — What to delete](#screen-2--what-to-delete)
-- [Screen 3 — Photos & video](#screen-3--photos--video)
-- [Screen 4 — Duplicates](#screen-4--duplicates)
-- [Screen 5 — Trends](#screen-5--trends)
-- [Screen 6 — Restore](#screen-6--restore)
-- [Screen 7 — Automatic](#screen-7--automatic)
-- [Screen 8 — Settings](#screen-8--settings)
+- [Screen 2 — System](#screen-2--system)
+- [Screen 3 — What to delete](#screen-3--what-to-delete)
+- [Screen 4 — Photos & video](#screen-4--photos--video)
+- [Screen 5 — Duplicates](#screen-5--duplicates)
+- [Screen 6 — Trends](#screen-6--trends)
+- [Screen 7 — Restore](#screen-7--restore)
+- [Screen 8 — Automatic](#screen-8--automatic)
+- [Screen 9 — Settings](#screen-9--settings)
 - [The file viewer](#the-file-viewer)
 - [Deleting](#deleting)
 - [Disk alerts and the tray](#disk-alerts-and-the-tray)
@@ -92,6 +93,7 @@ while skimming.
 | Screen | The question it answers | Acts on |
 | --- | --- | --- |
 | **Disk usage** | Where did the space go? | One folder you choose |
+| **System** | Where did the rest of the drive go? | The whole system drive |
 | **What to delete** | Which of it is safe to remove, and why? | The same scan |
 | **Photos & video** | What is in my picture library, and where did it come from? | Curated photo folders |
 | **Duplicates** | What do I have more than one copy of? | One folder you choose |
@@ -146,7 +148,7 @@ Nothing in that sequence happens without a click, and step 6 cannot be skipped.
 
 ### The sidebar
 
-Eight tabs down the left, each with an icon and a label. Two of them carry a
+Nine tabs down the left, each with an icon and a label. Two of them carry a
 **badge** when there is something to report: *What to delete* shows the total
 size it considers safe to remove, *Photos & video* shows how many files it found.
 
@@ -287,7 +289,16 @@ Disk usage, What to delete and Duplicates are built from one shared list:
 
 Because system locations are excluded by design, **scanning `C:\` under-reports
 the drive's real usage**. The status line says how many locations were left out,
-so the gap is visible rather than mysterious.
+so the gap is visible rather than mysterious, and the [System](#screen-2--system)
+screen measures all of it.
+
+Two things used to be left out that never should have been, and were found by
+measuring a real drive. **OneDrive's folder** is a special kind of folder that
+Windows' directory listing describes as a link, so a scan of the home folder
+skipped it — on the machine this was built on that was 12 GB, including
+Documents, Pictures and the Desktop. And inside the app, **`.asar` files** (the
+single file most Electron apps ship in) were reported as folders and skipped.
+Both are now asked about directly and counted.
 
 ### Honest timestamps
 
@@ -300,7 +311,57 @@ banner explains it and every date on screen is relabelled **Modified**.
 
 ---
 
-## Screen 2 — What to delete
+## Screen 2 — System
+
+Where **all** of the system drive went — including everything the other screens
+leave out on purpose. It answers the question Disk usage cannot: "the drive says
+413 GB is used, the scan found 140 — where is the rest?"
+
+### Measuring
+
+- **The drive's size, what is used and what is free** appear as soon as the tab
+  opens.
+- **Measure this drive** reads every folder on it. It adds up the space each
+  file actually takes on the disk (a OneDrive file that is only in the cloud
+  takes none), counts a file with several names once — most of `System32` is
+  also in `WinSxS` under a second name — and follows no link. On a 475 GB drive
+  with 1.1 million files it took between one and two and a quarter minutes. It
+  can be stopped.
+- **Measure with administrator rights…** is the one button in the app that
+  raises a UAC prompt, and only when it is pressed. It measures exactly the
+  folders the first pass could not read, and asks Windows' own tools what only
+  they can see: restore points (`vssadmin`), the file system's index
+  (`fsutil`), and the component store (`DISM`). The helper that does this reads
+  only, answers only that fixed list, and leaves as soon as it has answered.
+
+### What you see
+
+One bar for the whole drive: **your files · programs · Windows and the system ·
+free · not explained**. Under it, a card per row — your profile, what the other
+scans skip (folders whose names start with a dot, `node_modules`…), folders at
+the top of the drive, installed programs, the Windows Installer cache, the
+component store, the hibernation file, restore points, the Recycle Bin, and the
+rest — each with its size, one sentence saying what it is, what doing something
+about it costs, and how it was measured.
+
+**Not explained** is a number, never hidden. It is what the drive reports as used
+and nothing on the screen accounts for. On the machine this was built on it was
+35.5 GB before administrator rights and 1.4 GB after — a third of one per cent
+of the space in use.
+
+### What it will not do
+
+**Change anything.** The app does not turn off hibernation, delete restore
+points or clean the component store. A row's button opens the Windows tool that
+owns that space — Power Options, System Protection, Disk Cleanup, Storage
+settings, Installed apps — and a command such as
+`DISM /Online /Cleanup-Image /StartComponentCleanup` is shown to copy, never run.
+Every row is `keep` or `review`, never `safe`, and none of it can ever be part of
+an automatic cleanup.
+
+---
+
+## Screen 3 — What to delete
 
 The same scan, read a different way: not "what is big" but "what is disposable".
 
@@ -361,7 +422,7 @@ total size`, and the delete button stays disabled until something is ticked.
 
 ---
 
-## Screen 3 — Photos & video
+## Screen 4 — Photos & video
 
 Its own screen, because its files are the only ones in the app that cannot be got
 back. Everything here is arranged around that.
@@ -482,7 +543,7 @@ a fixed list of categories, and nothing here produces one.
 
 ---
 
-## Screen 4 — Duplicates
+## Screen 5 — Duplicates
 
 Byte-identical files inside the chosen folder.
 
@@ -523,7 +584,7 @@ you are allowed to do.
 
 ---
 
-## Screen 5 — Trends
+## Screen 6 — Trends
 
 Whether the problem is getting worse, and how fast.
 
@@ -578,7 +639,7 @@ measurements" for roughly the first week, and there is no way around that.
 
 ---
 
-## Screen 6 — Restore
+## Screen 7 — Restore
 
 Everything the app has done to a file, newest first, and the way back from each
 of it. It is free on every tier and it is never behind a licence: whatever the
@@ -630,7 +691,7 @@ can ask for something the app did to be undone and for nothing else.
 
 ---
 
-## Screen 7 — Automatic
+## Screen 8 — Automatic
 
 Cleanup on a timetable, with no window open. Off by default, and designed so that
 every ambiguity resolves towards doing nothing — there is no dialog in front of
@@ -713,7 +774,7 @@ the cleanup.
 
 ---
 
-## Screen 8 — Settings
+## Screen 9 — Settings
 
 Small on purpose. **Nothing in Settings changes what the app deletes.**
 
@@ -910,6 +971,10 @@ the disk is, so the question can be answered without clicking anything.
   interface itself is forbidden from reaching the network at all.
 - **No automatic optimisation, defragmentation or registry cleaning.** It does
   not claim to make anything faster.
+- **No system change of its own.** Hibernation, restore points, the component
+  store, a previous Windows installation: the System screen explains them and
+  opens the Windows tool that owns them. It never runs a command that changes
+  the system.
 - **What is written outside the Recycle Bin.** In the app's own data folder:
   the settings, the **Action Journal** (below), a log of unattended runs, the
   disk-usage history behind Trends, a duplicate-finder hash cache, and two
@@ -946,7 +1011,7 @@ The journal is a claim, not a permission. The purge still acts only on items the
 Recycle Bin's own metadata corroborates, so a hand-edited line deletes nothing.
 Month files older than thirteen months are dropped at launch.
 
-It is also what the [Restore](#screen-6--restore) screen reads, and a restore is
+It is also what the [Restore](#screen-7--restore) screen reads, and a restore is
 recorded in it like any other action — which is how the purge knows a file that
 was put back is no longer the app's to remove.
 
@@ -962,7 +1027,12 @@ was put back is no longer the app's to remove.
 - **Display caps**: 300 duplicate groups, 50 largest files, 50 protected-location
   rows, 100 files per cleanup category. The last is flagged on screen.
 - **Scanning `C:\` under-reports it**, because protected system locations are
-  excluded by design. The status line says how many were left out.
+  excluded by design. The status line says how many were left out; the System
+  screen measures the whole drive.
+- **The System screen measures the system drive only**, and reading every
+  folder on it takes minutes rather than seconds. It has been checked on one
+  machine; several Windows installations, a drive BitLocker is still encrypting,
+  Storage Spaces and ReFS have not been tried.
 - **Trends need about a week** before they say anything.
 - **The scheduled task only fires while somebody is logged on.** A machine left
   at the login screen at 02:00 runs the cleanup at the next opportunity instead.
@@ -988,7 +1058,7 @@ The interface is plain HTML, CSS and JavaScript — no framework and no build st
 so what is in `src/renderer/` is what runs. All filesystem work happens in a
 separate process; the interface has no access to the disk, the network or Node at
 all, and reaches the system only through a fixed list of named operations —
-forty-six of them, written down in `src/main/ipc-manifest.js`. A handler for a
+fifty-one of them, written down in `src/main/ipc-manifest.js`. A handler for a
 channel not in that file throws at startup, and `npm run test:ipc` holds the
 preload, the handlers and the manifest to the same list.
 
@@ -1011,8 +1081,13 @@ A checkout opens every feature by default; a built installer ignores
 A few paths need an administrator. They go through a **helper**: the same
 executable started with `--helper` through a UAC prompt the user answered,
 answering only a fixed, read-only list of requests over a named pipe that both
-sides authenticate. It opens no window and leaves after five minutes idle.
-`npm run verify:helper -- --elevated` raises a real prompt to prove it.
+sides authenticate: measure these refused folders (sums only, never a file
+name), and run `vssadmin`, `fsutil` or `DISM` from `System32` with arguments
+written into the app. It opens no window and leaves after five minutes idle, or
+as soon as the System screen has its answers. `npm run verify:helper --
+--elevated` raises a real prompt to prove it; `npm run capture:system` records
+what those tools print, as the fixtures the parsers are tested against; and
+`npm run verify:system -- --elevated` measures the real drive end to end.
 
 The app ships with **two runtime dependencies**: one for auto-update, and
 `mammoth` for reading Word documents in the viewer. The second is a deliberate
@@ -1025,7 +1100,7 @@ Everything else, including the ZIP, Excel, PowerPoint, image and video readers,
 the charts and the tray icon, is written here. There are no binary assets in the
 repository; the icons are drawn in code.
 
-Test harnesses live in [`scripts/`](scripts/) — twenty-eight suites in
+Test harnesses live in [`scripts/`](scripts/) — twenty-nine suites in
 `npm test`, plus the Electron ones, covering the classification rules, the
 candidate contract, the action pipeline, the journal (including two processes
 writing it at once), the deletion guards, the unattended-run gates, the Recycle
@@ -1034,5 +1109,5 @@ entitlement matrix, the elevated helper's handshake, the settings migration
 against the released code, the translation dictionary, and an end-to-end run
 that boots the real application and reads its rendered interface back out.
 `npm run verify:restore` puts throwaway files back from the real Recycle Bin.
-`npm run shoot:lists`, `shoot:media`, `shoot:viewer` and `shoot:restore` take
-screenshots of the real screens.
+`npm run shoot:lists`, `shoot:media`, `shoot:viewer`, `shoot:restore` and
+`shoot:system` take screenshots of the real screens.
