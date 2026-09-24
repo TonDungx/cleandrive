@@ -64,7 +64,7 @@ async function runScheduled() {
       );
       run.notes.push(t('run.expectedAt', 'Expected at {path}', { path: services().settingsPath }));
     } else {
-      run = await runAutoClean({ settings, ledger });
+      run = await runAutoClean({ settings, ledger, journal: services().journal, source: 'scheduled' });
       run.warnings = store.warnings;
     }
   } catch (err) {

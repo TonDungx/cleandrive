@@ -634,6 +634,10 @@ class Advisor {
       mtimeMs: file.mtimeMs,
       atimeMs: file.atimeMs,
       reason: result.reason,
+      // Which rule decided -- the folder, the extension, the name or the size.
+      // The analyzer turns it into a confidence: a folder called Temp is
+      // stronger evidence than a file that happens to end in .bak.
+      source: result.source,
     });
 
     // Keep only the largest few; trim in batches rather than on every push.

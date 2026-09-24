@@ -236,6 +236,15 @@
     'reason.systemOwned': 'Thuộc về hệ điều hành hoặc một chương trình đã cài',
     'reason.binaryModule': 'Một tệp .{ext} được chương trình nào đó nạp — các bản sao thường không thay thế nhau được',
 
+    // Evidence the analyzers add beside a verdict.
+    'evidence.noRule': 'Không có quy tắc dọn dẹp nào khớp với tệp này, nên ứng dụng không có lý do gợi ý xoá nó',
+    'evidence.atimeUntracked':
+      'Windows không ghi lại lúc tệp được mở trên máy này, nên tuổi này là lần sửa đổi cuối cùng',
+    'evidence.dupes.identical.one': 'Giống hệt từng byte với 1 bản sao khác, đã xác nhận bằng SHA-256 toàn bộ tệp',
+    'evidence.dupes.identical.other':
+      'Giống hệt từng byte với {n} bản sao khác, đã xác nhận bằng SHA-256 toàn bộ từng tệp',
+    'evidence.dupes.oldest': 'Bản cũ nhất — được gợi ý là bản nên giữ lại',
+
     // The unit picks the key, so the number can sit where Vietnamese puts it.
     'reason.stale.years': 'Không mở trong {n} năm',
     'reason.stale.months': 'Không mở trong {n} tháng',
@@ -291,6 +300,7 @@
     'run.note.rootFailed': '{root}: {error}',
     'run.note.purgeFailed': 'Không gỡ được {n} mục trong Thùng rác',
     'run.note.purgeError': 'Dọn Thùng rác thất bại: {error}',
+    'run.note.recordFailed': 'Đã dừng sớm: không ghi được bản ghi về những gì đã chuyển đi ({error})',
     'run.note.stillInBin':
       'Các tệp đang nằm trong Thùng rác, vốn ở cùng ổ đĩa — chưa có dung lượng nào trống ra cho tới khi ' +
       'thùng rác được dọn. Bật xoá vĩnh viễn có thời gian chờ để CleanDrive tự dọn phần của nó sau một ' +
@@ -301,7 +311,7 @@
     /* ---- the native confirmations -------------------------------------- */
     'dialog.confirmDelete.title': 'Xác nhận xoá',
     'dialog.confirmDelete.message': 'Chuyển {n} mục vào Thùng rác?',
-    'dialog.confirmDelete.detail': 'Việc này giải phóng {size}. Các mục vẫn khôi phục được từ Thùng rác.',
+    'dialog.confirmDelete.detailBin': '{size} sẽ được chuyển vào Thùng rác, và vẫn khôi phục được từ đó.',
     'dialog.confirmAuto.withPurge':
       'Chúng vẫn khôi phục được trong {days} ngày, sau đó CleanDrive xoá vĩnh viễn phần của nó và dung ' +
       'lượng mới thật sự được giải phóng.',
@@ -344,7 +354,6 @@
     'dupes.groupTitle': '{n} bản giống hệt nhau · mỗi bản {size}',
     'dupes.reclaimableAmount': 'thu hồi được {size}',
     'dupes.oldest': 'cũ nhất',
-    'dupes.oldestHint': 'Bản cũ nhất — nên giữ lại bản này',
     'dupes.skippedNote':
       '{n} {files} không được chọn — chúng thuộc về chương trình đã cài hoặc thư mục phụ thuộc. ' +
       'Nếu bạn chắc chắn thì hãy tự tích từng tệp.',
@@ -357,14 +366,25 @@
     'delete.ready': '{n} {items} sẵn sàng · {size}',
     'delete.rate': '{n} tệp/giây',
     'delete.took': ' trong {n} giây',
-    'delete.moved': 'Đã chuyển {n} {items} vào Thùng rác{took} · giải phóng {freed}',
-    'delete.stopped':
-      'Đã dừng. {n} {items} đã được chuyển vào Thùng rác · giải phóng {freed} · còn {left} chưa đụng tới.',
+    'delete.progress': '{done} / {total} · {moved} / {size}',
+    'delete.movedToBin':
+      'Đã chuyển {n} {items} ({size}) vào Thùng rác{took} — chưa giải phóng cho tới khi dọn Thùng rác',
+    'delete.stoppedToBin':
+      'Đã dừng. {n} {items} ({size}) đã ở trong Thùng rác · còn {left} chưa đụng tới.',
     'delete.cancelled': 'Đã huỷ xoá — không có gì bị gỡ đi.',
     'delete.needsAdmin': '{n} mục cần quyền quản trị',
     'delete.inUse': '{n} mục đang được chương trình khác sử dụng',
     'delete.otherSkipped': 'bỏ qua {n} mục',
     'delete.nothing': 'Không có gì bị xoá. {reason}',
+
+    /* ---- shared components ------------------------------------------ */
+    'frees.yes': 'Giải phóng dung lượng',
+    'frees.bin': 'Chưa giải phóng cho tới khi dọn Thùng rác',
+    'frees.yesHint': 'Dung lượng trở lại ổ này ngay khi việc này xong.',
+    'frees.binHint': 'Thùng rác nằm trên cùng ổ đĩa, nên chuyển tệp vào đó không giải phóng gì cho tới khi dọn nó.',
+    'evidence.head': 'Vì sao — {confidence}',
+    'evidence.open': 'Vì sao: {reasons}',
+    'dupes.identical': 'giống hệt',
 
     /* ---- trends ------------------------------------------------------- */
     'trends.volume': 'Ổ đĩa',
@@ -752,6 +772,16 @@
     'settings.critters.mouse': 'Chuột',
     'settings.critters.mixed': 'Mỗi thứ một ít',
     'settings.critters.off': 'Không ai cả — chỉ thanh tiến trình',
+
+    'settings.snapshots.title': 'Lịch sử quét',
+    'settings.snapshots.note':
+      'Sau mỗi lần quét, ứng dụng giữ lại một bản phác thảo đã nén của thư mục — mỗi thư mục con lớn bao nhiêu, ' +
+      'và những tệp lớn nhất trong đó — để sau này so sánh hai lần quét với nhau. Bản này có tên tệp nên không ' +
+      'bao giờ rời khỏi máy tính này. Giữ những bản mới nhất, cộng thêm mỗi tháng một bản.',
+    'settings.snapshots.recent': 'Số lần quét mới nhất được giữ, cho mỗi thư mục',
+    'settings.snapshots.monthly': 'Cộng thêm mỗi tháng một bản, trong ngần này tháng',
+    'settings.snapshots.detail':
+      'Tối đa {n} bản cho mỗi thư mục. Bản cũ hơn bị xoá sau lần quét kế tiếp của thư mục đó.',
     'settings.appearance.title': 'Giao diện',
     'settings.appearance.note':
       '“Tự động” theo hệ thống, nên máy nào chuyển sang tối lúc hoàng hôn thì cửa sổ này chuyển theo. ' +
@@ -1076,10 +1106,10 @@
      * one: the whole reason this is on screen is so that "a guess" cannot be
      * mistaken for "certain" by somebody skimming before they delete.
      */
-    'media.strength.certain': 'chắc chắn',
-    'media.strength.strong': 'căn cứ vững',
-    'media.strength.likely': 'nhiều khả năng',
-    'media.strength.guess': 'chỉ là phỏng đoán',
+    'confidence.certain': 'chắc chắn',
+    'confidence.strong': 'căn cứ vững',
+    'confidence.likely': 'nhiều khả năng',
+    'confidence.guess': 'chỉ là phỏng đoán',
 
     /* ---- photos and video: the filter chips -------------------------------
      *

@@ -355,6 +355,16 @@ console.log('\ni18n: moved is not freed, in either language\n');
   check('the loud notice still says moving frees nothing',
     /không giải phóng/.test(binNote), binNote.slice(0, 60) + '…');
 
+  // The receipt after every delete, and the badge beside every button. Both
+  // used to say "freed"; neither may, in either language.
+  const receipt = i18n.t('delete.movedToBin', '');
+  check('the receipt after a delete says it is not freed yet', /chưa giải phóng/.test(receipt), receipt);
+  check('and does not claim anything was freed', !/giải phóng \{/.test(receipt));
+  const badge = i18n.t('frees.bin', '');
+  check('the badge beside the button says the same', /Chưa giải phóng/.test(badge), badge);
+  const dialog = i18n.t('dialog.confirmDelete.detailBin', '');
+  check('and the confirmation no longer opens with "this frees"', !/giải phóng/.test(dialog), dialog);
+
   i18n.setLanguage('en');
 }
 

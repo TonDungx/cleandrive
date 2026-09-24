@@ -5,6 +5,7 @@ const fsp = fs.promises;
 const path = require('node:path');
 
 const i18n = require('../../i18n');
+const { ALLOWED_ADVISOR_NAMES } = require('../automatic/allowed-categories');
 
 /**
  * Persisted application settings.
@@ -22,15 +23,66 @@ const i18n = require('../../i18n');
  * because the alternative is a scheduled task that silently stops running.
  */
 
-const SCHEMA_VERSION = 1;
+/**
+ * The shape of the file, and how an older one becomes this one.
+ *
+ * A migration runs on the parsed file *before* coercion, so it only has to say
+ * what changed; every value it produces still goes through the same clamps as
+ * a value typed by hand. Migrations only ever go forward. An older build that
+ * reads a newer file coerces what it understands and warns about the rest,
+ * which is what it has always done with a key it did not know.
+ *
+ *   1 -> 2   `snapshots`: how many folder snapshots to keep (roadmap 0.6/0.7)
+ */
+const SCHEMA_VERSION = 2;
+
+const MIGRATIONS = Object.freeze([
+  {
+    from: 1,
+    to: 2,
+    migrate(raw) {
+      // Additive. The defaults are what the snapshot store used before there
+      // was anywhere to change them.
+      return { ...raw, version: 2, snapshots: { keepRecent: 12, keepMonthly: 12, ...(raw.snapshots || {}) } };
+    },
+  },
+]);
 
 /**
- * Advisor categories whose verdict is 'safe' (see CATEGORIES in advisor.js).
+ * Bring a parsed file up to this version, one step at a time.
+ *
+ * A file with no version is a version 1 file: that is the only version that
+ * ever omitted it.
+ *
+ * @returns {{raw: object, from: number, steps: number}}
+ */
+function migrate(raw) {
+  if (!isObject(raw)) return { raw, from: SCHEMA_VERSION, steps: 0 };
+  const from = Number.isInteger(raw.version) ? raw.version : 1;
+  let current = raw;
+  let version = from;
+  let steps = 0;
+  while (version < SCHEMA_VERSION) {
+    const step = MIGRATIONS.find((m) => m.from === version);
+    if (!step) break;
+    current = step.migrate(current);
+    version = step.to;
+    steps += 1;
+  }
+  return { raw: current, from, steps };
+}
+
+/**
+ * The categories an unattended run may be allowed into -- the hard whitelist
+ * in `automatic/allowed-categories.js`, in the advisor's own names. It is read
+ * from there rather than written again here, so the settings file and the run
+ * cannot disagree about what 2am may touch.
+ *
  * `buildoutput` is deliberately absent from the default set: it is safe by the
  * advisor's rules, but "safe to delete" and "safe to delete at 2am while you
  * are not looking" are different bars. A developer can opt into it.
  */
-const SAFE_CATEGORIES = ['temp', 'cache', 'crashdump', 'log', 'gpucache', 'buildoutput'];
+const SAFE_CATEGORIES = [...ALLOWED_ADVISOR_NAMES];
 const DEFAULT_CATEGORIES = ['temp', 'cache', 'crashdump', 'log', 'gpucache'];
 
 /**
@@ -69,7 +121,7 @@ const THEMES = ['system', 'light', 'dark'];
 const LANGUAGES = ['system', ...i18n.CODES];
 
 /** The top-level groups `patch` merges one level into. */
-const SECTIONS = ['autoClean', 'purge', 'monitor', 'appearance', 'updates', 'trends'];
+const SECTIONS = ['autoClean', 'purge', 'monitor', 'appearance', 'updates', 'trends', 'snapshots'];
 
 /** Hard ceilings. These are not preferences -- they bound the blast radius. */
 const LIMITS = {
@@ -87,6 +139,10 @@ const LIMITS = {
   warnPercent: { min: 50, max: 99, fallback: 85 },
   criticalPercent: { min: 51, max: 100, fallback: 95 },
   snoozeMinutes: { min: 5, max: 1440, fallback: 60 },
+  // Snapshots per folder: the newest few, plus one a month. At least one
+  // recent one, or the next scan would have nothing to be compared with.
+  snapshotKeepRecent: { min: 1, max: 100, fallback: 12 },
+  snapshotKeepMonthly: { min: 0, max: 60, fallback: 12 },
   roots: 32,
   whitelist: 256,
   skipIfRunning: 64,
@@ -179,6 +235,13 @@ function defaults() {
        */
       dailySample: true,
       sampleTime: '12:00',
+    },
+    snapshots: {
+      // A compressed tree of each scan, kept so two can be compared. Twelve of
+      // the newest and one a month for a year is at most 24 per folder -- a
+      // few hundred kilobytes each for a home folder.
+      keepRecent: LIMITS.snapshotKeepRecent.fallback,
+      keepMonthly: LIMITS.snapshotKeepMonthly.fallback,
     },
     updates: {
       // On by default. This is distributed to people with no support channel,
@@ -370,16 +433,20 @@ function coerceSchedule(value, warnings, minMinutes = 1) {
  *   installed build passes MIN_MINUTES_PACKAGED.
  * @returns {{settings: object, warnings: string[]}}
  */
-function coerceSettings(raw, { minMinutes = 1 } = {}) {
+function coerceSettings(input, { minMinutes = 1 } = {}) {
   const warnings = [];
   const base = defaults();
-  if (!isObject(raw)) {
-    if (raw !== undefined && raw !== null) warnings.push('settings: not an object, using defaults');
+  if (!isObject(input)) {
+    if (input !== undefined && input !== null) warnings.push('settings: not an object, using defaults');
     return { settings: base, warnings };
   }
 
-  if (raw.version !== undefined && raw.version !== SCHEMA_VERSION) {
-    warnings.push(`settings.version: found ${raw.version}, expected ${SCHEMA_VERSION}`);
+  const { raw, from } = migrate(input);
+  if (from > SCHEMA_VERSION) {
+    warnings.push(
+      `settings.version: this file was written by a newer CleanDrive (version ${from}); ` +
+        `only what version ${SCHEMA_VERSION} understands was read`
+    );
   }
 
   const rawAuto = isObject(raw.autoClean) ? raw.autoClean : {};
@@ -507,6 +574,22 @@ function coerceSettings(raw, { minMinutes = 1 } = {}) {
     ),
   };
 
+  const rawSnapshots = isObject(raw.snapshots) ? raw.snapshots : {};
+  const snapshots = {
+    keepRecent: clampInt(
+      rawSnapshots.keepRecent === undefined ? base.snapshots.keepRecent : rawSnapshots.keepRecent,
+      LIMITS.snapshotKeepRecent,
+      'snapshots.keepRecent',
+      warnings
+    ),
+    keepMonthly: clampInt(
+      rawSnapshots.keepMonthly === undefined ? base.snapshots.keepMonthly : rawSnapshots.keepMonthly,
+      LIMITS.snapshotKeepMonthly,
+      'snapshots.keepMonthly',
+      warnings
+    ),
+  };
+
   return {
     settings: {
       version: SCHEMA_VERSION,
@@ -516,6 +599,7 @@ function coerceSettings(raw, { minMinutes = 1 } = {}) {
       appearance: { theme, language },
       updates,
       trends,
+      snapshots,
     },
     warnings,
   };
@@ -554,6 +638,7 @@ class SettingsStore {
      * instead of acting on it.
      */
     this.exists = false;
+    this.fileVersion = null;
     this._cache = null;
     this._writeChain = Promise.resolve();
   }
@@ -585,6 +670,9 @@ class SettingsStore {
       return this._cache;
     }
 
+    // Remembered so the first save over an older file can keep a copy of it.
+    this.fileVersion = isObject(parsed) && Number.isInteger(parsed.version) ? parsed.version : 1;
+
     const { settings, warnings } = coerceSettings(parsed, { minMinutes: this.minMinutes });
     this.warnings = warnings;
     this._cache = settings;
@@ -610,6 +698,8 @@ class SettingsStore {
   async save(next) {
     const { settings, warnings } = coerceSettings(next, { minMinutes: this.minMinutes });
     this.warnings = warnings;
+
+    await this._keepOlderVersion();
 
     // Serialised: two saves racing on the same temp name would interleave. An
     // earlier save's failure must not fail this one, so the chain is joined on
@@ -652,6 +742,27 @@ class SettingsStore {
     return this.save(merged);
   }
 
+  /**
+   * Before the first save replaces a file written by an older version, keep
+   * that file as `settings.v<N>.json`.
+   *
+   * The migration from 1 to 2 only adds a section, so nothing is lost by it.
+   * The copy is for the migration that one day is not so kind, and for going
+   * back to an older build: its settings are then still where it left them.
+   * Written once, never overwritten, and never read by the app.
+   */
+  async _keepOlderVersion() {
+    if (!this.exists || !Number.isInteger(this.fileVersion) || this.fileVersion >= SCHEMA_VERSION) return;
+    const copy = path.join(path.dirname(this.filePath), `settings.v${this.fileVersion}.json`);
+    try {
+      await fsp.copyFile(this.filePath, copy, fs.constants.COPYFILE_EXCL);
+    } catch {
+      // Already kept by an earlier save, or the original is gone. Neither is a
+      // reason to refuse the save the user asked for.
+    }
+    this.fileVersion = SCHEMA_VERSION;
+  }
+
   async _writeAtomic(settings) {
     const dir = path.dirname(this.filePath);
     await fsp.mkdir(dir, { recursive: true });
@@ -676,6 +787,8 @@ class SettingsStore {
 module.exports = {
   SettingsStore,
   coerceSettings,
+  migrate,
+  MIGRATIONS,
   defaults,
   MIN_MINUTES_PACKAGED,
   SCHEMA_VERSION,

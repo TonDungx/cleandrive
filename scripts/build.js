@@ -67,10 +67,25 @@ function mb(bytes) {
   fs.writeFileSync(icoPath, buildAppIco());
   console.log(`icon        ${path.relative(ROOT, icoPath)}  (${fs.statSync(icoPath).size} bytes)\n`);
 
+  /* ---- which build this is ----------------------------------------------- */
+  // Written for the packager and removed straight after, so it only ever
+  // exists inside an installer. A checkout without it is the `dev` channel,
+  // which is the only place the entitlement override is honoured -- leaving
+  // this file behind would quietly turn the checkout into a release build.
+  const channel = process.env.CLEANDRIVE_CHANNEL || 'stable';
+  const buildInfoPath = path.join(ROOT, 'src', 'main', 'build-info.json');
+  fs.writeFileSync(
+    buildInfoPath,
+    `${JSON.stringify({ channel, version: pkg.version, releaseDate: new Date().toISOString() }, null, 2)}\n`
+  );
+  console.log(`channel     ${channel}\n`);
+
   /* ---- package ----------------------------------------------------------- */
   const builder = require('electron-builder');
 
-  const results = await builder.build({
+  let results;
+  try {
+    results = await builder.build({
     targets: builder.Platform.WINDOWS.createTarget(
       dirOnly ? ['dir'] : ['nsis', 'dir'],
       builder.Arch.x64
@@ -128,7 +143,10 @@ function mb(bytes) {
       // See "Code signing" in the README.
     },
     publish: 'never',
-  });
+    });
+  } finally {
+    fs.rmSync(buildInfoPath, { force: true });
+  }
 
   console.log('');
   for (const artifact of results) {

@@ -201,10 +201,18 @@
           <section class="card card-wide">
             <div class="card-head">
               <h2 data-i18n="usage.largest">Largest files</h2>
-              <button class="btn btn-danger btn-sm" id="delete-large" disabled data-i18n="app.moveSelected">Move selected to Recycle Bin</button>
             </div>
             <ul class="files" id="largest-files"></ul>
           </section>
+        </div>
+
+        <!-- The same floating bar every list screen has: it appears when
+             something is ticked, says how much, and offers only what applies
+             to all of it. -->
+        <div class="actionbar" id="large-actionbar" hidden>
+          <span class="actionbar-count" id="large-selection" data-i18n="app.nothingSelected">Nothing selected</span>
+          <span class="actionbar-gap"></span>
+          <button class="btn btn-danger btn-sm" id="delete-large" disabled data-i18n="app.moveSelected">Move selected to Recycle Bin</button>
         </div>
 
         <p class="empty" id="scan-empty" hidden></p>
@@ -232,12 +240,15 @@
         <div class="panel-actions" id="cleanup-toolbar" hidden>
           <button class="btn btn-sm" id="select-safe" data-i18n="cleanup.selectSafe">Select everything marked safe</button>
           <button class="btn btn-sm" id="cleanup-select-none" data-i18n="app.clearSelection">Clear selection</button>
-          <span class="spacer"></span>
-          <span class="status" id="cleanup-selection" data-i18n="app.nothingSelected">Nothing selected</span>
-          <button class="btn btn-danger btn-sm" id="delete-cleanup" disabled data-i18n="app.moveSelected">Move selected to Recycle Bin</button>
         </div>
 
         <div class="groups" id="cleanup-groups"></div>
+
+        <div class="actionbar" id="cleanup-actionbar" hidden>
+          <span class="actionbar-count" id="cleanup-selection" data-i18n="app.nothingSelected">Nothing selected</span>
+          <span class="actionbar-gap"></span>
+          <button class="btn btn-danger btn-sm" id="delete-cleanup" disabled data-i18n="app.moveSelected">Move selected to Recycle Bin</button>
+        </div>
 
         <section class="card" id="protected-card" hidden>
           <h2 data-i18n="cleanup.neverDeleted">Never deleted</h2>
@@ -430,12 +441,15 @@
         <div class="panel-actions" id="dupes-toolbar" hidden>
           <button class="btn btn-sm" id="select-extra" data-i18n="dupes.selectExtra">Select all but the oldest copy</button>
           <button class="btn btn-sm" id="select-none" data-i18n="app.clearSelection">Clear selection</button>
-          <span class="spacer"></span>
-          <span class="status" id="selection-status" data-i18n="app.nothingSelected">Nothing selected</span>
-          <button class="btn btn-danger btn-sm" id="delete-dupes" disabled data-i18n="app.moveSelected">Move selected to Recycle Bin</button>
         </div>
 
         <div id="dupe-groups" class="groups"></div>
+
+        <div class="actionbar" id="dupes-actionbar" hidden>
+          <span class="actionbar-count" id="selection-status" data-i18n="app.nothingSelected">Nothing selected</span>
+          <span class="actionbar-gap"></span>
+          <button class="btn btn-danger btn-sm" id="delete-dupes" disabled data-i18n="app.moveSelected">Move selected to Recycle Bin</button>
+        </div>
         <p class="empty" id="dupes-empty" hidden></p>
       </section>
 
@@ -885,6 +899,24 @@
             </label>
           </section>
 
+          <section class="card">
+            <h2 data-i18n="settings.snapshots.title">Scan history</h2>
+            <p class="card-note" data-i18n="settings.snapshots.note">
+              After every scan the app keeps a compressed outline of the folder — how big each
+              folder in it is, and its largest files — so two scans can later be compared. It
+              names files, so it never leaves this computer. The newest are kept, and one a month.
+            </p>
+            <label class="field field-row">
+              <span data-i18n="settings.snapshots.recent">Newest scans kept, per folder</span>
+              <input type="number" id="snapshot-keep-recent" min="1" max="100" step="1" />
+            </label>
+            <label class="field field-row">
+              <span data-i18n="settings.snapshots.monthly">Plus one a month, for this many months</span>
+              <input type="number" id="snapshot-keep-monthly" min="0" max="60" step="1" />
+            </label>
+            <p class="card-note" id="snapshot-detail"></p>
+          </section>
+
           <section class="card card-wide">
             <div class="card-head">
               <h2 data-i18n="settings.version.title">Version and updates</h2>
@@ -955,6 +987,8 @@
 
     <script src="sidebar.js"></script>
     <script src="critters.js"></script>
+    <script src="candidates.js"></script>
+    <script src="components.js"></script>
     <script src="app.js"></script>
     <!-- Loaded before the screens: every one of them opens a file row. -->
     <script src="document.js"></script>
@@ -964,5 +998,6 @@
     <script src="automatic.js"></script>
     <script src="trends.js"></script>
     <script src="updates.js"></script>
+    <script src="snapshots.js"></script>
   </body>
 </html>

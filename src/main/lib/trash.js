@@ -190,7 +190,7 @@ async function planTrash(targets, options = {}, handlers = {}) {
     }
 
     emit();
-    return { path: target, size: stats.size };
+    return { path: target, size: stats.size, mtimeMs: stats.mtimeMs };
   });
 
   for (const entry of vetted) {
@@ -200,7 +200,10 @@ async function planTrash(targets, options = {}, handlers = {}) {
       continue;
     }
     totalBytes += entry.size;
-    plan.push({ path: entry.path, size: entry.size });
+    // The modification time rides along for the journal: with the original
+    // path it is what identifies the item again later, among everything else
+    // the Recycle Bin holds.
+    plan.push({ path: entry.path, size: entry.size, mtimeMs: entry.mtimeMs });
   }
 
   const needsAdmin = failed.filter((f) => f.code === 'EPERM_ADMIN');
@@ -240,6 +243,7 @@ async function executeTrash(plan, options = {}, handlers = {}) {
   const moved = [];
   const failed = [];
   let freedBytes = 0;
+  let recordError = null;
 
   const totalBytes = plan.reduce((n, item) => n + item.size, 0);
 
@@ -293,12 +297,27 @@ async function executeTrash(plan, options = {}, handlers = {}) {
       continue;
     }
 
+    let trashed = false;
     try {
       await shell.trashItem(item.path);
       moved.push({ path: item.path, size: item.size });
       freedBytes += item.size;
+      trashed = true;
     } catch (err) {
       failed.push({ path: item.path, error: err.message || 'Trash operation failed' });
+    }
+
+    // The record is written before the window hears about the move. If it
+    // cannot be written the batch stops: carrying on would mean deleting
+    // things the app then has no account of -- nothing it could restore and
+    // nothing its purge could ever identify as its own.
+    if (trashed && handlers.onItem) {
+      try {
+        await handlers.onItem({ ...item, trashedAt: Date.now() });
+      } catch (err) {
+        recordError = err.message || String(err);
+        break;
+      }
     }
 
     window.push(Date.now());
@@ -317,6 +336,7 @@ async function executeTrash(plan, options = {}, handlers = {}) {
     cancelled: token.cancelled,
     remaining: plan.length - (moved.length + failed.length),
     durationMs: Date.now() - started,
+    ...(recordError ? { recordError } : {}),
   };
 }
 

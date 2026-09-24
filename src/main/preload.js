@@ -17,8 +17,9 @@ const api = {
   findDuplicates: (roots, options) => ipcRenderer.invoke('dupes:run', roots, options),
   cancelDuplicates: () => ipcRenderer.invoke('dupes:cancel'),
 
-  trash: (paths, options) => ipcRenderer.invoke('trash:delete', paths, options),
-  cancelTrash: () => ipcRenderer.invoke('trash:cancel'),
+  /* acting on files -- every kind through the one pipeline */
+  trash: (paths, options) => ipcRenderer.invoke('action:execute', { kind: 'recycle', items: paths, options }),
+  cancelTrash: () => ipcRenderer.invoke('action:stop'),
 
   reveal: (target) => ipcRenderer.invoke('shell:reveal', target),
   open: (target) => ipcRenderer.invoke('shell:open', target),
@@ -73,10 +74,13 @@ const api = {
   monitorSnooze: (minutes) => ipcRenderer.invoke('monitor:snooze', minutes),
   monitorResume: () => ipcRenderer.invoke('monitor:resume'),
 
+  /* which features this build may use -- never the licence itself */
+  entitlements: () => ipcRenderer.invoke('license:entitlements'),
+
   /** Subscribe to progress. Returns an unsubscribe function. */
   onScanProgress: (cb) => subscribe('scan:progress', cb),
   onDuplicateProgress: (cb) => subscribe('dupes:progress', cb),
-  onTrashProgress: (cb) => subscribe('trash:progress', cb),
+  onTrashProgress: (cb) => subscribe('action:progress', cb),
   onAutoCleanProgress: (cb) => subscribe('autoclean:progress', cb),
   onMediaProgress: (cb) => subscribe('media:progress', cb),
   /** Files as they are read, so the grid fills while the scan is still running. */

@@ -12,6 +12,10 @@ const fs = require('node:fs');
 const { app, BrowserWindow } = require('electron');
 
 const ipc = require('../src/main/ipc');
+// The delete-progress check below really deletes forty throwaway files, and a
+// native confirmation would stop it dead. The window cannot skip that dialog
+// on its own -- only this process can allow it.
+ipc.allowUnconfirmedForHarness();
 
 // Running `electron scripts/foo.js` does not read the project's package.json,
 // so Electron falls back to the name "Electron" and `getPath('userData')`
@@ -362,6 +366,30 @@ app.whenReady().then(async () => {
       `document.getElementById('scan-progress').hidden === true`
     ));
 
+    // The scan left a snapshot of its tree -- inside this harness's sandbox,
+    // never in the real %LOCALAPPDATA%.
+    {
+      const { services } = require('../src/main/services');
+      const snapshotRoots = await services().snapshots.roots();
+      check('the scan kept a snapshot of the folder tree', snapshotRoots.length >= 1, snapshotRoots.join(', '));
+      check('and kept it inside the sandbox', services().snapshotsDir.startsWith(SANDBOX_USER_DATA),
+        services().snapshotsDir);
+      const listed = snapshotRoots.length ? await services().snapshots.list(snapshotRoots[0]) : [];
+      check('marked complete, with its totals', listed.length >= 1 && listed[0].complete === true && listed[0].totals.files > 0,
+        listed[0] ? `${listed[0].totals.files} files, ${listed[0].bytesOnDisk} bytes on disk` : '');
+      const reply = await win.webContents.executeJavaScript(`
+        window.cleandrive.scan(${JSON.stringify(picked.path)}).then((r) => ({
+          ok: r.ok,
+          hasTree: Boolean(r.data && 'tree' in r.data),
+          candidates: r.data && Array.isArray(r.data.candidates) ? r.data.candidates.length : -1,
+          everyOneHasEvidence: Boolean(r.data) && r.data.candidates.every((c) => c.evidence.length > 0 && c.confidence),
+        }))
+      `);
+      check('and the tree never reached the window', reply.ok && reply.hasTree === false);
+      check('what did reach it is candidates, each with evidence and a confidence',
+        reply.candidates > 0 && reply.everyOneHasEvidence, `${reply.candidates} candidates`);
+    }
+
     /* -- cleanup advice --------------------------------------------------- */
     console.log('\nWhat to delete:');
     await win.webContents.executeJavaScript(`document.querySelector('.tab[data-tab="cleanup"]').click()`);
@@ -414,6 +442,113 @@ app.whenReady().then(async () => {
     console.log(`    select-safe -> ${selectedSafe.status}`);
     check('"select everything safe" never selects a review item',
       selectedSafe.reviewChecked === 0, `${selectedSafe.reviewChecked} review rows checked`);
+
+    /* -- the shared components -------------------------------------------- */
+    console.log('\nShared components:');
+
+    const components = await win.webContents.executeJavaScript(`
+      (async () => {
+        const out = {};
+        const bar = document.getElementById('cleanup-actionbar');
+        out.barShownWithSelection = bar.hidden === false;
+        out.frees = (bar.querySelector('.frees-badge') || {}).textContent || '';
+        out.readout = document.getElementById('cleanup-selection').textContent;
+        document.getElementById('cleanup-select-none').click();
+        out.barHiddenWhenEmpty = bar.hidden === true;
+
+        const pill = document.querySelector('#cleanup-groups .file-row .badge-button');
+        out.pillText = pill ? pill.textContent : '';
+        if (pill) pill.click();
+        const panel = document.querySelector('#cleanup-groups .evidence-row');
+        out.evidenceShown = Boolean(panel);
+        out.evidenceHead = panel ? panel.querySelector('.evidence-head').textContent : '';
+        out.evidenceItems = panel ? panel.querySelectorAll('li').length : 0;
+        if (pill) document.querySelector('#cleanup-groups .file-row .badge-button').click();
+        out.evidenceClosed = !document.querySelector('#cleanup-groups .evidence-row');
+
+        // Shift-click: tick the first box, shift-tick the third, expect three.
+        const group = [...document.querySelectorAll('#cleanup-groups .group')].find((g) => g.querySelectorAll('.file-row').length >= 3);
+        if (group) {
+          const boxes = group.querySelectorAll('.file-row input[type="checkbox"]');
+          boxes[0].click();
+          boxes[2].dispatchEvent(new MouseEvent('click', { bubbles: true, shiftKey: true }));
+          boxes[2].checked = true;
+          out.rangeChecked = group.querySelectorAll('.file-row input:checked').length;
+          out.rangeReadout = document.getElementById('cleanup-selection').textContent;
+        } else {
+          out.rangeChecked = -1;
+        }
+        document.getElementById('cleanup-select-none').click();
+
+        const rows = document.querySelectorAll('#cleanup-groups .file-row');
+        out.aria = rows.length > 0 && [...rows].every((r) => r.getAttribute('aria-posinset') && r.getAttribute('aria-setsize'));
+
+        // The keyboard: Space on a row ticks it once, an arrow moves to the next.
+        const firstRow = rows[0];
+        firstRow.focus();
+        firstRow.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+        out.spaceTicked = firstRow.querySelector('input').checked;
+        firstRow.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+        out.focusMoved = document.activeElement !== firstRow && document.activeElement.classList.contains('file-row');
+        document.getElementById('cleanup-select-none').click();
+
+        // A list long enough to be windowed, drawn into the real page.
+        const host = document.createElement('ul');
+        host.className = 'files';
+        document.getElementById('panel-cleanup').appendChild(host);
+        const many = Array.from({ length: 5000 }, (_, i) => ({
+          id: 'x' + i, path: 'C:\\\\fixture\\\\file-' + i + '.bin', size: i, verdict: 'keep', confidence: 'certain',
+          evidence: [{ rank: 1, i18n: 'evidence.noRule', en: 'No rule' }], actions: ['recycle'], mtimeMs: Date.now(),
+        }));
+        const frames = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+        const long = CandidateList(host, { rows: many, selection: new Set(), onChange: () => {} });
+        await frames();
+        // Off screen, it draws nothing: that is the point of it.
+        out.offscreenRows = host.querySelectorAll('.file-row').length;
+        host.scrollIntoView({ block: 'start' });
+        await frames();
+        await frames();
+        out.windowedRows = host.querySelectorAll('.file-row').length;
+        out.windowedSize = host.querySelector('.file-row') ? host.querySelector('.file-row').getAttribute('aria-setsize') : '';
+        const scroller = document.querySelector('main');
+        scroller.scrollTop += 40000;
+        await frames();
+        await frames();
+        const first = host.querySelector('.file-row');
+        out.laterIndex = first ? Number(first.dataset.index) : -1;
+        out.laterRows = host.querySelectorAll('.file-row').length;
+        host.remove();
+        scroller.scrollTop = 0;
+
+        await loadEntitlements();
+        out.noUpsellWhenAllowed = UpgradeHint('pro.diff', 'x') === null;
+        out.refusal = RefusalNote({ i18n: 'none', en: 'Only one scan so far.' }).textContent;
+        return out;
+      })()
+    `);
+    check('the action bar floats in only when something is selected',
+      components.barShownWithSelection && components.barHiddenWhenEmpty);
+    check('it says how much is selected', /selected/.test(components.readout), components.readout);
+    check('and that moving to the bin frees nothing', /Not freed until the bin is emptied/.test(components.frees),
+      components.frees);
+    check('each row carries how sure the app is', /certain|strong evidence|likely|a guess/.test(components.pillText),
+      components.pillText);
+    check('clicking it opens the reasons, strongest first', components.evidenceShown && components.evidenceItems >= 1 &&
+      /^Why/.test(components.evidenceHead), `${components.evidenceHead} (${components.evidenceItems})`);
+    check('and clicking again closes them', components.evidenceClosed);
+    check('shift-click takes everything in between', components.rangeChecked === 3 || components.rangeChecked === -1,
+      components.rangeChecked === -1 ? 'no group with three rows' : `${components.rangeChecked} checked · ${components.rangeReadout}`);
+    check('rows say where they are in the list, for a screen reader', components.aria);
+    check('Space on a row ticks it', components.spaceTicked);
+    check('and an arrow key moves to the next row', components.focusMoved);
+    check('a list of 5,000 rows puts only the visible ones in the page',
+      components.windowedRows > 0 && components.windowedRows < 200 && components.windowedSize === '5000',
+      `${components.windowedRows} rows drawn, ${components.offscreenRows} while off screen`);
+    check('and draws later ones as it is scrolled through',
+      components.laterIndex > 300 && components.laterRows > 0 && components.laterRows < 200,
+      `first drawn row is #${components.laterIndex}, ${components.laterRows} rows`);
+    check('no upgrade hint appears where the feature is allowed', components.noUpsellWhenAllowed);
+    check('a refusal is a sentence, not a number', components.refusal === 'Only one scan so far.');
 
     await win.webContents.executeJavaScript(`document.getElementById('cleanup-select-none').click()`);
 
@@ -1069,6 +1204,23 @@ app.whenReady().then(async () => {
     check('panel hidden again afterwards', await win.webContents.executeJavaScript(
       `document.getElementById('delete-progress').hidden === true`));
 
+    // Every one of those forty is in the Action Journal, item by item, and the
+    // journal says the Recycle Bin freed none of it.
+    {
+      const { services } = require('../src/main/services');
+      const sessions = await services().journal.sessions();
+      const mine = sessions.find((s) => s.kind === 'recycle' &&
+        s.items.some((item) => probes.includes(item.from)));
+      check('the delete is in the Action Journal, one line per file',
+        mine && mine.complete && probes.every((p) => mine.items.some((item) => item.from === p)),
+        mine ? `${mine.items.length} items, source ${mine.source}` : 'no session');
+      check('and the journal says the bin freed none of it',
+        mine && mine.end.freedOnSource === 0 && mine.end.movedBytes > 0 && mine.freesOnVolume === false,
+        mine ? `moved ${mine.end.movedBytes}, freed ${mine.end.freedOnSource}` : '');
+      check('the journal is inside the sandbox, not the real profile',
+        services().journalDir.startsWith(SANDBOX_USER_DATA), services().journalDir);
+    }
+
     fs.rmSync(probeDir, { recursive: true, force: true });
 
     /* -- automatic cleanup ------------------------------------------------ */
@@ -1528,6 +1680,36 @@ app.whenReady().then(async () => {
     check('and still applies the form change', afterFormSave.age === 120, String(afterFormSave.age));
 
     await click('system');
+
+    /* -- scan history -------------------------------------------------------- */
+    console.log('\nScan history:');
+
+    const history = await win.webContents.executeJavaScript(`
+      (async () => {
+        document.querySelector('.tab[data-tab="settings"]').click();
+        const recent = document.getElementById('snapshot-keep-recent');
+        const monthly = document.getElementById('snapshot-keep-monthly');
+        const shown = { recent: recent.value, monthly: monthly.value };
+        recent.value = '5';
+        recent.dispatchEvent(new Event('change'));
+        await new Promise((r) => setTimeout(r, 1500));
+        const saved = (await window.cleandrive.getSettings()).data.settings.snapshots;
+        recent.value = '5000';
+        recent.dispatchEvent(new Event('change'));
+        await new Promise((r) => setTimeout(r, 1500));
+        const clamped = { stored: (await window.cleandrive.getSettings()).data.settings.snapshots.keepRecent, shown: recent.value };
+        recent.value = '12';
+        recent.dispatchEvent(new Event('change'));
+        await new Promise((r) => setTimeout(r, 1500));
+        return { shown, saved, clamped, detail: document.getElementById('snapshot-detail').textContent };
+      })()
+    `);
+    check('the card shows what is stored', history.shown.recent === '12' && history.shown.monthly === '12',
+      `${history.shown.recent} / ${history.shown.monthly}`);
+    check('a change is saved without touching the other field', history.saved.keepRecent === 5 && history.saved.keepMonthly === 12);
+    check('an impossible number is clamped, and the field shows the clamped one',
+      history.clamped.stored === 100 && history.clamped.shown === '100', `${history.clamped.stored} / ${history.clamped.shown}`);
+    check('and the card says what that adds up to', /\d+/.test(history.detail), history.detail);
 
     /* -- updates ----------------------------------------------------------- */
     console.log('\nUpdates:');

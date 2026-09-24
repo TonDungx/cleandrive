@@ -823,8 +823,14 @@ function syncCells() {
   }
 }
 
+// Beside the button, the sentence every screen's action carries: moving a
+// photograph to the Recycle Bin frees nothing until the bin is emptied.
+const mediaFrees = FreesBadge(false);
+$('media-delete').before(mediaFrees);
+
 function updateSelection() {
   const count = media.selected.size;
+  mediaFrees.hidden = count === 0;
   let bytes = 0;
   let synced = 0;
   for (const file of media.files) {
@@ -922,15 +928,15 @@ function renderDetail(file) {
     : labelFor(ORIGIN_LABEL, file.origin);
 
   const strength = document.createElement('span');
-  strength.className = `detail-strength is-${file.strength}`;
-  strength.textContent = strengthWord(file.strength);
+  strength.className = `detail-strength is-${file.confidence}`;
+  strength.textContent = confidenceWord(file.confidence);
 
   verdict.append(label, strength);
   panel.appendChild(verdict);
 
   const why = document.createElement('ul');
   why.className = 'detail-why';
-  for (const reason of file.why) {
+  for (const reason of file.evidence) {
     const li = document.createElement('li');
     li.textContent = tm(reason);
     why.appendChild(li);
@@ -1014,14 +1020,6 @@ function renderDetail(file) {
   panel.appendChild(actions);
 }
 
-function strengthWord(strength) {
-  switch (strength) {
-    case 'certain': return t('media.strength.certain', 'certain');
-    case 'strong': return t('media.strength.strong', 'strong evidence');
-    case 'likely': return t('media.strength.likely', 'likely');
-    default: return t('media.strength.guess', 'a guess');
-  }
-}
 
 /* ------------------------------------------------------------------ roots */
 
@@ -1098,7 +1096,7 @@ api.onMediaProgress((p) => {
 // Files arrive in batches while the scan is still running, so the grid starts
 // filling immediately rather than after everything has been read.
 api.onMediaBatch((batch) => {
-  media.files.push(...batch);
+  media.files.push(...batch.map(candidateView));
   applyFilters();
 });
 
@@ -1127,7 +1125,7 @@ $('media-scan').addEventListener('click', async () => {
     return;
   }
 
-  media.files = result.files;
+  media.files = result.files.map(candidateView);
   media.displays = result.displays || [];
   media.excluded = result.excluded || [];
   renderExcluded();

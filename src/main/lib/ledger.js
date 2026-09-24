@@ -18,6 +18,20 @@ const { pathKey } = require('./util');
  * An entry is only ever a claim about the past. It is matched against the bin's
  * own metadata before anything is removed -- see recyclebin.js -- so a stale or
  * hand-edited ledger cannot cause a deletion that the bin does not corroborate.
+ *
+ * ## Two modes
+ *
+ * Given a journal (`journal/journal.js`), which is how the app now builds it,
+ * the ledger keeps no file of its own and is a view of the journal: what was
+ * recycled, less what has been purged. Without one it is the file it always
+ * was, which is what the harnesses that predate the journal still exercise.
+ *
+ * The journal also fixes two things the file got wrong. It was rewritten whole
+ * from the process's own copy, so a window open overnight overwrote whatever
+ * the 02:00 run had added. And it stamped a whole batch with the one moment
+ * it was recorded, so for a delete that ran longer than the purge's five-minute
+ * tolerance the bin's own timestamp stopped matching and those items could
+ * never be purged. The journal records each item at the moment it moved.
  */
 
 const SCHEMA_VERSION = 1;
@@ -30,10 +44,21 @@ const MAX_AGE_DAYS = 365;
 
 const DAY = 24 * 60 * 60 * 1000;
 
+/** A migration lock older than this belonged to a process that died. */
+const LOCK_STALE_MS = 10 * 60 * 1000;
+
 class TrashLedger {
-  /** @param {string} filePath */
-  constructor(filePath) {
+  /**
+   * @param {string} filePath  the ledger file -- in journal mode, the old one
+   *   to import once and then leave alone
+   * @param {object} [options]
+   * @param {object} [options.journal]  an ActionJournal. With one, the ledger
+   *   keeps no file of its own: it is a view of the journal's recycle sessions,
+   *   less whatever a purge session has since removed.
+   */
+  constructor(filePath, { journal = null } = {}) {
     this.filePath = path.resolve(filePath);
+    this.journal = journal;
     this.entries = [];
     this.loaded = false;
     this._writeChain = Promise.resolve();
@@ -41,21 +66,132 @@ class TrashLedger {
 
   /** Never throws: a missing or corrupt ledger is an empty ledger. */
   async load() {
-    this.entries = [];
+    if (this.journal) return this._loadFromJournal();
+    this.entries = await this._readFile(this.filePath);
     this.loaded = true;
+    return this.entries;
+  }
 
+  /**
+   * What the journal says is in the Recycle Bin on the app's behalf.
+   *
+   * Every item of every recycle session, minus every item a purge session has
+   * since removed, matched on path and the moment it was recycled. The old
+   * ledger file, if one is still there, is imported first -- once.
+   */
+  async _loadFromJournal() {
+    await this._importLegacy();
+
+    const { lines } = await this.journal.read();
+    const kinds = new Map();
+    for (const line of lines) {
+      if (line.op === 'begin') kinds.set(line.session, { kind: line.kind, runId: line.runId || null });
+    }
+
+    const purged = new Set();
+    const recycled = [];
+    for (const line of lines) {
+      if (line.op !== 'item') continue;
+      const session = kinds.get(line.session);
+      if (!session) continue;
+      if (session.kind === 'purge') {
+        purged.add(entryKey(line.from, Date.parse(line.recycledAt)));
+      } else if (session.kind === 'recycle') {
+        recycled.push({
+          path: path.resolve(line.from),
+          size: Number.isFinite(line.bytes) ? line.bytes : 0,
+          trashedAt: Date.parse(line.t),
+          runId: session.runId,
+        });
+      }
+    }
+
+    const cutoff = Date.now() - MAX_AGE_DAYS * DAY;
+    const seen = new Set();
+    this.entries = [];
+    for (const entry of recycled) {
+      if (!Number.isFinite(entry.trashedAt) || entry.trashedAt < cutoff) continue;
+      const key = entryKey(entry.path, entry.trashedAt);
+      if (purged.has(key) || seen.has(key)) continue;
+      seen.add(key);
+      this.entries.push(entry);
+    }
+    this.loaded = true;
+    return this.entries;
+  }
+
+  /**
+   * Bring the old ledger file into the journal, once.
+   *
+   * The window and the scheduled run can start at the same moment, so one of
+   * them has to win. The claim is an exclusive create of a lock file, which
+   * Windows grants to exactly one caller. Renaming the ledger out of the way
+   * was tried first and does not work: measured here, two concurrent renames of
+   * the same file *both* succeed, because each opens the file and then renames
+   * the handle -- the second rename moves the first one's result.
+   *
+   * The file ends as `.migrated`, kept rather than deleted. A lock left behind
+   * by a process that died half way is broken after ten minutes; if that
+   * process had already written the journal, the second import only repeats
+   * lines the ledger view de-duplicates anyway.
+   */
+  async _importLegacy() {
+    try {
+      await fsp.access(this.filePath);
+    } catch {
+      return 0; // nothing to import -- the common case, and it costs one stat
+    }
+
+    const lock = `${this.filePath}.migrating`;
+    let handle = null;
+    for (let attempt = 0; attempt < 2 && !handle; attempt++) {
+      try {
+        handle = await fsp.open(lock, 'wx');
+      } catch (err) {
+        if (err.code !== 'EEXIST') return 0;
+        const stats = await fsp.stat(lock).catch(() => null);
+        if (!stats || Date.now() - stats.mtimeMs < LOCK_STALE_MS) return 0; // somebody else is importing
+        await fsp.rm(lock, { force: true }).catch(() => {});
+      }
+    }
+    if (!handle) return 0;
+
+    try {
+      // Read under the lock: another process may have finished the import
+      // between the check above and the lock, in which case there is nothing.
+      const entries = await this._readFile(this.filePath, { keepAll: true });
+      if (entries.length > 0) {
+        await this.journal.appendSession(
+          'recycle',
+          entries.map((e) => ({ path: e.path, size: e.size, trashedAt: e.trashedAt })),
+          { source: 'migrated', runId: 'trash-ledger.json' }
+        );
+      }
+      // Only after the journal holds it. If the write above failed, the file
+      // stays where it is and the next launch tries again.
+      await fsp.rename(this.filePath, `${this.filePath}.migrated`).catch(() => {});
+      return entries.length;
+    } finally {
+      await handle.close().catch(() => {});
+      await fsp.rm(lock, { force: true }).catch(() => {});
+    }
+  }
+
+  /** Entries from a ledger file on disk; a missing or corrupt file is none. */
+  async _readFile(filePath, { keepAll = false } = {}) {
+    const out = [];
     let text;
     try {
-      text = await fsp.readFile(this.filePath, 'utf8');
+      text = await fsp.readFile(filePath, 'utf8');
     } catch {
-      return this.entries;
+      return out;
     }
 
     let parsed;
     try {
       parsed = JSON.parse(text);
     } catch {
-      return this.entries;
+      return out;
     }
 
     const list = parsed && Array.isArray(parsed.entries) ? parsed.entries : [];
@@ -63,10 +199,10 @@ class TrashLedger {
 
     for (const raw of list) {
       const entry = coerceEntry(raw);
-      if (entry && entry.trashedAt >= cutoff) this.entries.push(entry);
+      if (entry && (keepAll || entry.trashedAt >= cutoff)) out.push(entry);
     }
 
-    return this.entries;
+    return out;
   }
 
   async ensureLoaded() {
@@ -85,21 +221,34 @@ class TrashLedger {
     const trashedAt = Number.isFinite(meta.trashedAt) ? meta.trashedAt : Date.now();
     const runId = typeof meta.runId === 'string' ? meta.runId : null;
 
-    let added = 0;
+    const added = [];
     for (const item of Array.isArray(items) ? items : [items]) {
       const target = typeof item === 'string' ? { path: item } : item;
       if (!target || typeof target.path !== 'string' || target.path.trim() === '') continue;
-      this.entries.push({
+      added.push({
         path: path.resolve(target.path),
         size: Number.isFinite(target.size) ? target.size : 0,
         trashedAt,
         runId,
       });
-      added += 1;
+    }
+    if (added.length === 0) return 0;
+
+    if (this.journal) {
+      // In journal mode this is a record made after the fact, in one write.
+      // The pipeline journals item by item as it goes and does not come here.
+      await this.journal.appendSession('recycle', added, {
+        source: runId === 'manual' ? 'manual' : 'autoclean',
+        runId,
+        startedAt: trashedAt,
+      });
+      this.entries.push(...added);
+      return added.length;
     }
 
-    if (added > 0) await this.flush();
-    return added;
+    this.entries.push(...added);
+    await this.flush();
+    return added.length;
   }
 
   /**
@@ -129,14 +278,33 @@ class TrashLedger {
     return map;
   }
 
-  /** Drop entries by identity, e.g. after they were purged from the bin. */
-  async forget(entries) {
+  /**
+   * Drop entries by identity, after they were purged from the bin.
+   *
+   * In journal mode nothing is removed from anywhere: a purge session is
+   * appended naming each item, and the next load leaves them out. That is also
+   * the record of the one permanent deletion the app makes, which the old file
+   * never kept.
+   */
+  async forget(entries, { freedBytes = 0 } = {}) {
     if (!entries || entries.length === 0) return 0;
     const doomed = new Set(entries);
     const before = this.entries.length;
+    const leaving = this.entries.filter((e) => doomed.has(e));
     this.entries = this.entries.filter((e) => !doomed.has(e));
     const removed = before - this.entries.length;
-    if (removed > 0) await this.flush();
+    if (removed === 0) return 0;
+
+    if (this.journal) {
+      await this.journal.appendSession(
+        'purge',
+        leaving.map((e) => ({ path: e.path, size: e.size, recycledAt: e.trashedAt })),
+        { source: 'purge', freedOnSource: freedBytes }
+      );
+      return removed;
+    }
+
+    await this.flush();
     return removed;
   }
 
@@ -150,6 +318,11 @@ class TrashLedger {
     this._writeChain = this._writeChain.then(() => writeAtomic(this.filePath, payload)).catch(() => {});
     await this._writeChain;
   }
+}
+
+/** An item in the bin is one path recycled at one moment. */
+function entryKey(filePath, trashedAt) {
+  return `${pathKey(filePath)}|${Math.trunc(trashedAt)}`;
 }
 
 function coerceEntry(raw) {

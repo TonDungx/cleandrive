@@ -15,6 +15,8 @@ const { app } = require('electron');
 
 const { coerceSettings } = require('../src/main/lib/settings');
 const { TrashLedger } = require('../src/main/lib/ledger');
+const { ActionJournal } = require('../src/main/journal/journal');
+const { render } = require('../src/i18n');
 const { runAutoClean } = require('../src/main/lib/autoclean');
 const { findUserBins, listItems, purgeRecorded } = require('../src/main/lib/recyclebin');
 const { diskUsage } = require('../src/main/lib/disk');
@@ -94,17 +96,27 @@ app.whenReady().then(async () => {
   /* ---- 2. the real thing ------------------------------------------------- */
 
   console.log('\n  step 2: real run\n');
-  const ledger = new TrashLedger(ledgerPath);
+  // Built the way the app builds it: the ledger is a view of the journal, and
+  // the run records each file into the journal as it moves.
+  const journal = new ActionJournal(path.join(base, 'journal'));
+  const ledger = new TrashLedger(ledgerPath, { journal });
   await ledger.load();
 
-  const real = await runAutoClean({ settings: settingsFor({ dryRun: false }), ledger, now: Date.now() });
+  const real = await runAutoClean({
+    settings: settingsFor({ dryRun: false }),
+    ledger,
+    journal,
+    source: 'scheduled',
+    now: Date.now(),
+  });
+  await ledger.load();
   check('every file was moved to the Recycle Bin', real.trashed.files === FILES,
     `${real.trashed.files} of ${FILES}`);
   check('the files are gone from where they were',
     (await Promise.all(created.map(exists))).every((e) => e === false));
-  check('the ledger recorded them', ledger.entries.length === FILES, String(ledger.entries.length));
+  check('the journal recorded them, one line each', ledger.entries.length === FILES, String(ledger.entries.length));
   check('the run warns that no space is free yet',
-    real.notes.some((n) => n.includes('no space is free')), real.notes.join(' | '));
+    real.notes.some((n) => render(n).includes('no space is free')), real.notes.map(render).join(' | '));
 
   const midway = await diskUsage(base);
   console.log(`\n  disk after moving to the bin: ${formatBytes(midway.freeBytes)} free`);
@@ -140,8 +152,13 @@ app.whenReady().then(async () => {
   check('both halves of each pair are gone',
     (await Promise.all(mine.flatMap((i) => [exists(i.dataPath), exists(i.metaPath)]))).every((e) => e === false));
 
-  await ledger.forget(purge.purged.map((p) => p.entry));
+  await ledger.forget(purge.purged.map((p) => p.entry), { freedBytes: purge.freedBytes });
+  await ledger.load();
   check('the ledger no longer claims them', ledger.entries.length === 0, String(ledger.entries.length));
+  const purgeSession = (await journal.sessions()).find((s) => s.kind === 'purge');
+  check('and the purge is in the journal, with what it freed',
+    purgeSession && purgeSession.items.length === FILES && purgeSession.end.freedOnSource === purge.freedBytes,
+    purgeSession ? `${purgeSession.items.length} items, ${formatBytes(purgeSession.end.freedOnSource)}` : 'none');
 
   // Windows does not always reflect a deletion in the volume's free-space
   // counter the instant the handle closes.

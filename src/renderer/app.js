@@ -195,10 +195,30 @@ $('run-scan').addEventListener('click', async () => {
     return;
   }
 
-  state.scan = result;
+  state.scan = hydrateScan(result);
   state.selectedLarge.clear();
-  renderScan(result);
+  renderScan(state.scan);
 });
+
+/**
+ * Turn the scan's reply into the lists the two screens draw.
+ *
+ * The reply is a summary plus the candidates; the summary names its rows by id
+ * -- `largest` and each cleanup group's `ids` -- so a file that is both large
+ * and disposable is one record in both lists, with one verdict.
+ */
+function hydrateScan(result) {
+  const byId = indexCandidates(result.candidates);
+  const { candidates, largest, ...rest } = result;
+  return {
+    ...rest,
+    largestFiles: viewsOf(largest, byId),
+    cleanup: {
+      ...result.cleanup,
+      groups: result.cleanup.groups.map(({ ids, ...group }) => ({ ...group, files: viewsOf(ids, byId) })),
+    },
+  };
+}
 
 $('cancel-scan').addEventListener('click', () => api.cancelScan());
 
@@ -273,96 +293,78 @@ function renderBars(list, items, max, labelFn) {
   }
 }
 
-function renderLargest(files) {
-  const list = $('largest-files');
-  list.replaceChildren();
+/*
+ * Every list screen's rows are a CandidateList (components.js): the row shape,
+ * shift-click ranges, arrow keys and the "why" behind each verdict live there
+ * once. Each row still leads with View, then the two that leave -- these rows
+ * exist so somebody can decide whether a file may go, and viewing is how.
+ */
 
-  for (const file of files.slice(0, 50)) {
-    const badge =
-      file.verdict === 'safe' || file.verdict === 'review'
-        ? makeBadge(file.verdict, verdictWord(file.verdict), tm(file.reason))
-        : null;
+const lists = { largest: null, cleanup: [], dupes: [] };
 
-    list.appendChild(
-      fileRow(
-        file,
-        state.selectedLarge,
-        () => {
-          $('delete-large').disabled = state.selectedLarge.size === 0;
-        },
-        {
-          meta: file.reason ? `${timeLabel(file)} · ${tm(file.reason)}` : timeLabel(file),
-          badge,
-        }
-      )
-    );
+const bars = {
+  largest: ActionBar({
+    root: $('large-actionbar'),
+    readout: $('large-selection'),
+    buttons: { recycle: $('delete-large') },
+    selected: () => (state.scan ? state.scan.largestFiles.filter((f) => state.selectedLarge.has(f.path)) : []),
+  }),
+  cleanup: ActionBar({
+    root: $('cleanup-actionbar'),
+    readout: $('cleanup-selection'),
+    buttons: { recycle: $('delete-cleanup') },
+    selected: () => selectedIn(state.cleanup && state.cleanup.groups, state.selectedCleanup),
+  }),
+  dupes: ActionBar({
+    root: $('dupes-actionbar'),
+    readout: $('selection-status'),
+    buttons: { recycle: $('delete-dupes') },
+    selected: () => selectedIn(state.dupes && state.dupes.groups, state.selectedDupes),
+  }),
+};
+
+/** The selected rows of a grouped screen, each once. */
+function selectedIn(groups, selection) {
+  const out = [];
+  const seen = new Set();
+  for (const group of groups || []) {
+    for (const file of group.files) {
+      if (selection.has(file.path) && !seen.has(file.path)) {
+        seen.add(file.path);
+        out.push(file);
+      }
+    }
   }
-  $('delete-large').disabled = true;
+  return out;
 }
 
 /**
- * One selectable file row: checkbox, size, path, a reason/age line, an optional
- * verdict badge, and reveal/open actions.
+ * The pill on a row that states a conclusion, and opens the reasons for it.
+ *
+ * `verdict · confidence` where the row carries its own verdict; the confidence
+ * alone where the group it sits in has already said the verdict.
  */
-function fileRow(file, selection, onToggle, { meta = null, badge = null } = {}) {
-  const li = document.createElement('li');
-  li.className = 'file-row';
-  li.dataset.path = file.path;
+function evidencePill(file, { verdict = true, className = null, text = null } = {}) {
+  const el = document.createElement('button');
+  el.type = 'button';
+  el.className = className || `badge badge-${verdict ? file.verdict : 'confidence'} badge-button`;
+  el.textContent = text || (verdict ? `${verdictWord(file.verdict)} · ${confidenceWord(file.confidence)}` : confidenceWord(file.confidence));
+  el.title = evidenceText(file);
+  el.setAttribute('aria-label', t('evidence.open', 'Why: {reasons}', { reasons: el.title }));
+  return el;
+}
 
-  const check = document.createElement('input');
-  check.type = 'checkbox';
-  check.checked = selection.has(file.path);
-  check.addEventListener('change', () => {
-    if (check.checked) selection.add(file.path);
-    else selection.delete(file.path);
-    onToggle();
+function renderLargest(files) {
+  lists.largest = CandidateList($('largest-files'), {
+    rows: files.slice(0, 50),
+    selection: state.selectedLarge,
+    onChange: () => bars.largest.update(),
+    meta: (file) => (file.verdict !== 'keep' && file.reason ? `${timeLabel(file)} · ${tm(file.reason)}` : timeLabel(file)),
+    // Only a row the app has an opinion about carries a pill. A file no rule
+    // matched says nothing, rather than wearing a "keep" on every row.
+    badge: (file) => (file.verdict === 'safe' || file.verdict === 'review' ? evidencePill(file) : null),
   });
-
-  const size = document.createElement('span');
-  size.className = 'file-size';
-  size.textContent = formatBytes(file.size);
-
-  const main = document.createElement('span');
-  main.className = 'file-main';
-
-  const pathEl = document.createElement('span');
-  pathEl.className = 'file-path';
-  pathEl.textContent = elide(file.path, 90);
-  pathEl.title = file.path;
-  main.appendChild(pathEl);
-
-  const metaText = meta === null ? timeLabel(file) : meta;
-  if (metaText) {
-    const metaEl = document.createElement('span');
-    metaEl.className = 'file-meta';
-    metaEl.textContent = metaText;
-    metaEl.title = metaText;
-    main.appendChild(metaEl);
-  }
-
-  /*
-   * View first, then the two that leave.
-   *
-   * These rows exist so somebody can decide whether a file may go, and until
-   * now the only way to find out what was in one was Open -- which hands it to
-   * Word or Acrobat and puts the decision two applications away from the list
-   * it was being made in. Viewing is the common act, so it leads and it is the
-   * one drawn as a button; revealing and opening are the exits and stay quiet.
-   */
-  const actions = document.createElement('span');
-  actions.className = 'file-actions';
-  actions.append(
-    linkButton(t('app.view', 'View'), () => openViewer(file.path), 'is-lead'),
-    linkButton(t('app.reveal', 'Reveal'), () => api.reveal(file.path)),
-    linkButton(t('app.open', 'Open'), async () =>
-      unwrap(await api.open(file.path), t('app.open', 'Open'))
-    )
-  );
-
-  li.append(check, size, main);
-  if (badge) li.appendChild(badge);
-  li.appendChild(actions);
-  return li;
+  bars.largest.update();
 }
 
 /**
@@ -397,9 +399,16 @@ function linkButton(label, handler, extra = '') {
 }
 
 $('delete-large').addEventListener('click', async () => {
-  await deleteSelected([...state.selectedLarge], () => {
+  await deleteSelected([...state.selectedLarge], (moved) => {
+    // What moved leaves the list, as it does on every other screen. It used to
+    // stay, ticked off, looking as though it was still on the disk.
+    const gone = new Set(moved.map((m) => m.path));
     state.selectedLarge.clear();
-    $('delete-large').disabled = true;
+    if (state.scan) {
+      state.scan.largestFiles = state.scan.largestFiles.filter((f) => !gone.has(f.path));
+      renderLargest(state.scan.largestFiles);
+    }
+    bars.largest.update();
   });
 });
 
@@ -446,6 +455,7 @@ function renderCleanup(cleanup, accessTimes) {
 
   const container = $('cleanup-groups');
   container.replaceChildren();
+  lists.cleanup = [];
 
   for (const group of cleanup.groups) {
     container.appendChild(renderCleanupGroup(group));
@@ -509,13 +519,16 @@ function renderCleanupGroup(group) {
 
   const list = document.createElement('ul');
   list.className = 'files';
-  for (const file of group.files) {
-    list.appendChild(
-      fileRow(file, state.selectedCleanup, updateCleanupSelection, {
-        meta: `${timeLabel(file)} · ${tm(file.reason)}`,
-      })
-    );
-  }
+  lists.cleanup.push(
+    CandidateList(list, {
+      rows: group.files,
+      selection: state.selectedCleanup,
+      onChange: updateCleanupSelection,
+      meta: (file) => `${timeLabel(file)} · ${tm(file.reason)}`,
+      // The group head already says the verdict; each row says how sure.
+      badge: (file) => evidencePill(file, { verdict: false }),
+    })
+  );
   body.appendChild(list);
 
   if (group.truncated) {
@@ -567,26 +580,11 @@ function renderProtected(entries) {
 }
 
 function syncCleanupCheckboxes() {
-  for (const row of $('cleanup-groups').querySelectorAll('.file-row')) {
-    const box = row.querySelector('input[type="checkbox"]');
-    if (box) box.checked = state.selectedCleanup.has(row.dataset.path);
-  }
+  for (const list of lists.cleanup) list.sync();
 }
 
 function updateCleanupSelection() {
-  const count = state.selectedCleanup.size;
-  let bytes = 0;
-  if (state.cleanup) {
-    for (const group of state.cleanup.groups) {
-      for (const file of group.files) {
-        if (state.selectedCleanup.has(file.path)) bytes += file.size;
-      }
-    }
-  }
-  $('cleanup-selection').textContent = count
-    ? t('app.selectedCount', '{n} selected · {size}', { n: formatCount(count), size: formatBytes(bytes) })
-    : t('app.nothingSelected', 'Nothing selected');
-  $('delete-cleanup').disabled = count === 0;
+  bars.cleanup.update();
 }
 
 $('select-safe').addEventListener('click', () => {
@@ -673,9 +671,27 @@ $('run-dupes').addEventListener('click', async () => {
     return;
   }
 
-  state.dupes = result;
-  renderDupes(result);
+  state.dupes = hydrateDupes(result);
+  renderDupes(state.dupes);
 });
+
+/** The duplicate groups, each holding the candidates it names. */
+function hydrateDupes(result) {
+  const byId = indexCandidates(result.candidates);
+  const { candidates, ...rest } = result;
+  return {
+    ...rest,
+    groups: result.groups.map(({ ids, ...group }) => ({
+      ...group,
+      files: viewsOf(ids, byId).map((file) => ({
+        ...file,
+        keeper: file.keeper,
+        protected: file.component,
+        protectionReason: file.component ? file.reason : null,
+      })),
+    })),
+  };
+}
 
 $('cancel-dupes').addEventListener('click', () => api.cancelDuplicates());
 
@@ -712,6 +728,7 @@ function renderDupes(result) {
 
   const container = $('dupe-groups');
   container.replaceChildren();
+  lists.dupes = [];
 
   if (result.totalGroups === 0) {
     $('dupes-toolbar').hidden = true;
@@ -749,24 +766,35 @@ function renderGroup(group) {
   const list = document.createElement('ul');
   list.className = 'files';
 
-  for (const file of group.files) {
-    let badge = null;
-    if (file.protected) {
-      badge = makeBadge('protected', t('cleanup.inUse', 'in use'), tm(file.protectionReason));
-    } else if (file.keeper) {
-      badge = document.createElement('span');
-      badge.className = 'keeper-tag';
-      badge.textContent = t('dupes.oldest', 'oldest');
-      badge.title = t('dupes.oldestHint', 'Oldest copy — suggested keeper');
-    }
-
-    list.appendChild(
-      fileRow(file, state.selectedDupes, updateSelectionStatus, {
-        badge,
-        meta: file.protected ? `${timeLabel(file)} · ${file.protectionReason}` : null,
-      })
-    );
-  }
+  lists.dupes.push(
+    CandidateList(list, {
+      rows: group.files,
+      selection: state.selectedDupes,
+      onChange: updateSelectionStatus,
+      meta: (file) => (file.protected ? `${timeLabel(file)} · ${tm(file.protectionReason)}` : timeLabel(file)),
+      // Every copy says why it is where it is: the oldest, one an installed
+      // program uses, or simply identical -- which is the one thing on this
+      // screen the app is certain of.
+      badge: (file) => {
+        if (file.protected) {
+          return evidencePill(file, {
+            className: 'badge badge-protected badge-button',
+            text: `${t('cleanup.inUse', 'in use')} · ${confidenceWord(file.confidence)}`,
+          });
+        }
+        if (file.keeper) {
+          return evidencePill(file, {
+            className: 'keeper-tag badge-button',
+            text: `${t('dupes.oldest', 'oldest')} · ${confidenceWord(file.confidence)}`,
+          });
+        }
+        return evidencePill(file, {
+          className: 'badge badge-confidence badge-button',
+          text: `${t('dupes.identical', 'identical')} · ${confidenceWord(file.confidence)}`,
+        });
+      },
+    })
+  );
 
   body.appendChild(list);
   section.append(head, body);
@@ -774,23 +802,7 @@ function renderGroup(group) {
 }
 
 function updateSelectionStatus() {
-  const count = state.selectedDupes.size;
-  const bytes = sumSelected(state.selectedDupes);
-  $('selection-status').textContent = count
-    ? t('app.selectedCount', '{n} selected · {size}', { n: formatCount(count), size: formatBytes(bytes) })
-    : t('app.nothingSelected', 'Nothing selected');
-  $('delete-dupes').disabled = count === 0;
-}
-
-function sumSelected(selection) {
-  if (!state.dupes) return 0;
-  let total = 0;
-  for (const group of state.dupes.groups) {
-    for (const file of group.files) {
-      if (selection.has(file.path)) total += file.size;
-    }
-  }
-  return total;
+  bars.dupes.update();
 }
 
 $('select-extra').addEventListener('click', () => {
@@ -830,10 +842,7 @@ $('select-none').addEventListener('click', () => {
 });
 
 function syncCheckboxes() {
-  for (const row of $('dupe-groups').querySelectorAll('.file-row')) {
-    const box = row.querySelector('input[type="checkbox"]');
-    if (box) box.checked = state.selectedDupes.has(row.dataset.path);
-  }
+  for (const list of lists.dupes) list.sync();
 }
 
 $('delete-dupes').addEventListener('click', async () => {
@@ -894,6 +903,7 @@ const progressPanel = {
     $('delete-progress').hidden = false;
 
     // Nothing else may start a delete while one is running.
+    setActionRunning(true);
     for (const id of DELETE_BUTTONS) $(id).disabled = true;
   },
 
@@ -931,8 +941,14 @@ const progressPanel = {
     }
 
     $('dp-title').textContent = t('delete.title', 'Moving to Recycle Bin');
-    $('dp-count').textContent =
-      `${formatCount(p.done)} of ${formatCount(p.total)} · ${formatBytes(p.freedBytes)} of ${formatBytes(p.totalBytes)}`;
+    // `freedBytes` in the progress frames is what has *moved*: nothing is
+    // freed until the bin is emptied, and the words here say moved.
+    $('dp-count').textContent = t('delete.progress', '{done} of {total} · {moved} of {size}', {
+      done: formatCount(p.done),
+      total: formatCount(p.total),
+      moved: formatBytes(p.freedBytes),
+      size: formatBytes(p.totalBytes),
+    });
     $('dp-rate').textContent =
       p.ratePerSec > 0 ? t('delete.rate', '{n} files/s', { n: Math.round(p.ratePerSec) }) : '';
     $('dp-eta').textContent = p.etaMs != null ? formatDuration(p.etaMs) : '';
@@ -941,14 +957,13 @@ const progressPanel = {
 
   hide() {
     $('delete-progress').hidden = true;
+    setActionRunning(false);
     for (const id of DELETE_BUTTONS) $(id).disabled = true; // re-enabled by selection state
-    updateSelectionStatus();
-    updateCleanupSelection();
+    for (const bar of Object.values(bars)) bar.update();
     // `media.js` loads after this file, so its updater may not exist yet -- a
     // delete cannot have run before then, but guarding costs nothing and the
     // alternative is a load-order dependency nobody would expect.
     if (typeof updateSelection === 'function') updateSelection();
-    $('delete-large').disabled = state.selectedLarge.size === 0;
   },
 };
 
@@ -989,12 +1004,12 @@ async function deleteSelected(paths, onDone, options = {}) {
     if (moved > 0) {
       toast(
         t(
-          'delete.stopped',
-          'Stopped. {n} {items} already moved to the Recycle Bin · {freed} freed · {left} left untouched.',
+          'delete.stoppedToBin',
+          'Stopped. {n} {items} ({size}) already in the Recycle Bin · {left} left untouched.',
           {
             n: formatCount(moved),
             items: word(moved, 'app.item', 'item', 'items'),
-            freed: formatBytes(result.freedBytes),
+            size: formatBytes(result.movedBytes),
             left: formatCount(result.remaining || 0),
           }
         )
@@ -1022,12 +1037,15 @@ async function deleteSelected(paths, onDone, options = {}) {
       skipped.push(t('delete.otherSkipped', '{n} skipped', { n: formatCount(otherFailures) }));
     }
 
+    // The receipt says moved, and says what that means. "2.1 GB freed" after a
+    // move to the Recycle Bin was the most misleading sentence the app could
+    // print, and it printed it after every delete.
     toast(
-      t('delete.moved', 'Moved {n} {items} to the Recycle Bin{took} · {freed} freed', {
+      t('delete.movedToBin', 'Moved {n} {items} ({size}) to the Recycle Bin{took} — not freed until the bin is emptied', {
         n: formatCount(moved),
         items: word(moved, 'app.item', 'item', 'items'),
         took,
-        freed: formatBytes(result.freedBytes),
+        size: formatBytes(result.movedBytes),
       }) + (skipped.length ? ` · ${skipped.join(', ')}` : '')
     );
     onDone(result.moved);

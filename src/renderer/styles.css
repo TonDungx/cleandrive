@@ -1605,6 +1605,130 @@ main {
 }
 
 /* ==========================================================================
+   shared components -- components.js
+   ========================================================================== */
+
+/*
+ * The pill on a row is where its reasons open. It is a button, so it is drawn
+ * as one only by the cursor and the focus ring: a verdict badge that suddenly
+ * looked like a toolbar button would stop reading as a verdict.
+ */
+.badge-button {
+  font: inherit;
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: normal;
+  cursor: pointer;
+}
+
+/* The keeper tag had no border of its own, so as a <button> it picked up the
+   browser's default one. */
+.keeper-tag.badge-button {
+  border: 1px solid transparent;
+}
+
+.badge-button:focus-visible {
+  outline: 2px solid var(--accent-ring);
+  outline-offset: 1px;
+}
+
+/* How sure, where the verdict is already said. No colour of its own: green,
+   amber and red mean verdicts in this app, and nothing else borrows them. */
+.badge-confidence {
+  background: var(--surface-2);
+  border-color: var(--border);
+  color: var(--text-2);
+}
+
+.evidence-row {
+  list-style: none;
+  margin: 0 -10px;
+  padding: 0 10px 10px 108px;
+}
+
+.evidence-panel {
+  padding: 10px 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.evidence-head {
+  margin: 0 0 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+.evidence {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 11.5px;
+  color: var(--text);
+}
+
+.evidence li + li {
+  margin-top: 3px;
+}
+
+/* A row being moved through with the keyboard shows where it is. */
+.file-row:focus-visible {
+  outline: 2px solid var(--accent-ring);
+  outline-offset: -2px;
+}
+
+.file-spacer {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* Beside every action: whether it gives the space back. Muted, never red --
+   it is a fact about the action, not a warning about the files. */
+.frees-badge {
+  flex: 0 0 auto;
+  font-size: 11px;
+  color: var(--text-3);
+  white-space: nowrap;
+}
+
+.upgrade-hint {
+  margin: 8px 0 0;
+  font-size: 11.5px;
+  color: var(--text-3);
+}
+
+.refusal-note {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+@media (max-width: 760px) {
+  .evidence-row { padding-left: 10px; }
+}
+
+/*
+ * Where the bar cannot fit its sentence and its button on one line, the
+ * sentence about freeing goes underneath rather than off the edge. It was
+ * measured going off the edge at 700px, taking the delete button with it.
+ */
+@media (max-width: 1000px) {
+  .actionbar:has(.frees-badge:not([hidden])) {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    row-gap: 4px;
+    border-radius: var(--radius);
+  }
+
+  .actionbar .frees-badge {
+    order: 10;
+    flex-basis: 100%;
+    text-align: right;
+  }
+}
+
+/* ==========================================================================
    delete progress panel
    ========================================================================== */
 
@@ -1715,6 +1839,33 @@ main {
 
 .toast.is-error {
   border-left-color: var(--danger);
+}
+
+/*
+ * Above the action bar, never over it. Every list screen floats one at the
+ * bottom now, and a receipt sitting on top of the button it is a receipt for
+ * -- or on the next one somebody reaches for -- is in the one place it must
+ * not be.
+ */
+body:has(.panel.is-active .actionbar:not([hidden])) .toast {
+  bottom: 76px;
+}
+
+/* Where the bar wraps onto two lines (see .actionbar .frees-badge), it is a
+   line taller, and the receipt moves up with it. */
+@media (max-width: 1000px) {
+  body:has(.panel.is-active .actionbar:not([hidden])) .toast {
+    bottom: 100px;
+  }
+}
+
+@media (max-width: 620px) {
+  body:has(.panel.is-active .actionbar:not([hidden])) .toast {
+    bottom: 124px;
+    left: 12px;
+    right: 12px;
+    max-width: none;
+  }
 }
 
 /* ==========================================================================

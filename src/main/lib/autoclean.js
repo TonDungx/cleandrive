@@ -10,6 +10,8 @@ const { planTrash, executeTrash } = require('./trash');
 const { fullestVolume } = require('./disk');
 const { findUserBins, purgeRecorded } = require('./recyclebin');
 const { CancelToken, pathKey, isUndeletablePath, IS_WIN } = require('./util');
+const { isAllowedUnattended } = require('../automatic/allowed-categories');
+const { execute } = require('../actions/execute');
 const { message: m } = require('../../i18n');
 
 /**
@@ -138,6 +140,14 @@ function selectFiles(cleanup, settings, now = Date.now()) {
     // in the morning, so it is now checked where the deleting happens.
     const known = CATEGORIES[group.category];
     if (!known || known.verdict !== 'safe') {
+      skipped.category += group.count || 0;
+      continue;
+    }
+
+    // And against the hard whitelist, which no analyzer and no settings file
+    // can extend. A category the advisor one day calls safe is still not
+    // something that runs at 2am until it is added there by hand.
+    if (!isAllowedUnattended(`cleanup.${group.category}`)) {
       skipped.category += group.count || 0;
       continue;
     }
@@ -337,23 +347,45 @@ async function runAutoClean(options) {
 
   onStage({ stage: 'deleting', total: unique.length });
 
-  const planned = await deps.planTrash(unique.map((f) => f.path), { confirm: false }, { token });
-  if (planned.plan.length === 0) {
-    run.trashed.failed = planned.failed.length;
+  // Through the same pipeline as a delete from any screen: the same vetting,
+  // the same probe, the same record. The only thing this caller leaves out is
+  // the dialog, because at 02:00 there is nobody to show it to -- which is why
+  // a schedule starts in report-only mode.
+  const executed = await execute(
+    { kind: 'recycle', items: unique.map((f) => f.path) },
+    {
+      token,
+      journal: options.journal,
+      source: options.source || 'autoclean',
+      runId: run.runId,
+      deps: {
+        planTrash: deps.planTrash,
+        executeTrash: deps.executeTrash,
+        shell: options.deps && options.deps.shell,
+      },
+    }
+  );
+
+  if (executed.moved.length === 0 && !executed.cancelled && executed.failed.length > 0 &&
+      executed.description && executed.description.count === 0) {
+    run.trashed.failed = executed.failed.length;
     return finish('ok', m('run.allRefused', 'Every candidate was refused by the delete guards'));
   }
 
-  const executed = await deps.executeTrash(
-    planned.plan,
-    options.deps && options.deps.shell ? { shell: options.deps.shell } : {},
-    { token }
-  );
-
   run.trashed.files = executed.moved.length;
-  run.trashed.bytes = executed.freedBytes;
-  run.trashed.failed = planned.failed.length + executed.failed.length;
+  run.trashed.bytes = executed.movedBytes;
+  run.trashed.failed = executed.failed.length;
+  if (executed.recordError) {
+    run.notes.push(
+      m('run.note.recordFailed', 'Stopped early: the record of what was moved could not be written ({error})', {
+        error: executed.recordError,
+      })
+    );
+  }
 
-  if (options.ledger && executed.moved.length > 0) {
+  // A caller with a journal has had every item recorded as it moved. One
+  // without -- the harnesses -- still gets the old ledger written.
+  if (!options.journal && options.ledger && executed.moved.length > 0) {
     await options.ledger.record(executed.moved, { runId: run.runId });
   }
 
@@ -376,7 +408,7 @@ async function runAutoClean(options) {
         run.purged.files = purge.purged.length;
         run.purged.bytes = purge.freedBytes;
         if (purge.purged.length > 0) {
-          await options.ledger.forget(purge.purged.map((p) => p.entry));
+          await options.ledger.forget(purge.purged.map((p) => p.entry), { freedBytes: purge.freedBytes });
         }
         if (purge.failed.length > 0) {
           run.notes.push(

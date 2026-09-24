@@ -1,5 +1,6 @@
 'use strict';
 
+const crypto = require('node:crypto');
 const fs = require('node:fs');
 const fsp = fs.promises;
 const path = require('node:path');
@@ -13,6 +14,8 @@ const {
   accessTimesAreTracked,
   isProgramInstallPath,
   isRoamingAppData,
+  SYSTEM_DIR_NAMES,
+  NOISE_DIR_NAMES,
 } = require('./util');
 const {
   Advisor,
@@ -36,6 +39,14 @@ const DEFAULTS = {
   // files -- capped at 100 it would free almost nothing.
   keepPerCategory: 100,
   progressMs: 120,
+  // The per-folder tree a snapshot is made of. Off unless asked for: the
+  // unattended cleanup scans the same way and has no use for it.
+  collectTree: false,
+  // Files at least this big are named in the tree, up to this many per folder.
+  // Everything else is only counted, so a snapshot of a home folder stays a
+  // few hundred kilobytes rather than a list of every file in it.
+  treeBigFileBytes: 10 * 1024 * 1024,
+  treeBigPerDir: 10,
 };
 
 // Backstop against reparse-point loops when maxDepth is unlimited. A real
@@ -270,6 +281,12 @@ async function scan(rootPath, options = {}, handlers = {}) {
   let largest = [];
   const keep = opts.topFilesKept;
 
+  // dir -> { bytes, files, big } -- what each folder holds directly. Totals
+  // for a folder and everything under it are sums over this, so they are not
+  // stored twice.
+  const tree = opts.collectTree ? new Map() : null;
+  let excluded = 0;
+
   // All ages in one scan are measured against a single instant, so two files
   // written a millisecond apart cannot land on different sides of a threshold.
   const advisor = new Advisor({ now: started, keepPerCategory: opts.keepPerCategory });
@@ -315,6 +332,22 @@ async function scan(rootPath, options = {}, handlers = {}) {
       types.set(ext, { size, count: 1 });
     }
 
+    if (tree) {
+      const dir = path.dirname(full);
+      let row = tree.get(dir);
+      if (!row) {
+        row = { bytes: 0, files: 0, big: null };
+        tree.set(dir, row);
+      }
+      row.bytes += size;
+      row.files++;
+      if (size >= opts.treeBigFileBytes) {
+        if (!row.big) row.big = [];
+        row.big.push([path.basename(full), size, stats.mtimeMs]);
+        if (row.big.length > opts.treeBigPerDir * 4) trimBig(row, opts.treeBigPerDir);
+      }
+    }
+
     const record = {
       path: full,
       name: path.basename(full),
@@ -333,6 +366,8 @@ async function scan(rootPath, options = {}, handlers = {}) {
       atimeMs: stats.atimeMs,
       verdict: verdict ? verdict.verdict : 'keep',
       reason: verdict ? verdict.reason : null,
+      category: verdict ? verdict.category : null,
+      source: verdict ? verdict.source : null,
     });
     if (largest.length >= keep * 4) trimLargest();
 
@@ -340,7 +375,10 @@ async function scan(rootPath, options = {}, handlers = {}) {
   };
 
   const onSkip = (full, reason) => {
-    if (reason.kind === 'system') advisor.addProtected(full, reason.reason);
+    if (reason.kind === 'system') {
+      excluded++;
+      advisor.addProtected(full, reason.reason);
+    }
   };
 
   const onBlocked = (full, reason) => advisor.addAppFolder(full, reason);
@@ -394,7 +432,54 @@ async function scan(rootPath, options = {}, handlers = {}) {
     errorCount: errors.length,
     cancelled,
     durationMs: Date.now() - started,
+    // How many system locations were refused, and a fingerprint of the rules
+    // that refused them -- two snapshots are only comparable if both match.
+    excluded,
+    rules: rulesFingerprint(opts),
+    ...(tree
+      ? { tree: treeRows(root, tree, opts.treeBigPerDir), bigFileBytes: opts.treeBigFileBytes, bigPerDir: opts.treeBigPerDir }
+      : {}),
   };
+}
+
+function trimBig(row, keep) {
+  row.big.sort((a, b) => b[1] - a[1]);
+  row.big.length = Math.min(row.big.length, keep);
+}
+
+/**
+ * The tree as a snapshot stores it: one row per folder that holds files,
+ * `[relativePath, bytes, files, [[name, size, mtimeMs], …]]`, largest first.
+ */
+function treeRows(root, tree, keep) {
+  const rows = [];
+  for (const [dir, row] of tree) {
+    if (row.big) trimBig(row, keep);
+    const rel = path.relative(root, dir);
+    rows.push([rel, row.bytes, row.files, row.big || []]);
+  }
+  rows.sort((a, b) => b[1] - a[1]);
+  return rows;
+}
+
+/**
+ * What the walk was told to skip, as a short hash.
+ *
+ * A scan that skipped hidden folders and one that did not measure different
+ * things, and so do two versions of the app with different lists of noise
+ * folders. A snapshot carries this so a comparison between two such scans can
+ * refuse itself instead of reporting the difference in rules as growth.
+ */
+function rulesFingerprint(opts) {
+  const basis = JSON.stringify({
+    followSymlinks: Boolean(opts.followSymlinks),
+    ignoreHidden: Boolean(opts.ignoreHidden),
+    excludeSystem: Boolean(opts.excludeSystem),
+    maxDepth: Number.isFinite(opts.maxDepth) ? opts.maxDepth : 'none',
+    system: [...SYSTEM_DIR_NAMES].sort(),
+    noise: [...NOISE_DIR_NAMES].sort(),
+  });
+  return crypto.createHash('sha1').update(basis).digest('hex').slice(0, 12);
 }
 
 /**

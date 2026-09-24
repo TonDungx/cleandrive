@@ -5,3 +5,4 @@ out/
 .cache/
 build/
 release/
+src/main/build-info.json

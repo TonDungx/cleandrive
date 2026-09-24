@@ -3,11 +3,8 @@
 const path = require('node:path');
 const { ipcMain, dialog, shell, app, BrowserWindow, nativeTheme, screen } = require('electron');
 
-const { scan } = require('./lib/scanner');
-const { findDuplicates } = require('./lib/duplicate');
-const { scanMedia } = require('./lib/media/scan');
-const { classifyOrigin } = require('./lib/media/origin');
-const { describeNature } = require('./lib/media/nature');
+const analyzers = require('./analyzers');
+const manifest = require('./ipc-manifest');
 const mediaRoots = require('./lib/media/roots');
 const cloud = require('./lib/media/cloud');
 const thumbs = require('./lib/media/thumbs');
@@ -15,7 +12,10 @@ const perceptual = require('./lib/media/perceptual');
 const { MediaCache } = require('./lib/media/cache');
 const { preview } = require('./lib/preview');
 const previewServe = require('./lib/preview/serve');
-const { planTrash, executeTrash, ESTIMATED_FILES_PER_SEC } = require('./lib/trash');
+const { ESTIMATED_FILES_PER_SEC } = require('./lib/trash');
+const { execute } = require('./actions/execute');
+const licenseState = require('./license/state');
+const entitlements = require('./license/entitlements');
 const { CancelToken, formatBytes, formatDuration } = require('./lib/util');
 const { services } = require('./services');
 const scheduler = require('./lib/scheduler');
@@ -77,61 +77,20 @@ function displayResolutions() {
   }
 }
 
+/** How many media candidates travel in one `media:batch` message. */
+const MEDIA_BATCH = 256;
+
 /**
- * A probe record, classified and cut down to what the window draws.
- *
- * The full record carries fields nothing on screen reads -- block counts, moov
- * hop counts, EXIF exposure times -- and fifty thousand of them crossing the
- * IPC boundary is a payload worth trimming. Everything kept here is either
- * displayed or filtered on.
+ * Keep the size and time a thumbnail request will need to find its cache
+ * entry. The classification itself now lives in the media analyzer.
  */
-function forDisplay(record, context) {
-  const origin = classifyOrigin(record, context);
-  const nature = describeNature(record, context);
-
-  // The year a photograph belongs to, in the order the user would mean it:
-  // when it was taken, else when it was recorded, else when the file was last
-  // written. A file copied off a camera has today's mtime and a capture date
-  // from years ago, and filing it under this year would be wrong.
-  const at = record.takenAt || record.recordedAt || record.mtimeMs;
-  mediaStats.set(record.path, {
-    path: record.path,
-    size: record.size,
-    mtimeMs: record.mtimeMs,
-    aspect: record.aspect || 0,
+function rememberMedia(candidate) {
+  mediaStats.set(candidate.path, {
+    path: candidate.path,
+    size: candidate.bytes,
+    mtimeMs: candidate.meta.mtimeMs,
+    aspect: candidate.meta.aspect || 0,
   });
-
-  return {
-    path: record.path,
-    name: record.name,
-    ext: record.ext,
-    size: record.size,
-    kind: record.kind,
-    format: record.format || null,
-    width: record.width || 0,
-    height: record.height || 0,
-    megapixels: record.megapixels || 0,
-    bytesPerPixel: record.bytesPerPixel || 0,
-    aspect: record.aspect || 0,
-    camera: record.camera || null,
-    lens: record.lens || null,
-    software: record.software || null,
-    durationSec: record.durationSec ?? null,
-    bitrateKbps: record.bitrateKbps ?? null,
-    title: record.title || null,
-    cloudService: record.cloudService || null,
-    dehydrated: Boolean(record.dehydrated),
-    unread: record.unread || null,
-    takenAt: record.takenAt || null,
-    mtimeMs: record.mtimeMs,
-    at,
-    year: at ? new Date(at).getFullYear() : null,
-    origin: origin.origin,
-    app: origin.app,
-    strength: origin.strength,
-    why: origin.evidence,
-    traits: nature.traits,
-  };
 }
 
 /**
@@ -146,6 +105,19 @@ let lastReconciliation = null;
 /** Called by main.js after the launch reconciliation. */
 function noteReconciliation(result) {
   lastReconciliation = result && (result.changes.length > 0 || result.problems.length > 0) ? result : null;
+}
+
+/**
+ * Register a handler, but only for a channel the manifest lists.
+ *
+ * The manifest is the written-down answer to "what can the window ask for";
+ * registering through here is what keeps that answer true.
+ */
+const registered = new Set();
+function handle(channel, fn) {
+  manifest.assertInvokable(channel);
+  registered.add(channel);
+  ipcMain.handle(channel, fn);
 }
 
 /** Uniform envelope so the renderer never has to deal with raw exceptions. */
@@ -187,7 +159,7 @@ function register() {
 
   /* ---- folder picker --------------------------------------------------- */
 
-  ipcMain.handle('dialog:pickFolder', (event) =>
+  handle('dialog:pickFolder', (event) =>
     guard(async () => {
       const win = BrowserWindow.fromWebContents(event.sender);
       const result = await dialog.showOpenDialog(win, {
@@ -200,7 +172,7 @@ function register() {
 
   /* ---- scan ------------------------------------------------------------ */
 
-  ipcMain.handle('scan:run', (event, folder, options = {}) =>
+  handle('scan:run', (event, folder, options = {}) =>
     guard(async () => {
       if (tokens.scan) tokens.scan.cancel();
       const token = new CancelToken();
@@ -211,25 +183,36 @@ function register() {
       };
 
       try {
-        const result = await scan(folder, options, { token, onProgress: send });
+        const collected = await analyzers.collect(
+          'scan',
+          { root: folder, options: { ...options, collectTree: true } },
+          { token, onProgress: send, can: licenseState.canNow() }
+        );
+        // The tree is for the snapshot store and stays in this process: it is
+        // a row per folder, and the window draws none of it.
+        const { tree, ...summary } = collected.summary;
+
         // A cancelled scan reports partial totals; recording those as a point
         // on the trend would put a dip in the series that never happened.
-        if (!result.cancelled) await recordSnapshot(result, 'scan');
-        return result;
+        if (!summary.cancelled) await recordSnapshot(summary, 'scan');
+        // The snapshot keeps even a stopped scan, marked incomplete: comparing
+        // against it later is allowed, and labelled a guess.
+        if (tree) await saveTreeSnapshot({ ...summary, tree });
+        return { ...summary, candidates: collected.candidates };
       } finally {
         if (tokens.scan === token) tokens.scan = null;
       }
     })
   );
 
-  ipcMain.handle('scan:cancel', () => {
+  handle('scan:cancel', () => {
     if (tokens.scan) tokens.scan.cancel();
     return { ok: true };
   });
 
   /* ---- duplicates ------------------------------------------------------ */
 
-  ipcMain.handle('dupes:run', (event, roots, options = {}) =>
+  handle('dupes:run', (event, roots, options = {}) =>
     guard(async () => {
       if (tokens.dupes) tokens.dupes.cancel();
       const token = new CancelToken();
@@ -240,158 +223,102 @@ function register() {
       };
 
       try {
-        return await findDuplicates(roots, {
-          ...options,
-          cachePath: path.join(app.getPath('userData'), 'hash-cache.json'),
-        }, { token, onProgress: send });
+        const { candidates, summary } = await analyzers.collect(
+          'duplicates',
+          { roots, options: { ...options, cachePath: path.join(app.getPath('userData'), 'hash-cache.json') } },
+          { token, onProgress: send, can: licenseState.canNow() }
+        );
+        return { ...summary, candidates };
       } finally {
         if (tokens.dupes === token) tokens.dupes = null;
       }
     })
   );
 
-  ipcMain.handle('dupes:cancel', () => {
+  handle('dupes:cancel', () => {
     if (tokens.dupes) tokens.dupes.cancel();
     return { ok: true };
   });
 
   /* ---- delete ---------------------------------------------------------- */
 
-  ipcMain.handle('trash:delete', (event, paths, options = {}) =>
+  /*
+   * Every action on a file, from any screen.
+   *
+   * One handler, because one pipeline (`actions/execute.js`): the vetting, the
+   * permission probe, the confirmation and the record are the same whatever
+   * kind of action it is, and a kind without a handler is refused there.
+   */
+  handle('action:execute', (event, request = {}) =>
     guard(async () => {
-      const list = Array.isArray(paths) ? paths : [paths];
-      if (list.length === 0) return { moved: [], failed: [], freedBytes: 0, requested: 0 };
+      const kind = typeof request.kind === 'string' ? request.kind : '';
+      const list = Array.isArray(request.items) ? request.items : [];
+      const options = request.options && typeof request.options === 'object' ? request.options : {};
+      if (list.length === 0) return { kind, moved: [], failed: [], movedBytes: 0, freedBytes: 0, requested: 0 };
 
       if (tokens.trash) tokens.trash.cancel();
       const token = new CancelToken();
       tokens.trash = token;
 
       const send = (payload) => {
-        if (!event.sender.isDestroyed()) event.sender.send('trash:progress', payload);
+        if (!event.sender.isDestroyed()) event.sender.send('action:progress', payload);
       };
 
+      // The window may ask for a dry run. It may not ask to skip the dialog:
+      // "nothing moves without a click on the confirmation" is only true if
+      // the thing being protected against cannot switch it off. A harness that
+      // drives the real app turns that off from the main process instead.
+      const confirmWanted = !(options.confirm === false && unconfirmedAllowed);
+      const win = BrowserWindow.fromWebContents(event.sender);
+
       try {
-        /* -- phase 1: vet everything, delete nothing ----------------------- */
-        const planned = await planTrash(list, options, { token, onProgress: send });
-
-        if (token.cancelled) {
-          send({ phase: 'done' });
-          return { moved: [], failed: planned.failed, freedBytes: 0, requested: list.length, cancelled: true };
-        }
-
-        if (planned.plan.length === 0) {
-          send({ phase: 'done' });
-          return { moved: [], failed: planned.failed, freedBytes: 0, requested: list.length };
-        }
-
-        // An explicit dry run stops here -- report what would go, delete nothing.
-        if (options.dryRun) {
-          send({ phase: 'done' });
-          return {
-            moved: planned.plan.map((item) => ({ ...item, dryRun: true })),
-            failed: planned.failed,
-            freedBytes: planned.totalBytes,
-            requested: list.length,
-            dryRun: true,
-          };
-        }
-
-        /* -- confirmation, with the cost stated up front ------------------- */
-        if (options.confirm !== false) {
-          const count = planned.plan.length;
-          const win = BrowserWindow.fromWebContents(event.sender);
-          const slow = planned.estimatedMs >= 30000;
-
-          send({ phase: 'confirming', total: count, totalBytes: planned.totalBytes });
-
-          const { response } = await dialog.showMessageBox(win, {
-            type: 'warning',
-            buttons: [t('dialog.moveToBin', 'Move to Recycle Bin'), t('app.cancel', 'Cancel')],
-            defaultId: 1,
-            cancelId: 1,
-            title: t('dialog.confirmDelete.title', 'Confirm delete'),
-            message: t('dialog.confirmDelete.message', 'Move {n} item(s) to the Recycle Bin?', {
-              n: count.toLocaleString(language.current()),
-            }),
-            detail:
-              t(
-                'dialog.confirmDelete.detail',
-                'This frees {size}. Items stay recoverable from the Recycle Bin.',
-                { size: formatBytes(planned.totalBytes) }
-              ) +
-              binNote(options) +
-              cloudNote(planned) +
-              skippedNote(planned) +
-              (slow
-                ? `\n\nWindows moves about ${ESTIMATED_FILES_PER_SEC} files per second, so this will take ` +
-                  `roughly ${formatDuration(planned.estimatedMs)}. Progress is shown as it runs and you can ` +
-                  `stop at any point — anything already moved stays in the Recycle Bin.`
-                : ''),
-          });
-
-          if (response !== 0) {
-            send({ phase: 'done' });
-            return { moved: [], failed: [], freedBytes: 0, requested: list.length, cancelled: true };
+        const result = await execute(
+          { kind, items: list, options: { dryRun: options.dryRun === true } },
+          {
+            token,
+            onProgress: send,
+            can: licenseState.canNow(),
+            source: 'manual',
+            runId: 'manual',
+            // Every item is journalled as it moves. Nothing is purged because
+            // of that -- the purge has its own switch, its own grace period and
+            // its own corroboration against the bin -- but without the record
+            // there is no way to later tell our items from the user's own.
+            journal: services().journal,
+            confirm: confirmWanted ? (description, planned) => confirmAction(win, description, planned, options) : null,
           }
-        }
+        );
 
-        /* -- phase 2: the actual deletion ---------------------------------- */
-        // One immediate frame so the bar appears at 0 rather than after the
-        // first throttled tick.
-        send({
-          phase: 'deleting',
-          done: 0,
-          total: planned.plan.length,
-          freedBytes: 0,
-          totalBytes: planned.totalBytes,
-          etaMs: planned.estimatedMs,
-          ratePerSec: 0,
-          elapsedMs: 0,
-        });
-
-        const result = await executeTrash(planned.plan, options, { token, onProgress: send });
-        send({ phase: 'done' });
-
-        // Record what we put in the Recycle Bin. Nothing is purged because of
-        // this -- the purge has its own switch, its own grace period and its
-        // own corroboration against the bin -- but without the record there is
-        // no way to later tell our items from the user's own deletions.
-        if (result.moved.length > 0) {
-          await services().ledger.record(result.moved, { runId: 'manual' }).catch(() => {});
+        if (!result.dryRun && result.moved.length > 0) {
           // Recorded as *moved*, never as freed: these bytes are in the Recycle
           // Bin, which is on the same disk.
           await services()
-            .history.addEvent({ movedBytes: result.freedBytes, files: result.moved.length, source: 'manual' })
+            .history.addEvent({
+              movedBytes: result.movedBytes,
+              freedBytes: result.freedBytes,
+              files: result.moved.length,
+              source: 'manual',
+            })
             .catch(() => {});
         }
 
-        return {
-          moved: result.moved,
-          failed: [...planned.failed, ...result.failed],
-          needsAdmin: planned.needsAdmin.length,
-          inUse: planned.inUse.length,
-          freedBytes: result.freedBytes,
-          requested: list.length,
-          cancelled: result.cancelled,
-          remaining: result.remaining,
-          durationMs: result.durationMs,
-        };
+        return result;
       } finally {
         if (tokens.trash === token) tokens.trash = null;
       }
     })
   );
 
-  ipcMain.handle('trash:cancel', () => {
+  handle('action:stop', () => {
     if (tokens.trash) tokens.trash.cancel();
     return { ok: true };
   });
 
   /* ---- automatic cleanup ------------------------------------------------ */
 
-  ipcMain.handle('settings:get', () => guard(() => readState()));
+  handle('settings:get', () => guard(() => readState()));
 
-  ipcMain.handle('settings:save', (event, next) =>
+  handle('settings:save', (event, next) =>
     guard(async () => {
       const { settings } = await services().settings.patch(next);
       // The Task Scheduler entries and the tray are both derived state, never a
@@ -420,7 +347,7 @@ function register() {
    * writes a file. The renderer asks for this when the tab is opened or the
    * Check button is pressed, not on every repaint.
    */
-  ipcMain.handle('tasks:status', (event, options = {}) =>
+  handle('tasks:status', (event, options = {}) =>
     guard(async () => {
       const store = services().settings;
       const settings = await store.load();
@@ -436,7 +363,7 @@ function register() {
   );
 
   /** Re-check and repair, on demand, and report what changed. */
-  ipcMain.handle('tasks:reconcile', () =>
+  handle('tasks:reconcile', () =>
     guard(async () => {
       const store = services().settings;
       const settings = await store.load();
@@ -454,7 +381,7 @@ function register() {
    * the same way. Running the job in-process would prove nothing about the
    * registration.
    */
-  ipcMain.handle('tasks:runNow', (event, which = 'cleanup') =>
+  handle('tasks:runNow', (event, which = 'cleanup') =>
     guard(async () => {
       const taskPath = which === 'sampler' ? scheduler.sampleTaskPath() : scheduler.cleanupTaskPath();
       if (!(await scheduler.isInstalled(taskPath))) {
@@ -468,7 +395,7 @@ function register() {
     })
   );
 
-  ipcMain.handle('autoclean:run', (event, options = {}) =>
+  handle('autoclean:run', (event, options = {}) =>
     guard(async () => {
       if (tokens.auto) tokens.auto.cancel();
       const token = new CancelToken();
@@ -497,6 +424,8 @@ function register() {
         const run = await runAutoClean({
           settings,
           ledger,
+          journal: services().journal,
+          source: 'manual',
           token,
           onStage: send,
           onConfirm: dryRun ? undefined : (selection) => confirmAutoDelete(win, selection, settings),
@@ -525,20 +454,20 @@ function register() {
     })
   );
 
-  ipcMain.handle('autoclean:cancel', () => {
+  handle('autoclean:cancel', () => {
     if (tokens.auto) tokens.auto.cancel();
     return { ok: true };
   });
 
   /* ---- disk ------------------------------------------------------------- */
 
-  ipcMain.handle('disk:usage', (event, target) =>
+  handle('disk:usage', (event, target) =>
     guard(async () => diskUsage(target || app.getPath('home')))
   );
 
   /* ---- Recycle Bin ------------------------------------------------------ */
 
-  ipcMain.handle('recyclebin:preview', () =>
+  handle('recyclebin:preview', () =>
     guard(async () => {
       const { settings: store, ledger } = services();
       const settings = await store.load();
@@ -567,7 +496,7 @@ function register() {
     })
   );
 
-  ipcMain.handle('recyclebin:purge', (event) =>
+  handle('recyclebin:purge', (event) =>
     guard(async () => {
       const { settings: store, ledger } = services();
       const settings = await store.load();
@@ -619,7 +548,7 @@ function register() {
         afterDays: settings.purge.afterDays,
       });
       if (result.purged.length > 0) {
-        await ledger.forget(result.purged.map((p) => p.entry));
+        await ledger.forget(result.purged.map((p) => p.entry), { freedBytes: result.freedBytes });
         // The one place `freedBytes` is the honest word for it.
         await services()
           .history.addEvent({ freedBytes: result.freedBytes, files: result.purged.length, source: 'purge' })
@@ -633,7 +562,7 @@ function register() {
 
   /* ---- appearance -------------------------------------------------------- */
 
-  ipcMain.handle('theme:set', (event, mode) =>
+  handle('theme:set', (event, mode) =>
     guard(async () => {
       const { settings } = await services().settings.patch({ appearance: { theme: mode } });
 
@@ -657,7 +586,7 @@ function register() {
    * files?" stayed English would leave the one sentence that must be
    * understood in the language the user just turned off.
    */
-  ipcMain.handle('language:set', (event, preference) =>
+  handle('language:set', (event, preference) =>
     guard(async () => {
       const { settings } = await services().settings.patch({ appearance: { language: preference } });
       const code = language.apply(settings.appearance.language);
@@ -671,7 +600,7 @@ function register() {
   );
 
   /** What the window needs to draw the language control. */
-  ipcMain.handle('language:get', () =>
+  handle('language:get', () =>
     guard(async () => {
       const settings = await services().settings.load();
       return {
@@ -685,7 +614,7 @@ function register() {
 
   /* ---- updates ----------------------------------------------------------- */
 
-  ipcMain.handle('update:state', () =>
+  handle('update:state', () =>
     guard(async () => {
       // `enabled` comes from the stored setting rather than the updater's own
       // copy: the updater only learns it when apply() runs, and a screen that
@@ -696,20 +625,20 @@ function register() {
     })
   );
 
-  ipcMain.handle('update:check', () => guard(async () => updater.check({ manual: true })));
+  handle('update:check', () => guard(async () => updater.check({ manual: true })));
 
-  ipcMain.handle('update:download', () => guard(async () => updater.download()));
+  handle('update:download', () => guard(async () => updater.download()));
 
-  ipcMain.handle('update:install', () => guard(async () => updater.install()));
+  handle('update:install', () => guard(async () => updater.install()));
 
-  ipcMain.handle('update:acknowledge', () => guard(async () => {
+  handle('update:acknowledge', () => guard(async () => {
     updater.acknowledgeUpdate();
     return updater.snapshot();
   }));
 
   /* ---- trends ----------------------------------------------------------- */
 
-  ipcMain.handle('history:get', (event, options = {}) =>
+  handle('history:get', (event, options = {}) =>
     guard(async () => {
       const { history, settings: store } = services();
       await history.load();
@@ -746,7 +675,7 @@ function register() {
    * other, so pressing it repeatedly cannot manufacture a trend -- and the
    * reply says when that has happened rather than pretending a point was added.
    */
-  ipcMain.handle('trends:sample', () =>
+  handle('trends:sample', () =>
     guard(async () => {
       const { history, settings: store } = services();
       await history.load();
@@ -772,7 +701,7 @@ function register() {
    * two formats hand over the actual numbers, and they are what somebody
    * querying the app's conclusions would ask for.
    */
-  ipcMain.handle('history:export', (event, format = 'json') =>
+  handle('history:export', (event, format = 'json') =>
     guard(async () => {
       const { history } = services();
       await history.load();
@@ -801,16 +730,16 @@ function register() {
 
   /* ---- disk monitoring --------------------------------------------------- */
 
-  ipcMain.handle('monitor:status', () => guard(async () => tray.status()));
+  handle('monitor:status', () => guard(async () => tray.status()));
 
-  ipcMain.handle('monitor:check', () =>
+  handle('monitor:check', () =>
     guard(async () => {
       await tray.checkNow();
       return tray.status();
     })
   );
 
-  ipcMain.handle('monitor:snooze', (event, minutes) =>
+  handle('monitor:snooze', (event, minutes) =>
     guard(async () => {
       const result = tray.snooze(minutes);
       if (!result.ok) throw new Error(result.error);
@@ -818,7 +747,7 @@ function register() {
     })
   );
 
-  ipcMain.handle('monitor:resume', () =>
+  handle('monitor:resume', () =>
     guard(async () => {
       const result = tray.clearSnooze();
       if (!result.ok) throw new Error(result.error);
@@ -836,7 +765,7 @@ function register() {
    * `Pictures` resolves to `OneDrive\Hình ảnh`, and no amount of guessing in
    * the renderer would find it.
    */
-  ipcMain.handle('media:roots', () =>
+  handle('media:roots', () =>
     guard(async () => {
       const list = mediaRoots.candidateRoots(
         {
@@ -857,7 +786,7 @@ function register() {
     })
   );
 
-  ipcMain.handle('media:scan', (event, roots, options = {}) =>
+  handle('media:scan', (event, roots, options = {}) =>
     guard(async () => {
       if (tokens.media) tokens.media.cancel();
       const token = new CancelToken();
@@ -873,31 +802,51 @@ function register() {
       // would look it up under a size and time it no longer has.
       mediaStats = new Map();
 
-      try {
-        const result = await scanMedia(
-          roots,
-          { ...options, cachePath: path.join(app.getPath('userData'), 'media-cache.json') },
-          {
-            token,
-            onProgress: (p) => send('media:progress', p),
-            // Batches go over as they are read, so the grid starts filling
-            // while the scan is still running rather than after it.
-            onBatch: (batch) => send('media:batch', batch.map((r) => forDisplay(r, context))),
-          }
-        );
+      // Candidates go over in batches as they are read, so the grid starts
+      // filling while the scan is still running rather than after it. They are
+      // gathered here rather than sent one message each: fifty thousand IPC
+      // messages cost more than the fifty thousand records they carry.
+      const byId = new Map();
+      let pending = [];
+      const flush = () => {
+        if (pending.length === 0) return;
+        send('media:batch', pending);
+        pending = [];
+      };
 
-        return {
-          ...result,
-          files: result.files.map((r) => forDisplay(r, context)),
-          displays: context.displays,
-        };
+      try {
+        for await (const item of analyzers.runAnalyzer(
+          'media',
+          {
+            roots,
+            options: { ...options, cachePath: path.join(app.getPath('userData'), 'media-cache.json') },
+            context,
+          },
+          { token, can: licenseState.canNow() }
+        )) {
+          if (item.type === 'candidate') {
+            const candidate = item.candidate;
+            byId.set(candidate.id, candidate);
+            rememberMedia(candidate);
+            pending.push(candidate);
+            if (pending.length >= MEDIA_BATCH) flush();
+          } else if (item.type === 'progress') {
+            flush();
+            send('media:progress', item);
+          } else if (item.type === 'summary') {
+            flush();
+            const { visibleIds, ...summary } = item.summary;
+            return { ...summary, files: visibleIds.map((id) => byId.get(id)).filter(Boolean) };
+          }
+        }
+        return { files: [], cancelled: true };
       } finally {
         if (tokens.media === token) tokens.media = null;
       }
     })
   );
 
-  ipcMain.handle('media:cancel', () => {
+  handle('media:cancel', () => {
     if (tokens.media) tokens.media.cancel();
     return { ok: true };
   });
@@ -912,7 +861,7 @@ function register() {
    *
    * The numbers taken from the pixels are cached; the pictures are not.
    */
-  ipcMain.handle('media:thumbs', (event, paths, options = {}) =>
+  handle('media:thumbs', (event, paths, options = {}) =>
     guard(async () => {
       const list = (Array.isArray(paths) ? paths : [paths]).filter((p) => typeof p === 'string');
       if (list.length === 0) return {};
@@ -949,7 +898,7 @@ function register() {
    * be measured: the answer improves as the user scrolls, and the alternative
    * is a progress bar in front of a feature nobody asked to wait for.
    */
-  ipcMain.handle('media:similar', () =>
+  handle('media:similar', () =>
     guard(async () => {
       const cache = await mediaAnalysisCache();
       const items = [];
@@ -991,7 +940,7 @@ function register() {
    * app's own protocol). The renderer never learns a path it did not already
    * have, and never gets one it can turn into a fetch of its own.
    */
-  ipcMain.handle('preview:open', (event, filePath) =>
+  handle('preview:open', (event, filePath) =>
     guard(async () => {
       if (typeof filePath !== 'string' || filePath.trim() === '') {
         throw new Error(t('preview.error.noPath', 'No file was named'));
@@ -1005,23 +954,36 @@ function register() {
   );
 
   /** Closing the preview forgets the token with it. */
-  ipcMain.handle('preview:close', () =>
+  handle('preview:close', () =>
     guard(async () => {
       previewServe.revokeAll();
       return true;
     })
   );
 
+  /* ---- entitlements ------------------------------------------------------ */
+
+  /**
+   * Which features this build may use, one yes or no each, and why not.
+   *
+   * Everything the window gets to know about the licence. The decision is made
+   * here, on every request that needs one; this list only decides what the
+   * window draws.
+   */
+  handle('license:entitlements', () =>
+    guard(async () => entitlements.forRenderer(licenseState.currentLicense()))
+  );
+
   /* ---- shell helpers --------------------------------------------------- */
 
-  ipcMain.handle('shell:reveal', (event, target) =>
+  handle('shell:reveal', (event, target) =>
     guard(async () => {
       shell.showItemInFolder(path.resolve(target));
       return true;
     })
   );
 
-  ipcMain.handle('shell:open', (event, target) =>
+  handle('shell:open', (event, target) =>
     guard(async () => {
       const err = await shell.openPath(path.resolve(target));
       if (err) throw new Error(err);
@@ -1029,7 +991,7 @@ function register() {
     })
   );
 
-  ipcMain.handle('app:paths', () =>
+  handle('app:paths', () =>
     guard(async () => ({
       home: app.getPath('home'),
       desktop: safePath('desktop'),
@@ -1039,6 +1001,11 @@ function register() {
       videos: safePath('videos'),
     }))
   );
+
+  // And the other direction: a channel in the manifest with nothing behind it
+  // is a promise the window would find broken only when it called it.
+  const missing = manifest.INVOKE.filter((channel) => !registered.has(channel));
+  if (missing.length > 0) throw new Error(`ipc-manifest.js lists channels with no handler: ${missing.join(', ')}`);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1091,6 +1058,15 @@ async function recordSnapshot(result, source) {
   } catch (err) {
     // History is a nicety. It must never take a scan down with it.
     console.error('[history]', err);
+  }
+}
+
+/** Keep the scan's folder tree. Like history, it must never take a scan down. */
+async function saveTreeSnapshot(result) {
+  try {
+    await services().snapshots.save(result);
+  } catch (err) {
+    console.error('[snapshots]', err);
   }
 }
 
@@ -1181,6 +1157,60 @@ function volumesOf(entries) {
 }
 
 /**
+ * The confirmation in front of an action the user started from a screen.
+ *
+ * The pipeline decides what is about to happen and hands over its
+ * description; this only words it. A kind with no wording here is not
+ * confirmed, and so does not run -- the dialog for quarantine or relocation
+ * arrives with the handler that needs it.
+ */
+async function confirmAction(win, description, planned, options) {
+  if (description.kind !== 'recycle') return false;
+
+  const count = description.count;
+  const slow = description.etaMs >= 30000;
+
+  const { response } = await dialog.showMessageBox(win, {
+    type: 'warning',
+    buttons: [t('dialog.moveToBin', 'Move to Recycle Bin'), t('app.cancel', 'Cancel')],
+    defaultId: 1,
+    cancelId: 1,
+    title: t('dialog.confirmDelete.title', 'Confirm delete'),
+    message: t('dialog.confirmDelete.message', 'Move {n} item(s) to the Recycle Bin?', {
+      n: count.toLocaleString(language.current()),
+    }),
+    detail:
+      t('dialog.confirmDelete.detailBin', '{size} will move to the Recycle Bin, where it stays recoverable.', {
+        size: formatBytes(description.bytes),
+      }) +
+      binNote(description) +
+      cloudNote(planned) +
+      skippedNote(planned) +
+      (slow
+        ? `\n\nWindows moves about ${ESTIMATED_FILES_PER_SEC} files per second, so this will take ` +
+          `roughly ${formatDuration(description.etaMs)}. Progress is shown as it runs and you can ` +
+          `stop at any point — anything already moved stays in the Recycle Bin.`
+        : ''),
+  });
+
+  return response === 0;
+}
+
+/**
+ * Whether a request from the window may skip the confirmation.
+ *
+ * Off, and only switchable from this process. The end-to-end harness drives
+ * the real app and really deletes forty throwaway files, and a native dialog
+ * would stop it dead; it calls `allowUnconfirmedForHarness()` from the main
+ * process, which no page in the window can reach.
+ */
+let unconfirmedAllowed = false;
+
+function allowUnconfirmedForHarness() {
+  unconfirmedAllowed = true;
+}
+
+/**
  * The dialog in front of a cleanup the user started by hand. The scheduled run
  * has no equivalent -- its consent was given when the schedule was saved, which
  * is why the schedule starts in report-only mode.
@@ -1263,21 +1293,18 @@ function cloudNote(planned) {
 }
 
 /**
- * The sentence the rest of the app already insists on, in front of the delete
- * that most needs it.
+ * The sentence the rest of the app already insists on, in front of every
+ * delete that does not free anything.
  *
- * The line above this one says "This frees {size}", and for a move to the
- * Recycle Bin that is not true until the bin is emptied -- the bin is on the
- * same disk. The Automatic tab says so loudly in `auto.binNote` and the
- * scheduled run's notification says it too. Photographs are where somebody is
- * most likely to be deleting to make room, so the correction belongs here.
- *
- * [Inference] It is added for the photo screen only, rather than to every
- * delete, because the existing wording is what the other tabs have always shown
- * and changing it is a decision about those tabs rather than about this work.
+ * The line above used to say "This frees {size}", which for a move to the
+ * Recycle Bin is not true until the bin is emptied -- the bin is on the same
+ * disk. It was corrected for the photo screen first and the other tabs were
+ * left as they were, as a decision about those tabs; the roadmap made that
+ * decision (rule 2, "moved is not freed", on every action), so it now depends
+ * on what the action frees and not on which screen asked.
  */
-function binNote(options) {
-  if (options.context !== 'media') return '';
+function binNote(description) {
+  if (description.freesOnVolume) return '';
   return `\n\n${t(
     'dialog.confirmDelete.binNote',
     'Moving them to the Recycle Bin does not free any disk space yet — the bin is on the same drive. ' +
@@ -1329,4 +1356,4 @@ function cancelAll() {
   if (tokens.thumbs) tokens.thumbs.cancel();
 }
 
-module.exports = { register, cancelAll, noteReconciliation };
+module.exports = { register, cancelAll, noteReconciliation, allowUnconfirmedForHarness };

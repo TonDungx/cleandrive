@@ -21,6 +21,11 @@ const isScheduledRun = process.argv.includes('--scheduled-run');
 // because measuring a disk needs no permission to delete anything.
 const isSampleOnly = process.argv.includes('--sample-only');
 
+// The elevated helper: this same executable, started through a UAC prompt the
+// user answered, to read the few things only an administrator can. It opens
+// no window and answers only the fixed, read-only list in helper/ops.js.
+const isHelper = process.argv.includes('--helper');
+
 // Required lazily, inside the windowed branch. Between them these pull in the
 // scanner, the duplicate finder, the tray and the updater, and the two headless
 // modes need none of it -- the sampler in particular is a ~150ms process and
@@ -166,7 +171,17 @@ function revealWindow() {
 // scheduled run's toast is attributed to "electron.exe", or dropped entirely.
 app.setAppUserModelId('com.cleandrive.app');
 
-if (isSampleOnly) {
+if (isHelper) {
+  /*
+   * Like the sampler, this never waits for `app.whenReady()` -- there is no
+   * window to paint -- and it takes no single-instance lock, because the app
+   * that launched it is holding that lock and is the process it talks to.
+   */
+  require('./helper/helper-process')
+    .runHelper(process.argv)
+    .then((code) => app.exit(code))
+    .catch(() => app.exit(1));
+} else if (isSampleOnly) {
   /*
    * The measuring mode, and the only part of the app that never waits for
    * `app.whenReady()`.
@@ -278,6 +293,12 @@ if (isSampleOnly) {
       if (reconciled) ipc.noteReconciliation(reconciled);
       await sampleAtLaunch(settings);
     }
+
+    // Whole month files past the journal's retention. Never a line within one.
+    require('./services')
+      .services()
+      .journal.prune()
+      .catch((err) => console.error('[journal] could not prune:', err.message));
 
     // Deliberately only in the windowed branch. The scheduled run above never
     // reaches this line: a 2am maintenance task that silently replaced the
