@@ -27,6 +27,10 @@ const INVOKE = Object.freeze([
   'action:execute',
   'action:stop',
 
+  'journal:sessions',
+  'journal:items',
+  'journal:restore',
+
   'shell:reveal',
   'shell:open',
 

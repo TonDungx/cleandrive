@@ -61,6 +61,10 @@ const DYNAMIC_PREFIXES = [
   // chip, the detail panel's verdict, and the trait list under it.
   'media.origin.',
   'media.trait.label.',
+  // The Restore Center's state words are a table in `restore.js`, and its
+  // session count goes through `word()`.
+  'restore.state.',
+  'restore.session.',
 ];
 
 /* -------------------------------------------------------------------------- */

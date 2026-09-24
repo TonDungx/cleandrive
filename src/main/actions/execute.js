@@ -3,7 +3,7 @@
 /**
  * The one way anything in this app acts on a file.
  *
- * Moving to the Recycle Bin is the only action today, and it already had a
+ * Moving to the Recycle Bin was the first action, and it already had a
  * careful path: vet every path, probe for the permission prompt, confirm with
  * the real numbers, move one at a time with a stop button. The roadmap adds
  * seven more kinds of action, and the risk is not that any one of them is
@@ -108,13 +108,20 @@ async function execute(request, ctx = {}) {
   }
 
   /* -- confirm, with the cost stated up front ------------------------------ */
+  // A dialog may answer more than yes: a restore asks what to do about files
+  // already in the way. Such an answer is `{ approved, options }`, and its
+  // options win over the request's, because the dialog is the main process
+  // asking the person and the request is only what the window sent.
+  let applyOptions = options;
   if (ctx.confirm) {
     onProgress({ phase: 'confirming', total: description.count, totalBytes: description.bytes });
-    const approved = await ctx.confirm(description, planned);
+    const answer = await ctx.confirm(description, planned);
+    const approved = answer === true || Boolean(answer && typeof answer === 'object' && answer.approved === true);
     if (!approved) {
       onProgress({ phase: 'done' });
       return { ...withPlan, cancelled: true };
     }
+    if (answer && typeof answer === 'object' && answer.options) applyOptions = { ...options, ...answer.options };
   }
 
   /* -- apply, journalled as it goes --------------------------------------- */
@@ -122,7 +129,7 @@ async function execute(request, ctx = {}) {
 
   let result;
   try {
-    result = await handler.apply(planned, options, {
+    result = await handler.apply(planned, applyOptions, {
       token,
       onProgress,
       deps: ctx.deps,

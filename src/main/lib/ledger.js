@@ -76,8 +76,9 @@ class TrashLedger {
    * What the journal says is in the Recycle Bin on the app's behalf.
    *
    * Every item of every recycle session, minus every item a purge session has
-   * since removed, matched on path and the moment it was recycled. The old
-   * ledger file, if one is still there, is imported first -- once.
+   * since removed or a restore session has put back, matched on path and the
+   * moment it was recycled. The old ledger file, if one is still there, is
+   * imported first -- once.
    */
   async _loadFromJournal() {
     await this._importLegacy();
@@ -88,14 +89,20 @@ class TrashLedger {
       if (line.op === 'begin') kinds.set(line.session, { kind: line.kind, runId: line.runId || null });
     }
 
-    const purged = new Set();
+    // What is no longer in the bin on the app's behalf: what it purged, and
+    // what it put back. Leaving a restored item in would be a trap -- restore
+    // a file at 10:02 that the app recycled at 10:00, delete it yourself in
+    // Explorer at 10:03, and the bin's deletion time is inside the purge's
+    // five-minute tolerance of the app's record. After the grace period the
+    // purge would have removed, permanently, a delete that was yours.
+    const settled = new Set();
     const recycled = [];
     for (const line of lines) {
       if (line.op !== 'item') continue;
       const session = kinds.get(line.session);
       if (!session) continue;
-      if (session.kind === 'purge') {
-        purged.add(entryKey(line.from, Date.parse(line.recycledAt)));
+      if (session.kind === 'purge' || session.kind === 'restore') {
+        settled.add(entryKey(line.from, Date.parse(line.recycledAt)));
       } else if (session.kind === 'recycle') {
         recycled.push({
           path: path.resolve(line.from),
@@ -112,7 +119,7 @@ class TrashLedger {
     for (const entry of recycled) {
       if (!Number.isFinite(entry.trashedAt) || entry.trashedAt < cutoff) continue;
       const key = entryKey(entry.path, entry.trashedAt);
-      if (purged.has(key) || seen.has(key)) continue;
+      if (settled.has(key) || seen.has(key)) continue;
       seen.add(key);
       this.entries.push(entry);
     }

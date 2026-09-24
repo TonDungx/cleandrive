@@ -2,7 +2,9 @@
 
 const path = require('node:path');
 
-const { message: m } = require('../../i18n');
+const i18n = require('../../i18n');
+
+const { message: m } = i18n;
 const os = require('node:os');
 
 /**
@@ -257,19 +259,26 @@ function extOf(name) {
   return ext ? ext.slice(1).toLowerCase() : '';
 }
 
-/** "about 2 minutes" / "about 1 hour 38 minutes" -- for durations a user waits out. */
+/**
+ * "2 minutes" / "1 h 38 min" -- for durations a user waits out.
+ *
+ * It lands inside the delete confirmation, which is translated, so it is
+ * translated too, in whichever language the main process is speaking.
+ */
 function formatDuration(ms) {
-  if (!Number.isFinite(ms) || ms < 0) return 'unknown';
+  const t = i18n.t;
+  if (!Number.isFinite(ms) || ms < 0) return t('duration.unknown', 'unknown');
   const seconds = Math.round(ms / 1000);
-  if (seconds < 5) return 'a moment';
-  if (seconds < 60) return `${seconds} seconds`;
+  if (seconds < 5) return t('duration.moment', 'a moment');
+  if (seconds < 60) return t('duration.seconds', '{n} seconds', { n: seconds });
 
   const minutes = Math.round(seconds / 60);
-  if (minutes < 60) return `${minutes} minute${minutes === 1 ? '' : 's'}`;
+  if (minutes < 60) return minutes === 1 ? t('duration.minute', '1 minute') : t('duration.minutes', '{n} minutes', { n: minutes });
 
   const hours = Math.floor(minutes / 60);
   const rest = minutes % 60;
-  return `${hours} hour${hours === 1 ? '' : 's'}${rest ? ` ${rest} minute${rest === 1 ? '' : 's'}` : ''}`;
+  if (!rest) return hours === 1 ? t('duration.hour', '1 hour') : t('duration.hours', '{h} hours', { h: hours });
+  return t('duration.hoursMinutes', '{h} h {m} min', { h: hours, m: rest });
 }
 
 function formatBytes(bytes) {

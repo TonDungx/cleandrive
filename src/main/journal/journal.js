@@ -47,8 +47,14 @@ const VERSION = 1;
  */
 const KEEP_MONTHS = 13;
 
-/** The kinds a session may be: the contract's actions, plus the purge. */
-const KINDS = new Set([...ACTION_KINDS, 'purge']);
+/**
+ * The kinds a session may be: the contract's actions, plus two that act on the
+ * app's own earlier sessions rather than on a candidate -- the purge, which
+ * removes what the app put in the bin, and the restore, which puts it back.
+ * Both name each item with the moment it was first recycled (`recycledAt`),
+ * which is how the ledger knows those items are no longer the app's to purge.
+ */
+const KINDS = new Set([...ACTION_KINDS, 'purge', 'restore']);
 
 function monthOf(ms) {
   const d = new Date(ms);

@@ -12,7 +12,7 @@
   "scripts": {
     "start": "electron .",
     "dev": "electron . --dev",
-    "test": "node scripts/test-duplicate.js --fixture && node scripts/test-advisor.js && node scripts/test-protection.js && node scripts/test-appsafety.js && node scripts/test-trash.js && node scripts/test-trash-progress.js && node scripts/test-settings.js && node scripts/test-recyclebin.js && node scripts/test-autoclean.js && node scripts/test-scheduler.js && node scripts/test-history.js && node scripts/test-monitor.js && node scripts/test-media-format.js && node scripts/test-media-scan.js && node scripts/test-media-classify.js && node scripts/test-media-perceptual.js && node scripts/test-preview.js && node scripts/test-office.js && node scripts/test-i18n.js && node scripts/test-contract.js && node scripts/test-actions.js && node scripts/test-ipc-manifest.js && node scripts/test-journal.js && node scripts/test-entitlements.js && node scripts/test-helper.js && node scripts/test-snapshots.js && node scripts/test-settings-migration.js",
+    "test": "node scripts/test-duplicate.js --fixture && node scripts/test-advisor.js && node scripts/test-protection.js && node scripts/test-appsafety.js && node scripts/test-trash.js && node scripts/test-trash-progress.js && node scripts/test-settings.js && node scripts/test-recyclebin.js && node scripts/test-autoclean.js && node scripts/test-scheduler.js && node scripts/test-history.js && node scripts/test-monitor.js && node scripts/test-media-format.js && node scripts/test-media-scan.js && node scripts/test-media-classify.js && node scripts/test-media-perceptual.js && node scripts/test-preview.js && node scripts/test-office.js && node scripts/test-i18n.js && node scripts/test-contract.js && node scripts/test-actions.js && node scripts/test-ipc-manifest.js && node scripts/test-journal.js && node scripts/test-entitlements.js && node scripts/test-helper.js && node scripts/test-snapshots.js && node scripts/test-settings-migration.js && node scripts/test-restore.js",
     "test:scanner": "node scripts/test-scanner.js",
     "test:duplicate": "node scripts/test-duplicate.js --fixture",
     "test:advisor": "node scripts/test-advisor.js",
@@ -43,7 +43,9 @@
     "test:helper": "node scripts/test-helper.js",
     "test:snapshots": "node scripts/test-snapshots.js",
     "test:settings:migration": "node scripts/test-settings-migration.js",
+    "test:restore": "node scripts/test-restore.js",
     "verify:helper": "electron scripts/verify-helper.js",
+    "verify:restore": "electron scripts/verify-restore.js",
     "test:scheduler:live": "node scripts/test-scheduler.js --live",
     "scheduled-run": "electron . --scheduled-run",
     "sample-only": "electron . --sample-only",
@@ -59,7 +61,8 @@
     "compare:office": "node scripts/compare-office.js",
     "shoot:media": "electron scripts/shoot-media.js",
     "shoot:viewer": "electron scripts/shoot-viewer.js",
-    "shoot:lists": "electron scripts/shoot-lists.js"
+    "shoot:lists": "electron scripts/shoot-lists.js",
+    "shoot:restore": "electron scripts/shoot-restore.js"
   },
   "devDependencies": {
     "electron": "^33.2.0",

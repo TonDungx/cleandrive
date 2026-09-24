@@ -1178,5 +1178,108 @@
     'dialog.confirmDelete.binNote':
       'Chuyển vào Thùng rác vẫn chưa giải phóng được dung lượng nào — Thùng rác nằm trên cùng ổ đĩa. ' +
       'Chưa có gì thực sự được thu hồi cho tới khi dọn Thùng rác.',
+    'dialog.confirmDelete.slow':
+      'Windows chuyển được khoảng {rate} tệp mỗi giây, nên việc này mất chừng {duration}. Tiến độ hiện ' +
+      'trong lúc chạy và bạn có thể dừng bất cứ lúc nào — những gì đã chuyển vẫn nằm trong Thùng rác.',
+
+    /* ---- durations, inside the dialogs ---------------------------------- */
+    'duration.unknown': 'không rõ',
+    'duration.moment': 'một lát',
+    'duration.seconds': '{n} giây',
+    'duration.minute': '1 phút',
+    'duration.minutes': '{n} phút',
+    'duration.hour': '1 giờ',
+    'duration.hours': '{h} giờ',
+    'duration.hoursMinutes': '{h} giờ {m} phút',
+
+    /* ---- the Restore Center ----------------------------------------------
+     *
+     * *Put back* → **khôi phục**, the word Explorer's own Recycle Bin uses, so
+     * the button here and the one in Explorer read as the same act. A file
+     * "no longer in the bin" is **không còn trong Thùng rác**, never "đã mất":
+     * the app does not know that it is lost, only that it is not there.
+     */
+    'app.tab.restore': 'Khôi phục',
+    'restore.refresh': 'Kiểm tra lại',
+    'restore.intro':
+      'Mọi việc ứng dụng đã làm với tệp, mới nhất ở trên. Mỗi lần mở trang này, vị trí hiện tại của từng ' +
+      'tệp được đọc lại từ ổ đĩa chứ không lấy từ bản ghi: tệp đã được ai đó khôi phục bằng Explorer, hoặc ' +
+      'đã bị dọn khỏi Thùng rác, sẽ được ghi đúng như vậy.',
+    'restore.putBackSelected': 'Khôi phục mục đã chọn',
+    'restore.empty':
+      'Chưa có gì. Mỗi lần ứng dụng di chuyển một tệp, việc đó được ghi lại ở đây, và thứ gì khôi phục được ' +
+      'thì khôi phục được từ đây.',
+    'restore.progressTitle': 'Đang khôi phục từ Thùng rác',
+    'restore.title.recycle': 'Đã chuyển {n} {items} vào Thùng rác',
+    'restore.title.restore': 'Đã khôi phục {n} {items} từ Thùng rác',
+    'restore.title.purge': 'Đã xoá vĩnh viễn {n} {items} khỏi Thùng rác',
+    'restore.title.other': '{kind}: {n} {items}',
+    'restore.source.manual': 'từ một màn hình',
+    'restore.source.autoclean': 'dọn dẹp tự động, chạy bằng tay',
+    'restore.source.scheduled': 'lần chạy theo lịch',
+    'restore.source.migrated': 'từ bản ghi cũ',
+    'restore.source.purge': 'dọn chọn lọc Thùng rác',
+    'restore.source.restore': 'chuyển ra để nhường chỗ cho tệp được khôi phục',
+    'restore.tally.inBin': '{n} còn trong Thùng rác',
+    'restore.tally.restored': '{n} đã khôi phục',
+    'restore.tally.purged': '{n} đã bị ứng dụng xoá vĩnh viễn',
+    'restore.tally.gone': '{n} không còn trong Thùng rác',
+    'restore.tally.unavailable': '{n} nằm trên ổ đang không kết nối',
+    'restore.state.inBin': 'trong Thùng rác',
+    'restore.state.restored': 'đã khôi phục',
+    'restore.state.purged': 'đã xoá vĩnh viễn',
+    'restore.state.gone': 'không còn trong Thùng rác',
+    'restore.state.unavailable': 'ổ không kết nối',
+    'restore.row.inBin': 'Chuyển vào Thùng rác {when} — Thùng rác ghi cùng thời điểm đó',
+    'restore.row.restored': 'Đã khôi phục {when}, với tên {path}',
+    'restore.row.restoredHere': 'Đã khôi phục {when}, về đúng chỗ cũ',
+    'restore.row.restoredMoved': 'Đã khôi phục {when}, và hiện không còn ở {path}',
+    'restore.row.purged':
+      'Đã bị xoá hẳn khỏi Thùng rác {when} bởi lần dọn chọn lọc của ứng dụng — không khôi phục được nữa',
+    'restore.row.unavailable': 'Ổ chứa tệp này đang không kết nối, nên không kiểm tra được tệp đang ở đâu',
+    'restore.row.goneHere':
+      'Không còn trong Thùng rác, và ở đường dẫn cũ đang có một tệp — có thể nó đã được khôi phục bằng Explorer',
+    'restore.row.gone': 'Không còn trong Thùng rác — Thùng rác đã được dọn, hoặc tệp đã được lấy ra bên ngoài ứng dụng',
+    'restore.putBackAll': 'Khôi phục cả {n}',
+    'restore.showFiles': 'Xem các tệp',
+    'restore.hideFiles': 'Ẩn các tệp',
+    'restore.incomplete':
+      'Việc này chưa chạy xong — ứng dụng đã dừng giữa chừng. Danh sách là những gì đã được ghi trước lúc đó.',
+    'restore.cancelled': 'Đã dừng giữa chừng; phần còn lại vẫn để nguyên chỗ cũ.',
+    'restore.purgeNote': 'Dọn chọn lọc là vĩnh viễn: không khôi phục được các tệp này. Lần đó đã giải phóng {size}.',
+    'restore.status': '{n} {sessions} · {count} {items} khôi phục được ({size})',
+    'restore.session.one': 'lần',
+    'restore.session.other': 'lần',
+    'restore.cancelledNothing': 'Chưa khôi phục gì.',
+    'restore.done': 'Đã khôi phục {n} {items} ({size}) về chỗ cũ',
+    'restore.skipped': '{n} mục không khôi phục được',
+    'restore.nothing': 'Không khôi phục được gì. {reason}',
+    'restore.fileSuffix': 'đã khôi phục',
+    'restore.why.unknown': 'Không phải việc ứng dụng đã làm',
+    'restore.why.restored': 'Đã được khôi phục rồi',
+    'restore.why.purged': 'Đã bị ứng dụng xoá vĩnh viễn khỏi Thùng rác',
+    'restore.why.gone': 'Không còn trong Thùng rác',
+    'restore.why.unavailable': 'Ổ chứa tệp này đang không kết nối',
+    'restore.why.notAbsolute': 'Không phải đường dẫn đầy đủ',
+    'restore.why.system': 'Không ghi vào vị trí hệ thống',
+    'restore.why.program': 'Không ghi vào thư mục của ứng dụng đã cài',
+    'restore.why.inTheWay': 'Đường dẫn đó đang có thứ khác, nên để nguyên',
+    'restore.why.folderInTheWay': 'Có một thư mục nằm chắn chỗ, và thư mục thì không bao giờ bị chuyển vào Thùng rác',
+    'restore.why.displaceFailed': 'Không chuyển được tệp đang nằm ở đó vào Thùng rác',
+    'restore.why.failed': 'Không khôi phục được',
+
+    'dialog.restore.title': 'Khôi phục từ Thùng rác',
+    'dialog.restore.message': 'Khôi phục {n} mục từ Thùng rác?',
+    'dialog.restore.detail': '{size} sẽ trở về đúng chỗ đã bị xoá.',
+    'dialog.restore.refused':
+      '{n} mục trong số đã chọn không khôi phục được — chúng không còn trong Thùng rác, hoặc ổ đĩa đang không kết nối.',
+    'dialog.restore.conflicts': '{n} mục trong số này hiện đang có thứ khác nằm ở đường dẫn cũ.',
+    'dialog.restore.conflictsHow':
+      '“Giữ cả hai” đặt tệp được khôi phục ngay bên cạnh, tên có thêm “(đã khôi phục)”. “Thay thế” chuyển ' +
+      'tệp đang nằm ở đó vào Thùng rác trước, nên tệp đó cũng khôi phục lại được.',
+    'dialog.restore.keepBoth': 'Khôi phục, giữ cả hai',
+    'dialog.restore.skip': 'Khôi phục, bỏ qua các mục đó',
+    'dialog.restore.replace': 'Khôi phục, thay thế',
+    'dialog.restore.go': 'Khôi phục',
   };
 });

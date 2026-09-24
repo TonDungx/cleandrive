@@ -14,6 +14,7 @@ const { preview } = require('./lib/preview');
 const previewServe = require('./lib/preview/serve');
 const { ESTIMATED_FILES_PER_SEC } = require('./lib/trash');
 const { execute } = require('./actions/execute');
+const restoreEngine = require('./actions/restore');
 const licenseState = require('./license/state');
 const entitlements = require('./license/entitlements');
 const { CancelToken, formatBytes, formatDuration } = require('./lib/util');
@@ -313,6 +314,80 @@ function register() {
     if (tokens.trash) tokens.trash.cancel();
     return { ok: true };
   });
+
+  /* ---- the Restore Center ------------------------------------------------ */
+
+  /*
+   * Everything the app did, and where it is now.
+   *
+   * Read-only: the journal says what happened and the disk is asked where each
+   * item is today. Nothing here passes through the licence -- an expired
+   * licence must never make something the app did impossible to undo, so these
+   * handlers are not given a `can` at all.
+   */
+  handle('journal:sessions', () =>
+    guard(async () => restoreEngine.listSessions(services().journal))
+  );
+
+  handle('journal:items', (_event, sessionId) =>
+    guard(async () => {
+      if (typeof sessionId !== 'string' || !/^s_[0-9a-f]{8}$/.test(sessionId)) throw new Error('Not a session id');
+      const items = await restoreEngine.listItems(services().journal, sessionId);
+      if (!items) throw new Error('No such session');
+      return items;
+    })
+  );
+
+  /*
+   * Put items back. The window names them by journal id -- `s_1a2b3c4d:17` --
+   * never by path, so it can ask for something the app did to be undone and
+   * for nothing else.
+   *
+   * The same pipeline as a delete, and the same shared token, so the progress
+   * panel's Stop works for both and only one of them runs at a time.
+   */
+  handle('journal:restore', (event, request = {}) =>
+    guard(async () => {
+      const ids = (Array.isArray(request.items) ? request.items : [])
+        .filter((id) => typeof id === 'string' && /^s_[0-9a-f]{8}:\d{1,7}$/.test(id));
+      const options = request.options && typeof request.options === 'object' ? request.options : {};
+      if (ids.length === 0) return { kind: 'restore', moved: [], failed: [], movedBytes: 0, freedBytes: 0, requested: 0 };
+
+      if (tokens.trash) tokens.trash.cancel();
+      const token = new CancelToken();
+      tokens.trash = token;
+      const send = (payload) => {
+        if (!event.sender.isDestroyed()) event.sender.send('action:progress', payload);
+      };
+      const confirmWanted = !(options.confirm === false && unconfirmedAllowed);
+      const win = BrowserWindow.fromWebContents(event.sender);
+      const journal = services().journal;
+
+      try {
+        return await execute(
+          {
+            kind: 'restore',
+            items: ids,
+            // What to do about a file in the way is the dialog's question. Only
+            // when the harness has switched the dialog off does the request get
+            // to say, and then it cannot choose to replace anything.
+            options: confirmWanted ? {} : { onConflict: options.onConflict === 'rename' ? 'rename' : 'skip' },
+          },
+          {
+            token,
+            onProgress: send,
+            source: 'manual',
+            runId: 'manual',
+            journal,
+            deps: { journal },
+            confirm: confirmWanted ? (description, planned) => confirmRestore(win, description, planned) : null,
+          }
+        );
+      } finally {
+        if (tokens.trash === token) tokens.trash = null;
+      }
+    })
+  );
 
   /* ---- automatic cleanup ------------------------------------------------ */
 
@@ -1187,13 +1262,85 @@ async function confirmAction(win, description, planned, options) {
       cloudNote(planned) +
       skippedNote(planned) +
       (slow
-        ? `\n\nWindows moves about ${ESTIMATED_FILES_PER_SEC} files per second, so this will take ` +
-          `roughly ${formatDuration(description.etaMs)}. Progress is shown as it runs and you can ` +
-          `stop at any point — anything already moved stays in the Recycle Bin.`
+        ? `\n\n${t(
+            'dialog.confirmDelete.slow',
+            'Windows moves about {rate} files per second, so this will take roughly {duration}. Progress is ' +
+              'shown as it runs and you can stop at any point — anything already moved stays in the Recycle Bin.',
+            { rate: ESTIMATED_FILES_PER_SEC, duration: formatDuration(description.etaMs) }
+          )}`
         : ''),
   });
 
   return response === 0;
+}
+
+/**
+ * The confirmation in front of putting things back.
+ *
+ * Its one real question is what to do about a file that is already where the
+ * restored one belongs -- somebody may have made a new `report.docx` since the
+ * old one went to the bin. The answer travels back to the pipeline as the
+ * restore's options, so the choice is made by the person, in this dialog, and
+ * never by the window that asked.
+ *
+ * @returns {Promise<false | {approved: true, options: {onConflict: 'skip'|'rename'|'replace'}}>}
+ */
+async function confirmRestore(win, description) {
+  if (description.kind !== 'restore') return false;
+  const n = (v) => Number(v || 0).toLocaleString(language.current());
+
+  const lines = [
+    t('dialog.restore.detail', '{size} goes back to where it was deleted from.', { size: formatBytes(description.bytes) }),
+  ];
+  if (description.refused > 0) {
+    lines.push(
+      t('dialog.restore.refused', '{n} of the items chosen cannot be put back — they are no longer in the Recycle Bin, or the drive is not connected.', {
+        n: n(description.refused),
+      })
+    );
+  }
+
+  const conflicts = description.conflicts || 0;
+  const replaceable = conflicts - (description.conflictFolders || 0);
+  const buttons = [];
+  const choices = [];
+  if (conflicts > 0) {
+    lines.push(
+      t('dialog.restore.conflicts', '{n} of them have something else at that path now.', { n: n(conflicts) }) +
+        ' ' +
+        t(
+          'dialog.restore.conflictsHow',
+          '“Keep both” puts the restored file beside it with “(restored)” added to its name. “Replace” moves the file that is there now to the Recycle Bin first, so it can be put back too.'
+        )
+    );
+    buttons.push(t('dialog.restore.keepBoth', 'Put back, keep both'));
+    choices.push('rename');
+    buttons.push(t('dialog.restore.skip', 'Put back, skip those'));
+    choices.push('skip');
+    if (replaceable > 0) {
+      buttons.push(t('dialog.restore.replace', 'Put back, replace them'));
+      choices.push('replace');
+    }
+  } else {
+    buttons.push(t('dialog.restore.go', 'Put back'));
+    choices.push('skip');
+  }
+  buttons.push(t('app.cancel', 'Cancel'));
+  const cancelId = buttons.length - 1;
+
+  const { response } = await dialog.showMessageBox(win, {
+    type: 'question',
+    buttons,
+    defaultId: cancelId,
+    cancelId,
+    noLink: true,
+    title: t('dialog.restore.title', 'Put back from the Recycle Bin'),
+    message: t('dialog.restore.message', 'Put back {n} item(s) from the Recycle Bin?', { n: n(description.count) }),
+    detail: lines.join('\n\n'),
+  });
+
+  if (response === cancelId || !choices[response]) return false;
+  return { approved: true, options: { onConflict: choices[response] } };
 }
 
 /**

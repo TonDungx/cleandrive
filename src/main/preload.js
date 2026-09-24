@@ -21,6 +21,11 @@ const api = {
   trash: (paths, options) => ipcRenderer.invoke('action:execute', { kind: 'recycle', items: paths, options }),
   cancelTrash: () => ipcRenderer.invoke('action:stop'),
 
+  /* the Restore Center: what the app did, and putting it back */
+  journalSessions: () => ipcRenderer.invoke('journal:sessions'),
+  journalItems: (sessionId) => ipcRenderer.invoke('journal:items', sessionId),
+  restore: (itemIds, options) => ipcRenderer.invoke('journal:restore', { items: itemIds, options }),
+
   reveal: (target) => ipcRenderer.invoke('shell:reveal', target),
   open: (target) => ipcRenderer.invoke('shell:open', target),
 

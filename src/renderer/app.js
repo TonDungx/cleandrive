@@ -129,9 +129,15 @@ $('pick-folder').addEventListener('click', async () => {
     btn.className = 'btn btn-quick';
     // The keys are Electron's own path names (downloads, documents, …), so the
     // dictionary can name each one; anything unrecognised is shown as it came.
-    btn.textContent = t(`app.path.${label}`, label[0].toUpperCase() + label.slice(1));
+    const name = () => t(`app.path.${label}`, label[0].toUpperCase() + label.slice(1));
+    btn.textContent = name();
     btn.title = value;
     btn.addEventListener('click', () => setFolder(value));
+    // Built once from a reply, so the DOM pass that re-translates the markup
+    // never reaches them; a language switch has to name them again.
+    onLanguageChange(() => {
+      btn.textContent = name();
+    });
     container.appendChild(btn);
   }
 })();
@@ -888,7 +894,7 @@ function formatDuration(ms) {
 
 /* ---- the shared progress panel, used by every delete path ---- */
 
-const DELETE_BUTTONS = ['delete-large', 'delete-dupes', 'delete-cleanup', 'media-delete'];
+const DELETE_BUTTONS = ['delete-large', 'delete-dupes', 'delete-cleanup', 'media-delete', 'restore-selected'];
 
 const progressPanel = {
   show(title) {
@@ -940,7 +946,10 @@ const progressPanel = {
       return;
     }
 
-    $('dp-title').textContent = t('delete.title', 'Moving to Recycle Bin');
+    $('dp-title').textContent =
+      p.phase === 'restoring'
+        ? t('restore.progressTitle', 'Putting back from the Recycle Bin')
+        : t('delete.title', 'Moving to Recycle Bin');
     // `freedBytes` in the progress frames is what has *moved*: nothing is
     // freed until the bin is emptied, and the words here say moved.
     $('dp-count').textContent = t('delete.progress', '{done} of {total} · {moved} of {size}', {

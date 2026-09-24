@@ -117,23 +117,36 @@ Thời lượng tương đối chỉ mang tính minh hoạ. [Speculation] Tôi k
 > - **Harness cũ vẫn pass:** 19 suite của `npm test` trước khi bắt đầu vẫn pass; thêm 8 suite mới (`test-contract`, `test-actions`, `test-ipc-manifest`, `test-journal`, `test-entitlements`, `test-helper`, `test-snapshots`, `test-settings-migration`), tổng 27. E2E `smoke.js`, `verify-autoclean.js` (Recycle Bin thật) và `verify-helper.js` (Electron thật, không nâng quyền) đều pass.
 > - **Mọi lần xoá được ghi vào journal:** xoá từ cửa sổ (smoke xác nhận đủ 40/40 dòng), autoclean chạy tay, lần chạy theo lịch, và purge (`verify-autoclean.js` xác nhận trên bin thật) đều đi qua journal.
 > - **Còn mở:** (1) bấm UAC thật cho helper, cần người: `npm run verify:helper -- --elevated`; (2) quyết định khoá/mở Pro ở bản `stable` trước Giai đoạn 6 (ghi ở mục 4.4); (3) sửa bảng 4.2 về `freesOnVolume` của quarantine/relocate/archive trước khi làm B1.
+> - **Đã đóng cả ba (2026-09-24):** UAC đã bấm thử và pass; Pro mở ở `stable`; bảng 4.2 đã sửa. Xem ghi chú quyết định ở Giai đoạn 1.
 
 ### Giai đoạn 1 — Nhìn thấy toàn bộ & giải phóng không mất dữ liệu
 
-| Mã | Tính năng | Ưu tiên |
-| --- | --- | --- |
-| A1 | Bóc tách dung lượng hệ thống | P1 |
-| A3 | Treemap / Sunburst | P1 |
-| A5 | Snapshot diff | P1 |
-| B1 | Quarantine sang ổ khác | P1 |
-| B3 | OneDrive "Free up space" | P1 |
-| D4 | Cache app phổ biến | P1 |
-| I1 | Restore Center | P1 |
-| I2 | Accessibility (high-contrast, bàn phím, screen reader) | P1 |
-| I3 | Menu chuột phải trong Explorer | P2 |
-| I4 | Onboarding "Moved ≠ freed" | P2 |
+| Mã | Tính năng | Ưu tiên | Trạng thái |
+| --- | --- | --- | --- |
+| A1 | Bóc tách dung lượng hệ thống | P1 | |
+| A3 | Treemap / Sunburst | P1 | |
+| A5 | Snapshot diff | P1 | |
+| B1 | Quarantine sang ổ khác | P1 | |
+| B3 | OneDrive "Free up space" | P1 | |
+| D4 | Cache app phổ biến | P1 | |
+| I1 | Restore Center | P1 | ✅ Đã code xong (2026-09-24) |
+| I2 | Accessibility (high-contrast, bàn phím, screen reader) | P1 | |
+| I3 | Menu chuột phải trong Explorer | P2 | |
+| I4 | Onboarding "Moved ≠ freed" | P2 | |
+
+Thứ tự làm (chốt 2026-09-24): I1 → A1 → A3 → A5 → B3 → D4 → B1 → I2 → I4 → I3. Giai đoạn 0 được commit riêng trước (`37179d8`).
 
 **Hoàn thành khi:** trên máy test, tổng của "đã giải thích được" (thư mục người dùng + A1) cộng với dung lượng trống lệch không quá một ngưỡng nhất định so với dung lượng volume. Phần còn lại phải được hiện rõ thành một dòng *"chưa giải thích được: X GB"*, không được che đi.
+
+> **Quyết định đã chốt trước khi code Giai đoạn 1 (2026-09-24):**
+> - Tính năng Pro ở bản `stable` trước Giai đoạn 6: **mở cho mọi người** (phương án a). Giai đoạn 6 sẽ phải khoá lại. Chưa quyết cho Pro·Dev và Business: hỏi lại trước Giai đoạn 2 và 5.
+> - Helper UAC đã được bấm thử thật: `npm run verify:helper -- --elevated` → ALL PASS, integrity `high`.
+> - Chỉ có **một** máy test, không phải ba như A1 ghi.
+> - A1: thêm các dòng đặc tả thiếu (chương trình đã cài, phần còn lại của Windows, phần bị bỏ qua khi quét, người dùng khác), và thay `helper:request` dạng chung bằng hai kênh cố định. Fixture chỉ dùng output tiếng Anh thật, parser đọc theo cấu trúc (máy này không có bản dịch vssadmin/DISM).
+> - A3: một màu accent đậm nhạt theo độ sâu, không tô theo loại file; bỏ Sunburst; dời tô màu Pro.
+> - B1: bản gốc vào Recycle Bin theo mặc định và ghi thật là chưa giải phóng; tuỳ chọn "xoá bản gốc ngay" (tắt sẵn) là cách duy nhất giải phóng ổ C, kèm sửa quy tắc README về xoá vĩnh viễn.
+> - B3: harness được tạo file thử trong OneDrive thật (thư mục riêng, tự dọn), nhưng phải hỏi lại ngay trước khi chạy.
+> - D4: chỉ phát hành định nghĩa app đã kiểm đường dẫn trên máy này.
 
 ### Giai đoạn 2 — Quy mô & chuyên sâu
 
@@ -343,7 +356,9 @@ export async function execute({ kind, items, options }, { signal, onProgress, li
 > - IPC `trash:delete`/`trash:cancel`/`trash:progress` đổi thành `action:execute`/`action:stop`/`action:progress`. Tên hàm ở preload giữ nguyên.
 > - Sửa một lỗ hổng có sẵn: trước đây renderer gửi `{ confirm: false }` là bỏ qua được hộp thoại xác nhận. Giờ chỉ main process mới bật được (`ipc.allowUnconfirmedForHarness()`, do `smoke.js` gọi).
 > - Autoclean cũng đi qua `execute()`.
-> - ⚠️ **Bảng bên dưới mâu thuẫn với B1/B2/B5.** `quarantine`, `relocate`, `archive` được ghi là "Giải phóng: Có", nhưng đặc tả của chính chúng lại đưa bản gốc vào Recycle Bin, nên **chưa giải phóng** cho tới khi bin được dọn. Vì vậy `freesOnVolume(item, options)` nhận thêm `options`: B1 chỉ được trả `true` khi bật "xoá bản gốc ngay".
+> - ~~⚠️ Bảng bên dưới mâu thuẫn với B1/B2/B5.~~ **Đã sửa bảng (2026-09-24)**, theo quyết định cho B1: `quarantine` chỉ giải phóng khi bật "xoá bản gốc ngay"; `relocate` và `archive` giữ đúng đặc tả của chúng (bản gốc vào bin). `freesOnVolume(item, options)` nhận thêm `options` cho đúng việc này.
+> - **Thêm ở I1 (2026-09-24):** handler có thêm `undo` (`locate`, `ready`, `putBack`): Restore Center dùng nó để tìm và đưa từng loại mục về. Có thêm handler `restore`. Nó không phải ActionKind trong contract (không candidate nào đề xuất nó), nhưng vẫn đi qua cùng pipeline và journal. Hộp thoại xác nhận có thể trả `{ approved, options }` thay vì `true`, và `options` của hộp thoại thắng `options` của request.
+> - Chưa sửa (để B1 làm): `execute()` vẫn tính `freedBytes` cho cả lô theo `description.freesOnVolume` (`execute.js`), chưa cộng theo từng mục. B1 cần tính theo từng mục, vì một file đã copy xong mà xoá bản gốc thất bại thì không được tính là đã giải phóng.
 
 Mỗi handler khai báo:
 
@@ -360,11 +375,11 @@ Mỗi handler khai báo:
 | Kind | Giải phóng volume gốc? | Hoàn tác | Thư mục? | Gói |
 | --- | --- | --- | --- | --- |
 | `recycle` | Không (cho tới khi bin được làm trống) | Bin | Không | Free |
-| `quarantine` | **Có** | Journal (chuyển về chỗ cũ) | Không | Pro |
-| `relocate` | **Có** | Journal | Có | Pro |
+| `quarantine` | **Chỉ khi bật "xoá bản gốc ngay"**. Mặc định: không, vì bản gốc vào bin | Journal (chuyển về chỗ cũ) | Không | Pro |
+| `relocate` | Không (bản gốc vào bin theo B2), cho tới khi bin được dọn | Journal | Có | Pro |
 | `compress` | Có (một phần, sau khi đo) | Journal (giải nén) | Có | Pro |
-| `dehydrate` | **Có** | Tự động (OneDrive tải lại khi mở) | Có | Free |
-| `archive` | **Có** (sau khi bản gốc được xử lý) | Journal (giải nén về chỗ cũ) | Có | Pro |
+| `dehydrate` | **Có**, nhưng do OneDrive thực hiện sau đó; con số là số đo được, không phải giả định | Tự động (OneDrive tải lại khi mở) | Có | Free |
+| `archive` | Không (thư mục gốc vào bin theo B5), cho tới khi bin được dọn | Journal (giải nén về chỗ cũ) | Có | Pro |
 | `hardlink` | Có | Journal (tách lại thành bản độc lập) | Không | Pro·Dev |
 | `handoff` | Tuỳ công cụ đích; app **không** tự tính là đã giải phóng | Không áp dụng | — | Free |
 
@@ -448,7 +463,7 @@ export const canRead = (lic, feature) => can(lic, feature) || lic.state === 'exp
 > - Ở kênh `dev`, mặc định bật tất cả. `CLEANDRIVE_ENTITLEMENTS=free|pro|pro+dev|business|all` dùng để thu hẹp khi test. Ở `stable`/`beta` biến này bị bỏ qua hoàn toàn, và license là `free` vì chưa có kho license (Giai đoạn 6).
 > - `can()` đã được gắn vào registry analyzer và pipeline `execute()`. Renderer chỉ nhận `license:entitlements` dạng `[{ feature, allowed, reason }]`.
 > - Harness kiểm tra tĩnh rằng journal, ledger, purge, trash, handler recycle và hộp thoại xác nhận **không hề nạp** module license.
-> - ⚠️ **Cần anh quyết định trước tính năng Pro đầu tiên** (A2/A4/A5 ở Giai đoạn 1–2): bản `stable` phát hành trước Giai đoạn 6 thì khoá Pro (người dùng thấy `UpgradeHint` nhưng chưa mua được), hay mở toàn bộ như gợi ý kênh `beta` ở 7.8? Hiện tại chưa có tính năng nào là Pro nên chưa ảnh hưởng gì.
+> - ~~⚠️ Cần quyết định trước tính năng Pro đầu tiên.~~ **Đã chốt (2026-09-24): mở cho mọi người** ở `stable` trước Giai đoạn 6. Code (`license/state.js` cho kênh không phải `dev`) sẽ đổi cùng tính năng Pro đầu tiên (A5). Giai đoạn 6 phải tính tới việc khoá lại thứ đã mở.
 
 ### 4.5. Elevated Helper
 
@@ -470,7 +485,7 @@ export const canRead = (lic, feature) => can(lic, feature) || lic.state === 'exp
 > - Sửa trong lúc test: mọi exe mà helper (elevated) hoặc bước bật UAC gọi tới đều dùng **đường dẫn tuyệt đối trong System32**. Trên máy này PATH có `whoami.exe` của Git đứng trước bản Windows. Với một tiến trình admin, đó là lỗ hổng chiếm quyền qua PATH.
 > - Helper tự thoát khi app đóng pipe, khi 5 phút không có yêu cầu, hoặc khi nhận được thứ không phải yêu cầu hợp lệ.
 > - Chưa có IPC `helper:request` cho renderer: nó đi cùng nút "Đo với quyền quản trị" của A1, để UAC chỉ bật khi có cú click.
-> - ⚠️ **Chưa kiểm chứng:** bước nâng quyền thật qua UAC. Cần người bấm: `npm run verify:helper -- --elevated`.
+> - ~~⚠️ Chưa kiểm chứng: bước nâng quyền thật qua UAC.~~ **Đã kiểm chứng (2026-09-24), do người bấm:** `npm run verify:helper -- --elevated` → `main.js routed --helper to the helper, inside Electron` (`{"integrity":"high","elevated":true}`), ALL PASS.
 
 ### 4.6. Snapshot Store
 
@@ -1242,6 +1257,18 @@ cleandrive restore <session> [--dry-run]
 - Trạng thái từng mục: *còn trong bin*, *còn trong vùng cách ly*, *đã bị purge*, *đã bị người dùng xoá khỏi bin*, *vùng cách ly không truy cập được*. App kiểm tra trạng thái thật trên đĩa, không tin vào journal (giống nguyên tắc "record là tuyên bố, metadata là bằng chứng").
 - Khôi phục từ Recycle Bin dùng API Shell để khôi phục đúng mục của phiên, không phải "Restore all".
 - **License hết hạn vẫn khôi phục được mọi thứ**, kể cả những gì được cách ly bằng tính năng Pro.
+
+> **✅ Đã code xong (2026-09-24).** Code ở `src/main/actions/restore.js` (`inspect`, `listSessions`, `listItems`, handler `restore`), `undo` trong `src/main/actions/recycle.js`, `matchRecorded`/`putBack` trong `src/main/lib/recyclebin.js`, IPC `journal:sessions`/`journal:items`/`journal:restore` cùng `confirmRestore` trong `src/main/ipc.js`, màn `src/renderer/restore.js`. Harness: `scripts/test-restore.js` (38 kiểm tra, bin tự dựng, viết từ phía kẻ tấn công), `scripts/verify-restore.js` (Electron, Recycle Bin thật, file giả), 13 kiểm tra mới trong `smoke.js` chạy trên 40 file thật trong bin, ảnh chụp `npm run shoot:restore`. Khác với đặc tả ở trên:
+> - **Không dùng API Shell.** Đo trên file giả ở máy này, bốn cách: (A) `fs.rename` `$R` về chỗ cũ mất 3,3 ms, nhưng **ghi đè im lặng** file đang nằm ở đó (libuv yêu cầu Windows thay file có sẵn); (A2) hard link `$R` sang đường dẫn gốc rồi unlink `$R` mất 2,3 ms, gặp file có sẵn thì báo `EEXIST` và không đụng vào gì; (B) Shell COM `InvokeVerb('undelete')` mất 431 ms mỗi mục cộng 2,5 s khởi động PowerShell, và khi có file trùng tên thì bật hộp thoại của Explorer ngoài tầm app, treo tới timeout 15 s. Đã chọn A2. Ổ không có hard link thì chép với `COPYFILE_EXCL` (cũng không ghi đè). Mục chỉ rời bin khi đã nằm đúng chỗ; nếu không gỡ được `$R` thì bản vừa đặt vào bị gỡ lại. Thùng rác mà Windows tự hiển thị (Shell namespace) cũng thôi liệt kê mục đó (có kiểm tra trong `verify-restore.js`).
+> - **Nhận diện mục trong bin** giống purge: đường dẫn gốc, cộng thời điểm xoá lệch ≤ 5 phút so với journal. Thêm một điều purge không cần: mỗi mục trong bin chỉ khớp với một bản ghi, ưu tiên bản ghi gần nhất về thời gian. Ngoài ra `$R` phải còn thật. Đo được: sau `undelete` của Shell, `$I` vẫn nằm lại một mình.
+> - **Trạng thái từng mục:** `inBin` (khôi phục được), `restored` (kèm "còn ở đó không"), `purged`, `gone`, `unavailable` (ổ không kết nối). Câu "đã bị người dùng xoá khỏi bin" đổi thành "không còn trong Thùng rác", vì app không biết ai đã dọn (Storage Sense cũng dọn bin). Nếu đường dẫn cũ đang có file thì dòng đó nói thêm "có thể đã được khôi phục bằng Explorer". Trạng thái của vùng cách ly sẽ đi cùng B1, qua `undo` của handler `quarantine`.
+> - **Trùng tên** (đặc tả: hỏi đổi tên / bỏ qua / thay thế): hộp thoại hỏi ba lựa chọn "giữ cả hai" (bản khôi phục mang tên `tên (restored).ext`, bản tiếng Việt là `(đã khôi phục)`), "bỏ qua" và "thay thế". "Thay thế" chuyển file đang nằm đó vào Recycle Bin trước, ghi thành một session `recycle` riêng (nên nó cũng khôi phục được), và chỉ làm sau khi chắc `$R` còn đó. Thư mục chắn đường thì không bao giờ thay. Mặc định là bỏ qua. Chỉ hộp thoại chọn được "thay thế": request từ cửa sổ không chọn được (smoke kiểm tra trên app thật).
+> - **Sửa một lỗi có sẵn (ledger):** trước đây ledger chỉ trừ các mục đã purge. Kịch bản: app xoá X lúc 10:00, người dùng khôi phục lúc 10:02, rồi tự xoá X bằng Explorer lúc 10:03. Hết grace period, purge xoá vĩnh viễn bản người dùng tự xoá, vì 10:03 nằm trong khoảng lệch 5 phút. Giờ ledger trừ cả session `restore`. Harness tái hiện đúng kịch bản này; chạy với `ledger.js` cũ thì fail ("1 purged").
+> - **Dòng trong Restore Center là bản ghi journal, không phải candidate** (đã chốt): không có verdict nào hợp lý cho chúng. Vẫn dùng chung `CandidateList` (thêm `selectable`, `rowActions`, `onOpen`) để bàn phím chạy giống mọi màn khác. Trạng thái dùng badge trung tính, không dùng màu verdict. Nút "Khôi phục" không có `FreesBadge` (khôi phục không giải phóng mà cũng không tốn thêm dung lượng).
+> - Là **tab mới trên sidebar** (đã chốt), nằm dưới Trends. Mỗi lần mở tab, trạng thái được đọc lại từ đĩa.
+> - **Không đi qua `can()`:** handler `restore` có `feature: 'free'`, còn các IPC `journal:*` không được truyền `can`. `test-entitlements.js` đọc mã nguồn để kiểm tra `restore.js`, `execute.js` và khối IPC không nạp module license.
+> - Cửa sổ chỉ gọi mục bằng id journal (`s_xxxxxxxx:n`), không bao giờ bằng đường dẫn. Journal ghi gì thì mới khôi phục được cái đó. Đích là vị trí hệ thống hoặc thư mục ứng dụng đã cài thì bị từ chối, kể cả khi thư mục cha đã bị tráo thành junction trỏ vào Windows (đi theo junction rồi mới kiểm tra).
+> - Sửa kèm: câu ước tính thời gian trong hộp thoại xoá viết cứng tiếng Anh (lọt qua `test:i18n`), giờ đã dịch; `formatDuration` ở main process cũng dịch. Nút đường tắt thư mục trên thanh trên cùng không đổi ngôn ngữ khi chuyển tiếng lúc đang chạy (thấy qua ảnh chụp), đã sửa.
 
 #### I2. Accessibility
 

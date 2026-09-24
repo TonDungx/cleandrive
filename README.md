@@ -25,8 +25,9 @@ and the notifications.
 - [Screen 3 — Photos & video](#screen-3--photos--video)
 - [Screen 4 — Duplicates](#screen-4--duplicates)
 - [Screen 5 — Trends](#screen-5--trends)
-- [Screen 6 — Automatic](#screen-6--automatic)
-- [Screen 7 — Settings](#screen-7--settings)
+- [Screen 6 — Restore](#screen-6--restore)
+- [Screen 7 — Automatic](#screen-7--automatic)
+- [Screen 8 — Settings](#screen-8--settings)
 - [The file viewer](#the-file-viewer)
 - [Deleting](#deleting)
 - [Disk alerts and the tray](#disk-alerts-and-the-tray)
@@ -95,6 +96,7 @@ while skimming.
 | **Photos & video** | What is in my picture library, and where did it come from? | Curated photo folders |
 | **Duplicates** | What do I have more than one copy of? | One folder you choose |
 | **Trends** | Is this getting worse, and how fast? | Every volume the app knows about |
+| **Restore** | What did the app do, and can I have it back? | Everything in the Action Journal |
 | **Automatic** | Can this happen without me? | A policy you write |
 | **Settings** | Appearance, language, version | The app itself |
 
@@ -144,7 +146,7 @@ Nothing in that sequence happens without a click, and step 6 cannot be skipped.
 
 ### The sidebar
 
-Seven tabs down the left, each with an icon and a label. Two of them carry a
+Eight tabs down the left, each with an icon and a label. Two of them carry a
 **badge** when there is something to report: *What to delete* shows the total
 size it considers safe to remove, *Photos & video* shows how many files it found.
 
@@ -576,7 +578,59 @@ measurements" for roughly the first week, and there is no way around that.
 
 ---
 
-## Screen 6 — Automatic
+## Screen 6 — Restore
+
+Everything the app has done to a file, newest first, and the way back from each
+of it. It is free on every tier and it is never behind a licence: whatever the
+app did, it must stay possible to undo.
+
+Each card is one session from the [Action Journal](#the-action-journal) — a
+delete from a screen, a scheduled cleanup, a purge, an earlier restore — with
+when it happened, where it came from, and its size. Under it, **where its files
+are now**:
+
+| What the row says | What the app checked |
+| --- | --- |
+| *in the bin* | The Recycle Bin's own record names this path, deleted at the moment the app recorded, and the data is still there |
+| *put back* | A restore session names it — and whether it is still where it was put |
+| *purged* | The app's own purge removed it for good; it cannot be put back |
+| *not in the bin* | Nothing in the bin matches any more: it was emptied, or restored in Explorer. If a file sits at its old path, the row says so |
+| *drive not connected* | The drive it was on is not there, so nothing can be said about it |
+
+That column is read from the disk every time the tab opens, not taken from the
+journal. The journal says what the app did; only the disk says what is true now,
+and the two part company the moment somebody uses Explorer's own *Restore* or
+empties the bin.
+
+**Put back all**, or tick files and **Put back selected**. It goes through the
+same pipeline as a delete — a native confirmation with the count and the size,
+the progress panel with Stop, a receipt — and is recorded as a session of its
+own.
+
+When a file has appeared at the old path since, the confirmation asks rather
+than choosing: **keep both** (the restored one comes back as `name (restored)`),
+**skip** those, or **replace** them — in which case the file there now goes to
+the Recycle Bin first, as its own session, so it can be put back too. Nothing is
+ever overwritten, and a folder in the way is never replaced.
+
+Two decisions behind it, both measured rather than assumed:
+
+- **A file comes back by hard link, never by rename.** On Windows a rename onto
+  a path where a file already stands replaces that file without an error; a link
+  refuses. Windows' own *undelete* was tried as well and works, at about half a
+  second a file — but when something is in the way it raises Explorer's conflict
+  dialog, which the app can neither see nor answer.
+- **What was put back is no longer the app's to purge.** Before this, a file
+  restored and then deleted by hand within five minutes of the app's own delete
+  could have been matched by the purge and removed permanently. The purge now
+  skips anything a restore session names.
+
+The window asks for items by their place in the journal and never by path, so it
+can ask for something the app did to be undone and for nothing else.
+
+---
+
+## Screen 7 — Automatic
 
 Cleanup on a timetable, with no window open. Off by default, and designed so that
 every ambiguity resolves towards doing nothing — there is no dialog in front of
@@ -659,7 +713,7 @@ the cleanup.
 
 ---
 
-## Screen 7 — Settings
+## Screen 8 — Settings
 
 Small on purpose. **Nothing in Settings changes what the app deletes.**
 
@@ -781,8 +835,9 @@ sentence the app printed.
 
 Every screen's delete, the manual cleanup and the 02:00 run go through the same
 sequence — vet, probe, confirm, record, act — in `src/main/actions/`. Moving to
-the Recycle Bin is the only action today; each one the roadmap adds is another
-handler in the same sequence rather than a path of its own. The window can ask
+the Recycle Bin, and putting back from it, are the actions today; each one the
+roadmap adds is another handler in the same sequence rather than a path of its
+own. The window can ask
 for a dry run; it cannot ask to skip the confirmation. That used to be possible
 by passing `confirm: false` from the page, and is now something only the main
 process can switch off, for the test harness.
@@ -891,6 +946,10 @@ The journal is a claim, not a permission. The purge still acts only on items the
 Recycle Bin's own metadata corroborates, so a hand-edited line deletes nothing.
 Month files older than thirteen months are dropped at launch.
 
+It is also what the [Restore](#screen-6--restore) screen reads, and a restore is
+recorded in it like any other action — which is how the purge knows a file that
+was put back is no longer the app's to remove.
+
 ---
 
 ## Limits worth knowing before you plan around it
@@ -929,7 +988,7 @@ The interface is plain HTML, CSS and JavaScript — no framework and no build st
 so what is in `src/renderer/` is what runs. All filesystem work happens in a
 separate process; the interface has no access to the disk, the network or Node at
 all, and reaches the system only through a fixed list of named operations —
-forty-three of them, written down in `src/main/ipc-manifest.js`. A handler for a
+forty-six of them, written down in `src/main/ipc-manifest.js`. A handler for a
 channel not in that file throws at startup, and `npm run test:ipc` holds the
 preload, the handlers and the manifest to the same list.
 
@@ -966,12 +1025,14 @@ Everything else, including the ZIP, Excel, PowerPoint, image and video readers,
 the charts and the tray icon, is written here. There are no binary assets in the
 repository; the icons are drawn in code.
 
-Test harnesses live in [`scripts/`](scripts/) — twenty-seven suites in
+Test harnesses live in [`scripts/`](scripts/) — twenty-eight suites in
 `npm test`, plus the Electron ones, covering the classification rules, the
 candidate contract, the action pipeline, the journal (including two processes
 writing it at once), the deletion guards, the unattended-run gates, the Recycle
-Bin purge written from the attacker's side, the entitlement matrix, the elevated
-helper's handshake, the settings migration against the released code, the
-translation dictionary, and an end-to-end run that boots the real application
-and reads its rendered interface back out. `npm run shoot:lists`,
-`shoot:media` and `shoot:viewer` take screenshots of the real screens.
+Bin purge and the restore both written from the attacker's side, the
+entitlement matrix, the elevated helper's handshake, the settings migration
+against the released code, the translation dictionary, and an end-to-end run
+that boots the real application and reads its rendered interface back out.
+`npm run verify:restore` puts throwaway files back from the real Recycle Bin.
+`npm run shoot:lists`, `shoot:media`, `shoot:viewer` and `shoot:restore` take
+screenshots of the real screens.

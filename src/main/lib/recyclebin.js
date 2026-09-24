@@ -1,5 +1,6 @@
 'use strict';
 
+const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 const path = require('node:path');
 
@@ -34,6 +35,10 @@ const { pathKey, IS_WIN } = require('./util');
  * Windows only. On other platforms every function reports "unsupported" and
  * deletes nothing, rather than guessing at a trash layout it has not been
  * tested against.
+ *
+ * The same corroboration runs the other way for the Restore Center: an item is
+ * put back only when the bin's metadata agrees with the app's record of having
+ * put it there (`matchRecorded`, `putBack`).
  */
 
 /* -------------------------------------------------------------------------- */
@@ -321,12 +326,124 @@ async function purgeRecorded(options = {}) {
   return result;
 }
 
+/* -------------------------------------------------------------------------- */
+/* restore                                                                     */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Which bin item, if any, each of the app's records describes.
+ *
+ * The same corroboration the purge relies on -- the original path, and a
+ * deletion time within the tolerance of the one the app recorded -- with one
+ * addition the purge does not need: each bin item is claimed by at most one
+ * record. A file deleted, put back and deleted again inside five minutes
+ * leaves two records and two bin items at the same path, and matching each
+ * record to the nearest item in time is what keeps them apart.
+ *
+ * An item whose `$R` half is missing is still returned by `listItems` (the
+ * `$I` is what it reads), so a match here is a claim about the metadata only;
+ * the caller checks the data is there before calling it restorable.
+ *
+ * @param {Array<{path: string, trashedAt: number}>} records
+ * @param {Array} binItems   from listItems()
+ * @returns {Map<object, object>} record -> bin item
+ */
+function matchRecorded(records, binItems, { tolerance = TIME_TOLERANCE_MS } = {}) {
+  const byPath = new Map();
+  for (const item of binItems) {
+    const key = pathKey(item.originalPath);
+    const bucket = byPath.get(key);
+    if (bucket) bucket.push(item);
+    else byPath.set(key, [item]);
+  }
+
+  const pairs = [];
+  for (const record of records) {
+    if (!record || typeof record.path !== 'string' || !Number.isFinite(record.trashedAt)) continue;
+    for (const item of byPath.get(pathKey(record.path)) || []) {
+      const gap = Math.abs(record.trashedAt - item.deletedAt);
+      if (gap <= tolerance) pairs.push({ record, item, gap });
+    }
+  }
+  pairs.sort((a, b) => a.gap - b.gap);
+
+  const matched = new Map();
+  const taken = new Set();
+  for (const { record, item } of pairs) {
+    if (matched.has(record) || taken.has(item)) continue;
+    matched.set(record, item);
+    taken.add(item);
+  }
+  return matched;
+}
+
+/**
+ * Put one recycled file back at `target`, refusing to overwrite anything.
+ *
+ * A hard link to the target and then the `$R` unlinked -- never a rename.
+ * Measured on this machine with throwaway files: `fs.rename` onto a path where
+ * a file already stood replaced that file without an error, because libuv asks
+ * Windows to replace existing files; a link to the same path fails with EEXIST
+ * and leaves both files alone. Shell's own "undelete" verb was measured too: it
+ * worked, at 431 ms a file plus two seconds to start PowerShell, and when a file
+ * was in the way it raised Explorer's conflict dialog -- a modal the app cannot
+ * see or answer, which held the test for fifteen seconds until it was killed.
+ *
+ * A volume without hard links gets a copy that equally refuses an existing
+ * target (COPYFILE_EXCL). Either way the file only leaves the bin once it is in
+ * place, and if the bin copy cannot be removed afterwards the restored one is
+ * taken away again, so a file is never left in both places.
+ *
+ * The metadata half is removed last. Nothing permanent happens to the user's
+ * data here: the `$R` unlinked is a second name for a file that now has a first.
+ *
+ * @returns {Promise<{ok: true, target: string, via: 'link'|'copy'} |
+ *   {ok: false, code: string, error: string}>}
+ */
+async function putBack(item, target) {
+  let stats;
+  try {
+    stats = await fsp.lstat(item.dataPath);
+  } catch {
+    return { ok: false, code: 'ENOENT', error: 'No longer in the Recycle Bin' };
+  }
+  if (!stats.isFile()) return { ok: false, code: 'ENOTFILE', error: 'Not a file' };
+
+  await fsp.mkdir(path.dirname(target), { recursive: true });
+
+  let via = 'link';
+  try {
+    await fsp.link(item.dataPath, target);
+  } catch (err) {
+    if (err.code === 'EEXIST') return { ok: false, code: 'EEXIST', error: 'A file is already at that path' };
+    via = 'copy';
+    try {
+      await fsp.copyFile(item.dataPath, target, fs.constants.COPYFILE_EXCL);
+    } catch (copyErr) {
+      if (copyErr.code === 'EEXIST') return { ok: false, code: 'EEXIST', error: 'A file is already at that path' };
+      return { ok: false, code: copyErr.code || 'ECOPY', error: copyErr.message || 'Could not put it back' };
+    }
+  }
+
+  try {
+    await fsp.unlink(item.dataPath);
+  } catch (err) {
+    // Back out, so the file is in exactly one place: the bin.
+    await fsp.unlink(target).catch(() => {});
+    return { ok: false, code: err.code || 'EUNLINK', error: 'Could not take it out of the Recycle Bin' };
+  }
+  await fsp.rm(item.metaPath, { force: true }).catch(() => {});
+  return { ok: true, target, via };
+}
+
 module.exports = {
   parseMeta,
   encodeMeta,
   findUserBins,
   listItems,
   purgeRecorded,
+  matchRecorded,
+  putBack,
   TIME_TOLERANCE_MS,
   META_PREFIX,
   DATA_PREFIX,

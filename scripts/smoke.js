@@ -1221,6 +1221,95 @@ app.whenReady().then(async () => {
         services().journalDir.startsWith(SANDBOX_USER_DATA), services().journalDir);
     }
 
+    /* -- the Restore Center, on those same forty -------------------------- */
+    // They are in the real Recycle Bin now, so this is the restore path against
+    // the real bin: what the screen says is read from it, and five of them are
+    // really put back.
+    console.log('\nRestore Center (the same forty, from the real Recycle Bin):');
+    {
+      await win.webContents.executeJavaScript(`document.querySelector('.tab[data-tab="restore"]').click()`);
+      await until(win, `document.querySelector('#restore-sessions .restore-session[data-kind="recycle"]') !== null`, 30000);
+      const listed = await win.webContents.executeJavaScript(`(() => {
+        const card = [...document.querySelectorAll('#restore-sessions .restore-session[data-kind="recycle"]')]
+          .find((c) => /40/.test(c.querySelector('strong').textContent));
+        return card ? {
+          session: card.dataset.session,
+          title: card.querySelector('strong').textContent,
+          note: (card.querySelector('.restore-note') || {}).textContent || '',
+          all: (card.querySelector('[data-restore-all]') || {}).textContent || '',
+          badges: card.querySelectorAll('.frees-badge').length,
+        } : null;
+      })()`);
+      check('the delete is listed as a session of its own', listed && /Moved 40 items to the Recycle Bin/.test(listed.title),
+        listed ? listed.title : 'not listed');
+      check('and says all forty are still in the bin -- read from the bin, not the record',
+        listed && /40 still in the Recycle Bin/.test(listed.note), listed ? listed.note : '');
+      check('with a way to put all of them back', listed && /40/.test(listed.all), listed ? listed.all : '');
+
+      await win.webContents.executeJavaScript(
+        `document.querySelector('[data-restore-toggle="${listed ? listed.session : ''}"]').click()`);
+      await until(win, `document.querySelectorAll('.restore-session[data-session="${listed ? listed.session : ''}"] .file-row').length >= 40`, 30000);
+      const rows = await win.webContents.executeJavaScript(`(() => {
+        const card = document.querySelector('.restore-session[data-session="${listed ? listed.session : ''}"]');
+        const list = [...card.querySelectorAll('.file-row')];
+        return {
+          count: list.length,
+          tickable: list.filter((li) => !li.querySelector('input').disabled).length,
+          words: [...new Set(list.map((li) => (li.querySelector('.badge-state') || {}).textContent))],
+          verdictColour: card.querySelectorAll('.badge-safe, .badge-review').length,
+          viewButtons: card.querySelectorAll('.file-actions .is-lead').length,
+        };
+      })()`);
+      check('its forty files are listed, each one tickable', rows.count === 40 && rows.tickable === 40,
+        `${rows.count} rows, ${rows.tickable} tickable`);
+      check('each says where it is, in words, without a verdict colour',
+        rows.words.length === 1 && rows.words[0] === 'in the bin' && rows.verdictColour === 0, rows.words.join(', '));
+      check('and none offers View: a file in the bin has nothing at its old path to look at', rows.viewButtons === 0);
+
+      // Five back: one of them has a new file in its place, and the request
+      // asks to replace it. The window is not allowed that choice -- only the
+      // dialog is -- so it must be skipped, not overwritten and not recycled.
+      fs.mkdirSync(probeDir, { recursive: true });
+      fs.writeFileSync(probes[4], 'somebody made a new one');
+      const ids = await win.webContents.executeJavaScript(
+        `restoreCenter.view.items.get(${JSON.stringify(listed ? listed.session : '')}).slice(0, 5).map((r) => r.id)`);
+      const back = await win.webContents.executeJavaScript(`
+        window.cleandrive.restore(${JSON.stringify(ids)}, { confirm: false, onConflict: 'replace' })
+          .then((r) => ({ ok: r.ok, moved: r.ok ? r.data.moved.length : 0, failed: r.ok ? r.data.failed.map((f) => f.code) : [] }))`);
+      check('four come back from the real bin, with what they held',
+        back.ok && back.moved === 4 && probes.slice(0, 4).every((p) => fs.existsSync(p) && fs.readFileSync(p, 'utf8') === 'x'.repeat(4096)),
+        JSON.stringify(back));
+      check('the one with a file in its place is skipped: the window cannot choose to replace',
+        back.failed.includes('EEXIST') && fs.readFileSync(probes[4], 'utf8') === 'somebody made a new one');
+
+      const kept = await win.webContents.executeJavaScript(`
+        window.cleandrive.restore(${JSON.stringify(ids.slice(4))}, { confirm: false, onConflict: 'rename' })
+          .then((r) => (r.ok ? r.data.moved.map((m) => m.to) : []))`);
+      check('asked to keep both, it comes back beside the new one under another name',
+        kept.length === 1 && /\(restored\)\.bin$/.test(kept[0]) && fs.readFileSync(kept[0], 'utf8') === 'x'.repeat(4096) &&
+          fs.readFileSync(probes[4], 'utf8') === 'somebody made a new one', kept[0] || 'nothing moved');
+
+      const { services } = require('../src/main/services');
+      await services().ledger.load();
+      const claimed = services().ledger.entries.filter((e) => probes.slice(0, 5).includes(e.path)).length;
+      check('the ledger no longer counts what was put back as the app\'s to purge', claimed === 0, `${claimed} still claimed`);
+
+      await win.webContents.executeJavaScript('restoreCenter.load()');
+      const after = await win.webContents.executeJavaScript(`(() => {
+        const card = document.querySelector('.restore-session[data-session="${listed ? listed.session : ''}"]');
+        const list = [...card.querySelectorAll('.file-row')];
+        return {
+          note: card.querySelector('.restore-note').textContent,
+          tickable: list.filter((li) => !li.querySelector('input').disabled).length,
+          restoreCards: document.querySelectorAll('.restore-session[data-kind="restore"]').length,
+        };
+      })()`);
+      check('read again, the screen says five are back and thirty-five are still in the bin',
+        /35 still in the Recycle Bin/.test(after.note) && /5 put back/.test(after.note), after.note);
+      check('the five can no longer be ticked', after.tickable === 35, String(after.tickable));
+      check('and each restore is a session of its own on the screen', after.restoreCards === 2, String(after.restoreCards));
+    }
+
     fs.rmSync(probeDir, { recursive: true, force: true });
 
     /* -- automatic cleanup ------------------------------------------------ */

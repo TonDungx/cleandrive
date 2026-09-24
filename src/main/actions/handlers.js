@@ -16,7 +16,16 @@
  *   reversible           'bin' | 'journal' | 'manual' | 'none'
  *   freesOnVolume(...)   whether it gives space back to the source volume
  *   plan, describe, apply
+ *   undo                 optional: { locate, ready, putBack } -- how the
+ *                        Restore Center finds this kind's items and puts them
+ *                        back. A kind without one is listed but not undoable.
+ *
+ * `restore` is here too, though no candidate ever offers it: it acts on the
+ * app's own earlier sessions rather than on a file somebody chose, which is
+ * why it is not an ActionKind in the contract. It is still an action, so it
+ * gets the same pipeline and the same journal as the rest.
  */
 module.exports = Object.freeze({
   recycle: require('./recycle'),
+  restore: require('./restore'),
 });

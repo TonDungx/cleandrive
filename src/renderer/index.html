@@ -96,6 +96,11 @@
             <svg class="tab-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M2.6 2.6v10.8h10.8"/><path d="M4.8 10.6l2.8-3 2.2 2.1 3.4-4"/></svg>
             <span class="tab-label" data-i18n="app.tab.trends">Trends</span>
           </button>
+          <button class="tab" data-tab="restore" role="tab"
+            data-i18n-title="app.tab.restore" title="Restore">
+            <svg class="tab-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3.3 6.4A5 5 0 1 1 3 9.2"/><path d="M2.8 3.2v3.4h3.4"/></svg>
+            <span class="tab-label" data-i18n="app.tab.restore">Restore</span>
+          </button>
           <button class="tab" data-tab="auto" role="tab"
             data-i18n-title="app.tab.auto" title="Automatic">
             <svg class="tab-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="5.6"/><path d="M8 4.8V8.3l2.3 1.5"/></svg>
@@ -548,6 +553,42 @@
       </section>
 
       <!-- ------------------------------------------------ automatic -->
+      <!-- ------------------------------------------------ restore -->
+      <!--
+        Everything the app did to a file, and the way back.
+
+        Free on every tier and never behind a licence: whatever the app did, it
+        must always be possible to undo. Each row is a record from the journal,
+        and where the file is *now* is read from the disk, not from the record --
+        the journal says what happened, only the disk says what is true.
+      -->
+      <section class="panel" id="panel-restore" role="tabpanel">
+        <div class="panel-actions">
+          <span class="status" id="restore-status" data-i18n="app.loading">Loading…</span>
+          <span class="spacer"></span>
+          <button class="btn btn-sm" id="restore-refresh" data-i18n="restore.refresh">Check again</button>
+        </div>
+
+        <p class="card-note restore-intro" data-i18n="restore.intro">
+          Everything the app has done to a file, newest first. Where each file is now is read from
+          the disk each time you open this, not taken from the record: a file somebody put back in
+          Explorer, or that was emptied out of the bin, says so.
+        </p>
+
+        <div class="groups" id="restore-sessions"></div>
+
+        <div class="actionbar" id="restore-actionbar" hidden>
+          <span class="actionbar-count" id="restore-selection" data-i18n="app.nothingSelected">Nothing selected</span>
+          <span class="actionbar-gap"></span>
+          <button class="btn btn-primary btn-sm" id="restore-selected" disabled data-i18n="restore.putBackSelected">Put back selected</button>
+        </div>
+
+        <p class="empty" id="restore-empty" hidden data-i18n="restore.empty">
+          Nothing yet. Each time the app moves a file, it is recorded here, and anything that can be
+          put back can be put back from here.
+        </p>
+      </section>
+
       <section class="panel" id="panel-auto" role="tabpanel">
         <!--
           The controls, at the top and stuck there.
@@ -999,5 +1040,6 @@
     <script src="trends.js"></script>
     <script src="updates.js"></script>
     <script src="snapshots.js"></script>
+    <script src="restore.js"></script>
   </body>
 </html>

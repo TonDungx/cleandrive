@@ -80,8 +80,14 @@
     return el;
   }
 
-  /** What each action frees, as the main process's handlers declare it. */
-  const FREES = { recycle: false };
+  /**
+   * What each action frees, as the main process's handlers declare it.
+   *
+   * `null` is "the question does not arise": putting a file back from the bin
+   * moves bytes between two places on the same drive, freeing nothing and
+   * taking nothing, so its button carries no badge rather than a misleading one.
+   */
+  const FREES = { recycle: false, restore: null };
 
   /* ------------------------------------------------------------ action bar */
 
@@ -103,6 +109,7 @@
   function ActionBar({ root, readout, buttons, selected }) {
     const badges = {};
     for (const [kind, button] of Object.entries(buttons)) {
+      if (FREES[kind] === null) continue;
       badges[kind] = FreesBadge(FREES[kind] === true);
       button.before(badges[kind]);
     }
@@ -119,7 +126,7 @@
       for (const [kind, button] of Object.entries(buttons)) {
         const allowed = count > 0 && rows.every((row) => !row.actions || row.actions.includes(kind));
         button.disabled = !allowed || actionRunning;
-        badges[kind].hidden = !allowed;
+        if (badges[kind]) badges[kind].hidden = !allowed;
       }
       root.hidden = count === 0;
     }
@@ -154,8 +161,27 @@
    * @param {(row) => string|null} [options.meta]    the second line
    * @param {(row) => HTMLElement|null} [options.badge]
    * @param {number} [options.virtualizeAt]
+   * @param {(row) => boolean} [options.selectable]   false leaves the box unticked and disabled
+   * @param {(row) => HTMLButtonElement[]} [options.rowActions]  in place of View / Reveal / Open
+   * @param {(row) => void} [options.onOpen]          what Enter does; the viewer by default
+   *
+   * The last three exist for the Restore Center, whose rows are journal
+   * records rather than candidates: a file that is in the Recycle Bin cannot
+   * be viewed at the path it came from, and one the purge removed cannot be
+   * ticked. The list is shared so the keyboard works the same on every screen.
    */
-  function CandidateList(list, { rows, selection, onChange, meta = null, badge = null, virtualizeAt = VIRTUALIZE_AT }) {
+  function CandidateList(list, {
+    rows,
+    selection,
+    onChange,
+    meta = null,
+    badge = null,
+    virtualizeAt = VIRTUALIZE_AT,
+    selectable = null,
+    rowActions = null,
+    onOpen = null,
+  }) {
+    const canTick = (row) => !selectable || selectable(row);
     let anchor = null;
     let active = 0;
     const expanded = new Set();
@@ -172,9 +198,12 @@
       if (extend && anchor !== null) {
         const [from, to] = anchor < index ? [anchor, index] : [index, anchor];
         for (let i = from; i <= to; i++) {
+          if (!canTick(rows[i])) continue;
           if (checked) selection.add(rows[i].path);
           else selection.delete(rows[i].path);
         }
+      } else if (!canTick(row)) {
+        return;
       } else if (checked) selection.add(row.path);
       else selection.delete(row.path);
       anchor = index;
@@ -194,6 +223,7 @@
       const check = document.createElement('input');
       check.type = 'checkbox';
       check.checked = selection.has(row.path);
+      check.disabled = !canTick(row);
       check.tabIndex = -1;
       check.setAttribute('aria-label', row.path);
       check.addEventListener('click', (event) => {
@@ -243,9 +273,13 @@
       const actions = document.createElement('span');
       actions.className = 'file-actions';
       actions.append(
-        linkButton(t('app.view', 'View'), () => openViewer(row.path), 'is-lead'),
-        linkButton(t('app.reveal', 'Reveal'), () => api.reveal(row.path)),
-        linkButton(t('app.open', 'Open'), async () => unwrap(await api.open(row.path), t('app.open', 'Open')))
+        ...(rowActions
+          ? rowActions(row)
+          : [
+              linkButton(t('app.view', 'View'), () => openViewer(row.path), 'is-lead'),
+              linkButton(t('app.reveal', 'Reveal'), () => api.reveal(row.path)),
+              linkButton(t('app.open', 'Open'), async () => unwrap(await api.open(row.path), t('app.open', 'Open'))),
+            ])
       );
       for (const button of actions.querySelectorAll('button')) button.tabIndex = -1;
       li.appendChild(actions);
@@ -348,7 +382,8 @@
         toggle(index, !selection.has(rows[index].path), event.shiftKey);
       } else if (event.key === 'Enter') {
         event.preventDefault();
-        openViewer(rows[index].path);
+        if (onOpen) onOpen(rows[index]);
+        else openViewer(rows[index].path);
       }
     };
 

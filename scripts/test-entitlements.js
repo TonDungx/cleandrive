@@ -122,6 +122,8 @@ console.log('\nentitlements: what never goes through can()\n');
     'src/main/lib/recyclebin.js',
     'src/main/lib/trash.js',
     'src/main/actions/recycle.js',
+    'src/main/actions/restore.js',
+    'src/main/actions/execute.js',
   ];
   const offenders = mustNotGate.filter((rel) => /license\/(entitlements|state)/.test(fs.readFileSync(path.join(ROOT, rel), 'utf8')));
   check('the journal, the ledger, the purge and the Recycle Bin never consult a licence', offenders.length === 0,
@@ -130,6 +132,13 @@ console.log('\nentitlements: what never goes through can()\n');
   const ipc = fs.readFileSync(path.join(ROOT, 'src/main/ipc.js'), 'utf8');
   const confirm = ipc.slice(ipc.indexOf('async function confirmAction'), ipc.indexOf('let unconfirmedAllowed'));
   check('nor does the confirmation dialog', confirm.length > 0 && !/can\(|canNow|entitlements/.test(confirm));
+
+  // The Restore Center's handlers, from the first to the last: none of them is
+  // handed a licence check, so an expired one cannot stop a file coming back.
+  const restoreBlock = ipc.slice(ipc.indexOf("handle('journal:sessions'"), ipc.indexOf('/* ---- automatic cleanup'));
+  check('nor do the Restore Center\'s handlers', restoreBlock.includes("handle('journal:restore'") &&
+    !/\bcan\s*:|canNow|entitlements|licenseState/.test(restoreBlock));
+  check('and the restore action asks for no paid feature', require('../src/main/actions/restore').feature === 'free');
 }
 
 console.log(failures === 0 ? '\nALL PASS\n' : `\n${failures} FAILURE(S)\n`);
