@@ -102,9 +102,9 @@ while skimming.
 | **Automatic** | Can this happen without me? | A policy you write |
 | **Settings** | Appearance and your own colours, language, keys, version | The app itself |
 
-Plus two things that run outside the window: an optional **tray watcher** that
-warns before a disk fills, and a **scheduled cleanup** that runs with no window
-open.
+Plus three things outside the window: an optional **tray watcher** that warns
+before a disk fills, a **scheduled cleanup** that runs with no window open, and,
+if you switch it on, CleanDrive in **Explorer's right-click menu**.
 
 ---
 
@@ -236,8 +236,11 @@ fields 1.3:1, a button's label on the dark theme's blue 3.2:1, and the green of 
   table of its readings; the page says which language it is in, so the voice
   reading it is the right one.
 - Checked by `npm run test:a11y`: axe-core on every screen in both themes, in the
-  user's own colours and in Vietnamese; Chromium's own accessibility tree; Tab
-  walked through every screen; the keys pressed; a contrast theme emulated.
+  user's own colours and in Vietnamese, and again with every kind of control
+  forced into its hovered and focused look (a colour that only exists under the
+  pointer was found only when the real pointer happened to rest there);
+  Chromium's own accessibility tree; Tab walked through every screen; the keys
+  pressed; a contrast theme emulated.
   [Unverified] What Narrator actually says has not been listened to — Windows'
   UI Automation cannot see into this Electron's pages from outside to check it.
 
@@ -289,9 +292,35 @@ happened, how much, how long, and what was skipped. They are the app's receipts.
   or does not exist is simply not offered, rather than failing when clicked.
 - The chosen path is shown **elided in the middle** so both ends stay readable,
   with the full path on hover.
+- **From Explorer**, once it is switched on in Settings: **Analyse with
+  CleanDrive** on a folder, on the empty space inside one, or on a drive opens
+  the app on it and scans it; **Find duplicates with CleanDrive** on a file looks
+  for its copies. On Windows 11 both are under *Show more options* (or
+  Shift+F10). Each is offered for one item at a time — a menu entry on a
+  selection of forty would start forty searches.
 
 The Disk usage and Duplicates screens work on one folder at a time. Photos &
 video works on its own curated list instead, described below.
+
+### The right-click menu, and what it writes
+
+Off until you switch it on. Switched on, it writes four entries under
+`HKEY_CURRENT_USER\Software\Classes` — your account only, no administrator —
+each naming this copy of `CleanDrive.exe`. Every launch checks them against the
+executable and the language actually in use, and rewrites any that differ, so
+moving the app or changing its language does not leave a menu pointing at
+nothing or speaking the wrong language. Switched off, they are taken out; so
+they are when the app is uninstalled (not when it is updated). The card in
+Settings says what the registry has, read back each time it is opened, not what
+the setting says.
+
+What Explorer passes in is somebody else's input, and treated so: the app only
+acts on a path that is absolute, exists, and is a folder or a file as the entry
+expects — and it only ever reads it. A second copy started from the menu while
+the app is running hands its request to the first and quits.
+
+Windows 11's own new-style menu wants a signed package with native code inside
+it, which this app does not have; the classic entries are what it can offer.
 
 ---
 
@@ -720,6 +749,15 @@ Byte-identical files inside the chosen folder.
 
 **Ignore files under** — 1 KB, 100 KB (default), 1 MB or 10 MB.
 
+### Copies of one file
+
+**Find duplicates with CleanDrive** on a file in Explorer opens this screen on
+that file alone: every byte-for-byte copy of it in your Home folder, or on its
+whole drive when the file is not in Home. Only the files of its exact size are
+read at all, so it is a walk of the folder and a handful of hashes. The same
+list and the same rules follow — the oldest copy is the suggested keeper, and
+nothing is ticked. "No other copy" says where it looked.
+
 ### What it reports while it works
 
 Four named phases, with counts and elapsed time, so a long search is legible
@@ -997,6 +1035,7 @@ exception, off until you switch it on: *Delete the original*, on the card for
 | **Appearance** | Light, dark, follow the system, or your own colours |
 | **Your own colours** | Eleven colours, checked as you pick them; import and export a theme file |
 | **Keyboard** | Where the list of keys is (**?** opens it too) |
+| **Right-click menu in Explorer** | Whether CleanDrive is in Explorer's menu, and what the registry actually has |
 | **Language** | English or Vietnamese, or follow Windows |
 | **Company while scanning** | Which animal walks the progress bar, or none |
 | **Scan history** | How many folder snapshots to keep: the newest few, plus one a month |
@@ -1251,7 +1290,9 @@ the disk is, so the question can be answered without clicking anything.
   file *names*, so none of it ever leaves the machine. And, only if you move
   files to another drive, the `CleanDrive Quarantine` folder on the drive you
   chose: the files themselves, and a manifest of where each came from. And a
-  theme file, only when you export your own colours, only where you save it.
+  theme file, only when you export your own colours, only where you save it. And,
+  only while the right-click menu is switched on, its four entries in your
+  account's registry (see [the right-click menu](#the-right-click-menu-and-what-it-writes)).
 - **Settings upgrade forward, once.** The settings file is versioned; the first
   save after an upgrade keeps the previous file as `settings.v1.json`, and the
   version before this one still reads the new file (that is tested against the
@@ -1324,6 +1365,12 @@ was put back is no longer the app's to remove.
   call itself fixed. The copy is read back after it is flushed to the drive,
   but [Inference] that read can be answered from memory rather than from the
   disk itself.
+- **The right-click menu is the classic one**: on Windows 11 it is a click
+  further in, under *Show more options*. It is offered only by the installed
+  app, for one item at a time. That the uninstaller takes its entries out is
+  checked in the script it is built from, [Unverified] not by installing and
+  uninstalling — a test install carries the same identity as a real one and
+  would replace it.
 - **The scheduled task only fires while somebody is logged on.** A machine left
   at the login screen at 02:00 runs the cleanup at the next opportunity instead.
 - **Moving the app** relocates the executable the scheduled task points at. The
@@ -1351,7 +1398,7 @@ The interface is plain HTML, CSS and JavaScript — no framework and no build st
 so what is in `src/renderer/` is what runs. All filesystem work happens in a
 separate process; the interface has no access to the disk, the network or Node at
 all, and reaches the system only through a fixed list of named operations —
-fifty-nine of them, written down in `src/main/ipc-manifest.js`. A handler for a
+sixty-two of them, written down in `src/main/ipc-manifest.js`. A handler for a
 channel not in that file throws at startup, and `npm run test:ipc` holds the
 preload, the handlers and the manifest to the same list.
 
@@ -1361,11 +1408,12 @@ ranked evidence behind them. A candidate missing its confidence or its evidence
 is refused before it leaves the main process, which is what makes "every verdict
 arrives with its evidence" a property of the code rather than a habit.
 
-Two further environment variables exist for development only:
+Three further environment variables exist for development only:
 
 ```
 CLEANDRIVE_CHANNEL=beta npm run build         # which channel a build is (default: stable)
 CLEANDRIVE_ENTITLEMENTS=free npm start        # narrow a checkout to one tier: free, pro, pro+dev, business, all
+CLEANDRIVE_COPIES_SCOPE=D:\x npm start        # where "Find duplicates" looks, instead of Home (a checkout only)
 ```
 
 A checkout opens every feature by default; a built installer ignores
@@ -1386,6 +1434,19 @@ known app's cache waits for the app to close — the same absolute path, the sam
 fixed arguments — and `npm run capture:appcaches` records, reading only, the
 folder names those apps keep on this machine: the fixtures their definitions
 are tested against, with sites' and accounts' names blanked.
+
+The right-click menu is written with `System32\reg.exe` and nothing else, by its
+absolute path: `import` of a `.reg` file the app writes to its own temp folder
+(UTF-16, so a Vietnamese label arrives intact and a command line's quotes are
+the file's escapes, not a second layer of quoting), and `export` of one key to
+read it back — `reg query` prints in the console's code page, which has no
+Vietnamese. `npm run verify:contextmenu` does all of it against the real
+registry, under harness names (`CleanDrive.harness.*`) that are never the real
+ones, asks Windows' Shell whether a folder and a file now carry the entries, and
+takes them out again, checking nothing else under those keys changed.
+`npm run verify:launch` starts the real app the way Explorer does — with
+`--analyze=…`, then a second copy with `--duplicates-of=…` — and reads the
+window back through Chromium's debugging port.
 
 A few paths need an administrator. They go through a **helper**: the same
 executable started with `--helper` through a UAC prompt the user answered,
@@ -1416,7 +1477,7 @@ Everything else, including the ZIP, Excel, PowerPoint, image and video readers,
 the charts and the tray icon, is written here. There are no binary assets in the
 repository; the icons are drawn in code.
 
-Test harnesses live in [`scripts/`](scripts/) — thirty-seven suites in
+Test harnesses live in [`scripts/`](scripts/) — thirty-eight suites in
 `npm test`, plus the Electron ones, covering the classification rules, the
 colour rules a theme must pass (CIEDE2000 held to its published reference
 pairs), the
@@ -1432,7 +1493,8 @@ against the released code, the translation dictionary, and an end-to-end run
 that boots the real application and reads its rendered interface back out.
 `npm run test:a11y` boots it too and checks it for accessibility (see
 [Keyboard and screen readers](#keyboard-and-screen-readers)), and
-`npm run test:onboarding` walks the introduction every way out of it.
+`npm run test:onboarding` walks the introduction every way out of it, and
+`npm run test:explorer` the right-click menu's card and what the menu asks for.
 `npm run verify:restore` puts throwaway files back from the real Recycle Bin.
 `npm run shoot:lists`, `shoot:media`, `shoot:viewer`, `shoot:restore`,
-`shoot:system`, `shoot:treemap`, `shoot:changes`, `shoot:cloud`, `shoot:appcaches`, `shoot:quarantine`, `shoot:a11y` and `shoot:intro` take screenshots of the real screens.
+`shoot:system`, `shoot:treemap`, `shoot:changes`, `shoot:cloud`, `shoot:appcaches`, `shoot:quarantine`, `shoot:a11y`, `shoot:intro` and `shoot:explorer` take screenshots of the real screens.

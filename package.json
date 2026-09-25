@@ -12,7 +12,7 @@
   "scripts": {
     "start": "electron .",
     "dev": "electron . --dev",
-    "test": "node scripts/test-duplicate.js --fixture && node scripts/test-advisor.js && node scripts/test-protection.js && node scripts/test-appsafety.js && node scripts/test-trash.js && node scripts/test-trash-progress.js && node scripts/test-settings.js && node scripts/test-atomic.js && node scripts/test-recyclebin.js && node scripts/test-autoclean.js && node scripts/test-scheduler.js && node scripts/test-history.js && node scripts/test-monitor.js && node scripts/test-media-format.js && node scripts/test-media-scan.js && node scripts/test-media-classify.js && node scripts/test-media-perceptual.js && node scripts/test-preview.js && node scripts/test-office.js && node scripts/test-i18n.js && node scripts/test-contract.js && node scripts/test-actions.js && node scripts/test-ipc-manifest.js && node scripts/test-journal.js && node scripts/test-entitlements.js && node scripts/test-helper.js && node scripts/test-snapshots.js && node scripts/test-settings-migration.js && node scripts/test-restore.js && node scripts/test-system.js && node scripts/test-treemap.js && node scripts/test-snapshot-diff.js && node scripts/test-dehydrate.js && node scripts/test-appcaches.js && node scripts/test-quarantine.js && node scripts/test-theme.js && node scripts/test-intro.js",
+    "test": "node scripts/test-duplicate.js --fixture && node scripts/test-advisor.js && node scripts/test-protection.js && node scripts/test-appsafety.js && node scripts/test-trash.js && node scripts/test-trash-progress.js && node scripts/test-settings.js && node scripts/test-atomic.js && node scripts/test-recyclebin.js && node scripts/test-autoclean.js && node scripts/test-scheduler.js && node scripts/test-history.js && node scripts/test-monitor.js && node scripts/test-media-format.js && node scripts/test-media-scan.js && node scripts/test-media-classify.js && node scripts/test-media-perceptual.js && node scripts/test-preview.js && node scripts/test-office.js && node scripts/test-i18n.js && node scripts/test-contract.js && node scripts/test-actions.js && node scripts/test-ipc-manifest.js && node scripts/test-journal.js && node scripts/test-entitlements.js && node scripts/test-helper.js && node scripts/test-snapshots.js && node scripts/test-settings-migration.js && node scripts/test-restore.js && node scripts/test-system.js && node scripts/test-treemap.js && node scripts/test-snapshot-diff.js && node scripts/test-dehydrate.js && node scripts/test-appcaches.js && node scripts/test-quarantine.js && node scripts/test-theme.js && node scripts/test-intro.js && node scripts/test-contextmenu.js",
     "test:scanner": "node scripts/test-scanner.js",
     "test:duplicate": "node scripts/test-duplicate.js --fixture",
     "test:advisor": "node scripts/test-advisor.js",
@@ -22,6 +22,7 @@
     "test:e2e": "electron scripts/smoke.js",
     "test:a11y": "electron scripts/test-a11y.js",
     "test:onboarding": "electron scripts/test-onboarding.js",
+    "test:explorer": "electron scripts/test-explorer.js",
     "verify:trash": "electron scripts/verify-trash.js",
     "verify:autoclean": "electron scripts/verify-autoclean.js",
     "verify:monitor": "electron scripts/verify-monitor.js",
@@ -55,10 +56,13 @@
     "test:quarantine": "node scripts/test-quarantine.js",
     "test:theme": "node scripts/test-theme.js",
     "test:intro": "node scripts/test-intro.js",
+    "test:contextmenu": "node scripts/test-contextmenu.js",
     "verify:helper": "electron scripts/verify-helper.js",
     "verify:restore": "electron scripts/verify-restore.js",
     "verify:dehydrate": "node scripts/verify-dehydrate.js",
     "verify:quarantine": "node scripts/verify-quarantine.js",
+    "verify:contextmenu": "node scripts/verify-contextmenu.js",
+    "verify:launch": "node scripts/verify-launch-target.js",
     "capture:system": "electron scripts/capture-system.js",
     "verify:system": "electron scripts/verify-system.js",
     "test:scheduler:live": "node scripts/test-scheduler.js --live",
@@ -86,6 +90,7 @@
     "shoot:quarantine": "electron scripts/shoot-quarantine.js",
     "shoot:a11y": "electron scripts/shoot-a11y.js",
     "shoot:intro": "electron scripts/shoot-intro.js",
+    "shoot:explorer": "electron scripts/shoot-explorer.js",
     "capture:appcaches": "node scripts/capture-app-caches.js"
   },
   "devDependencies": {

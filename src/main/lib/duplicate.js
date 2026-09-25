@@ -139,6 +139,9 @@ function groupBySharedKey(items, keyFn) {
   return map;
 }
 
+/** Windows paths name the same file whatever their case. */
+const samePath = (a, b) => path.resolve(a).toLowerCase() === path.resolve(b).toLowerCase();
+
 /* -------------------------------------------------------------------------- */
 /* main entry point                                                            */
 /* -------------------------------------------------------------------------- */
@@ -161,6 +164,19 @@ async function findDuplicates(roots, options = {}, handlers = {}) {
   const started = Date.now();
 
   const rootList = Array.isArray(roots) ? roots : [roots];
+
+  // `copiesOf`: the one file whose copies are wanted. Measured before anything
+  // is walked; a file that is not there, or is not a file, is an answer of
+  // its own rather than a search of the whole folder for nothing.
+  let target = null;
+  if (opts.copiesOf) {
+    const st = await fsp.stat(opts.copiesOf);
+    if (!st.isFile()) throw Object.assign(new Error('Not a file'), { code: 'ENOTFILE' });
+    target = { path: path.resolve(opts.copiesOf), size: st.size, mtimeMs: st.mtimeMs, atimeMs: st.atimeMs };
+    // A copy of a small file is still a copy; the usual floor would hide it.
+    opts.minSize = Math.min(opts.minSize, Math.max(1, st.size));
+  }
+
   const cache = opts.useCache ? await new HashCache(opts.cachePath || defaultCachePath()).load() : null;
 
   const stats = {
@@ -194,8 +210,18 @@ async function findDuplicates(roots, options = {}, handlers = {}) {
   /* --- pass 1: group by size -------------------------------------------- */
 
   report('grouping');
-  const bySize = groupBySharedKey(files, (f) => f.size);
-  let candidates = [...bySize.values()];
+  let candidates;
+  if (target) {
+    // Copies of one file (I3, "Find duplicates of this file"): only the files
+    // of its exact size can be copies of it, so only those are ever read.
+    // The file itself goes in even if the walk left its folder out (a hidden
+    // one, say) -- it is the one thing the person asked about.
+    const same = files.filter((f) => f.size === target.size);
+    if (!same.some((f) => samePath(f.path, target.path))) same.push(target);
+    candidates = same.length > 1 ? [same] : [];
+  } else {
+    candidates = [...groupBySharedKey(files, (f) => f.size).values()];
+  }
   stats.candidatesBySize = candidates.reduce((n, g) => n + g.length, 0);
 
   if (candidates.length === 0) return finish(false, []);
@@ -281,6 +307,9 @@ async function findDuplicates(roots, options = {}, handlers = {}) {
 
     const usable = tagged.filter(Boolean);
     for (const [hash, bucket] of groupBySharedKey(usable, (f) => f.hash)) {
+      // Copies of one file: the group it is in, and no other group of files
+      // that merely happen to share its size with each other.
+      if (target && !bucket.some((f) => samePath(f.path, target.path))) continue;
       // Oldest copy first -- that is the one suggested as the keeper.
       bucket.sort((a, b) => a.mtimeMs - b.mtimeMs || a.path.localeCompare(b.path));
 
@@ -333,6 +362,7 @@ async function findDuplicates(roots, options = {}, handlers = {}) {
 
     return {
       roots: rootList,
+      copiesOf: target ? target.path : null,
       groups: resultGroups,
       totalGroups: resultGroups.length,
       totalDuplicateFiles: resultGroups.reduce((n, g) => n + g.count - 1, 0),

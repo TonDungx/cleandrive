@@ -10,6 +10,7 @@ const { app, BrowserWindow, shell } = require('electron');
 const language = require('./language');
 const appearance = require('./appearance');
 const intro = require('./intro');
+const launchTarget = require('./launch-target');
 
 const isDev = process.argv.includes('--dev');
 
@@ -27,6 +28,11 @@ const isSampleOnly = process.argv.includes('--sample-only');
 // user answered, to read the few things only an administrator can. It opens
 // no window and answers only the fixed, read-only list in helper/ops.js.
 const isHelper = process.argv.includes('--helper');
+
+// Started from Explorer's right-click menu (I3): a folder to analyse, or a
+// file whose copies to find. Read here, before the single-instance lock, so a
+// second copy can hand it to the first.
+const launchedFor = launchTarget.parse(process.argv);
 
 // Required lazily, inside the windowed branch. Between them these pull in the
 // scanner, the duplicate finder, the tray and the updater, and the two headless
@@ -65,6 +71,15 @@ function createWindow() {
   });
 
   mainWindow.once('ready-to-show', () => mainWindow.show());
+  // A folder or file Explorer's menu asked for, once the page can hear it.
+  pageReady = false;
+  mainWindow.webContents.on('did-start-loading', () => {
+    pageReady = false;
+  });
+  mainWindow.webContents.on('did-finish-load', () => {
+    pageReady = true;
+    sendTarget();
+  });
 
   // `appearance.js` holds the chosen mode (and the user's own palette, when
   // there is one): the IPC layer updates it when the user picks, and main.js
@@ -157,6 +172,26 @@ async function sampleAtLaunch(settings) {
   }
 }
 
+/**
+ * What Explorer's right-click menu asked for (I3), waiting for a window that
+ * has finished loading. Only the latest counts: two right-clicks in a row
+ * mean the second one.
+ */
+let pendingTarget = null;
+/**
+ * Set by the page's own load events rather than read from isLoading(), which
+ * was measured still saying true inside 'did-finish-load' -- and a first
+ * launch from Explorer then kept its folder to itself.
+ */
+let pageReady = false;
+
+function sendTarget(target) {
+  if (target) pendingTarget = target;
+  if (!pendingTarget || !pageReady || !mainWindow || mainWindow.isDestroyed()) return;
+  mainWindow.webContents.send('app:target', pendingTarget);
+  pendingTarget = null;
+}
+
 /** Show the window, creating it again if it was closed to the tray. */
 function revealWindow() {
   if (!mainWindow) {
@@ -222,7 +257,9 @@ if (isHelper) {
       app.quit();
     }
   });
-} else if (!app.requestSingleInstanceLock()) {
+} else if (!app.requestSingleInstanceLock(launchedFor ? { target: launchedFor } : undefined)) {
+  // The copy already running is told what this one was started for (the
+  // single-instance lock carries it), and checks it again itself.
   app.quit();
 } else {
   /*
@@ -239,7 +276,14 @@ if (isHelper) {
    * revealWindow() is the same path the tray uses, and it covers the window
    * being hidden, minimised, or gone entirely.
    */
-  app.on('second-instance', () => revealWindow());
+  app.on('second-instance', (event, argv, cwd, data) => {
+    revealWindow();
+    // From Explorer's menu: the second instance's own reading of its command
+    // line, checked again here -- it came from another process.
+    const target = launchTarget.validate(data && data.target) || launchTarget.parse(argv);
+    if (target) sendTarget(target);
+  });
+  if (launchedFor) pendingTarget = launchedFor;
 
   /*
    * The preview scheme, declared before `ready` because Electron requires it.
@@ -296,6 +340,10 @@ if (isHelper) {
       // writes to the history file the reconciliation never touches.
       const reconciled = await reconcileTasks(settings, { settingsExisted });
       if (reconciled) ipc.noteReconciliation(reconciled);
+      // Explorer's menu, like the task: derived from the settings and made to
+      // match them at every launch -- pointing at this executable, in this
+      // language, or not there at all.
+      await ipc.reconcileMenu(settings).catch((err) => console.error('[explorer] could not update the menu:', err.message));
       await sampleAtLaunch(settings);
     }
 

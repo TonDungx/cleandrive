@@ -42,8 +42,10 @@ const themePalette = require('../../shared/theme-palette');
  *            before they are called expired, and whether originals are
  *            deleted outright (B1)
  *   4 -> 5   `appearance.custom`: the user's own colours, or null (I2)
+ *   5 -> 6   `explorer.contextMenu`: CleanDrive in Explorer's right-click
+ *            menu, off (I3)
  */
-const SCHEMA_VERSION = 5;
+const SCHEMA_VERSION = 6;
 
 const MIGRATIONS = Object.freeze([
   {
@@ -94,6 +96,15 @@ const MIGRATIONS = Object.freeze([
       // shows the light or dark theme a custom one was built on.
       const appearance = isObject(raw.appearance) ? raw.appearance : {};
       return { ...raw, version: 5, appearance: { custom: null, ...appearance } };
+    },
+  },
+  {
+    from: 5,
+    to: 6,
+    migrate(raw) {
+      // Additive, and off: nothing is written to the registry until somebody
+      // switches the menu on in Settings.
+      return { ...raw, version: 6, explorer: { contextMenu: false, ...(isObject(raw.explorer) ? raw.explorer : {}) } };
     },
   },
 ]);
@@ -174,7 +185,7 @@ const THEMES = ['system', 'light', 'dark'];
 const LANGUAGES = ['system', ...i18n.CODES];
 
 /** The top-level groups `patch` merges one level into. */
-const SECTIONS = ['autoClean', 'purge', 'monitor', 'appearance', 'updates', 'trends', 'snapshots', 'quarantine'];
+const SECTIONS = ['autoClean', 'purge', 'monitor', 'appearance', 'updates', 'trends', 'snapshots', 'quarantine', 'explorer'];
 
 /** Hard ceilings. These are not preferences -- they bound the blast radius. */
 const LIMITS = {
@@ -315,6 +326,12 @@ function defaults() {
       // the Recycle Bin, which frees nothing on its drive until the bin is
       // emptied; with it on the copy on the other drive is the only one left.
       deleteOriginal: false,
+    },
+    explorer: {
+      // "Analyse with CleanDrive" and "Find duplicates with CleanDrive" in
+      // Explorer's right-click menu (I3). Off by default (decided 2026-09-25):
+      // the app writes nothing to the registry until somebody asks it to.
+      contextMenu: false,
     },
     updates: {
       // On by default. This is distributed to people with no support channel,
@@ -732,6 +749,9 @@ function coerceSettings(input, { minMinutes = 1 } = {}) {
       trends,
       snapshots,
       quarantine,
+      explorer: {
+        contextMenu: bool(isObject(raw.explorer) ? raw.explorer.contextMenu : undefined, base.explorer.contextMenu),
+      },
     },
     warnings,
   };

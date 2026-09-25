@@ -18,6 +18,9 @@ const api = {
 
   findDuplicates: (roots, options) => ipcRenderer.invoke('dupes:run', roots, options),
   cancelDuplicates: () => ipcRenderer.invoke('dupes:cancel'),
+  findCopies: (filePath) => ipcRenderer.invoke('dupes:copiesOf', filePath),
+  explorerStatus: () => ipcRenderer.invoke('explorer:status'),
+  setExplorerMenu: (enabled) => ipcRenderer.invoke('explorer:set', enabled),
 
   /* acting on files -- every kind through the one pipeline */
   trash: (paths, options) => ipcRenderer.invoke('action:execute', { kind: 'recycle', items: paths, options }),
@@ -118,6 +121,8 @@ const api = {
 
   /** Fires when a background run rewrites settings, the log or the history. */
   onDataChanged: (cb) => subscribe('app:data-changed', cb),
+  // Explorer's right-click menu asked for a folder or a file (I3).
+  onTarget: (cb) => subscribe('app:target', cb),
 };
 
 function subscribe(channel, cb) {

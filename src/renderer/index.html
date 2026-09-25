@@ -1156,6 +1156,23 @@
             </div>
           </section>
 
+          <!-- Explorer's right-click menu (I3). explorer.js draws the state,
+               which is read back from the registry, not from the setting. -->
+          <section class="card" id="explorer-card">
+            <h2 data-i18n="explorer.title">Right-click menu in Explorer</h2>
+            <label class="check check-lead">
+              <input type="checkbox" id="explorer-menu" />
+              <span data-i18n="explorer.enable">Add CleanDrive to Explorer’s right-click menu</span>
+            </label>
+            <p class="card-note" data-i18n="explorer.note">
+              Adds “Analyse with CleanDrive” to folders and drives, and “Find duplicates with
+              CleanDrive” to files. On Windows 11 they are under Show more options (or Shift+F10).
+              They are written for your account only, and taken out again when this is switched off
+              or the app is uninstalled.
+            </p>
+            <p class="card-note" id="explorer-status" role="status"></p>
+          </section>
+
           <section class="card">
             <h2 data-i18n="settings.snapshots.title">Scan history</h2>
             <p class="card-note" data-i18n="settings.snapshots.note">
@@ -1424,6 +1441,8 @@
     <script src="keys.js"></script>
     <!-- The user's own colours, in Settings. -->
     <script src="theme-editor.js"></script>
+    <!-- Explorer's right-click menu, in Settings. -->
+    <script src="explorer.js"></script>
     <!-- The introduction, last: it opens over a window that is already built. -->
     <script src="intro.js"></script>
   </body>

@@ -269,6 +269,8 @@ function setScanRunning(running) {
 }
 
 api.onScanProgress((p) => {
+  // As for duplicates: a late frame must not overwrite the finished scan's line.
+  if ($('cancel-scan').hidden) return;
   $('scan-status').textContent = t('usage.scanning', 'Scanning… {files} files, {size} ({elapsed})', {
     files: formatCount(p.files),
     size: formatBytes(p.bytes),
@@ -797,6 +799,10 @@ const PHASE_LABEL = {
 };
 
 api.onDuplicateProgress((p) => {
+  // A progress frame that lands after the search has answered -- the reply
+  // and the frames do not share an order -- would write "Grouping by size…"
+  // over the result it had just put there (seen in test-explorer.js).
+  if ($('cancel-dupes').hidden) return;
   const phase = PHASE_LABEL[p.phase];
   const label = phase ? t(phase[0], phase[1]) : p.phase;
   const detail =
@@ -832,6 +838,56 @@ $('run-dupes').addEventListener('click', async () => {
   announce($('dupes-status').textContent);
 });
 
+/**
+ * Copies of one file, asked for from Explorer's menu (I3). The same screen,
+ * the same list and the same rules -- the oldest copy is the suggested
+ * keeper and nothing is ticked -- over the files of that one size in Home
+ * (or the file's drive, when it is not in Home; the main process decides).
+ */
+async function findCopiesOf(filePath) {
+  document.querySelector('.tab[data-tab="dupes"]').click();
+  setDupesRunning(true);
+  $('dupes-empty').hidden = true;
+  $('dupe-groups').replaceChildren();
+  state.selectedDupes.clear();
+  $('dupes-status').textContent = t('dupes.copies.looking', 'Looking for copies of {name}…', { name: filePath.split(/[\\/]/).pop() });
+
+  const result = unwrap(await api.findCopies(filePath), t('app.label.dupes', 'Duplicate search'));
+  setDupesRunning(false);
+  if (!result) {
+    $('dupes-status').textContent = t('dupes.failed', 'Duplicate search failed.');
+    return;
+  }
+  state.dupes = hydrateDupes(result);
+  renderDupes(state.dupes);
+  announce($('dupes-status').textContent);
+}
+
+/**
+ * Explorer's right-click menu asked for something (I3). The main process has
+ * checked the path exists and is the right kind of thing. Analysing a folder
+ * scans it -- the person pressed "Analyse" -- and deletes nothing; finding
+ * duplicates looks, and ticks nothing.
+ */
+api.onTarget((target) => {
+  if (!target || typeof target.path !== 'string') return;
+  if (target.kind === 'analyze') {
+    document.querySelector('.tab[data-tab="usage"]').click();
+    if (!$('cancel-scan').hidden) {
+      toast(t('explorer.busy', 'A scan is already running. Stop it, then try again.'));
+      return;
+    }
+    setFolder(target.path);
+    $('run-scan').click();
+  } else if (target.kind === 'duplicates') {
+    if (!$('cancel-dupes').hidden) {
+      toast(t('explorer.busyDupes', 'A search for duplicates is already running. Stop it, then try again.'));
+      return;
+    }
+    findCopiesOf(target.path);
+  }
+});
+
 /** The duplicate groups, each holding the candidates it names. */
 function hydrateDupes(result) {
   const byId = indexCandidates(result.candidates);
@@ -859,7 +915,24 @@ function renderDupes(result) {
   $('dstat-time').textContent = formatSeconds(result.durationMs);
   $('dupes-stats').hidden = false;
 
-  const notes = [t('dupes.checked', 'Checked {n} files.', { n: formatCount(result.indexedFiles) })];
+  const notes = [];
+  if (result.copiesOf) {
+    // Copies of one file, from Explorer's menu: say which file, and where the
+    // app looked -- "none" means none in that folder, not none anywhere.
+    const name = result.copiesOf.split(/[\\/]/).pop();
+    const copies = result.groups.length ? result.groups[0].count - 1 : 0;
+    notes.push(
+      copies
+        ? t('dupes.copies.found', '{name}: {n} other {copies} in {scope}.', {
+            name,
+            n: formatCount(copies),
+            copies: word(copies, 'dupes.copyWord', 'copy', 'copies'),
+            scope: result.scope,
+          })
+        : t('dupes.copies.none', '{name}: no other copy in {scope}.', { name, scope: result.scope })
+    );
+  }
+  notes.push(t('dupes.checked', 'Checked {n} files.', { n: formatCount(result.indexedFiles) }));
   if (result.withheldFiles) {
     notes.push(
       t(
@@ -889,7 +962,9 @@ function renderDupes(result) {
 
   if (result.totalGroups === 0) {
     $('dupes-toolbar').hidden = true;
-    $('dupes-empty').textContent = t('dupes.empty', 'No duplicate files found in this folder.');
+    $('dupes-empty').textContent = result.copiesOf
+      ? t('dupes.copies.empty', 'No other copy of this file, byte for byte, in {scope}.', { scope: result.scope })
+      : t('dupes.empty', 'No duplicate files found in this folder.');
     $('dupes-empty').hidden = false;
     return;
   }

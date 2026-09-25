@@ -24,6 +24,7 @@ const INVOKE = Object.freeze([
   'scan:children',
   'dupes:run',
   'dupes:cancel',
+  'dupes:copiesOf',
 
   'action:execute',
   'action:stop',
@@ -43,6 +44,9 @@ const INVOKE = Object.freeze([
 
   'quarantine:status',
   'quarantine:choose',
+
+  'explorer:status',
+  'explorer:set',
 
   'shell:reveal',
   'shell:open',
@@ -103,6 +107,7 @@ const EVENTS = Object.freeze([
   'media:batch',
   'update:state',
   'app:data-changed',
+  'app:target',
 ]);
 
 const INVOKE_SET = new Set(INVOKE);

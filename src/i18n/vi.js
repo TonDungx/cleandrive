@@ -1943,5 +1943,33 @@
       'Quét chỉ đọc. Chọn một thư mục để xem — việc quét bắt đầu khi bạn bấm Quét thư mục — hoặc mở màn Hệ thống ' +
       'để xem cả ổ đã đi đâu.',
     'intro.3.system': 'Xem cả ổ đã đi đâu',
+
+    /* ---- Explorer's right-click menu (I3) ---- */
+    'explorer.menu.analyze': 'Phân tích bằng CleanDrive',
+    'explorer.menu.copies': 'Tìm bản trùng bằng CleanDrive',
+    'explorer.title': 'Menu chuột phải trong Explorer',
+    'explorer.enable': 'Thêm CleanDrive vào menu chuột phải của Explorer',
+    'explorer.note':
+      'Thêm “Phân tích bằng CleanDrive” vào thư mục và ổ đĩa, và “Tìm bản trùng bằng CleanDrive” vào tệp. Trên ' +
+      'Windows 11 các mục này nằm trong “Show more options” của menu (hoặc bấm Shift+F10). Chúng chỉ được ghi ' +
+      'cho tài khoản của bạn, và được gỡ đi khi tắt mục này hoặc khi gỡ cài đặt app.',
+    'explorer.dev': 'Chỉ bản đã cài đặt mới tự thêm được vào menu của Explorer.',
+    'explorer.failed': 'Windows không nhận thay đổi: {why}',
+    'explorer.on': 'Đã có trong menu của Explorer: {n} mục, trỏ tới bản app này.',
+    'explorer.stale':
+      'Đang bật, nhưng {n} trong {total} mục bị thiếu hoặc đã cũ. Chúng sẽ được sửa lại ở lần mở app tới.',
+    'explorer.leftover': 'Vẫn còn {n} mục trong menu của Explorer; chúng sẽ được gỡ ở lần mở app tới.',
+    'explorer.off': 'Chưa có trong menu của Explorer.',
+    'explorer.adding': 'Đang thêm các mục…',
+    'explorer.removing': 'Đang gỡ các mục…',
+    'explorer.busy': 'Đang có một lần quét chạy. Hãy dừng nó rồi thử lại.',
+    'explorer.busyDupes': 'Đang tìm bản trùng. Hãy dừng lại rồi thử lại.',
+    'dupes.copies.gone': 'Tệp đó không còn nữa.',
+    'dupes.copies.looking': 'Đang tìm bản sao của {name}…',
+    'dupes.copies.found': '{name}: có thêm {n} {copies} khác trong {scope}.',
+    'dupes.copies.none': '{name}: không có bản sao nào khác trong {scope}.',
+    'dupes.copies.empty': 'Không có bản sao nào khác của tệp này, giống từng byte, trong {scope}.',
+    'dupes.copyWord.one': 'bản sao',
+    'dupes.copyWord.other': 'bản sao',
   };
 });

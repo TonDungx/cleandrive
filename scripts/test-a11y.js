@@ -306,6 +306,61 @@ app.whenReady().then(async () => {
   check('with a file open in the viewer, no violations', open.violations.length === 0, open.violations.map((v) => `${v.id}: ${v.nodes.join(' | ')}`).join(' || '));
   await run(`closeViewer();`);
 
+  // Under the pointer and in focus. axe sees the page as it is, and a state
+  // that only exists while the pointer rests somewhere was found only when
+  // the real pointer happened to rest there (the keeper tag, the View button).
+  // So the states are forced through CDP: every kind of control hovered --
+  // a row and its button together, as the pointer makes them -- and a row
+  // holding focus, then contrast is checked on what that draws.
+  console.log('\nHovered and focused (forced through CDP), contrast only:');
+  await dbg.sendCommand('DOM.enable');
+  await dbg.sendCommand('CSS.enable');
+  const HOVERED = ['.file-row', '.file-row .link', '.file-row .badge-button', '.btn', '.tab[data-tab]', '.btn-quick', '.chip', '.segmented-option',
+    '.ov-key', '.link', '.keeper-tag', '.group-select', '.spacemap-item', '.media-cell'];
+  const contrastUnder = async (states, selectors) => {
+    const { root } = await dbg.sendCommand('DOM.getDocument', { depth: -1 });
+    const forced = [];
+    for (const selector of selectors) {
+      const { nodeIds } = await dbg.sendCommand('DOM.querySelectorAll', { nodeId: root.nodeId, selector: `.panel.is-active ${selector}, .sidebar ${selector}, .topbar ${selector}` });
+      for (const nodeId of nodeIds.slice(0, 4)) {
+        await dbg.sendCommand('CSS.forcePseudoState', { nodeId, forcedPseudoClasses: states });
+        forced.push(nodeId);
+      }
+    }
+    await wait(250);
+    const found = await js(`axe.run(document, { runOnly: { type: 'rule', values: ['color-contrast'] } })
+      .then((r) => r.violations.flatMap((v) => v.nodes.slice(0, 4).map((n) => n.target.join(' ') + ' :: ' + (n.failureSummary || '').replace(/\\s+/g, ' ').slice(60, 170))))`);
+    for (const nodeId of forced) {
+      await dbg.sendCommand('CSS.forcePseudoState', { nodeId, forcedPseudoClasses: [] }).catch(() => {});
+    }
+    return { found, forced: forced.length };
+  };
+  {
+    // The method, checked: a forced :hover must really change what is drawn.
+    await tab('usage');
+    const probe = `(() => { const l = document.querySelector('#largest-files .file-row .link'); const s = getComputedStyle(l); return s.backgroundColor + '|' + s.borderTopColor; })()`;
+    const before = await js(probe);
+    const { root } = await dbg.sendCommand('DOM.getDocument', { depth: -1 });
+    const { nodeId } = await dbg.sendCommand('DOM.querySelector', { nodeId: root.nodeId, selector: '#largest-files .file-row .link' });
+    await dbg.sendCommand('CSS.forcePseudoState', { nodeId, forcedPseudoClasses: ['hover'] });
+    await wait(300);
+    const during = await js(probe);
+    await dbg.sendCommand('CSS.forcePseudoState', { nodeId, forcedPseudoClasses: [] });
+    check('forcing :hover through CDP really changes what a button draws', before !== during, `${before} -> ${during}`);
+  }
+  for (const mode of ['light', 'dark']) {
+    await setTheme(mode);
+    for (const screen of ['usage', 'cleanup', 'dupes', 'media', 'restore', 'settings']) {
+      await tab(screen);
+      await wait(250);
+      const hover = await contrastUnder(['hover'], HOVERED);
+      check(`${mode}: ${screen} hovered (${hover.forced} elements)`, hover.found.length === 0, hover.found.join(' || '));
+      const focus = await contrastUnder(['focus-within'], ['.file-row', '.segmented', '.actionbar']);
+      check(`${mode}: ${screen} with a row focused`, focus.found.length === 0, focus.found.join(' || '));
+    }
+  }
+  await setTheme('light');
+
   /* ---- 2. what a screen reader is handed ---- */
 
   console.log('\nChromium’s accessibility tree:');

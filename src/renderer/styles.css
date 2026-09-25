@@ -1824,11 +1824,15 @@ main {
   color: var(--text);
 }
 
+/* Under the pointer the fill and the edge turn to the accent; the words stay
+   the text colour. Accent words on the accent's own soft fill were under
+   4.5:1 -- axe found it on the View button whenever the pointer happened to
+   rest on one (test-explorer.js). */
 .link:hover,
 .file-row:hover .link:hover {
   background: var(--accent-soft);
   border-color: var(--accent-ring);
-  color: var(--accent);
+  color: var(--text);
 }
 
 /* ==========================================================================
@@ -2204,12 +2208,17 @@ main {
   cursor: default;
 }
 
+/* The copy suggested as the one to keep. The accent is its edge, not its
+   ink: accent on the accent's soft fill fell under 4.5:1 as soon as the row
+   under it was hovered, focused or ticked (axe, test-explorer.js), and the
+   text colour is the one every palette holds to 4.5:1 on every surface. */
 .keeper-tag {
   flex: none;
   padding: 2px 8px;
+  border: 1px solid var(--accent-ring);
   border-radius: var(--radius-pill);
   background: var(--accent-soft);
-  color: var(--accent);
+  color: var(--text);
   font-size: 10.5px;
   font-weight: 600;
 }
@@ -2234,7 +2243,7 @@ main {
 /* The keeper tag had no border of its own, so as a <button> it picked up the
    browser's default one. */
 .keeper-tag.badge-button {
-  border: 1px solid transparent;
+  border: 1px solid var(--accent-ring);
 }
 
 .badge-button:focus-visible {
@@ -4260,7 +4269,7 @@ html[data-i18n-pending] body {
 }
 
 .link.is-lead:hover {
-  color: var(--accent-hover);
+  color: var(--text);
 }
 
 @media (max-width: 720px) {

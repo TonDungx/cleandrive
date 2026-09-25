@@ -67,6 +67,14 @@ function mb(bytes) {
   fs.writeFileSync(icoPath, buildAppIco());
   console.log(`icon        ${path.relative(ROOT, icoPath)}  (${fs.statSync(icoPath).size} bytes)\n`);
 
+  /* ---- what the uninstaller takes out ------------------------------------ */
+  // Explorer's right-click entries (I3) live in the user's registry, so
+  // uninstalling has to remove them. Written from the same list the app writes
+  // them from, so the two cannot name different keys.
+  const nshPath = path.join(BUILD, 'installer.nsh');
+  fs.writeFileSync(nshPath, require('../src/main/lib/context-menu').uninstallerScript());
+  console.log(`uninstall   ${path.relative(ROOT, nshPath)}  (Explorer menu keys)\n`);
+
   /* ---- which build this is ----------------------------------------------- */
   // Written for the packager and removed straight after, so it only ever
   // exists inside an installer. A checkout without it is the `dev` channel,
@@ -126,6 +134,8 @@ function mb(bytes) {
         // They are small, and silently deleting a user's cleanup history
         // because they reinstalled is not this app's style.
         deleteAppDataOnUninstall: false,
+        // The uninstaller removes Explorer's menu entries; see installer.nsh above.
+        include: nshPath,
         artifactName: '${productName}-Setup-${version}.${ext}',
       },
 

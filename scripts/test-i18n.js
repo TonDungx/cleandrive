@@ -46,6 +46,8 @@ const DYNAMIC_PREFIXES = [
   'app.path.',
   'category.',
   'dupes.phase.',
+  // "n other copies" of one file (I3) goes through `word()`.
+  'dupes.copyWord.',
   'monitor.level.',
   'trends.measurement.',
   'trends.scan.',

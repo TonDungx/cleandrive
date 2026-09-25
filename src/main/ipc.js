@@ -43,6 +43,8 @@ const i18n = require('../i18n');
 const { message: m } = i18n;
 const themePalette = require('../shared/theme-palette');
 const appearance = require('./appearance');
+const contextMenu = require('./lib/context-menu');
+const launchTarget = require('./launch-target');
 
 // One in-flight job of each kind at a time; a new run supersedes the old one.
 const tokens = { scan: null, dupes: null, trash: null, auto: null, media: null, thumbs: null, system: null };
@@ -73,6 +75,55 @@ const LEAVES_ITS_FOLDER = new Set(['recycle', 'quarantine']);
 let cloudDeps = null;
 function setCloudDepsForHarness(deps) {
   cloudDeps = deps || null;
+}
+
+/**
+ * Explorer's right-click menu (I3). The command it writes has to name the
+ * installed CleanDrive.exe -- in a checkout, process.execPath is electron.exe,
+ * and a menu entry pointing at it would open an empty Electron -- so only a
+ * packaged build offers it. A harness supplies an executable path of its own
+ * and a reg.exe runner, and its key names carry CLEANDRIVE_TASK_SUFFIX.
+ */
+let menuHarness = null;
+function setContextMenuForHarness(options) {
+  menuHarness = options || null;
+}
+const menuAvailable = () => Boolean(menuHarness) || app.isPackaged;
+const menuDeps = () => (menuHarness && menuHarness.deps) || undefined;
+function menuOptions() {
+  return {
+    exe: (menuHarness && menuHarness.exe) || process.execPath,
+    labels: {
+      analyze: t('explorer.menu.analyze', 'Analyse with CleanDrive'),
+      copies: t('explorer.menu.copies', 'Find duplicates with CleanDrive'),
+    },
+  };
+}
+
+/** Make the registry match the setting. Nothing, where the menu is not offered. */
+async function reconcileMenu(settings) {
+  if (!menuAvailable()) return null;
+  return contextMenu.reconcile({ enabled: Boolean(settings.explorer && settings.explorer.contextMenu), ...menuOptions() }, menuDeps());
+}
+
+/**
+ * Where "Find duplicates" looks for copies of a file (decided 2026-09-25): the
+ * Home folder if the file is in it, otherwise the whole drive it is on. A
+ * harness names a folder of its own instead of the real Home.
+ */
+let copiesScope = null;
+function setCopiesScopeForHarness(dir) {
+  copiesScope = dir || null;
+}
+function copiesScopeFor(file) {
+  if (copiesScope) return copiesScope;
+  // A checkout only, for the harness that starts the real app from a command
+  // line (verify-launch-target.js) and cannot reach this module's setter. A
+  // built installer ignores it, as it ignores CLEANDRIVE_ENTITLEMENTS.
+  if (!app.isPackaged && process.env.CLEANDRIVE_COPIES_SCOPE) return process.env.CLEANDRIVE_COPIES_SCOPE;
+  const home = app.getPath('home');
+  const rel = path.relative(home.toLowerCase(), file.toLowerCase());
+  return rel && !rel.startsWith('..') && !path.isAbsolute(rel) ? home : path.parse(file).root;
 }
 
 /**
@@ -416,26 +467,43 @@ function register() {
 
   /* ---- duplicates ------------------------------------------------------ */
 
-  handle('dupes:run', (event, roots, options = {}) =>
+  async function runDupes(event, roots, options) {
+    if (tokens.dupes) tokens.dupes.cancel();
+    const token = new CancelToken();
+    tokens.dupes = token;
+
+    const send = (payload) => {
+      if (!event.sender.isDestroyed()) event.sender.send('dupes:progress', payload);
+    };
+
+    try {
+      const { candidates, summary } = await analyzers.collect(
+        'duplicates',
+        { roots, options: { ...options, cachePath: path.join(app.getPath('userData'), 'hash-cache.json') } },
+        { token, onProgress: send, can: licenseState.canNow() }
+      );
+      return { ...summary, candidates };
+    } finally {
+      if (tokens.dupes === token) tokens.dupes = null;
+    }
+  }
+
+  handle('dupes:run', (event, roots, options = {}) => guard(() => runDupes(event, roots, options)));
+
+  /**
+   * Copies of one file (I3's "Find duplicates with CleanDrive").
+   *
+   * Where to look is decided here, not by the window (decided 2026-09-25):
+   * the Home folder, or the whole drive when the file is not in Home. Only
+   * the files of its exact size are read at all.
+   */
+  handle('dupes:copiesOf', (event, filePath) =>
     guard(async () => {
-      if (tokens.dupes) tokens.dupes.cancel();
-      const token = new CancelToken();
-      tokens.dupes = token;
-
-      const send = (payload) => {
-        if (!event.sender.isDestroyed()) event.sender.send('dupes:progress', payload);
-      };
-
-      try {
-        const { candidates, summary } = await analyzers.collect(
-          'duplicates',
-          { roots, options: { ...options, cachePath: path.join(app.getPath('userData'), 'hash-cache.json') } },
-          { token, onProgress: send, can: licenseState.canNow() }
-        );
-        return { ...summary, candidates };
-      } finally {
-        if (tokens.dupes === token) tokens.dupes = null;
-      }
+      const target = launchTarget.validate({ kind: 'duplicates', path: filePath });
+      if (!target) throw Object.assign(new Error(t('dupes.copies.gone', 'That file is not there any more.')), { code: 'ENOENT', quiet: true });
+      const scope = copiesScopeFor(target.path);
+      const result = await runDupes(event, [scope], { copiesOf: target.path });
+      return { ...result, scope };
     })
   );
 
@@ -790,6 +858,13 @@ function register() {
         const { custom, ...rest } = next.appearance;
         next = { ...next, appearance: rest };
       }
+      // And the Explorer menu, set only through `explorer:set`, which writes
+      // the registry in the same breath: the setting and the keys must not
+      // disagree.
+      if (next && next.explorer) {
+        const { explorer, ...rest } = next;
+        next = rest;
+      }
       const { settings } = await services().settings.patch(next);
       // The Task Scheduler entries and the tray are both derived state, never a
       // second source of truth: whatever the settings say, the OS and the
@@ -1032,6 +1107,38 @@ function register() {
 
   /* ---- appearance -------------------------------------------------------- */
 
+  /* ---- Explorer's right-click menu (I3) ---------------------------------- */
+
+  handle('explorer:status', () =>
+    guard(async () => {
+      const settings = await services().settings.get();
+      if (!menuAvailable()) return { available: false, enabled: settings.explorer.contextMenu };
+      const now = await contextMenu.status(menuOptions(), menuDeps());
+      return { available: true, enabled: settings.explorer.contextMenu, ...now };
+    })
+  );
+
+  /**
+   * Switch the menu on or off: the registry first, the setting after, so a
+   * write Windows refused leaves the setting saying what is really there.
+   */
+  handle('explorer:set', (event, enabled) =>
+    guard(async () => {
+      if (!menuAvailable()) {
+        throw Object.assign(new Error(t('explorer.dev', 'Only the installed app can add itself to Explorer’s menu.')), { code: 'EDEV', quiet: true });
+      }
+      const want = enabled === true;
+      let result;
+      try {
+        result = await contextMenu.reconcile({ enabled: want, ...menuOptions() }, menuDeps());
+      } catch (err) {
+        throw Object.assign(new Error(t('explorer.failed', 'Windows did not take the change: {why}', { why: err.message })), { code: err.code, quiet: true });
+      }
+      await services().settings.patch({ explorer: { contextMenu: want } });
+      return { available: true, enabled: want, changed: result.changed, ...result.status };
+    })
+  );
+
   /** What the window is told after any change of appearance. */
   const appearanceReply = (settings) => {
     const custom = settings.appearance.custom;
@@ -1172,6 +1279,12 @@ function register() {
       // Rebuilt rather than relabelled: the menu is constructed from strings
       // when it is created, so it holds whatever language was current then.
       tray.apply(settings);
+
+      // Explorer's menu too: its labels are strings in the registry, written
+      // in the language that was current when they were.
+      if (settings.explorer.contextMenu) {
+        reconcileMenu(settings).catch((err) => console.error('[explorer] could not relabel the menu:', err.message));
+      }
 
       return { preference: settings.appearance.language, language: code };
     })
@@ -2150,4 +2263,7 @@ module.exports = {
   setQuarantineHarness,
   quarantineStatus,
   confirmQuarantineText,
+  setContextMenuForHarness,
+  setCopiesScopeForHarness,
+  reconcileMenu,
 };
