@@ -180,65 +180,89 @@ const V1 = {
     check('a new install keeps no copy -- there was nothing older', !fs.existsSync(path.join(dir, 'new', 'settings.v1.json')));
   }
 
-  console.log('\nsettings: the previous build reading this build’s file\n');
+  console.log('\nsettings: an older build reading this build’s file\n');
 
+  /*
+   * An older settings.js, out of git, asked to read what this one writes.
+   *
+   * Two older builds: the commit before this one (while its schema is older
+   * than the working tree's), and the last release -- the code people
+   * actually have, which is what "the previous version still reads it"
+   * promises. Each file that settings.js requires is fetched at the same
+   * revision, and so is each of theirs; a revision that cannot be loaded says
+   * why instead of being skipped in silence. It was skipped in silence for a
+   * while: once settings.js began to require src/shared/theme-palette.js,
+   * which this used not to fetch, every run printed "skipped".
+   */
   {
-    let released = null;
-    try {
-      const source = execFileSync('git', ['show', 'HEAD:src/main/lib/settings.js'], {
-        cwd: path.join(__dirname, '..'),
-        encoding: 'utf8',
-        stdio: ['ignore', 'pipe', 'ignore'],
-      });
-      // Only when HEAD is an older schema than the working tree; once this
-      // version is committed there is nothing older at HEAD to ask.
-      const headVersion = Number((/const SCHEMA_VERSION = (\d+);/.exec(source) || [])[1]);
-      if (headVersion < SCHEMA_VERSION) {
-        // Laid out as it is in the repo, so its `require('../../i18n')` resolves.
-        const sandbox = path.join(dir, 'released');
-        await fsp.mkdir(path.join(sandbox, 'src', 'main', 'lib'), { recursive: true });
-        await fsp.writeFile(path.join(sandbox, 'src', 'main', 'lib', 'settings.js'), source);
-        // What that settings.js requires, as HEAD has it too. A file HEAD does
-        // not have is one that version did not need.
-        for (const rel of ['src/i18n/index.js', 'src/main/lib/atomic.js', 'src/main/automatic/allowed-categories.js']) {
-          let body;
-          try {
-            body = execFileSync('git', ['show', `HEAD:${rel}`], {
-              cwd: path.join(__dirname, '..'),
-              encoding: 'utf8',
-              stdio: ['ignore', 'pipe', 'ignore'],
-            });
-          } catch {
-            continue;
+    const repo = path.join(__dirname, '..');
+    const git = (args) => execFileSync('git', args, { cwd: repo, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+    const schemaAt = (ref) => {
+      const source = git(['show', `${ref}:src/main/lib/settings.js`]);
+      return Number((/const SCHEMA_VERSION = (\d+);/.exec(source) || [])[1]) || 1;
+    };
+
+    async function loadAt(ref) {
+      const sandbox = path.join(dir, `at-${ref.replace(/[^\w.-]/g, '_')}`);
+      const fetched = new Set();
+      async function fetch(rel) {
+        if (fetched.has(rel)) return;
+        fetched.add(rel);
+        const body = git(['show', `${ref}:${rel}`]);
+        await fsp.mkdir(path.join(sandbox, path.dirname(rel)), { recursive: true });
+        await fsp.writeFile(path.join(sandbox, rel), body);
+        for (const m of body.matchAll(/require\('(\.{1,2}\/[^']+)'\)/g)) {
+          let next = path.posix.normalize(path.posix.join(path.posix.dirname(rel), m[1]));
+          const candidates = /\.js$/.test(next) ? [next] : [`${next}.js`, `${next}/index.js`];
+          for (const candidate of candidates) {
+            try {
+              await fetch(candidate);
+              break;
+            } catch {
+              fetched.delete(candidate);
+            }
           }
-          await fsp.mkdir(path.join(sandbox, path.dirname(rel)), { recursive: true });
-          await fsp.writeFile(path.join(sandbox, rel), body);
         }
-        released = require(path.join(sandbox, 'src', 'main', 'lib', 'settings.js'));
       }
-    } catch {
-      released = null;
+      await fetch('src/main/lib/settings.js');
+      return require(path.join(sandbox, 'src', 'main', 'lib', 'settings.js'));
     }
 
-    if (!released) {
-      console.log('  (skipped: HEAD is not an older schema, or git is not available)');
-    } else {
+    const refs = [];
+    try {
+      if (schemaAt('HEAD') < SCHEMA_VERSION) refs.push('HEAD');
+      const tag = git(['describe', '--tags', '--abbrev=0', 'HEAD']).trim();
+      if (tag && schemaAt(tag) < SCHEMA_VERSION && !refs.includes(tag)) refs.push(tag);
+    } catch (err) {
+      console.log(`  (no older build to ask: ${err.message.split('\n')[0]})`);
+    }
+    if (!refs.length) console.log('  (no older build to ask: HEAD and the last release both have this schema)');
+
+    for (const ref of refs) {
+      let released;
+      try {
+        released = await loadAt(ref);
+      } catch (err) {
+        check(`the build at ${ref} can be loaded to ask`, false, err.message.split('\n')[0]);
+        continue;
+      }
+      const at = `the build at ${ref} (schema ${released.SCHEMA_VERSION})`;
       const ours = coerceSettings(V1).settings;
       const { settings, warnings } = released.coerceSettings(JSON.parse(JSON.stringify(ours)));
-      check(`the previous build reads every setting it knows from a version ${SCHEMA_VERSION} file`,
+      check(`${at} reads every setting it knows from a version ${SCHEMA_VERSION} file`,
         settings.autoClean.minAgeDays === 30 && settings.purge.afterDays === 14 &&
           settings.appearance.theme === 'dark' && settings.trends.sampleTime === '09:30',
         warnings.join('; '));
-      check('and says it found a version it did not expect, rather than failing', warnings.some((w) => /version/.test(w)));
-      check('its cleanup stays exactly as configured -- nothing is switched on or off by the upgrade',
+      check(`${at} says it found a version it did not expect, rather than failing`, warnings.some((w) => /version/.test(w)));
+      check(`${at} keeps the cleanup exactly as configured -- nothing switched on or off`,
         settings.autoClean.enabled === true && settings.autoClean.dryRun === false &&
           JSON.stringify(settings.autoClean.categories) === '["temp","log"]');
-      // A file with the user's own colours switched on: the previous build
-      // does not know them, and shows the theme they were built on.
+      // A file with the user's own colours switched on: an older build does
+      // not know them, and shows the theme they were built on.
       const palette = require('../src/shared/theme-palette');
-      const custom = coerceSettings({ ...V1, version: 6, appearance: { theme: 'dark', custom: { enabled: true, name: 'x', base: 'dark', colors: palette.BASES.dark } } }).settings;
+      const custom = coerceSettings({ ...V1, version: SCHEMA_VERSION, appearance: { theme: 'dark', custom: { enabled: true, name: 'x', base: 'dark', colors: palette.BASES.dark } } }).settings;
       const older = released.coerceSettings(JSON.parse(JSON.stringify(custom))).settings;
-      check('with custom colours on, the previous build shows the theme underneath them', older.appearance.theme === 'dark');
+      check(`${at}, with custom colours on, shows the theme underneath them`, older.appearance.theme === 'dark');
     }
   }
 
