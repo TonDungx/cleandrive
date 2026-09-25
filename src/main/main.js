@@ -9,6 +9,7 @@ const { app, BrowserWindow, shell } = require('electron');
 
 const language = require('./language');
 const appearance = require('./appearance');
+const intro = require('./intro');
 
 const isDev = process.argv.includes('--dev');
 
@@ -74,7 +75,7 @@ function createWindow() {
   // reason: the window is written in English, so a Vietnamese user would watch
   // it translate itself if the answer arrived over IPC after the first frame.
   mainWindow.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'), {
-    query: { ...appearance.query(), lang: language.current() },
+    query: { ...appearance.query(), ...intro.query(), lang: language.current() },
   });
 
   if (isDev) mainWindow.webContents.openDevTools({ mode: 'detach' });
@@ -265,6 +266,10 @@ if (isHelper) {
     // decides the window's background colour, and that is chosen once, at
     // construction. Monitoring likewise has to come up with the app rather than
     // only when somebody opens the settings screen.
+    // Before the settings are read -- reading writes nothing, but the
+    // measurement at launch below does, and it is one of the traces asked about.
+    intro.decide(app.getPath('userData'));
+
     let settings = null;
     let settingsExisted = true;
     try {

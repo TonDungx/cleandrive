@@ -1851,7 +1851,7 @@
     'custom.preview.second': 'Một bộ cài đã 90 ngày',
     'custom.preview.quiet': 'Sửa 3 tháng trước',
     'custom.preview.safe': 'an toàn',
-    'custom.preview.review': 'cần xem',
+    'custom.preview.review': 'nên xem lại',
     'custom.preview.danger': 'đang dùng',
     'custom.preview.field': '100 KB',
     'custom.preview.button': 'Quét thư mục',
@@ -1902,13 +1902,46 @@
     'theme.key.accent': 'Màu nhấn',
     'theme.key.onAccent': 'Chữ trên màu nhấn',
     'theme.key.good': 'An toàn (mặc định là xanh lá)',
-    'theme.key.warn': 'Cần xem (mặc định là vàng)',
+    'theme.key.warn': 'Nên xem lại (mặc định là vàng)',
     'theme.key.danger': 'Nguy hiểm (mặc định là đỏ)',
     'theme.key.surface2': 'Nền nổi',
     'theme.key.surface3': 'Nền khi trỏ chuột',
     'theme.key.accentHover': 'Màu nhấn khi bấm',
     'theme.key.goodSoft': 'Nền của nhãn an toàn',
-    'theme.key.warnSoft': 'Nền của nhãn cần xem',
+    'theme.key.warnSoft': 'Nền của nhãn nên xem lại',
     'theme.key.dangerSoft': 'Nền của nhãn nguy hiểm',
+
+    /* ---- the introduction (I4) ---- */
+    'intro.skip': 'Bỏ qua',
+    'intro.back': 'Quay lại',
+    'intro.next': 'Tiếp',
+    'intro.done': 'Xong',
+    'intro.step': 'Bước {n}/{total}',
+    'intro.again': 'Xem lại phần giới thiệu',
+    'intro.1.title': 'CleanDrive cho bạn thấy, rồi để bạn quyết định',
+    'intro.1.text':
+      'Mỗi tệp app có nhận xét đều đi kèm nhận xét đó, lý do, và mức chắc chắn — chắc chắn, căn cứ vững, ' +
+      'nhiều khả năng hay chỉ là phỏng đoán. Không có gì được đánh dấu sẵn, và không có gì bị chuyển đi cho tới ' +
+      'khi bạn bấm nút và xác nhận.',
+    'intro.1.rowMeta': 'Sửa 3 tháng trước · Bộ cài đã tải về 3 tháng trước',
+    'intro.1.badge': 'nên xem lại · nhiều khả năng',
+    'intro.1.why1': 'Tên và kích thước của nó là của một bộ cài',
+    'intro.1.why2': 'Nó đã nằm trong Tải xuống ba tháng',
+    'intro.1.caption': 'Một dòng đúng như app vẽ: verdict, mức chắc chắn, và lý do. Bấm vào nhãn để mở phần lý do.',
+    'intro.2.title': 'Vào Thùng rác không có nghĩa là đã giải phóng',
+    'intro.2.text':
+      'Thùng rác nằm trên cùng ổ đĩa. Tệp chuyển vào đó vẫn chiếm chỗ cho tới khi dọn Thùng rác, nên app không ' +
+      'bao giờ cộng “đã chuyển” với “đã giải phóng”: nút nào cũng nói nó có giải phóng gì không, và biên lai sau ' +
+      'đó nói đó là loại nào.',
+    'intro.2.moved': 'Đã chuyển vào Thùng rác',
+    'intro.2.movedNote': 'Ổ C: vẫn đầy y như trước',
+    'intro.2.emptied': 'Đã dọn Thùng rác',
+    'intro.2.emptiedNote': 'Lúc này dung lượng mới trở lại',
+    'intro.2.caption': 'Đây là hình minh hoạ, không phải ổ của bạn. Cạnh mỗi nút, app ghi rõ nút đó thuộc loại nào:',
+    'intro.3.title': 'Chọn thư mục đầu tiên',
+    'intro.3.text':
+      'Quét chỉ đọc. Chọn một thư mục để xem — việc quét bắt đầu khi bạn bấm Quét thư mục — hoặc mở màn Hệ thống ' +
+      'để xem cả ổ đã đi đâu.',
+    'intro.3.system': 'Xem cả ổ đã đi đâu',
   };
 });

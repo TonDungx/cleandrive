@@ -132,7 +132,7 @@ Thời lượng tương đối chỉ mang tính minh hoạ. [Speculation] Tôi k
 | I1 | Restore Center | P1 | ✅ Đã code xong (2026-09-24) |
 | I2 | Accessibility (high-contrast, bàn phím, screen reader) | P1 | ✅ Đã code xong (2026-09-25) — theo theme tương phản của Windows (đo trên theme giả lập) + màu tự thiết kế; bỏ tuỳ chọn accent; chưa nghe thử bằng Narrator |
 | I3 | Menu chuột phải trong Explorer | P2 | |
-| I4 | Onboarding "Moved ≠ freed" | P2 | |
+| I4 | Onboarding "Moved ≠ freed" | P2 | ✅ Đã code xong (2026-09-25) — không hiện cho người nâng cấp từ bản cũ; "Giới thiệu" nằm trong card Phiên bản |
 
 Thứ tự làm (chốt 2026-09-24): I1 → A1 → A3 → A5 → B3 → D4 → B1 → I2 → I4 → I3. Giai đoạn 0 được commit riêng trước (`37179d8`).
 
@@ -1402,7 +1402,14 @@ Ba màn, bỏ qua được, chỉ hiện lần đầu:
 
 Có thể xem lại trong Settings → Giới thiệu.
 
----
+> **✅ Đã code xong (2026-09-25).** Code ở `src/main/intro.js` (quyết định có phải lần đầu hay không, trước khi có cửa sổ; truyền `intro=1` qua URL như theme và ngôn ngữ), `src/renderer/intro.js` (ba màn trong một `<dialog>` gốc), markup trong `index.html`, CSS phần "The introduction" và luật `forced-colors` cho hình minh hoạ trong `styles.css`, bản dịch trong `vi.js`. Harness: `scripts/test-intro.js` (11 kiểm tra, trong `npm test`: ai được giới thiệu), `scripts/test-onboarding.js` (40 kiểm tra, Electron: tự mở ở lần đầu, Tiếp/Quay lại/Bỏ qua/Esc/Xong, focus và tên dialog cho screen reader, axe trên cả ba màn ở theme sáng, tối và tiếng Việt, reduced motion, theme tương phản giả lập, nhớ đã xem, chọn thư mục thì không tự quét), ảnh chụp `npm run shoot:intro`. Khác với đặc tả ở trên:
+> - **"Chỉ hiện lần đầu"** được hiểu là lần đầu app chạy trên tài khoản này, không phải lần đầu của phiên bản này. Main xem trên đĩa: `settings.json`, `history.json` (mỗi lần mở app đều ghi một lần đo), thư mục `journal`, `trash-ledger.json`; có một trong bốn thứ đó là đã từng dùng. Vì vậy **người nâng cấp từ bản cũ không thấy màn giới thiệu**. Thư mục không đọc được thì coi như đã dùng (không làm phiền). Cửa sổ còn nhớ trong localStorage để không hiện hai lần nếu lần ghi đầu tiên thất bại.
+> - **Settings → Giới thiệu không tồn tại**; nút "Xem lại phần giới thiệu" nằm trong card Phiên bản và cập nhật.
+> - **Màn 1** minh hoạ bằng chính các class của một dòng thật (badge verdict, danh sách lý do), nên theo đúng theme, cả theme Tuỳ chỉnh.
+> - **Màn 2** là hai ổ đĩa đặt cạnh nhau (sau khi chuyển vào Thùng rác: đầy như cũ; sau khi dọn Thùng rác: vơi đi), cộng hai câu app ghi cạnh nút ("Chưa giải phóng cho tới khi dọn Thùng rác", "Giải phóng dung lượng, không xoá gì"). **Không có con số nào**, và ghi rõ là hình minh hoạ, không phải ổ của người dùng. Phần "động" là một tệp đi vào thùng rác; ai bật giảm chuyển động thì không có gì di chuyển, thùng rác chỉ hiện là đang chứa tệp.
+> - **Màn 3**: các nút thư mục đường tắt (cùng đường dẫn thật trong tooltip), nút chọn thư mục, và thêm một nút mở màn Hệ thống. Chọn thư mục thì **chỉ chọn**, focus về nút "Quét thư mục"; việc quét vẫn do người dùng bấm (harness kiểm tra không có lần quét nào tự chạy).
+> - Không có quảng cáo Pro nào trong ba màn (quy tắc 7), không có request mạng.
+> - **Sửa kèm:** vài bản dịch của I2 viết "cần xem" cho verdict `review`, lệch với "nên xem lại" app dùng ở mọi chỗ khác; đã thống nhất.
 
 ## 6. Ma trận gói (Free / Pro / Business)
 

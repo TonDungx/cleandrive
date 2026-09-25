@@ -1229,6 +1229,8 @@
               <button class="btn btn-sm" id="update-check" data-i18n="app.checkNow">Check now</button>
               <button class="btn btn-sm" id="update-download" hidden data-i18n="update.download">Download</button>
               <button class="btn btn-primary btn-sm" id="update-install" hidden data-i18n="update.install">Restart and install</button>
+              <span class="spacer"></span>
+              <button class="btn btn-sm" id="intro-open" data-i18n="intro.again">Show the introduction again</button>
             </div>
           </section>
         </div>
@@ -1286,6 +1288,103 @@
     <div class="sr-only" id="sr-polite" role="status" aria-live="polite" aria-atomic="true"></div>
     <div class="sr-only" id="sr-assertive" role="alert" aria-live="assertive" aria-atomic="true"></div>
 
+    <!--
+      The introduction (I4): three screens, shown the first time the app is
+      opened on this account and again from Settings. Every screen can be left
+      with Skip or Esc. It says the two things this app is built around --
+      it shows and you decide; moved is not freed -- and then gets out of the
+      way with a folder to start from. intro.js drives it.
+    -->
+    <dialog class="intro" id="intro" aria-labelledby="intro-title-1">
+      <div class="intro-head">
+        <span class="intro-step" id="intro-step"></span>
+        <span class="spacer"></span>
+        <button class="btn btn-sm" id="intro-skip" data-i18n="intro.skip">Skip</button>
+      </div>
+
+      <section class="intro-page" data-intro-page="1">
+        <h2 class="intro-title" id="intro-title-1" tabindex="-1" data-i18n="intro.1.title">CleanDrive shows you, then lets you decide</h2>
+        <p class="intro-text" data-i18n="intro.1.text">
+          Every file it has an opinion about comes with that opinion, the reasons for it, and how
+          sure it is — certain, strong, likely or a guess. Nothing is ticked for you, and nothing
+          moves until you press a button and confirm.
+        </p>
+        <figure class="intro-figure">
+          <div class="intro-row" aria-hidden="true">
+            <span class="intro-tick"></span>
+            <span class="file-size">30.0 MB</span>
+            <span class="intro-row-main">
+              <span class="file-path">Downloads\setup-4.2.exe</span>
+              <span class="file-meta" data-i18n="intro.1.rowMeta">Modified 3 months ago · Installer downloaded 3 months ago</span>
+            </span>
+            <span class="badge badge-review" data-i18n="intro.1.badge">review · likely</span>
+          </div>
+          <ol class="evidence intro-evidence" aria-hidden="true">
+            <li data-i18n="intro.1.why1">Its name and size are those of an installer</li>
+            <li data-i18n="intro.1.why2">It has sat in Downloads for three months</li>
+          </ol>
+          <figcaption class="intro-caption" data-i18n="intro.1.caption">
+            A row as the app draws one: the verdict, how sure it is, and why. Pressing the pill
+            opens the reasons.
+          </figcaption>
+        </figure>
+      </section>
+
+      <section class="intro-page" data-intro-page="2" hidden>
+        <h2 class="intro-title" id="intro-title-2" tabindex="-1" data-i18n="intro.2.title">Moving to the Recycle Bin is not freeing</h2>
+        <p class="intro-text" data-i18n="intro.2.text">
+          The Recycle Bin is on the same drive. A file moved there still takes its space until the
+          bin is emptied, so the app never adds “moved” and “freed” together: every button says
+          whether it frees anything, and the receipt afterwards says which it was.
+        </p>
+        <figure class="intro-figure intro-drives">
+          <div class="intro-drive" aria-hidden="true">
+            <p class="intro-drive-label" data-i18n="intro.2.moved">Moved to the Recycle Bin</p>
+            <div class="intro-bar"><span class="intro-bar-fill intro-fill-full"></span></div>
+            <div class="intro-bin">
+              <span class="intro-file"></span>
+              <span class="intro-bin-can"></span>
+            </div>
+            <p class="intro-drive-note" data-i18n="intro.2.movedNote">C: is exactly as full as before</p>
+          </div>
+          <div class="intro-drive" aria-hidden="true">
+            <p class="intro-drive-label" data-i18n="intro.2.emptied">The bin emptied</p>
+            <div class="intro-bar"><span class="intro-bar-fill intro-fill-less"></span></div>
+            <div class="intro-bin">
+              <span class="intro-bin-can is-empty"></span>
+            </div>
+            <p class="intro-drive-note" data-i18n="intro.2.emptiedNote">Only now is the space back</p>
+          </div>
+          <figcaption class="intro-caption" data-i18n="intro.2.caption">
+            An illustration, not your drive. Beside each button the app says which of the two it is:
+          </figcaption>
+          <div class="intro-badges">
+            <span class="frees-badge is-not-freed" data-i18n="frees.bin">Not freed until the bin is emptied</span>
+            <span class="frees-badge is-frees" data-i18n="frees.cloud">Frees the space, deletes nothing</span>
+          </div>
+        </figure>
+      </section>
+
+      <section class="intro-page" data-intro-page="3" hidden>
+        <h2 class="intro-title" id="intro-title-3" tabindex="-1" data-i18n="intro.3.title">Choose the first folder</h2>
+        <p class="intro-text" data-i18n="intro.3.text">
+          Scanning only reads. Pick a folder to look at — the scan starts when you press Scan folder — or
+          open the System screen to see where the whole drive went.
+        </p>
+        <div class="intro-paths" id="intro-paths"></div>
+        <div class="panel-actions panel-actions-tight">
+          <button class="btn btn-sm" id="intro-pick" data-i18n="app.pickFolder">Choose folder…</button>
+          <button class="btn btn-sm" id="intro-system" data-i18n="intro.3.system">See where the whole drive went</button>
+        </div>
+      </section>
+
+      <div class="intro-foot">
+        <button class="btn btn-sm" id="intro-back" data-i18n="intro.back">Back</button>
+        <span class="spacer"></span>
+        <button class="btn btn-primary btn-sm" id="intro-next" data-i18n="intro.next">Next</button>
+      </div>
+    </dialog>
+
     <!-- Every key the app answers to, opened with ? from anywhere that is not
          a text field. A native dialog: it keeps focus inside itself, Escape
          closes it, and the page behind it is inert while it is open. -->
@@ -1325,5 +1424,7 @@
     <script src="keys.js"></script>
     <!-- The user's own colours, in Settings. -->
     <script src="theme-editor.js"></script>
+    <!-- The introduction, last: it opens over a window that is already built. -->
+    <script src="intro.js"></script>
   </body>
 </html>

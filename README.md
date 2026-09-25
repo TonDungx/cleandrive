@@ -146,6 +146,28 @@ Nothing in that sequence happens without a click, and step 6 cannot be skipped.
 | One copy at a time | Launching it twice restores and focuses the window you already have |
 | Closing it | Cancels every scan, search and delete in flight. Nothing is left running unless the tray watcher is on |
 
+### The first time it opens
+
+Three short screens, each with **Skip**, and Esc closes them:
+
+1. **It shows you, then you decide** — a row as the lists draw one: a verdict,
+   how sure the app is, and the reasons.
+2. **Moving to the Recycle Bin is not freeing** — the same drive after a move
+   to the bin (exactly as full) and after the bin is emptied, and the two
+   sentences the app puts beside its buttons to say which is which. It is
+   labelled an illustration, and it has no figures: it is not your drive. For
+   anyone who asked Windows for less motion, the file does not travel into the
+   bin; the bin is simply shown holding it.
+3. **Choose the first folder** — the folder shortcuts, the picker, or the
+   System screen. A folder chosen here is only chosen: the scan starts when you
+   press **Scan folder**, as it always does.
+
+"The first time" is decided by the main process from what is on disk: every
+launch writes a disk measurement, a change of settings writes the settings, a
+delete writes the journal. None of them there means nobody has run the app on
+this account — so somebody upgrading is not introduced to an app they already
+use. **Show the introduction again** is on the Version card in Settings.
+
 ### The sidebar
 
 Nine tabs down the left, each with an icon and a label. Two of them carry a
@@ -979,7 +1001,7 @@ exception, off until you switch it on: *Delete the original*, on the card for
 | **Company while scanning** | Which animal walks the progress bar, or none |
 | **Scan history** | How many folder snapshots to keep: the newest few, plus one a month |
 | **Move to another drive** | Where moved files go, how many days before the app mentions they are still there, the most that folder may hold, and *Delete the original* |
-| **Version and updates** | Which version you are running, and the update controls |
+| **Version and updates** | Which version you are running, the update controls, and the introduction again |
 
 The version lives here because "which version am I running" is the first thing
 anyone reporting a problem is asked, and it used to sit inside a screen about
@@ -1394,7 +1416,7 @@ Everything else, including the ZIP, Excel, PowerPoint, image and video readers,
 the charts and the tray icon, is written here. There are no binary assets in the
 repository; the icons are drawn in code.
 
-Test harnesses live in [`scripts/`](scripts/) — thirty-six suites in
+Test harnesses live in [`scripts/`](scripts/) — thirty-seven suites in
 `npm test`, plus the Electron ones, covering the classification rules, the
 colour rules a theme must pass (CIEDE2000 held to its published reference
 pairs), the
@@ -1409,7 +1431,8 @@ entitlement matrix, the elevated helper's handshake, the settings migration
 against the released code, the translation dictionary, and an end-to-end run
 that boots the real application and reads its rendered interface back out.
 `npm run test:a11y` boots it too and checks it for accessibility (see
-[Keyboard and screen readers](#keyboard-and-screen-readers)).
+[Keyboard and screen readers](#keyboard-and-screen-readers)), and
+`npm run test:onboarding` walks the introduction every way out of it.
 `npm run verify:restore` puts throwaway files back from the real Recycle Bin.
 `npm run shoot:lists`, `shoot:media`, `shoot:viewer`, `shoot:restore`,
-`shoot:system`, `shoot:treemap`, `shoot:changes`, `shoot:cloud`, `shoot:appcaches`, `shoot:quarantine` and `shoot:a11y` take screenshots of the real screens.
+`shoot:system`, `shoot:treemap`, `shoot:changes`, `shoot:cloud`, `shoot:appcaches`, `shoot:quarantine`, `shoot:a11y` and `shoot:intro` take screenshots of the real screens.
