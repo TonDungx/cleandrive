@@ -8,6 +8,7 @@ const { renameRetrying } = require('./atomic');
 
 const i18n = require('../../i18n');
 const { ALLOWED_ADVISOR_NAMES } = require('../automatic/allowed-categories');
+const themePalette = require('../../shared/theme-palette');
 
 /**
  * Persisted application settings.
@@ -40,8 +41,9 @@ const { ALLOWED_ADVISOR_NAMES } = require('../automatic/allowed-categories');
  *   3 -> 4   `quarantine`: where files moved to another drive go, how long
  *            before they are called expired, and whether originals are
  *            deleted outright (B1)
+ *   4 -> 5   `appearance.custom`: the user's own colours, or null (I2)
  */
-const SCHEMA_VERSION = 4;
+const SCHEMA_VERSION = 5;
 
 const MIGRATIONS = Object.freeze([
   {
@@ -81,6 +83,17 @@ const MIGRATIONS = Object.freeze([
         version: 4,
         quarantine: { zone: null, retentionDays: 30, maxGB: 0, deleteOriginal: false, ...(raw.quarantine || {}) },
       };
+    },
+  },
+  {
+    from: 4,
+    to: 5,
+    migrate(raw) {
+      // Additive: nobody has colours of their own yet. `theme` keeps its
+      // three values, so the version before this one still reads the file and
+      // shows the light or dark theme a custom one was built on.
+      const appearance = isObject(raw.appearance) ? raw.appearance : {};
+      return { ...raw, version: 5, appearance: { custom: null, ...appearance } };
     },
   },
 ]);
@@ -260,6 +273,10 @@ function defaults() {
     appearance: {
       theme: 'system',
       language: 'system',
+      // The user's own colours (I2): { enabled, name, base, colors }, or null.
+      // While enabled they are drawn instead of the theme above -- and instead
+      // of a Windows contrast theme, which was the user's call to make.
+      custom: null,
     },
     trends: {
       /**
@@ -489,6 +506,39 @@ function coerceSchedule(value, warnings, minMinutes = 1) {
  *   installed build passes MIN_MINUTES_PACKAGED.
  * @returns {{settings: object, warnings: string[]}}
  */
+/**
+ * The user's own colours, held to the same rules the editor and an imported
+ * file are held to (src/shared/theme-palette.js). A palette that fails any of
+ * them -- somebody edited the file by hand, or a later version tightened a
+ * rule -- is dropped with a warning, and the window falls back to the theme
+ * underneath rather than drawing text nobody can read.
+ */
+function coerceCustom(value, warnings) {
+  if (value === null || value === undefined) return null;
+  if (!isObject(value)) {
+    warnings.push('appearance.custom: not an object, so it was dropped');
+    return null;
+  }
+  const shaped = themePalette.normalise({
+    format: themePalette.FORMAT,
+    version: themePalette.VERSION,
+    name: value.name === undefined ? '' : value.name,
+    base: value.base,
+    colors: value.colors,
+  });
+  if (!shaped.ok) {
+    warnings.push(`appearance.custom: ${shaped.errors.map((e) => i18n.render(e)).join('; ')}`);
+    return null;
+  }
+  const verdict = themePalette.check(shaped.theme);
+  if (!verdict.ok) {
+    warnings.push(`appearance.custom: fails ${verdict.failures.length} of the colour rules, so it was dropped`);
+    return null;
+  }
+  const { name, base, colors } = shaped.theme;
+  return { enabled: bool(value.enabled, false), name, base, colors };
+}
+
 function coerceSettings(input, { minMinutes = 1 } = {}) {
   const warnings = [];
   const base = defaults();
@@ -613,6 +663,8 @@ function coerceSettings(input, { minMinutes = 1 } = {}) {
     warnings.push(`appearance.language: "${rawAppearance.language}" is not one of ${LANGUAGES.join(', ')}`);
   }
 
+  const custom = coerceCustom(rawAppearance.custom, warnings);
+
   const rawUpdates = isObject(raw.updates) ? raw.updates : {};
   const updates = {
     enabled: bool(rawUpdates.enabled, base.updates.enabled),
@@ -675,7 +727,7 @@ function coerceSettings(input, { minMinutes = 1 } = {}) {
       autoClean,
       purge,
       monitor,
-      appearance: { theme, language },
+      appearance: { theme, language, custom },
       updates,
       trends,
       snapshots,

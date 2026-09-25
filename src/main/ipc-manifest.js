@@ -71,6 +71,9 @@ const INVOKE = Object.freeze([
   'update:acknowledge',
 
   'theme:set',
+  'theme:saveCustom',
+  'theme:import',
+  'theme:export',
   'language:set',
   'language:get',
 

@@ -80,6 +80,9 @@ const api = {
 
   /* appearance */
   setTheme: (mode) => ipcRenderer.invoke('theme:set', mode),
+  saveCustomTheme: (theme, options) => ipcRenderer.invoke('theme:saveCustom', theme, options),
+  importTheme: () => ipcRenderer.invoke('theme:import'),
+  exportTheme: (theme) => ipcRenderer.invoke('theme:export', theme),
   setLanguage: (preference) => ipcRenderer.invoke('language:set', preference),
   getLanguage: () => ipcRenderer.invoke('language:get'),
 

@@ -38,6 +38,11 @@ const { t } = language;
 const tray = require('./tray');
 const updater = require('./updater');
 const watcher = require('./watcher');
+const fsp = require('node:fs').promises;
+const i18n = require('../i18n');
+const { message: m } = i18n;
+const themePalette = require('../shared/theme-palette');
+const appearance = require('./appearance');
 
 // One in-flight job of each kind at a time; a new run supersedes the old one.
 const tokens = { scan: null, dupes: null, trash: null, auto: null, media: null, thumbs: null, system: null };
@@ -778,6 +783,13 @@ function register() {
         const { zone, ...rest } = next.quarantine;
         next = { ...next, quarantine: rest };
       }
+      // Likewise the user's own colours, set only through `theme:saveCustom`:
+      // a screen that loaded the settings before they were made would
+      // otherwise save them away.
+      if (next && next.appearance && typeof next.appearance === 'object') {
+        const { custom, ...rest } = next.appearance;
+        next = { ...next, appearance: rest };
+      }
       const { settings } = await services().settings.patch(next);
       // The Task Scheduler entries and the tray are both derived state, never a
       // second source of truth: whatever the settings say, the OS and the
@@ -1020,17 +1032,125 @@ function register() {
 
   /* ---- appearance -------------------------------------------------------- */
 
+  /** What the window is told after any change of appearance. */
+  const appearanceReply = (settings) => {
+    const custom = settings.appearance.custom;
+    return {
+      theme: settings.appearance.theme,
+      custom: custom ? { enabled: custom.enabled, name: custom.name, base: custom.base, colors: custom.colors } : null,
+      dark: nativeTheme.shouldUseDarkColors,
+    };
+  };
+
   handle('theme:set', (event, mode) =>
     guard(async () => {
-      const { settings } = await services().settings.patch({ appearance: { theme: mode } });
+      const store = services().settings;
+      const current = await store.get();
+      const stored = current.appearance.custom;
+      let patch;
+      if (mode === 'custom') {
+        if (!stored) {
+          throw Object.assign(new Error(t('theme.noCustom', 'There are no colours of your own saved yet.')), { quiet: true });
+        }
+        patch = { appearance: { custom: { ...stored, enabled: true } } };
+      } else {
+        // Choosing light, dark or system keeps the palette, switched off, so
+        // it is still there to go back to.
+        patch = { appearance: { theme: mode, custom: stored ? { ...stored, enabled: false } : null } };
+      }
+      const { settings } = await store.patch(patch);
 
-      // Setting themeSource does two things at once: it is what main.js reads
-      // back when it next builds a window, and it is what makes Electron's own
-      // dialogs -- the delete confirmation, the folder picker -- match. A light
-      // app throwing a black modal is the giveaway that a theme was bolted on.
-      nativeTheme.themeSource = settings.appearance.theme;
+      // appearance.apply() sets themeSource, which does two things at once: it
+      // is what main.js reads back when it next builds a window, and it is
+      // what makes Electron's own dialogs -- the delete confirmation, the
+      // folder picker -- match. A light app throwing a black modal is the
+      // giveaway that a theme was bolted on.
+      appearance.apply(settings.appearance);
+      return appearanceReply(settings);
+    })
+  );
 
-      return { theme: settings.appearance.theme, dark: nativeTheme.shouldUseDarkColors };
+  /**
+   * Keep the user's own colours, and use them if asked.
+   *
+   * The palette comes from the window, so it is held to every rule again here
+   * -- the editor checking it first is a courtesy, not the check. A palette
+   * that fails is an answer, not an error: the reply lists what failed, and
+   * nothing is saved. `null` forgets the palette.
+   */
+  handle('theme:saveCustom', (event, theme, options = {}) =>
+    guard(async () => {
+      const store = services().settings;
+      if (theme === null) {
+        const { settings } = await store.patch({ appearance: { custom: null } });
+        appearance.apply(settings.appearance);
+        return { saved: true, ...appearanceReply(settings) };
+      }
+      const shaped = themePalette.normalise(theme);
+      if (!shaped.ok) return { saved: false, errors: shaped.errors };
+      const verdict = themePalette.check(shaped.theme);
+      if (!verdict.ok) return { saved: false, failures: verdict.failures.map((f) => ({ ...f, message: themePalette.describe(f) })) };
+
+      const current = await store.get();
+      const enabled = options && options.use === true ? true : Boolean(current.appearance.custom && current.appearance.custom.enabled);
+      const { name, base, colors } = shaped.theme;
+      const { settings } = await store.patch({ appearance: { custom: { enabled, name, base, colors } } });
+      appearance.apply(settings.appearance);
+      return { saved: true, ...appearanceReply(settings) };
+    })
+  );
+
+  /**
+   * Read a theme file the user picks, for the editor. Saves nothing.
+   *
+   * The file is measured before it is read: anything over the size a theme
+   * can be is refused unopened. A file whose shape is wrong is refused with
+   * the reasons; one whose shape is right but whose colours fail a rule comes
+   * back with the failures, so the editor can show it and let them be fixed
+   * -- it still cannot be used until they are.
+   */
+  handle('theme:import', (event) =>
+    guard(async () => {
+      const win = BrowserWindow.fromWebContents(event.sender);
+      const picked = await dialog.showOpenDialog(win, {
+        title: t('dialog.importTheme', 'Choose a CleanDrive theme file'),
+        properties: ['openFile'],
+        filters: [{ name: t('dialog.themeFiles', 'CleanDrive theme'), extensions: ['json'] }],
+      });
+      if (picked.canceled || !picked.filePaths.length) return { cancelled: true };
+      const file = picked.filePaths[0];
+      const stat = await fsp.stat(file);
+      if (!stat.isFile()) return { refused: true, errors: [m('theme.err.notFile', 'That is not a file.')] };
+      if (stat.size > themePalette.MAX_BYTES) return { refused: true, errors: themePalette.parse('', stat.size).errors };
+      const parsed = themePalette.parse(await fsp.readFile(file, 'utf8'), stat.size);
+      if (!parsed.ok) return { refused: true, errors: parsed.errors };
+      const verdict = themePalette.check(parsed.theme);
+      return {
+        theme: parsed.theme,
+        filled: parsed.filled,
+        failures: verdict.failures.map((f) => ({ ...f, message: themePalette.describe(f) })),
+        file: path.basename(file),
+      };
+    })
+  );
+
+  /** Write the editor's palette to a file the user picks. */
+  handle('theme:export', (event, theme) =>
+    guard(async () => {
+      const shaped = themePalette.normalise(theme);
+      if (!shaped.ok) {
+        throw Object.assign(new Error(shaped.errors.map((e) => i18n.render(e)).join(' ')), { quiet: true });
+      }
+      const win = BrowserWindow.fromWebContents(event.sender);
+      const safe = (shaped.theme.name || t('theme.defaultName', 'My colours')).replace(/[<>:"/\\|?*]+/g, ' ').trim() || 'theme';
+      const picked = await dialog.showSaveDialog(win, {
+        title: t('dialog.exportTheme', 'Save these colours as a theme file'),
+        defaultPath: path.join(app.getPath('documents'), `${safe}.cleandrive-theme.json`),
+        filters: [{ name: t('dialog.themeFiles', 'CleanDrive theme'), extensions: ['json'] }],
+      });
+      if (picked.canceled || !picked.filePath) return { cancelled: true };
+      await fsp.writeFile(picked.filePath, themePalette.serialise(shaped.theme), 'utf8');
+      return { file: path.basename(picked.filePath) };
     })
   );
 

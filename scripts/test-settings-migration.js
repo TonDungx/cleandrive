@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 
-// Settings schema v4: the migrations forward, the copy kept of the old file,
+// Settings schema v5: the migrations forward, the copy kept of the old file,
 // and what the previous build makes of a file this one wrote.
 //   node scripts/test-settings-migration.js
 //
@@ -40,17 +40,17 @@ const V1 = {
 (async () => {
   const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'cleandrive-settings-v2-'));
 
-  console.log('\nsettings: version 1 to 4\n');
+  console.log('\nsettings: version 1 to 5\n');
 
-  check('this build writes version 4', SCHEMA_VERSION === 4);
+  check('this build writes version 5', SCHEMA_VERSION === 5);
   {
     const { raw, from, steps } = migrate(V1);
-    check('a version 1 file is migrated a step at a time, to 4', from === 1 && steps === 3 && raw.version === 4);
+    check('a version 1 file is migrated a step at a time, to 5', from === 1 && steps === 4 && raw.version === 5);
     check('it gains the snapshot section, at the defaults', raw.snapshots.keepRecent === 12 && raw.snapshots.keepMonthly === 12);
     check('and loses nothing it had', JSON.stringify(raw.autoClean) === JSON.stringify(V1.autoClean) &&
       raw.purge.afterDays === 14 && raw.appearance.theme === 'dark');
     const unversioned = migrate({ appearance: { theme: 'light' } });
-    check('a file with no version is read as version 1', unversioned.from === 1 && unversioned.raw.version === 4);
+    check('a file with no version is read as version 1', unversioned.from === 1 && unversioned.raw.version === 5);
     check('migration does not change the object it was given', V1.version === 1 && V1.snapshots === undefined);
   }
 
@@ -82,7 +82,7 @@ const V1 = {
   }
 
   {
-    const { settings, warnings } = coerceSettings({ ...V1, version: 5, futureThing: { x: 1 } });
+    const { settings, warnings } = coerceSettings({ ...V1, version: 6, futureThing: { x: 1 } });
     check('a file from a newer build is read as far as this one understands it',
       settings.autoClean.minAgeDays === 30 && warnings.some((w) => /newer CleanDrive/.test(w)), warnings.join('; '));
   }
@@ -92,7 +92,7 @@ const V1 = {
   {
     const { raw } = migrate({ version: 3, autoClean: { categories: ['temp'] } });
     check('a version 3 file gains the quarantine section, with no folder and originals kept',
-      raw.version === 4 && raw.quarantine.zone === null && raw.quarantine.deleteOriginal === false &&
+      raw.version === 5 && raw.quarantine.zone === null && raw.quarantine.deleteOriginal === false &&
         raw.quarantine.retentionDays === 30 && raw.quarantine.maxGB === 0);
     const read = coerceSettings({ version: 4, quarantine: { zone: 'relative\\place', retentionDays: 9000, maxGB: -4, deleteOriginal: 'yes' } });
     check('a zone that is not absolute is dropped, and the numbers are clamped',
@@ -101,6 +101,30 @@ const V1 = {
     const kept = coerceSettings({ version: 4, quarantine: { zone: 'D:\\CleanDrive Quarantine', deleteOriginal: true } }).settings.quarantine;
     check('an absolute zone is kept, and deleting originals is on only when the file says so',
       /CleanDrive Quarantine$/.test(kept.zone) && kept.deleteOriginal === true);
+  }
+
+  console.log('\nsettings: version 4 to 5 -- the user\u2019s own colours (I2)\n');
+
+  {
+    const { raw } = migrate({ version: 4, appearance: { theme: 'dark', language: 'vi' } });
+    check('a version 4 file gains no colours of its own, and keeps its theme',
+      raw.version === 5 && raw.appearance.custom === null && raw.appearance.theme === 'dark' && raw.appearance.language === 'vi');
+    const palette = require('../src/shared/theme-palette');
+    const good = { enabled: true, name: 'Mine', base: 'dark', colors: { ...palette.BASES.dark, accent: '#b48cff' } };
+    const kept = coerceSettings({ version: 5, appearance: { theme: 'light', custom: good } });
+    check('a palette that passes every rule is kept, switched on as the file says',
+      kept.settings.appearance.custom && kept.settings.appearance.custom.enabled === true &&
+        kept.settings.appearance.custom.colors.accent === '#b48cff' && kept.settings.appearance.theme === 'light' &&
+        kept.warnings.length === 0, kept.warnings.join('; '));
+    // Hand-edited into something unreadable: grey text on a grey card.
+    const bad = coerceSettings({ version: 5, appearance: { custom: { ...good, colors: { ...good.colors, text: '#30343c' } } } });
+    check('one that fails a rule is dropped, with a warning, and the window falls back to the theme',
+      bad.settings.appearance.custom === null && bad.warnings.some((w) => /colour rules/.test(w)), bad.warnings.join('; '));
+    const injected = coerceSettings({ version: 5, appearance: { custom: { ...good, colors: { ...good.colors, accent: 'url(http://x)' } } } });
+    check('a value that is not #rrggbb never reaches the stylesheet',
+      injected.settings.appearance.custom === null && injected.warnings.length === 1, injected.warnings.join('; '));
+    const unknown = coerceSettings({ version: 5, appearance: { custom: { ...good, colors: { ...good.colors, '--bg': '#000000' } } } });
+    check('nor does a colour it does not know', unknown.settings.appearance.custom === null);
   }
 
   console.log('\nsettings: the snapshot section is clamped like everything else\n');
@@ -125,11 +149,11 @@ const V1 = {
     const loaded = await store.load();
     check('loading an old file does not write anything', (await fsp.readFile(file, 'utf8')) === original &&
       !fs.existsSync(path.join(dir, 'settings.v1.json')));
-    check('but hands back version 4 settings', loaded.version === 4 && loaded.snapshots.keepMonthly === 12);
+    check('but hands back version 5 settings', loaded.version === 5 && loaded.snapshots.keepMonthly === 12);
 
     await store.patch({ snapshots: { keepRecent: 3 } });
     const written = JSON.parse(await fsp.readFile(file, 'utf8'));
-    check('the first save writes version 4', written.version === 4 && written.snapshots.keepRecent === 3);
+    check('the first save writes version 5', written.version === 5 && written.snapshots.keepRecent === 3);
     check('patching one snapshot field keeps the other', written.snapshots.keepMonthly === 12);
     check('and keeps the old file, byte for byte, as settings.v1.json',
       (await fsp.readFile(path.join(dir, 'settings.v1.json'), 'utf8')) === original);
@@ -197,6 +221,12 @@ const V1 = {
       check('its cleanup stays exactly as configured -- nothing is switched on or off by the upgrade',
         settings.autoClean.enabled === true && settings.autoClean.dryRun === false &&
           JSON.stringify(settings.autoClean.categories) === '["temp","log"]');
+      // A file with the user's own colours switched on: the previous build
+      // does not know them, and shows the theme they were built on.
+      const palette = require('../src/shared/theme-palette');
+      const custom = coerceSettings({ ...V1, version: 5, appearance: { theme: 'dark', custom: { enabled: true, name: 'x', base: 'dark', colors: palette.BASES.dark } } }).settings;
+      const older = released.coerceSettings(JSON.parse(JSON.stringify(custom))).settings;
+      check('with custom colours on, the previous build shows the theme underneath them', older.appearance.theme === 'dark');
     }
   }
 

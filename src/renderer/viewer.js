@@ -45,6 +45,7 @@ async function openViewer(filePath) {
   // over opens the next one on sheet four for no reason anybody could see.
   viewer.sheetIndex = 0;
   $('viewer').hidden = false;
+  setBehind(true);
   $('viewer-name').textContent = filePath.split(/[\\/]/).pop();
   $('viewer-name').title = filePath;
   $('viewer-facts').textContent = t('viewer.reading', 'Reading…');
@@ -62,9 +63,23 @@ async function openViewer(filePath) {
   render(result);
 }
 
+/**
+ * The window behind the panel, made inert while it is open.
+ *
+ * `aria-modal` tells a screen reader the rest is out of reach; it does not
+ * stop Tab walking out of the panel into rows nobody can see. `inert` does
+ * both, and the toast stays outside it so a receipt can still be read.
+ */
+function setBehind(on) {
+  for (const el of document.querySelectorAll('body > .topbar, body > .workspace, body > .delete-progress')) {
+    el.inert = on;
+  }
+}
+
 function closeViewer() {
   if ($('viewer').hidden) return;
   $('viewer').hidden = true;
+  setBehind(false);
   // Emptying it stops a video carrying on playing behind a closed panel, and
   // drops the reference that keeps a large picture in memory.
   $('viewer-body').replaceChildren();

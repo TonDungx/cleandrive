@@ -453,6 +453,8 @@
       view.result = { candidates: out.candidates, summary: out.summary };
     }
     render();
+    // Once, when it ends -- not from render(), which a language change also calls.
+    if (out && !out.declined) announce($('system-status').textContent);
   }
 
   $('system-measure').addEventListener('click', () => run('walk'));

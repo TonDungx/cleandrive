@@ -5,9 +5,10 @@
 process.env.UV_THREADPOOL_SIZE = process.env.UV_THREADPOOL_SIZE || '16';
 
 const path = require('node:path');
-const { app, BrowserWindow, shell, nativeTheme } = require('electron');
+const { app, BrowserWindow, shell } = require('electron');
 
 const language = require('./language');
+const appearance = require('./appearance');
 
 const isDev = process.argv.includes('--dev');
 
@@ -51,7 +52,7 @@ function createWindow() {
     // had tried going below.
     minWidth: 680,
     minHeight: 520,
-    backgroundColor: nativeTheme.shouldUseDarkColors ? WINDOW_BACKGROUND.dark : WINDOW_BACKGROUND.light,
+    backgroundColor: appearance.background(WINDOW_BACKGROUND),
     show: false,
     title: 'CleanDrive',
     webPreferences: {
@@ -64,17 +65,16 @@ function createWindow() {
 
   mainWindow.once('ready-to-show', () => mainWindow.show());
 
-  // `nativeTheme.themeSource` is the single source of truth for the chosen
-  // mode: the IPC layer writes it when the user picks one, and reading it back
-  // here avoids main.js and ipc.js having to share a variable. The renderer
-  // needs it synchronously, before its first paint, so it travels in the URL
-  // rather than over IPC.
+  // `appearance.js` holds the chosen mode (and the user's own palette, when
+  // there is one): the IPC layer updates it when the user picks, and main.js
+  // reads it back here. The renderer needs it synchronously, before its first
+  // paint, so it travels in the URL rather than over IPC.
   //
   // The language travels the same way and for a sharper version of the same
   // reason: the window is written in English, so a Vietnamese user would watch
   // it translate itself if the answer arrived over IPC after the first frame.
   mainWindow.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'), {
-    query: { theme: nativeTheme.themeSource, lang: language.current() },
+    query: { ...appearance.query(), lang: language.current() },
   });
 
   if (isDev) mainWindow.webContents.openDevTools({ mode: 'detach' });
@@ -271,7 +271,7 @@ if (isHelper) {
       const store = require('./services').services().settings;
       settings = await store.load();
       settingsExisted = store.exists;
-      nativeTheme.themeSource = settings.appearance.theme;
+      appearance.apply(settings.appearance);
       language.apply(settings.appearance.language);
     } catch (err) {
       console.error('[settings] could not be read, using defaults:', err);

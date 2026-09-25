@@ -593,6 +593,10 @@ function renderGrid(reset = false) {
     canvas.appendChild(cell);
   }
 
+  // A focused cell scrolled out of the window has no element to point at.
+  const pointed = $('media-grid').getAttribute('aria-activedescendant');
+  if (pointed && !document.getElementById(pointed)) $('media-grid').removeAttribute('aria-activedescendant');
+
   requestThumbs([...wanted.keys()]);
 }
 
@@ -608,12 +612,40 @@ function cssEscape(value) {
   return typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(value) : value.replace(/["\\]/g, '\\$&');
 }
 
+/**
+ * One id per file for as long as the window is open, so the grid can point
+ * a screen reader at the cell the arrow keys are on. The grid keeps the
+ * focus itself (the cells come and go as it scrolls), and without
+ * `aria-activedescendant` moving through it said nothing at all.
+ */
+const cellIds = new Map();
+function cellId(path) {
+  if (!cellIds.has(path)) cellIds.set(path, `media-cell-${cellIds.size + 1}`);
+  return cellIds.get(path);
+}
+
+/** What a screen reader says for a cell. It used to be the size alone. */
+function cellLabel(file) {
+  const when = file.takenAt || file.mtimeMs;
+  return [
+    file.name,
+    file.kind === 'video' ? t('media.videoShort', 'video') : t('media.photoShort', 'photo'),
+    formatBytes(file.size),
+    when ? new Date(when).toLocaleDateString(uiLocale(), { day: 'numeric', month: 'short', year: 'numeric' }) : null,
+    file.cloudService ? t('media.cloudBadge', 'Synced with {service} — deleting it here deletes it everywhere', { service: file.cloudService }) : null,
+  ]
+    .filter(Boolean)
+    .join(', ');
+}
+
 function makeCell(file, index) {
   const cell = document.createElement('div');
   cell.className = 'media-cell';
+  cell.id = cellId(file.path);
   cell.dataset.path = file.path;
   cell.dataset.index = String(index);
   cell.setAttribute('role', 'option');
+  cell.setAttribute('aria-label', cellLabel(file));
   cell.setAttribute('aria-selected', String(media.selected.has(file.path)));
   cell.classList.toggle('is-selected', media.selected.has(file.path));
   cell.classList.toggle('is-focused', media.focused === file.path);
@@ -658,7 +690,7 @@ function makeCell(file, index) {
   }
 
   /*
-   * The tick is a button, and it toggles.
+   * The tick toggles.
    *
    * It was a decoration -- `aria-hidden`, no handler -- drawn on hover because
    * it looked right. It looked like a checkbox, so people clicked it like one,
@@ -670,13 +702,18 @@ function makeCell(file, index) {
    * Clicking the picture still means "show me this one". Clicking the tick
    * means "add this to what I am choosing", which is what every photo app on
    * the machine already taught the user it means.
+   *
+   * It is for the pointer, and it is not a <button> (I2). The cell is an
+   * option in a listbox, and a focusable control inside an option is one a
+   * screen reader can land on without knowing what it belongs to -- axe calls
+   * it nested-interactive, and tabindex=-1 does not stop it. From the
+   * keyboard, Space on the grid is the same toggle, and the option itself
+   * says whether it is selected.
    */
-  const tick = document.createElement('button');
+  const tick = document.createElement('span');
   tick.className = 'media-tick';
-  tick.type = 'button';
-  tick.tabIndex = -1;
   tick.title = t('media.tickHint', 'Add to the selection (or shift-click to take a run of them)');
-  tick.setAttribute('aria-label', tick.title);
+  tick.setAttribute('aria-hidden', 'true');
   tick.addEventListener('click', (event) => {
     // Stop it reaching the cell, or the cell would immediately replace the
     // selection this just added to.
@@ -815,12 +852,17 @@ function toggle(path) {
 }
 
 function syncCells() {
+  let current = null;
   for (const cell of $('media-canvas').children) {
     const selected = media.selected.has(cell.dataset.path);
     cell.classList.toggle('is-selected', selected);
     cell.setAttribute('aria-selected', String(selected));
-    cell.classList.toggle('is-focused', media.focused === cell.dataset.path);
+    const focused = media.focused === cell.dataset.path;
+    cell.classList.toggle('is-focused', focused);
+    if (focused) current = cell;
   }
+  if (current) $('media-grid').setAttribute('aria-activedescendant', current.id);
+  else $('media-grid').removeAttribute('aria-activedescendant');
 }
 
 // Beside the button, the sentence every screen's action carries: moving a
@@ -861,6 +903,11 @@ function updateSelection() {
         ? ` · ${t('media.selectedSynced', '{n} synced to the cloud', { n: formatCount(synced) })}`
         : '');
   }
+  // As on the lists: a change in what is chosen is said, the return to
+  // nothing is not (it follows a delete, and its receipt).
+  const said = `${count}:${bytes}`;
+  if (count > 0 && said !== updateSelection.said) announce(status.textContent);
+  updateSelection.said = count > 0 ? said : '';
 
   // Once anything is chosen the whole grid shows its ticks, so adding the next
   // one is never a thing you have to go hunting for under the pointer.
@@ -1170,6 +1217,9 @@ function reportScan(result) {
   // that divides it up. What is left for the bar is what the bar is for: what
   // just happened, and anything that went wrong.
   $('media-status').textContent = parts.slice(1).join(' ');
+  // Said whole, headline included: the overview card it sits in is not where
+  // a screen reader is when the scan ends.
+  announce(parts.join(' '));
 
   const empty = result.files.length === 0;
   $('media-layout').hidden = empty;

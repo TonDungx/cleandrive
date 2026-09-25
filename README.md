@@ -100,7 +100,7 @@ while skimming.
 | **Trends** | Is this getting worse, and how fast? | Every volume the app knows about |
 | **Restore** | What did the app do, and can I have it back? | Everything in the Action Journal |
 | **Automatic** | Can this happen without me? | A policy you write |
-| **Settings** | Appearance, language, version | The app itself |
+| **Settings** | Appearance and your own colours, language, keys, version | The app itself |
 
 Plus two things that run outside the window: an optional **tray watcher** that
 warns before a disk fills, and a **scheduled cleanup** that runs with no window
@@ -169,6 +169,55 @@ system asks for reduced motion gets the change with no animation at all.
 Electron's own dialogs — the folder picker, the delete confirmation — follow the
 same theme. A light app throwing a black modal is the giveaway that a theme was
 added afterwards.
+
+**A Windows contrast theme is followed.** With one on, Windows replaces the
+app's colours with its own, and the app makes sure nothing it says depends on a
+colour Windows took away: the selected screen, the pressed option and a ticked
+row are drawn in the system's highlight, a progress bar keeps its fill, the
+drive's five parts on the System screen become five patterns, and the map of a
+folder — drawn on a canvas, which Windows does not recolour — asks for the
+system's colours and draws in those. [Unverified] This was checked on a contrast
+theme emulated through Chromium's developer protocol, which forces the palette
+for real, not on each of Windows' own contrast themes.
+
+**Or your own colours** (Settings → *Your own colours*): eleven colour pickers,
+each with the colour written out as `#rrggbb` beside it, a small preview drawn in
+them, and **Import…** / **Export…** for a theme file. Every change is checked as
+it is made — text at 4.5:1 on every surface, the edges of fields at 3:1, the
+three verdict colours readable on their own badges and never too alike to tell
+apart — and the colours cannot be used until every check passes. The verdict
+colours may be changed (blue and orange for somebody who cannot tell red from
+green), but they still mean only verdicts. While **Custom** is chosen it is drawn
+even over a Windows contrast theme; that was a deliberate choice. A theme file
+holds eleven `#rrggbb` values and nothing else — no names, no `url()`, nothing
+that could become CSS the app did not write — and anything over 32 KB is refused
+unread.
+
+The two built-in themes are held to the same rules, and failed four of them when
+the rules were first written: the quietest text was 3.4–4.1:1, the edges of text
+fields 1.3:1, a button's label on the dark theme's blue 3.2:1, and the green of a
+*safe* badge 4.46:1. All four were moved along their own hue until they pass.
+
+### Keyboard and screen readers
+
+- **Every control is a Tab stop, or sits where the arrow keys reach it.** The
+  sidebar is a list of tabs (↑/↓ move and open, Home/End), a list of files is
+  one stop (↑/↓ between rows, Tab to the row's own buttons), and the map and the
+  photo grid move with the arrows. **?** anywhere outside a text field lists
+  every key.
+- **A screen reader is told what the screen does not show where it is
+  looking:** a finished scan, a new phase of a delete, a receipt, how many are
+  now selected — through two announcement regions written at those moments,
+  never on every progress tick. A failure interrupts; the rest waits its turn.
+- **Pictures and charts have words.** Each photo says its name, whether it is a
+  photo or a video, its size and its date; the disk-usage chart is followed by a
+  table of its readings; the page says which language it is in, so the voice
+  reading it is the right one.
+- Checked by `npm run test:a11y`: axe-core on every screen in both themes, in the
+  user's own colours and in Vietnamese; Chromium's own accessibility tree; Tab
+  walked through every screen; the keys pressed; a contrast theme emulated.
+  [Unverified] What Narrator actually says has not been listened to — Windows'
+  UI Automation cannot see into this Electron's pages from outside to check it.
 
 ### Language
 
@@ -297,7 +346,10 @@ Disk usage, What to delete and Duplicates are built from one shared list:
 - **Tick to select, Shift-tick to take everything in between** — the way the
   photo grid has always worked.
 - **The keyboard does everything the mouse does**: arrow keys move between rows,
-  Space ticks, Shift+arrow extends, Enter opens the file in the viewer.
+  Space ticks, Shift+arrow extends, Enter opens the file in the viewer, and Tab
+  from a row walks its own buttons — the reasons, View, Reveal, Open. They used
+  to be out of the Tab order on every row, which left Reveal and Open out of the
+  keyboard's reach altogether.
 - **What is selected floats at the bottom of the window**, and only while
   something is: how many, how big, and the one action that applies to all of
   them. Beside the button it says, every time, *Not freed until the bin is
@@ -920,7 +972,9 @@ exception, off until you switch it on: *Delete the original*, on the card for
 
 | Card | What it holds |
 | --- | --- |
-| **Appearance** | Light, dark, or follow the system |
+| **Appearance** | Light, dark, follow the system, or your own colours |
+| **Your own colours** | Eleven colours, checked as you pick them; import and export a theme file |
+| **Keyboard** | Where the list of keys is (**?** opens it too) |
 | **Language** | English or Vietnamese, or follow Windows |
 | **Company while scanning** | Which animal walks the progress bar, or none |
 | **Scan history** | How many folder snapshots to keep: the newest few, plus one a month |
@@ -1174,7 +1228,8 @@ the disk is, so the question can be answered without clicking anything.
   None of them holds the contents of any file. Snapshots and the journal do hold
   file *names*, so none of it ever leaves the machine. And, only if you move
   files to another drive, the `CleanDrive Quarantine` folder on the drive you
-  chose: the files themselves, and a manifest of where each came from.
+  chose: the files themselves, and a manifest of where each came from. And a
+  theme file, only when you export your own colours, only where you save it.
 - **Settings upgrade forward, once.** The settings file is versioned; the first
   save after an upgrade keeps the previous file as `settings.v1.json`, and the
   version before this one still reads the new file (that is tested against the
@@ -1252,7 +1307,10 @@ was put back is no longer the app's to remove.
 - **Moving the app** relocates the executable the scheduled task points at. The
   app notices on next launch and repairs it, but the runs between the move and
   that launch do not happen.
-- **No high-contrast theme**, and no way to change the accent colour.
+- **No choice of accent colour on its own.** A Windows contrast theme, or your
+  own colours, change every colour instead. Windows' contrast themes were
+  checked through an emulated one, not each of the real ones, and what Narrator
+  reads has not been listened to.
 
 ---
 
@@ -1271,7 +1329,7 @@ The interface is plain HTML, CSS and JavaScript — no framework and no build st
 so what is in `src/renderer/` is what runs. All filesystem work happens in a
 separate process; the interface has no access to the disk, the network or Node at
 all, and reaches the system only through a fixed list of named operations —
-fifty-six of them, written down in `src/main/ipc-manifest.js`. A handler for a
+fifty-nine of them, written down in `src/main/ipc-manifest.js`. A handler for a
 channel not in that file throws at startup, and `npm run test:ipc` holds the
 preload, the handlers and the manifest to the same list.
 
@@ -1329,14 +1387,17 @@ The app ships with **two runtime dependencies**: one for auto-update, and
 exception to a standing rule against dependencies, made after building both a
 hand-written reader and the library version and measuring them against real
 documents — the comparison harness is still in `scripts/` and still runs for the
-other formats.
+other formats. `axe-core` is a development dependency only, pinned to one
+version, for the accessibility harness; it is not in the installer.
 
 Everything else, including the ZIP, Excel, PowerPoint, image and video readers,
 the charts and the tray icon, is written here. There are no binary assets in the
 repository; the icons are drawn in code.
 
-Test harnesses live in [`scripts/`](scripts/) — thirty-five suites in
+Test harnesses live in [`scripts/`](scripts/) — thirty-six suites in
 `npm test`, plus the Electron ones, covering the classification rules, the
+colour rules a theme must pass (CIEDE2000 held to its published reference
+pairs), the
 known apps' caches held to their real folders, moving files to another drive
 down to a folder swapped for a junction half way through, the
 candidate contract, the action pipeline, the map of the folder and what the
@@ -1347,6 +1408,8 @@ Bin purge and the restore both written from the attacker's side, the
 entitlement matrix, the elevated helper's handshake, the settings migration
 against the released code, the translation dictionary, and an end-to-end run
 that boots the real application and reads its rendered interface back out.
+`npm run test:a11y` boots it too and checks it for accessibility (see
+[Keyboard and screen readers](#keyboard-and-screen-readers)).
 `npm run verify:restore` puts throwaway files back from the real Recycle Bin.
 `npm run shoot:lists`, `shoot:media`, `shoot:viewer`, `shoot:restore`,
-`shoot:system`, `shoot:treemap`, `shoot:changes`, `shoot:cloud`, `shoot:appcaches` and `shoot:quarantine` take screenshots of the real screens.
+`shoot:system`, `shoot:treemap`, `shoot:changes`, `shoot:cloud`, `shoot:appcaches`, `shoot:quarantine` and `shoot:a11y` take screenshots of the real screens.

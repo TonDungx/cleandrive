@@ -846,9 +846,12 @@ app.whenReady().then(async () => {
       const choosing = document.getElementById('media-grid').classList.contains('is-choosing');
       ticks[1].click();
       return { afterFirst, afterThree, afterUntick: media.selected.size, choosing,
-               isButton: ticks[0].tagName === 'BUTTON' };
+               // For the pointer, and out of a screen reader's way: a control
+               // inside an option is one it could land on (I2). Space on the
+               // grid is the keyboard's tick.
+               pointerOnly: ticks[0].tagName !== 'BUTTON' && ticks[0].getAttribute('aria-hidden') === 'true' && ticks[0].tabIndex < 0 };
     })()`);
-    check('the tick is a real button, not a decoration', mediaTicks.isButton === true);
+    check('the tick is for the pointer, not a control inside the option', mediaTicks.pointerOnly === true);
     check('ticking one picture chooses one', mediaTicks.afterFirst === 1, String(mediaTicks.afterFirst));
     check('ticking three chooses three, not the last one',
       mediaTicks.afterThree === 3, `${mediaTicks.afterThree} chosen`);

@@ -158,6 +158,7 @@
       badges[kind] = FreesBadge(FREES[kind] === true, kind);
       pairUp(badges[kind], button);
     }
+    let said = '';
 
     function update() {
       const rows = selected();
@@ -167,6 +168,13 @@
       readout.textContent = count
         ? t('app.selectedCount', '{n} selected · {size}', { n: formatCount(count), size: formatBytes(bytes) })
         : t('app.nothingSelected', 'Nothing selected');
+
+      // A tick made with Space on a row says nothing by itself; this does.
+      // Not the return to zero: that happens after a delete, and would talk
+      // over the receipt.
+      const key = `${count}:${bytes}`;
+      if (count > 0 && key !== said && typeof announce === 'function') announce(readout.textContent);
+      said = count > 0 ? key : '';
 
       for (const [kind, button] of Object.entries(buttons)) {
         const allowed = count > 0 && rows.every((row) => !row.actions || row.actions.includes(kind));
@@ -256,6 +264,35 @@
       onChange();
     }
 
+    /**
+     * Only the active row is a Tab stop -- and so are its own buttons.
+     *
+     * The rows are one stop between them, reached and left with the arrow
+     * keys, which is what keeps a list of five thousand from being five
+     * thousand presses of Tab. Its buttons used to be out of the Tab order on
+     * every row, which left Reveal and Open unreachable from the keyboard at
+     * all; now Tab from the row walks its pill, View, Reveal and Open, and the
+     * next Tab leaves the list.
+     */
+    function setActive(li, on) {
+      li.tabIndex = on ? 0 : -1;
+      for (const button of li.querySelectorAll('button')) button.tabIndex = on ? 0 : -1;
+    }
+
+    /**
+     * What a screen reader says for a row: its path, size, age, the verdict,
+     * and whether it is ticked. The tick is a checkbox the row keeps out of the
+     * Tab order (Space on the row ticks it), so the row has to say it.
+     */
+    function labelRow(li, row, b) {
+      const parts = [row.path, formatBytes(row.size)];
+      const metaText = meta ? meta(row) : timeLabel(row);
+      if (metaText) parts.push(metaText);
+      if (b && b.textContent) parts.push(b.textContent);
+      if (canTick(row)) parts.push(selection.has(row.path) ? t('list.ticked', 'ticked') : t('list.notTicked', 'not ticked'));
+      li.setAttribute('aria-label', parts.join(', '));
+    }
+
     function rowElement(row, index) {
       const li = document.createElement('li');
       li.className = 'file-row';
@@ -263,7 +300,6 @@
       li.dataset.index = String(index);
       li.setAttribute('aria-setsize', String(rows.length));
       li.setAttribute('aria-posinset', String(index + 1));
-      li.tabIndex = index === active ? 0 : -1;
 
       const check = document.createElement('input');
       check.type = 'checkbox';
@@ -326,11 +362,17 @@
               linkButton(t('app.open', 'Open'), async () => unwrap(await api.open(row.path), t('app.open', 'Open'))),
             ])
       );
-      for (const button of actions.querySelectorAll('button')) button.tabIndex = -1;
       li.appendChild(actions);
+      setActive(li, index === active);
+      li._label = () => labelRow(li, row, b);
+      li._label();
 
-      li.addEventListener('focus', () => {
+      // focusin, not focus: a click on a button in another row makes that the
+      // active row, so Tab carries on from where the person actually is.
+      li.addEventListener('focusin', () => {
+        if (active === index) return;
         active = index;
+        for (const other of list.querySelectorAll('.file-row')) setActive(other, other === li);
       });
       return li;
     }
@@ -338,8 +380,11 @@
     function evidenceElement(row) {
       const li = document.createElement('li');
       li.className = 'evidence-row';
-      li.setAttribute('role', 'note');
-      li.appendChild(EvidencePanel(row));
+      // The row stays a list item -- a list may hold nothing else -- and the
+      // reasons inside it are the note.
+      const panel = EvidencePanel(row);
+      panel.setAttribute('role', 'note');
+      li.appendChild(panel);
       return li;
     }
 
@@ -386,6 +431,7 @@
       for (const li of list.querySelectorAll('.file-row')) {
         const box = li.querySelector('input[type="checkbox"]');
         if (box) box.checked = selection.has(li.dataset.path);
+        if (li._label) li._label();
       }
     }
 
@@ -397,7 +443,7 @@
         render();
         li = list.querySelector(`.file-row[data-index="${active}"]`);
       }
-      for (const row of list.querySelectorAll('.file-row')) row.tabIndex = row === li ? 0 : -1;
+      for (const row of list.querySelectorAll('.file-row')) setActive(row, row === li);
       if (li) {
         li.focus();
         li.scrollIntoView({ block: 'nearest' });

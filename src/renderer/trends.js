@@ -97,11 +97,18 @@ function renderChart(host, series, thresholds) {
   const x = (t) => padLeft + (tMax === tMin ? plotWidth : ((t - tMin) / (tMax - tMin)) * plotWidth);
   const y = (v) => padTop + plotHeight - ((v - low) / (high - low)) * plotHeight;
 
+  const first = series[0];
+  const final = series[series.length - 1];
   const svg = svgEl('svg', {
     viewBox: `0 0 ${width} ${height}`,
     preserveAspectRatio: 'none',
     role: 'img',
-    'aria-label': t('trends.chartTitle', 'Disk usage over time'),
+    'aria-label': t('trends.chartSummary', 'Disk usage over time: {from} on {fromDay}, {to} on {toDay}. The readings are in the table that follows.', {
+      from: `${first.usedPercent.toFixed(1)}%`,
+      fromDay: formatDay(first.at),
+      to: `${final.usedPercent.toFixed(1)}%`,
+      toDay: formatDay(final.at),
+    }),
   });
 
   // Horizontal guides, labelled with the percentage they stand for.
@@ -133,13 +140,69 @@ function renderChart(host, series, thresholds) {
   const last = series[series.length - 1];
   svg.append(svgEl('circle', { class: 'chart-point', cx: x(last.at), cy: y(last.usedPercent), r: 3 }));
 
-  const first = svgEl('text', { class: 'chart-label', x: padLeft, y: height - 8 });
-  first.textContent = formatDay(tMin);
+  const firstLabel = svgEl('text', { class: 'chart-label', x: padLeft, y: height - 8 });
+  firstLabel.textContent = formatDay(tMin);
   const lastLabel = svgEl('text', { class: 'chart-label', x: width - padRight, y: height - 8, 'text-anchor': 'end' });
   lastLabel.textContent = formatDay(tMax);
-  svg.append(first, lastLabel);
+  svg.append(firstLabel, lastLabel);
 
-  host.append(svg);
+  host.append(svg, chartTable(series));
+}
+
+/** Rows the table under the chart reads out; the newest, when there are more. */
+const CHART_TABLE_ROWS = 100;
+
+/**
+ * The chart's readings, as a table only a screen reader sees.
+ *
+ * A line is a picture of numbers, and the numbers are what somebody who
+ * cannot see the line needs: the same series, newest first.
+ */
+function chartTable(series) {
+  const table = document.createElement('table');
+  table.className = 'sr-only';
+  const caption = document.createElement('caption');
+  caption.textContent =
+    series.length > CHART_TABLE_ROWS
+      ? t('trends.table.captionSome', 'Disk usage readings: the newest {n} of {total}', { n: CHART_TABLE_ROWS, total: series.length })
+      : t('trends.table.caption', 'Disk usage readings, {n} of them', { n: series.length });
+  table.appendChild(caption);
+
+  const head = document.createElement('tr');
+  for (const label of [
+    t('trends.table.when', 'When'),
+    t('trends.table.used', 'In use'),
+    t('trends.table.usedBytes', 'Used'),
+    t('trends.table.free', 'Free'),
+  ]) {
+    const th = document.createElement('th');
+    th.scope = 'col';
+    th.textContent = label;
+    head.appendChild(th);
+  }
+  const thead = document.createElement('thead');
+  thead.appendChild(head);
+  table.appendChild(thead);
+
+  const body = document.createElement('tbody');
+  for (const point of series.slice(-CHART_TABLE_ROWS).reverse()) {
+    const tr = document.createElement('tr');
+    const cells = [
+      new Date(point.at).toLocaleString(uiLocale(), { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+      `${point.usedPercent.toFixed(1)}%`,
+      Number.isFinite(point.usedBytes) ? formatBytes(point.usedBytes) : '–',
+      Number.isFinite(point.freeBytes) ? formatBytes(point.freeBytes) : '–',
+    ];
+    cells.forEach((text, i) => {
+      const cell = document.createElement(i === 0 ? 'th' : 'td');
+      if (i === 0) cell.scope = 'row';
+      cell.textContent = text;
+      tr.appendChild(cell);
+    });
+    body.appendChild(tr);
+  }
+  table.appendChild(body);
+  return table;
 }
 
 /* ---- the lists ---------------------------------------------------------- */

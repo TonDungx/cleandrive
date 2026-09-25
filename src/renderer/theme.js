@@ -35,12 +35,33 @@
  */
 
 (() => {
-  const VALID = ['system', 'light', 'dark'];
+  const VALID = ['system', 'light', 'dark', 'custom'];
   const SWEEP_MS = 460;
+  const palettes = window.CleanDriveTheme;
+
+  /**
+   * The user's own colours, checked again here before a single token is set
+   * from them. The main process checked them when they were saved; this is
+   * the last place a bad palette could still become unreadable text, so it is
+   * checked where it is used too.
+   */
+  function usable(raw) {
+    if (!palettes || !raw) return null;
+    const shaped = palettes.normalise({ format: palettes.FORMAT, version: palettes.VERSION, name: raw.name || '', base: raw.base, colors: raw.colors });
+    return shaped.ok && palettes.check(shaped.theme).ok ? shaped.theme : null;
+  }
+
+  /** The palette the Custom choice draws with: the stored one, once known. */
+  let stored = null;
 
   function readMode() {
     try {
-      const mode = new URLSearchParams(window.location.search).get('theme');
+      const params = new URLSearchParams(window.location.search);
+      // Present whether or not Custom is on: it is what the Custom button and
+      // the editor offer.
+      stored = usable(JSON.parse(params.get('palette') || 'null'));
+      const mode = params.get('theme');
+      if (mode === 'custom') return stored ? 'custom' : 'system';
       return VALID.includes(mode) ? mode : 'system';
     } catch {
       return 'system';
@@ -61,10 +82,27 @@
    * there is no such value for `color-scheme`, and the CSS switch keys off the
    * attribute being present at all.
    */
-  function apply(mode) {
+  function apply(mode, palette = stored) {
     const root = document.documentElement;
-    if (mode === 'light' || mode === 'dark') root.setAttribute('data-theme', mode);
+    // The custom palette is a set of inline tokens on the document element,
+    // where they win over the stylesheet's; leaving any behind would tint the
+    // built-in theme with the last palette.
+    if (palettes) for (const token of palettes.TOKENS) root.style.removeProperty(token);
+    delete root.dataset.themeBase;
+
+    if (mode === 'custom' && palette) {
+      root.setAttribute('data-theme', 'custom');
+      root.dataset.themeBase = palette.base;
+      for (const [token, value] of Object.entries(palettes.derive(palette.colors, palette.base))) {
+        root.style.setProperty(token, value);
+      }
+    } else if (mode === 'light' || mode === 'dark') root.setAttribute('data-theme', mode);
     else root.removeAttribute('data-theme');
+
+    // The map of a folder paints on a canvas, which reads the tokens when it
+    // draws; one custom palette replacing another changes no attribute it
+    // could watch.
+    document.dispatchEvent(new CustomEvent('cleandrive:theme'));
   }
 
   let current = readMode();
@@ -141,13 +179,45 @@
       const buttons = [...host.querySelectorAll('[data-theme-choice]')];
       const index = buttons.findIndex((button) => button.dataset.themeChoice === current);
       if (index >= 0) host.style.setProperty('--switch-index', String(index));
+      // The sidebar's copy has no Custom button; with Custom on, its pill
+      // must not sit under whichever of the three was chosen last.
+      host.toggleAttribute('data-switch-none', index < 0);
     }
 
     for (const button of document.querySelectorAll('[data-theme-choice]')) {
       const active = button.dataset.themeChoice === current;
       button.classList.toggle('is-active', active);
       button.setAttribute('aria-pressed', String(active));
+      if (button.dataset.themeChoice === 'custom') {
+        // language.js is loaded before this file, so t() is always there.
+        button.disabled = !stored;
+        button.title = stored
+          ? window.t('custom.useHint', 'Your own colours: {name}', { name: stored.name || window.t('theme.defaultName', 'My colours') })
+          : window.t('custom.noneHint', 'Make your own colours in the card below first.');
+      }
     }
+  }
+
+  /**
+   * Change the stored palette -- the editor saved one, or forgot it. With
+   * Custom on, the window redraws in the new one at once.
+   */
+  function setStored(palette) {
+    stored = palette ? usable(palette) : null;
+    if (current === 'custom' && stored) apply('custom');
+    markActive();
+  }
+
+  /**
+   * Take up a mode the main process has already saved -- the editor's "Use
+   * these colours", or what is left after forgetting them. No IPC: this is
+   * the window catching up, not a new choice.
+   */
+  function adopt(mode, from) {
+    const next = mode === 'custom' && !stored ? 'system' : VALID.includes(mode) ? mode : 'system';
+    current = next;
+    sweep(next, from);
+    markActive();
   }
 
   function wire() {
@@ -159,6 +229,7 @@
 
       const mode = button.dataset.themeChoice;
       if (!VALID.includes(mode) || mode === current) return;
+      if (mode === 'custom' && !stored) return;
 
       // Repaint first, persist second. The switch should feel instant, and a
       // failed write is worth reporting but not worth blocking the change on.
@@ -181,6 +252,8 @@
     });
 
     markActive();
+    // The Custom button's tooltip is words, and follows a change of language.
+    if (typeof window.onLanguageChange === 'function') window.onLanguageChange(markActive);
   }
 
   if (document.readyState === 'loading') {
@@ -188,4 +261,13 @@
   } else {
     wire();
   }
+
+  /** For the colour editor, and for the harnesses. */
+  window.ThemeSwitch = {
+    current: () => current,
+    stored: () => stored,
+    setStored,
+    adopt,
+    markActive,
+  };
 })();

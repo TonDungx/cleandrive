@@ -153,7 +153,10 @@ function applyUpdateState(next) {
 
   const downloading = next.status === 'downloading';
   $('update-progress').hidden = !downloading;
-  if (downloading) $('update-bar').style.width = `${Math.round(next.progress)}%`;
+  if (downloading) {
+    $('update-bar').style.width = `${Math.round(next.progress)}%`;
+    $('update-progress').setAttribute('aria-valuenow', String(Math.round(next.progress)));
+  }
 
   $('update-check').disabled = !next.supported || next.checking || downloading ||
     next.status === 'available';

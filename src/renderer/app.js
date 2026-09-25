@@ -85,16 +85,52 @@ function elide(text, max = 80) {
   return `${text.slice(0, max - tail - 1)}…${text.slice(-tail)}`;
 }
 
+/**
+ * Tell a screen reader something that is not where its focus is.
+ *
+ * Cleared first and written a frame later, so the same sentence twice in a row
+ * -- two deletes of the same size -- is announced twice rather than taken for
+ * no change. A failure goes to the assertive region, which interrupts.
+ */
+function announce(message, { assertive = false } = {}) {
+  const el = $(assertive ? 'sr-assertive' : 'sr-polite');
+  if (!el || !message) return;
+  el.textContent = '';
+  requestAnimationFrame(() => {
+    el.textContent = message;
+  });
+}
+
+/**
+ * A receipt at the bottom of the window.
+ *
+ * It stays while the pointer or the focus is on it, and a long one stays
+ * longer: a toast that vanishes before it has been read is a receipt nobody
+ * got. A screen reader hears it through announce(), not by finding it.
+ */
 function toast(message, isError = false) {
   const el = $('toast');
   el.textContent = message;
   el.classList.toggle('is-error', isError);
   el.hidden = false;
+  announce(message, { assertive: isError });
+  toast._ms = Math.min(15000, 5000 + String(message).length * 40);
+  armToast();
+}
+
+function armToast() {
+  const el = $('toast');
   clearTimeout(toast._timer);
+  if (el.matches(':hover, :focus-within')) return;
   toast._timer = setTimeout(() => {
     el.hidden = true;
-  }, 5000);
+  }, toast._ms || 5000);
 }
+
+$('toast').addEventListener('mouseenter', () => clearTimeout(toast._timer));
+$('toast').addEventListener('mouseleave', armToast);
+$('toast').addEventListener('focusin', () => clearTimeout(toast._timer));
+$('toast').addEventListener('focusout', armToast);
 
 /** Unwrap the { ok, data, error } envelope every IPC handler returns. */
 function unwrap(envelope, label) {
@@ -153,14 +189,60 @@ $('pick-folder').addEventListener('click', async () => {
 // is drawn as a row like the others. Matching on the class alone made clicking
 // it switch to a panel called "panel-undefined", which left every panel hidden
 // and the window empty.
-for (const tab of document.querySelectorAll('.tab[data-tab]')) {
-  tab.addEventListener('click', () => {
-    document.querySelectorAll('.tab[data-tab]').forEach((t) => t.classList.toggle('is-active', t === tab));
-    document.querySelectorAll('.panel').forEach((p) => {
-      p.classList.toggle('is-active', p.id === `panel-${tab.dataset.tab}`);
-    });
+//
+// The sidebar is a tab list in the ARIA sense as well as the visual one: each
+// tab says whether it is the selected one and which panel it controls, only
+// the selected tab is a Tab stop, and the arrow keys move between them. A
+// screen reader used to hear nine tabs, every one of them "not selected".
+const TABS = [...document.querySelectorAll('.tab[data-tab]')];
+
+function selectTab(tab, { focus = false } = {}) {
+  for (const other of TABS) {
+    const on = other === tab;
+    other.classList.toggle('is-active', on);
+    other.setAttribute('aria-selected', String(on));
+    other.tabIndex = on ? 0 : -1;
+  }
+  document.querySelectorAll('.panel').forEach((p) => {
+    p.classList.toggle('is-active', p.id === `panel-${tab.dataset.tab}`);
   });
+  // The main region is named after the screen in it: "Disk usage, main".
+  // Chromium makes it focusable (it is what scrolls), and a focusable thing
+  // with no name is read as nothing.
+  document.querySelector('main').setAttribute('aria-labelledby', tab.id);
+  if (focus) tab.focus();
 }
+
+for (const tab of TABS) {
+  tab.id = `tab-${tab.dataset.tab}`;
+  tab.setAttribute('aria-controls', `panel-${tab.dataset.tab}`);
+  const panel = $(`panel-${tab.dataset.tab}`);
+  if (panel) panel.setAttribute('aria-labelledby', tab.id);
+  tab.addEventListener('click', () => selectTab(tab));
+}
+selectTab(TABS.find((tab) => tab.classList.contains('is-active')) || TABS[0]);
+
+document.querySelector('.sidebar-nav').addEventListener('keydown', (event) => {
+  const index = TABS.indexOf(event.target);
+  if (index < 0) return;
+  const last = TABS.length - 1;
+  const next = {
+    ArrowDown: index === last ? 0 : index + 1,
+    ArrowRight: index === last ? 0 : index + 1,
+    ArrowUp: index === 0 ? last : index - 1,
+    ArrowLeft: index === 0 ? last : index - 1,
+    Home: 0,
+    End: last,
+  }[event.key];
+  if (next === undefined) return;
+  event.preventDefault();
+  // Selection follows focus: every panel is already drawn, so showing one
+  // costs nothing and saves a second key press on every move. Through a
+  // click, because the screens that load on being opened (Trends, Restore,
+  // System, Settings) listen for exactly that.
+  TABS[next].click();
+  TABS[next].focus();
+});
 
 /* A sticky bar earns its edge only once something has gone underneath it. A
    line drawn across an unscrolled panel is decoration, and this app has a rule
@@ -209,6 +291,7 @@ $('run-scan').addEventListener('click', async () => {
   state.scan = hydrateScan(result);
   state.selectedLarge.clear();
   renderScan(state.scan);
+  announce($('scan-status').textContent);
   // The OneDrive card reads the reply before it is flattened: its rows are
   // candidates of their own, named in `cloud.ids`.
   window.CloudCard.show(result);
@@ -746,6 +829,7 @@ $('run-dupes').addEventListener('click', async () => {
 
   state.dupes = hydrateDupes(result);
   renderDupes(state.dupes);
+  announce($('dupes-status').textContent);
 });
 
 /** The duplicate groups, each holding the candidates it names. */
@@ -987,15 +1071,38 @@ const progressPanel = {
     $('dp-cancel').disabled = false;
     $('dp-cancel').textContent = t('app.stop', 'Stop');
     $('delete-progress').hidden = false;
+    progressPanel.said = title;
+    progressPanel.value(0);
+    announce(title);
 
     // Nothing else may start a delete while one is running.
     setActionRunning(true);
     for (const id of DELETE_BUTTONS) $(id).disabled = true;
   },
 
+  /** The bar as a screen reader has it: a percentage, and the words beside it. */
+  value(pct) {
+    const track = $('dp-track');
+    track.setAttribute('aria-valuenow', String(Math.round(pct)));
+    const words = [$('dp-count').textContent, $('dp-eta').textContent].filter(Boolean).join(' · ');
+    if (words) track.setAttribute('aria-valuetext', words);
+    else track.removeAttribute('aria-valuetext');
+  },
+
   update(p) {
     if (p.phase === 'done') return;
+    this.render(p);
+    const fill = $('dp-fill');
+    this.value(parseFloat(fill.style.width) || 0);
+    // A new phase is news; the hundredth file of the same phase is not.
+    const title = $('dp-title').textContent;
+    if (title !== this.said) {
+      this.said = title;
+      announce(title);
+    }
+  },
 
+  render(p) {
     const fill = $('dp-fill');
     const pct = p.total > 0 ? Math.min(100, (p.done / p.total) * 100) : 0;
     fill.style.width = `${pct}%`;

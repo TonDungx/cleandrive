@@ -32,6 +32,9 @@
     <script src="../i18n/index.js"></script>
     <script src="../i18n/vi.js"></script>
     <script src="language.js"></script>
+    <!-- Before theme.js: a window opened in the user's own colours checks
+         them and turns them into tokens before the first paint. -->
+    <script src="../shared/theme-palette.js"></script>
     <script src="theme.js"></script>
   </head>
   <body>
@@ -70,7 +73,7 @@
       </button>
 
       <div class="sidebar" id="sidebar">
-        <nav class="sidebar-nav" role="tablist" data-i18n-aria="app.sidebar.sections" aria-label="Sections">
+        <nav class="sidebar-nav" role="tablist" aria-orientation="vertical" data-i18n-aria="app.sidebar.sections" aria-label="Sections">
           <button class="tab is-active" data-tab="usage" role="tab"
             data-i18n-title="app.tab.usage" title="Disk usage">
             <svg class="tab-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="5.6"/><path d="M8 8V2.4"/><path d="M8 8l4.1 3.8"/></svg>
@@ -185,7 +188,7 @@
           <span class="status" id="scan-status" data-i18n="app.pickToBegin">Pick a folder to begin.</span>
         </div>
 
-        <div class="progress progress-walk" id="scan-progress" hidden>
+        <div class="progress progress-walk" id="scan-progress" hidden role="progressbar" data-i18n-aria="progress.scan" aria-label="Scanning">
         <span class="critters" aria-hidden="true"></span>
           <span class="progress-track"><span class="progress-bar is-indeterminate"></span></span>
         </div>
@@ -266,7 +269,7 @@
           <span class="status" id="system-status"></span>
         </div>
 
-        <div class="progress progress-walk" id="system-progress" hidden>
+        <div class="progress progress-walk" id="system-progress" hidden role="progressbar" data-i18n-aria="progress.system" aria-label="Reading the drive">
           <span class="critters" aria-hidden="true"></span>
           <span class="progress-track"><span class="progress-bar is-indeterminate"></span></span>
         </div>
@@ -406,7 +409,7 @@
             <span class="status" id="media-status" data-i18n="media.readyToScan">Ready to look through your photo folders.</span>
           </div>
 
-          <div class="progress progress-walk" id="media-progress" hidden>
+          <div class="progress progress-walk" id="media-progress" hidden role="progressbar" data-i18n-aria="progress.media" aria-label="Looking through the photo folders">
             <span class="critters" aria-hidden="true"></span>
             <span class="progress-track"><span class="progress-bar is-indeterminate"></span></span>
           </div>
@@ -527,7 +530,7 @@
           <span class="status" id="dupes-status" data-i18n="app.pickToBegin">Pick a folder to begin.</span>
         </div>
 
-        <div class="progress progress-walk" id="dupes-progress" hidden>
+        <div class="progress progress-walk" id="dupes-progress" hidden role="progressbar" data-i18n-aria="progress.dupes" aria-label="Looking for duplicates">
         <span class="critters" aria-hidden="true"></span>
           <span class="progress-track"><span class="progress-bar is-indeterminate"></span></span>
         </div>
@@ -741,7 +744,7 @@
             <span class="status" id="auto-status" data-i18n="app.loading">Loading…</span>
           </div>
 
-          <div class="progress" id="auto-progress" hidden>
+          <div class="progress" id="auto-progress" hidden role="progressbar" data-i18n-aria="progress.auto" aria-label="Cleaning up">
             <div class="progress-bar is-indeterminate"></div>
           </div>
         </div>
@@ -908,7 +911,7 @@
             </p>
             <ul class="path-list" id="auto-skip"></ul>
             <div class="field field-row">
-              <input type="text" id="auto-skip-input" placeholder="Code.exe" />
+              <input type="text" id="auto-skip-input" placeholder="Code.exe" data-i18n-aria="auto.skipInput" aria-label="Process name to add" />
               <button class="btn btn-sm" id="auto-add-skip" data-i18n="app.add">Add</button>
             </div>
           </section>
@@ -1038,7 +1041,7 @@
               with it. The same control sits at the foot of the sidebar.
             </p>
             <div
-              class="segmented segmented-wide"
+              class="segmented segmented-wide segmented-4"
               id="theme-switch-settings"
               data-theme-host
               role="group"
@@ -1048,7 +1051,12 @@
               <button class="segmented-option" data-theme-choice="system" data-i18n="settings.auto">Auto</button>
               <button class="segmented-option" data-theme-choice="light" data-i18n="app.theme.light">Light</button>
               <button class="segmented-option" data-theme-choice="dark" data-i18n="app.theme.dark">Dark</button>
+              <button class="segmented-option" data-theme-choice="custom" data-i18n="app.theme.custom" disabled>Custom</button>
             </div>
+            <p class="card-note" data-i18n="settings.appearance.contrastNote">
+              With a Windows contrast theme on, the app uses its colours — unless Custom is chosen:
+              your own colours are drawn even then.
+            </p>
 
             <h2 class="card-subhead" data-i18n="settings.critters.title">Company while it scans</h2>
             <p class="card-note" data-i18n="settings.critters.note">
@@ -1067,6 +1075,85 @@
                 <option value="off" data-i18n="settings.critters.off">Nobody — just the bar</option>
               </select>
             </label>
+          </section>
+
+          <!--
+            The user's own colours (I2). Eleven colours; every other shade the
+            interface uses is worked out from them. The rules are checked as
+            each colour changes, by the same code the main process checks a
+            saved or imported palette with (src/shared/theme-palette.js), and
+            "Use these colours" stays off until every one passes.
+            theme-editor.js draws it.
+          -->
+          <section class="card card-wide custom-card" id="custom-card">
+            <div class="card-head">
+              <h2 id="custom-title" data-i18n="custom.title">Your own colours</h2>
+              <span class="card-badge" id="custom-state"></span>
+            </div>
+            <p class="card-note" data-i18n="custom.note">
+              Pick eleven colours, or import a theme file someone made. Each change is checked
+              against the contrast rules as you make it, and the colours cannot be used until all of
+              them pass. While Custom is chosen they are drawn even over a Windows contrast theme.
+            </p>
+            <div class="custom-top">
+              <label class="field field-row">
+                <span data-i18n="custom.name">Name</span>
+                <input type="text" id="custom-name" maxlength="60" />
+              </label>
+              <label class="field field-row">
+                <span data-i18n="custom.base">Built on</span>
+                <select id="custom-base">
+                  <option value="light" data-i18n="app.theme.light">Light</option>
+                  <option value="dark" data-i18n="app.theme.dark">Dark</option>
+                </select>
+              </label>
+              <span class="spacer"></span>
+              <button class="btn btn-sm" id="custom-reset" data-i18n="custom.reset">Start again from the base</button>
+              <button class="btn btn-sm" id="custom-import" data-i18n="custom.import">Import…</button>
+              <button class="btn btn-sm" id="custom-export" data-i18n="custom.export">Export…</button>
+            </div>
+            <div class="custom-body">
+              <div class="custom-colors" id="custom-colors" role="group" aria-labelledby="custom-title"></div>
+              <div class="custom-side">
+                <div class="custom-preview" id="custom-preview" aria-hidden="true">
+                  <div class="custom-preview-card">
+                    <p class="custom-preview-title" data-i18n="custom.preview.title">Setup files</p>
+                    <p class="custom-preview-second" data-i18n="custom.preview.second">An installer, 90 days old</p>
+                    <p class="custom-preview-quiet" data-i18n="custom.preview.quiet">Modified 3 months ago</p>
+                    <div class="custom-preview-row">
+                      <span class="badge badge-safe" data-i18n="custom.preview.safe">safe</span>
+                      <span class="badge badge-review" data-i18n="custom.preview.review">review</span>
+                      <span class="custom-preview-danger" data-i18n="custom.preview.danger">in use</span>
+                    </div>
+                    <div class="custom-preview-row">
+                      <span class="custom-preview-field" data-i18n="custom.preview.field">100 KB</span>
+                      <span class="custom-preview-link" data-i18n="app.reveal">Reveal</span>
+                      <span class="spacer"></span>
+                      <span class="btn btn-primary btn-sm" data-i18n="custom.preview.button">Scan folder</span>
+                    </div>
+                  </div>
+                </div>
+                <p class="custom-summary" id="custom-summary" aria-live="polite"></p>
+                <ul class="custom-report" id="custom-report"></ul>
+              </div>
+            </div>
+            <div class="panel-actions panel-actions-tight">
+              <button class="btn btn-primary btn-sm" id="custom-use" data-i18n="custom.use" disabled>Use these colours</button>
+              <button class="btn btn-sm" id="custom-forget" data-i18n="custom.forget" hidden>Forget my colours</button>
+              <span class="status" id="custom-status"></span>
+            </div>
+          </section>
+
+          <section class="card">
+            <h2 data-i18n="settings.keys.title">Keyboard</h2>
+            <p class="card-note" data-i18n="settings.keys.note">
+              Every control can be reached with Tab. Lists, the map of a folder and the photo grid
+              move with the arrow keys, and Space ticks. Press ? anywhere outside a text field for
+              the whole list.
+            </p>
+            <div class="panel-actions panel-actions-tight">
+              <button class="btn btn-sm" id="shortcuts-open" data-i18n="settings.keys.open">Show keyboard shortcuts</button>
+            </div>
           </section>
 
           <section class="card">
@@ -1135,7 +1222,7 @@
               and the app makes no network requests at all.
             </p>
             <p class="card-note" id="update-detail"></p>
-            <div class="progress" id="update-progress" hidden>
+            <div class="progress" id="update-progress" hidden role="progressbar" aria-valuemin="0" aria-valuemax="100" data-i18n-aria="progress.update" aria-label="Downloading the update">
               <div class="progress-bar" id="update-bar"></div>
             </div>
             <div class="panel-actions panel-actions-tight">
@@ -1156,7 +1243,7 @@
         <span class="dp-eta" id="dp-eta"></span>
         <button class="btn btn-sm" id="dp-cancel" data-i18n="app.stop">Stop</button>
       </div>
-      <div class="dp-track"><div class="dp-fill" id="dp-fill"></div></div>
+      <div class="dp-track" id="dp-track" role="progressbar" aria-labelledby="dp-title" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="dp-fill" id="dp-fill"></div></div>
       <div class="dp-meta">
         <span id="dp-count" data-i18n="app.preparing">Preparing…</span>
         <span id="dp-rate"></span>
@@ -1187,6 +1274,30 @@
 
     <div class="toast" id="toast" hidden></div>
 
+    <!--
+      What a screen reader is told, apart from what has focus.
+
+      Two regions and no more: a receipt, a finished scan, a new phase of a
+      delete go to the polite one; a failure goes to the other, which
+      interrupts. They are written to at the moments something is decided,
+      never on every progress tick -- a region that speaks twice a second is
+      one people turn off. announce() in app.js is the only writer.
+    -->
+    <div class="sr-only" id="sr-polite" role="status" aria-live="polite" aria-atomic="true"></div>
+    <div class="sr-only" id="sr-assertive" role="alert" aria-live="assertive" aria-atomic="true"></div>
+
+    <!-- Every key the app answers to, opened with ? from anywhere that is not
+         a text field. A native dialog: it keeps focus inside itself, Escape
+         closes it, and the page behind it is inert while it is open. -->
+    <dialog class="shortcuts" id="shortcuts" aria-labelledby="shortcuts-title">
+      <div class="shortcuts-head">
+        <h2 id="shortcuts-title" data-i18n="keys.title">Keyboard shortcuts</h2>
+        <span class="spacer"></span>
+        <button class="btn btn-sm" id="shortcuts-close" data-i18n="app.close">Close</button>
+      </div>
+      <div class="shortcuts-body" id="shortcuts-body"></div>
+    </dialog>
+
     <script src="sidebar.js"></script>
     <script src="critters.js"></script>
     <script src="candidates.js"></script>
@@ -1210,5 +1321,9 @@
     <script src="quarantine.js"></script>
     <script src="restore.js"></script>
     <script src="system.js"></script>
+    <!-- The list of keys, opened with ?. -->
+    <script src="keys.js"></script>
+    <!-- The user's own colours, in Settings. -->
+    <script src="theme-editor.js"></script>
   </body>
 </html>

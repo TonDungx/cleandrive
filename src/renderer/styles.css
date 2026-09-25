@@ -36,10 +36,19 @@
   --border: light-dark(#dde2ea, #262d3a);
   --border-soft: light-dark(#eaedf3, #1d232d);
   --border-strong: light-dark(#bfc7d4, #38414f);
+  /* The edge of something you type into or tick. A card's border can be as
+     faint as it likes; the edge of a text field is how anybody finds it, and
+     WCAG asks 3:1 of it. --border was 1.3:1. This is 3.1:1 against both the
+     card and the field's own fill. */
+  --control-border: light-dark(#7b8ba6, #5f6e85);
 
   --text: light-dark(#11151c, #e9ecf3);
   --text-2: light-dark(#525b6b, #a3acbd);
-  --text-3: light-dark(#79828f, #6a7386);
+  /* The quietest text still has to be read. It was #79828f / #6a7386, which
+     is 3.4-4.1:1 on the cards it sits on -- under the 4.5:1 WCAG asks of body
+     text, on 52 rules. Same hue, moved until the worst surface it can land
+     on (--surface-3) gives 4.6:1. */
+  --text-3: light-dark(#616873, #8a92a3);
 
   /* The accent darkens in light mode. #5b8cff on white is a 2.6:1 contrast
      ratio -- fine as a fill behind white text, unreadable as text itself. */
@@ -50,17 +59,24 @@
   --accent-soft: light-dark(rgba(37, 99, 235, 0.09), rgba(91, 140, 255, 0.14));
   --accent-ring: light-dark(rgba(37, 99, 235, 0.28), rgba(91, 140, 255, 0.35));
   --accent-glow: light-dark(rgba(37, 99, 235, 0.22), rgba(91, 140, 255, 0.3));
-  --on-accent: #ffffff;
+  /* What is written on the accent. White on the dark theme's #5b8cff was
+     3.2:1, under the 4.5:1 a button's label needs; a dark ink is 6:1. */
+  --on-accent: light-dark(#ffffff, #0b1220);
 
   /* The semantic three, likewise darkened for light mode: these are read as
      text on cards, not just as fills. */
-  --good: light-dark(#15803d, #3fb950);
-  --good-soft: light-dark(rgba(21, 128, 61, 0.09), rgba(63, 185, 80, 0.13));
-  --good-line: light-dark(rgba(21, 128, 61, 0.28), rgba(63, 185, 80, 0.32));
+  /* Light mode's green and amber were each a hair under 4.5:1 where they are
+     read -- #15803d at 4.46:1 on its own soft badge fill, #a16207 at 4.43:1
+     on --surface-2 -- and were darkened along their own hue until they pass
+     (src/shared/theme-palette.js holds both palettes to the same rules a
+     custom theme must pass). */
+  --good: light-dark(#147739, #3fb950);
+  --good-soft: light-dark(rgba(20, 119, 57, 0.09), rgba(63, 185, 80, 0.13));
+  --good-line: light-dark(rgba(20, 119, 57, 0.28), rgba(63, 185, 80, 0.32));
 
-  --warn: light-dark(#a16207, #d8a020);
-  --warn-soft: light-dark(rgba(161, 98, 7, 0.09), rgba(216, 160, 32, 0.13));
-  --warn-line: light-dark(rgba(161, 98, 7, 0.28), rgba(216, 160, 32, 0.32));
+  --warn: light-dark(#945a06, #d8a020);
+  --warn-soft: light-dark(rgba(148, 90, 6, 0.09), rgba(216, 160, 32, 0.13));
+  --warn-line: light-dark(rgba(148, 90, 6, 0.28), rgba(216, 160, 32, 0.32));
 
   --danger: light-dark(#dc2626, #f0555b);
   --danger-text: light-dark(#b91c1c, #ff8a8e);
@@ -163,6 +179,21 @@ body {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
   border-radius: 4px;
+}
+
+/* On the page for a screen reader, off it for everyone else: the chart's
+   table of readings, the announcement regions. Not display:none, which
+   would take it out of the accessibility tree as well. */
+.sr-only {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
 }
 
 /* Scrollbars, styled so a scrolling panel does not put a strip of Windows grey
@@ -393,7 +424,7 @@ input[type="time"] {
   appearance: none;
   height: 30px;
   padding: 0 10px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--control-border);
   border-radius: var(--radius-sm);
   background: var(--surface-2);
   color: var(--text);
@@ -418,7 +449,7 @@ select:hover,
 input[type="number"]:hover,
 input[type="text"]:hover,
 input[type="time"]:hover {
-  border-color: var(--border-strong);
+  border-color: var(--text-3);
 }
 
 select:focus,
@@ -458,7 +489,7 @@ input[type="checkbox"] {
   width: 16px;
   height: 16px;
   margin: 0;
-  border: 1.5px solid var(--border-strong);
+  border: 1.5px solid var(--control-border);
   border-radius: 5px;
   background: var(--surface-2);
   cursor: pointer;
@@ -610,8 +641,12 @@ input[type="checkbox"]:disabled {
   height: 17px;
   padding: 0 6px;
   border-radius: var(--radius-pill);
-  background: var(--accent-soft);
-  color: var(--accent);
+  /* Solid, with the accent's own ink. The soft fill it had sat on the
+     selected tab's soft fill, and the accent on the two together was 4.0:1
+     (3.9:1 dark) -- under what 10.5px text needs. This pair is one every
+     palette, built-in or custom, is held to 4.5:1. */
+  background: var(--accent);
+  color: var(--on-accent);
   font-size: 10.5px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
@@ -3178,6 +3213,39 @@ body:has(.panel.is-active .actionbar:not([hidden])) .toast {
   font-size: 12.5px;
 }
 
+/* Settings' copy of the appearance switch has a fourth choice, Custom. */
+.segmented-4 {
+  --switch-count: 4;
+  max-width: 440px;
+}
+
+/* The sidebar's copy has no Custom button: with Custom on, none of its
+   three is chosen, and the pill says so by not being there. */
+.segmented[data-switch-none]::before {
+  opacity: 0;
+}
+
+.segmented-option:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* The user's own colours. theme.js writes them as tokens on this element;
+   these say which way the native controls and scrollbars should face, and
+   that Windows' contrast colours are not to be laid over them -- choosing
+   Custom was choosing these over those. */
+:root[data-theme="custom"] {
+  forced-color-adjust: none;
+}
+
+:root[data-theme="custom"][data-theme-base="light"] {
+  color-scheme: light;
+}
+
+:root[data-theme="custom"][data-theme-base="dark"] {
+  color-scheme: dark;
+}
+
 /* ==========================================================================
    the theme sweep
    ==========================================================================
@@ -3716,7 +3784,7 @@ html[data-i18n-pending] body {
   height: 20px;
   padding: 0;
   border-radius: 50%;
-  border: 1.5px solid var(--border-strong);
+  border: 1.5px solid var(--control-border);
   background: light-dark(rgba(255, 255, 255, 0.86), rgba(12, 14, 18, 0.76));
   box-shadow: 0 1px 3px var(--shadow-edge);
   opacity: 0;
@@ -4653,4 +4721,407 @@ html[data-i18n-pending] body {
 @media (max-width: 720px) {
   .doc { padding: 18px 14px 40px; }
   .deck { padding: 16px 12px 40px; }
+}
+
+/* ==========================================================================
+   Settings: your own colours
+   ========================================================================== */
+
+.custom-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  margin: 12px 0 14px;
+}
+
+.custom-top input[type="text"] {
+  width: 200px;
+}
+
+.custom-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.custom-colors {
+  display: grid;
+  gap: 6px;
+}
+
+.custom-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 40px 92px 76px;
+  align-items: center;
+  gap: 8px;
+}
+
+.custom-row-label {
+  color: var(--text-2);
+  font-size: 12.5px;
+}
+
+.custom-picker {
+  width: 40px;
+  height: 28px;
+  padding: 2px;
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  cursor: pointer;
+}
+
+.custom-picker::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.custom-picker::-webkit-color-swatch {
+  border: none;
+  border-radius: 5px;
+}
+
+input.custom-hex {
+  width: 92px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+input.custom-hex[aria-invalid="true"] {
+  border-style: dashed;
+}
+
+/* Pass and fail in words and weight: the verdict colours are what this card
+   may be changing. */
+.custom-row-mark {
+  color: var(--text-3);
+  font-size: 11.5px;
+}
+
+.custom-row-mark.is-failing {
+  color: var(--text);
+  font-weight: 700;
+}
+
+/* A little of the interface drawn in the palette being edited: the tokens
+   are set on this element, so everything inside it reads them. It keeps its
+   own colours under a Windows contrast theme too -- a preview of the
+   system's colours would be a preview of nothing. */
+.custom-preview {
+  forced-color-adjust: none;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--text);
+  pointer-events: none;
+  user-select: none;
+}
+
+.custom-preview-card {
+  display: grid;
+  gap: 3px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.custom-preview-card p {
+  margin: 0;
+}
+
+.custom-preview-title {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.custom-preview-second {
+  color: var(--text-2);
+}
+
+.custom-preview-quiet {
+  color: var(--text-3);
+  font-size: 12px;
+}
+
+.custom-preview-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.custom-preview-danger {
+  color: var(--danger-text);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.custom-preview-field {
+  display: inline-flex;
+  align-items: center;
+  height: 26px;
+  padding: 0 9px;
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  font-size: 12px;
+}
+
+.custom-preview-link {
+  color: var(--accent);
+  font-size: 12px;
+  text-decoration: underline;
+}
+
+.custom-summary {
+  margin: 12px 0 4px;
+  font-weight: 600;
+}
+
+.custom-report {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+  padding-left: 18px;
+  color: var(--text-2);
+  font-size: 12px;
+}
+
+@media (max-width: 900px) {
+  .custom-body {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ==========================================================================
+   Keyboard shortcuts (?)
+   ========================================================================== */
+
+.shortcuts {
+  width: min(640px, calc(100vw - 32px));
+  max-height: calc(100vh - 64px);
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-elevated);
+  color: var(--text);
+  box-shadow: var(--shadow);
+}
+
+.shortcuts::backdrop {
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.shortcuts-head {
+  position: sticky;
+  top: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border-soft);
+  background: var(--bg-elevated);
+}
+
+.shortcuts-head h2 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.shortcuts-body {
+  padding: 4px 18px 18px;
+}
+
+.shortcuts-section {
+  margin: 14px 0 6px;
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.shortcuts-list {
+  display: grid;
+  grid-template-columns: minmax(150px, max-content) 1fr;
+  gap: 6px 16px;
+  margin: 0;
+}
+
+.shortcuts-list dt {
+  color: var(--text-3);
+  white-space: nowrap;
+}
+
+.shortcuts-list dd {
+  margin: 0;
+}
+
+kbd {
+  display: inline-block;
+  min-width: 22px;
+  padding: 1px 6px;
+  border: 1px solid var(--control-border);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  background: var(--surface-2);
+  color: var(--text);
+  font: 600 11.5px var(--font);
+  text-align: center;
+}
+
+@media (max-width: 560px) {
+  .shortcuts-list {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+
+  .shortcuts-list dd {
+    margin-bottom: 6px;
+  }
+}
+
+/* ==========================================================================
+   Windows contrast themes (forced colours)
+   ==========================================================================
+
+   With a contrast theme on, Windows replaces every colour on the page with a
+   handful of its own: Canvas and CanvasText for the page, Highlight for what
+   is selected, and so on. Text and borders survive that. Anything that said
+   something with a background alone does not -- measured, before this block:
+   a progress bar at 40% drew the same black as its empty track, and the
+   selected sidebar tab looked exactly like the others.
+
+   So two rules, in the user's own colours:
+     - a quantity (a progress bar, a share of the drive) is a Highlight fill
+       inside a CanvasText outline;
+     - the selected, pressed or current thing is Highlight with
+       HighlightText on it, and a focused thing has an outline.
+
+   None of it applies while the app's own Custom theme is chosen: the user
+   picked that one over the Windows theme (see "Custom colours" below), and
+   the whole document opts out of forced colours for it.
+   ========================================================================== */
+
+@media (forced-colors: active) {
+  :root:not([data-theme="custom"]) {
+    /* ---- quantities ---- */
+    .progress,
+    .progress-track,
+    .dp-track,
+    .bar-track,
+    .ov-year-track {
+      forced-color-adjust: none;
+      background: Canvas;
+      border: 1px solid CanvasText;
+    }
+
+    .progress-bar,
+    .dp-fill,
+    .bar-fill,
+    .ov-year-fill,
+    .ov-dot {
+      forced-color-adjust: none;
+      background: Highlight;
+    }
+
+    .dp-fill.is-checking {
+      background: repeating-linear-gradient(135deg, Highlight 0 4px, Canvas 4px 8px);
+    }
+
+    /* The drive, in five parts. Weights of one colour are all one colour
+       here, so each part gets a pattern of its own, in the same two inks. */
+    .system-bar,
+    .system-swatch {
+      forced-color-adjust: none;
+      background: Canvas;
+      border: 1px solid CanvasText;
+    }
+
+    .system-seg + .system-seg {
+      border-left: 1px solid CanvasText;
+    }
+
+    .system-seg-yours { background: Highlight; }
+    .system-seg-programs { background: repeating-linear-gradient(90deg, Highlight 0 2px, Canvas 2px 4px); }
+    .system-seg-windows { background: repeating-linear-gradient(0deg, CanvasText 0 1px, Canvas 1px 4px); }
+    .system-seg-free { background: Canvas; }
+    .system-seg-unexplained { background: repeating-linear-gradient(135deg, CanvasText 0 1px, Canvas 1px 5px); }
+
+    .ov-seg {
+      forced-color-adjust: none;
+      background: CanvasText;
+    }
+
+    .ov-seg + .ov-seg {
+      border-left: 2px solid Canvas;
+    }
+
+    /* ---- the selected, pressed, current thing ---- */
+    .tab.is-active,
+    .segmented-option.is-active,
+    .chip.is-active,
+    .ov-key.is-active,
+    button[aria-pressed="true"],
+    [aria-current="location"] {
+      forced-color-adjust: none;
+      background: Highlight;
+      color: HighlightText;
+      border-color: HighlightText;
+    }
+
+    .tab.is-active::before {
+      background: HighlightText;
+    }
+
+    .ov-seg.is-active,
+    .ov-seg[aria-pressed="true"] {
+      background: Highlight;
+    }
+
+    .ov-year.is-active .ov-year-label {
+      text-decoration: underline;
+      text-decoration-thickness: 2px;
+    }
+
+    /* The sliding pill under a segmented control is a background, and would
+       be a Canvas-coloured nothing. The option itself carries the state. */
+    .segmented::before {
+      display: none;
+    }
+
+    .media-cell.is-focused .media-frame {
+      border: 2px dashed CanvasText;
+    }
+
+    .media-cell.is-selected .media-frame {
+      outline: 3px solid Highlight;
+      outline-offset: 1px;
+    }
+
+    /* The map's tiles are drawn on a canvas (treemap.js paints them in
+       system colours when this is on); the layer over it shows the state. */
+    .spacemap-item.is-selected {
+      border: 3px solid Highlight;
+    }
+
+    .spacemap-item:focus-visible {
+      outline: 2px solid CanvasText;
+      outline-offset: -2px;
+    }
+
+    /* Rings drawn with box-shadow are removed with every other shadow. */
+    .file-row:focus-visible,
+    .media-grid:focus-visible,
+    .badge-button:focus-visible,
+    .media-tick:focus-visible {
+      outline: 2px solid CanvasText;
+    }
+
+    .file-row:has(input[type="checkbox"]:checked) {
+      border-left: 4px solid Highlight;
+    }
+  }
 }

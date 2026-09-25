@@ -199,7 +199,45 @@
   const css = ([r, g, b]) => `rgb(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)})`;
 
   /** The fills for this theme, and for each the label colour that reads best on it. */
+  /**
+   * A Windows contrast theme is on, and the user has not chosen their own
+   * colours over it. The canvas is the one thing on the page the system does
+   * not recolour, so it has to ask for the system's colours itself.
+   */
+  function forcedColors() {
+    if (document.documentElement.dataset.theme === 'custom') return false;
+    try {
+      return window.matchMedia('(forced-colors: active)').matches;
+    } catch {
+      return false;
+    }
+  }
+
+  /** A CSS system colour (Canvas, CanvasText…) as the theme resolves it. */
+  function systemColor(name) {
+    probe.style.forcedColorAdjust = 'none';
+    probe.style.color = name;
+    const parts = (getComputedStyle(probe).color.match(/[\d.]+/g) || []).map(Number);
+    return parts.length >= 3 ? parts.slice(0, 3) : [0, 0, 0];
+  }
+
   function palette() {
+    if (forcedColors()) {
+      // Every tile the page colour with an outline in the text colour: weights
+      // of one colour do not exist here, and nesting reads from the outlines.
+      const page = systemColor('Canvas');
+      const ink = systemColor('CanvasText');
+      const tone = { fill: css(page), ink: css(ink) };
+      return {
+        surface: css(page),
+        text: css(ink),
+        depth: WEIGHTS.map(() => tone),
+        group: WEIGHTS.map(() => tone),
+        groupLine: css(ink),
+        outline: css(ink),
+        font: getComputedStyle(card).fontFamily,
+      };
+    }
     const accent = rgbOf('--accent');
     const surface = rgbOf('--surface');
     const text = rgbOf('--text');
@@ -334,6 +372,11 @@
       const tone = isGroup(tile.entry) ? colors.group[level] : colors.depth[level];
       ctx.fillStyle = tone.fill;
       ctx.fillRect(x0, y0, w, h);
+      if (colors.outline && !isGroup(tile.entry)) {
+        ctx.strokeStyle = colors.outline;
+        ctx.lineWidth = 1;
+        ctx.strokeRect(x0 + 0.5, y0 + 0.5, w - 1, h - 1);
+      }
       if (isGroup(tile.entry) && w > 3 && h > 3) {
         ctx.strokeStyle = colors.groupLine;
         ctx.lineWidth = 1;
@@ -862,8 +905,10 @@
             else {
               const row = document.createElement('li');
               row.className = 'spacemap-evidence';
-              row.setAttribute('role', 'note');
-              row.appendChild(EvidencePanel(v));
+              // A list item, as a list's children must be; the reasons are the note.
+              const panel = EvidencePanel(v);
+              panel.setAttribute('role', 'note');
+              row.appendChild(panel);
               li.after(row);
             }
             pill.setAttribute('aria-expanded', String(!open));
@@ -1012,6 +1057,10 @@
     attributeFilter: ['data-theme'],
   });
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => requestDraw());
+  window.matchMedia('(forced-colors: active)').addEventListener('change', () => requestDraw());
+  // One custom palette replacing another changes no attribute the observer
+  // above could see; theme.js says so instead.
+  document.addEventListener('cleandrive:theme', () => requestDraw());
   onLanguageChange(() => {
     if (map.level || map.error) render();
   });

@@ -137,7 +137,14 @@
     if (value === null || value === undefined) return '';
     if (typeof value === 'string') return value;
     if (typeof value === 'object' && typeof value.i18n === 'string') {
-      return t(value.i18n, value.en, value.params);
+      // A parameter can itself be a message -- "{fg} on {bg}" where both are
+      // names of colours -- and is worded in the same language as the rest.
+      const params = value.params
+        ? Object.fromEntries(
+            Object.entries(value.params).map(([k, v]) => [k, v && typeof v === 'object' && typeof v.i18n === 'string' ? render(v) : v])
+          )
+        : value.params;
+      return t(value.i18n, value.en, params);
     }
     return String(value);
   }
