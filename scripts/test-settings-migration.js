@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 
-// Settings schema v3: the migrations forward, the copy kept of the old file,
+// Settings schema v4: the migrations forward, the copy kept of the old file,
 // and what the previous build makes of a file this one wrote.
 //   node scripts/test-settings-migration.js
 //
@@ -40,17 +40,17 @@ const V1 = {
 (async () => {
   const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'cleandrive-settings-v2-'));
 
-  console.log('\nsettings: version 1 to 3\n');
+  console.log('\nsettings: version 1 to 4\n');
 
-  check('this build writes version 3', SCHEMA_VERSION === 3);
+  check('this build writes version 4', SCHEMA_VERSION === 4);
   {
     const { raw, from, steps } = migrate(V1);
-    check('a version 1 file is migrated a step at a time, to 3', from === 1 && steps === 2 && raw.version === 3);
+    check('a version 1 file is migrated a step at a time, to 4', from === 1 && steps === 3 && raw.version === 4);
     check('it gains the snapshot section, at the defaults', raw.snapshots.keepRecent === 12 && raw.snapshots.keepMonthly === 12);
     check('and loses nothing it had', JSON.stringify(raw.autoClean) === JSON.stringify(V1.autoClean) &&
       raw.purge.afterDays === 14 && raw.appearance.theme === 'dark');
     const unversioned = migrate({ appearance: { theme: 'light' } });
-    check('a file with no version is read as version 1', unversioned.from === 1 && unversioned.raw.version === 3);
+    check('a file with no version is read as version 1', unversioned.from === 1 && unversioned.raw.version === 4);
     check('migration does not change the object it was given', V1.version === 1 && V1.snapshots === undefined);
   }
 
@@ -68,7 +68,7 @@ const V1 = {
     const off = migrate({ version: 2, autoClean: { enabled: true, categories: ['temp', 'log'] } }).raw.autoClean.categories;
     check('with it off, nothing is added', JSON.stringify(off) === '["temp","log"]', off.join(', '));
     const unticked = migrate({ version: 3, autoClean: { categories: ['gpucache'] } }).raw.autoClean.categories;
-    check('a version 3 file is left alone -- an app somebody unticked stays unticked', JSON.stringify(unticked) === '["gpucache"]');
+    check('a version 3 file keeps its categories -- an app somebody unticked stays unticked', JSON.stringify(unticked) === '["gpucache"]');
     const read = coerceSettings(on).settings.autoClean.categories;
     check('and the added names are ones the settings accept', read.includes('app.edge') && read.length === 8, read.join(', '));
   }
@@ -82,9 +82,25 @@ const V1 = {
   }
 
   {
-    const { settings, warnings } = coerceSettings({ ...V1, version: 4, futureThing: { x: 1 } });
+    const { settings, warnings } = coerceSettings({ ...V1, version: 5, futureThing: { x: 1 } });
     check('a file from a newer build is read as far as this one understands it',
       settings.autoClean.minAgeDays === 30 && warnings.some((w) => /newer CleanDrive/.test(w)), warnings.join('; '));
+  }
+
+  console.log('\nsettings: version 3 to 4 -- moving files to another drive (B1)\n');
+
+  {
+    const { raw } = migrate({ version: 3, autoClean: { categories: ['temp'] } });
+    check('a version 3 file gains the quarantine section, with no folder and originals kept',
+      raw.version === 4 && raw.quarantine.zone === null && raw.quarantine.deleteOriginal === false &&
+        raw.quarantine.retentionDays === 30 && raw.quarantine.maxGB === 0);
+    const read = coerceSettings({ version: 4, quarantine: { zone: 'relative\\place', retentionDays: 9000, maxGB: -4, deleteOriginal: 'yes' } });
+    check('a zone that is not absolute is dropped, and the numbers are clamped',
+      read.settings.quarantine.zone === null && read.settings.quarantine.retentionDays === LIMITS.quarantineRetentionDays.max &&
+        read.settings.quarantine.maxGB === 0 && read.settings.quarantine.deleteOriginal === false, read.warnings.join('; '));
+    const kept = coerceSettings({ version: 4, quarantine: { zone: 'D:\\CleanDrive Quarantine', deleteOriginal: true } }).settings.quarantine;
+    check('an absolute zone is kept, and deleting originals is on only when the file says so',
+      /CleanDrive Quarantine$/.test(kept.zone) && kept.deleteOriginal === true);
   }
 
   console.log('\nsettings: the snapshot section is clamped like everything else\n');
@@ -109,11 +125,11 @@ const V1 = {
     const loaded = await store.load();
     check('loading an old file does not write anything', (await fsp.readFile(file, 'utf8')) === original &&
       !fs.existsSync(path.join(dir, 'settings.v1.json')));
-    check('but hands back version 3 settings', loaded.version === 3 && loaded.snapshots.keepMonthly === 12);
+    check('but hands back version 4 settings', loaded.version === 4 && loaded.snapshots.keepMonthly === 12);
 
     await store.patch({ snapshots: { keepRecent: 3 } });
     const written = JSON.parse(await fsp.readFile(file, 'utf8'));
-    check('the first save writes version 3', written.version === 3 && written.snapshots.keepRecent === 3);
+    check('the first save writes version 4', written.version === 4 && written.snapshots.keepRecent === 3);
     check('patching one snapshot field keeps the other', written.snapshots.keepMonthly === 12);
     check('and keeps the old file, byte for byte, as settings.v1.json',
       (await fsp.readFile(path.join(dir, 'settings.v1.json'), 'utf8')) === original);

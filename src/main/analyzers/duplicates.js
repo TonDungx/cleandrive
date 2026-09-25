@@ -69,7 +69,9 @@ function toCandidate(file, group) {
     verdict,
     confidence,
     evidence: list,
-    actions: ['recycle'],
+    // A program's own component is never moved to another drive: it would be
+    // somewhere the program cannot find it.
+    actions: file.protected ? ['recycle'] : ['recycle', 'quarantine'],
     unattendedEligible: false,
     meta: {
       group: group.hash,

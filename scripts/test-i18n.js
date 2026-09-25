@@ -71,6 +71,8 @@ const DYNAMIC_PREFIXES = [
   'changes.day.',
   'changes.hour.',
   'changes.minute.',
+  // The quarantine card names a drive's type from a table in `quarantine.js`.
+  'quarantine.type.',
 ];
 
 /* -------------------------------------------------------------------------- */

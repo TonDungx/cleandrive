@@ -165,7 +165,10 @@ function cleanupCandidate(file, category, verdict, accessTimes) {
     verdict,
     confidence: confidenceFor(category, file.source, file.path, accessTimes),
     evidence: list,
-    actions: ['recycle'],
+    // Another drive (B1) is for what somebody may want back -- an installer,
+    // an archive, something untouched for a year. What is safe to delete, a
+    // temp file or a cache, is not worth the copy.
+    actions: verdict === 'safe' ? ['recycle'] : ['recycle', 'quarantine'],
     unattendedEligible: verdict === 'safe' && isAllowedUnattended(id),
     meta: { mtimeMs: file.mtimeMs, atimeMs: file.atimeMs },
   };
@@ -182,7 +185,7 @@ function plainCandidate(file) {
     // Certain of the only thing it claims: that no rule matched.
     confidence: 'certain',
     evidence: [evidence(1, NO_RULE)],
-    actions: ['recycle'],
+    actions: ['recycle', 'quarantine'],
     unattendedEligible: false,
     meta: { mtimeMs: file.mtimeMs, atimeMs: file.atimeMs },
   };

@@ -56,6 +56,10 @@
         return t('restore.title.restore', 'Put back {n} {items} from the Recycle Bin', { n, items });
       case 'purge':
         return t('restore.title.purge', 'Permanently removed {n} {items} from the Recycle Bin', { n, items });
+      case 'quarantine':
+        return s.drive
+          ? t('restore.title.quarantine', 'Moved {n} {items} to {drive}', { n, items, drive: s.drive })
+          : t('restore.title.quarantineAnywhere', 'Moved {n} {items} to another drive', { n, items });
       default:
         return t('restore.title.other', '{kind}: {n} {items}', { kind: s.kind, n, items });
     }
@@ -85,12 +89,18 @@
   function tallyOf(s) {
     if (!s.tally) return '';
     const n = (count) => ({ n: formatCount(count) });
-    const { inBin, restored, purged, gone, unavailable } = s.tally;
+    const { inBin, inQuarantine, restored, purged, gone, unavailable } = s.tally;
+    const zone = s.kind === 'quarantine';
     return [
       inBin > 0 && t('restore.tally.inBin', '{n} still in the Recycle Bin', n(inBin)),
+      inQuarantine > 0 && t('restore.tally.inQuarantine', '{n} still in the quarantine folder', n(inQuarantine)),
+      s.expired > 0 && t('restore.tally.expired', '{n} there longer than the days set in Settings', n(s.expired)),
       restored > 0 && t('restore.tally.restored', '{n} put back', n(restored)),
       purged > 0 && t('restore.tally.purged', '{n} permanently removed by the app', n(purged)),
-      gone > 0 && t('restore.tally.gone', '{n} no longer in the Recycle Bin', n(gone)),
+      gone > 0 &&
+        (zone
+          ? t('restore.tally.goneZone', '{n} no longer in the quarantine folder', n(gone))
+          : t('restore.tally.gone', '{n} no longer in the Recycle Bin', n(gone))),
       unavailable > 0 && t('restore.tally.unavailable', '{n} on a drive that is not connected', n(unavailable)),
     ]
       .filter(Boolean)
@@ -99,6 +109,8 @@
 
   const STATE_WORD = {
     inBin: ['restore.state.inBin', 'in the bin'],
+    inQuarantine: ['restore.state.inQuarantine', 'in quarantine'],
+    goneZone: ['restore.state.goneZone', 'not in the folder'],
     restored: ['restore.state.restored', 'put back'],
     purged: ['restore.state.purged', 'purged'],
     gone: ['restore.state.gone', 'not in the bin'],
@@ -107,6 +119,21 @@
 
   /** The sentence under a row: where this file is, and how the app knows. */
   function whereNow(row) {
+    if (row.kind === 'quarantine') {
+      if (row.state === 'inQuarantine') {
+        const at = t('restore.row.inQuarantine', 'Copied to {path} {when}, and the copy checked against it', {
+          path: row.stored,
+          when: formatAgo(row.trashedAt),
+        });
+        return row.expired ? `${at} · ${t('restore.row.expired', 'there longer than the days set in Settings')}` : at;
+      }
+      if (row.state === 'unavailable') {
+        return t('restore.row.unavailableZone', 'The drive the quarantine folder is on is not connected, so the copy cannot be checked');
+      }
+      if (row.state === 'gone') {
+        return t('restore.row.goneZone', 'No longer in the quarantine folder — it was removed outside this app');
+      }
+    }
     switch (row.state) {
       case 'inBin':
         return t('restore.row.inBin', 'Moved to the Recycle Bin {when} — the bin records the same moment', {
@@ -137,7 +164,8 @@
   }
 
   function stateBadge(row) {
-    const [key, english] = STATE_WORD[row.state] || STATE_WORD.gone;
+    const state = row.kind === 'quarantine' && row.state === 'gone' ? 'goneZone' : row.state;
+    const [key, english] = STATE_WORD[state] || STATE_WORD.gone;
     const el = document.createElement('span');
     // Neutral on purpose: green, amber and red mean verdicts in this app, and
     // where a file is now is not a verdict on it.
@@ -167,9 +195,12 @@
 
   /* ---- drawing ---------------------------------------------------------------- */
 
-  function rowsOf(items) {
+  /** In the Recycle Bin, or in a quarantine folder on another drive (B1). */
+  const canPutBack = (row) => row.state === 'inBin' || row.state === 'inQuarantine';
+
+  function rowsOf(items, kind) {
     // `size` and `actions` are what the shared list and bar read.
-    return items.map((item) => ({ ...item, actions: item.state === 'inBin' ? ['restore'] : [] }));
+    return items.map((item) => ({ ...item, kind, actions: canPutBack(item) ? ['restore'] : [] }));
   }
 
   function renderItems(session, body) {
@@ -193,7 +224,7 @@
         onChange: () => bar.update(),
         meta: whereNow,
         badge: stateBadge,
-        selectable: (row) => row.state === 'inBin',
+        selectable: canPutBack,
         onOpen: (row) => {
           if (row.state === 'restored' && row.stillThere) openViewer(row.to);
         },
@@ -203,6 +234,9 @@
               linkButton(t('app.view', 'View'), () => openViewer(row.to), 'is-lead'),
               linkButton(t('app.reveal', 'Reveal'), () => api.reveal(row.to)),
             ];
+          }
+          if (row.state === 'inQuarantine' && row.stored) {
+            return [linkButton(t('app.reveal', 'Reveal'), () => api.reveal(row.stored))];
           }
           if (row.state === 'gone' && row.existsAtOrigin) {
             return [linkButton(t('app.reveal', 'Reveal'), () => api.reveal(row.path))];
@@ -241,7 +275,7 @@
       all.textContent = t('restore.putBackAll', 'Put back all {n}', { n: formatCount(session.restorable.count) });
       all.addEventListener('click', async () => {
         const rows = await itemsOf(session.id);
-        if (rows) putBack(rows.filter((row) => row.state === 'inBin').map((row) => row.id));
+        if (rows) putBack(rows.filter(canPutBack).map((row) => row.id));
       });
       actions.appendChild(all);
     }
@@ -273,6 +307,15 @@
       notes.push(t('restore.incomplete', 'This did not finish — the app stopped while it ran. What is listed is what it recorded before then.'));
     } else if (session.cancelled) {
       notes.push(t('restore.cancelled', 'Stopped part-way through; the rest was left where it was.'));
+    }
+    if (session.kind === 'quarantine') {
+      notes.push(
+        session.freedOnSource > 0
+          ? t('restore.quarantineDeleted', 'The originals were deleted once their copies were checked, freeing {size}. Putting back copies each one back and checks it.', {
+              size: formatBytes(session.freedOnSource),
+            })
+          : t('restore.quarantineNote', 'The originals went to the Recycle Bin. Putting back copies each file back from the quarantine folder and checks it; an original still in the bin stays there.')
+      );
     }
     if (session.kind === 'purge') {
       notes.push(
@@ -329,7 +372,8 @@
     if (view.items.has(sessionId)) return view.items.get(sessionId);
     const items = unwrap(await api.journalItems(sessionId), t('app.tab.restore', 'Restore'));
     if (!items) return null;
-    view.items.set(sessionId, rowsOf(items));
+    const session = (view.sessions || []).find((s) => s.id === sessionId);
+    view.items.set(sessionId, rowsOf(items, session ? session.kind : null));
     return view.items.get(sessionId);
   }
 
@@ -346,7 +390,7 @@
       for (const id of view.open) await itemsOf(id);
       for (const [id, paths] of view.selection) {
         const rows = view.items.get(id) || [];
-        const still = new Set(rows.filter((r) => r.state === 'inBin').map((r) => r.path));
+        const still = new Set(rows.filter(canPutBack).map((r) => r.path));
         for (const p of [...paths]) if (!still.has(p)) paths.delete(p);
       }
       render();

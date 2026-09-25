@@ -41,6 +41,11 @@ const api = {
   journalItems: (sessionId) => ipcRenderer.invoke('journal:items', sessionId),
   restore: (itemIds, options) => ipcRenderer.invoke('journal:restore', { items: itemIds, options }),
 
+  /* moving files to another drive (B1): the folder is picked and made in the main process */
+  quarantine: (paths, options) => ipcRenderer.invoke('action:execute', { kind: 'quarantine', items: paths, options }),
+  quarantineStatus: () => ipcRenderer.invoke('quarantine:status'),
+  quarantineChoose: () => ipcRenderer.invoke('quarantine:choose'),
+
   reveal: (target) => ipcRenderer.invoke('shell:reveal', target),
   open: (target) => ipcRenderer.invoke('shell:open', target),
 

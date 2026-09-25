@@ -61,7 +61,7 @@ class ScanTree {
     this.accessTimes = accessTimes;
     // Which known apps were open when the scan ended (D4); null is "could not tell".
     this.openApps = Array.isArray(openApps) ? new Set(openApps) : null;
-    this.removed = { files: 0, bytes: 0 };
+    this.removed = { files: 0, bytes: 0, deletedFiles: 0, deletedBytes: 0 };
     this._removedKeys = new Set();
     this._files = files;
 
@@ -283,8 +283,15 @@ class ScanTree {
       }
 
       this._removedKeys.add(key);
-      this.removed.files += 1;
-      this.removed.bytes += bytes;
+      // A quarantine (B1) whose original was deleted outright freed its space;
+      // every other file that left is in the Recycle Bin, on this drive.
+      if (item.original === 'deleted') {
+        this.removed.deletedFiles += 1;
+        this.removed.deletedBytes += bytes;
+      } else {
+        this.removed.files += 1;
+        this.removed.bytes += bytes;
+      }
       taken += 1;
     }
     return taken;

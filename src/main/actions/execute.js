@@ -147,6 +147,8 @@ async function execute(request, ctx = {}) {
       token,
       onProgress,
       deps: ctx.deps,
+      // A quarantine names its folder on the other drive after the session.
+      sessionId: session ? session.id : null,
       onItem: (item) => journal.record(session, item),
     });
   } finally {

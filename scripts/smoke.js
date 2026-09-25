@@ -9,6 +9,7 @@
 const path = require('node:path');
 const os = require('node:os');
 const fs = require('node:fs');
+const crypto = require('node:crypto');
 const { app, BrowserWindow } = require('electron');
 
 const ipc = require('../src/main/ipc');
@@ -498,7 +499,8 @@ app.whenReady().then(async () => {
         const out = {};
         const bar = document.getElementById('cleanup-actionbar');
         out.barShownWithSelection = bar.hidden === false;
-        out.frees = (bar.querySelector('.frees-badge') || {}).textContent || '';
+        // The Recycle Bin's own badge, beside its button: the bar carries one per action.
+        out.frees = (document.getElementById('delete-cleanup').previousElementSibling || {}).textContent || '';
         out.readout = document.getElementById('cleanup-selection').textContent;
         document.getElementById('cleanup-select-none').click();
         out.barHiddenWhenEmpty = bar.hidden === true;
@@ -2665,6 +2667,156 @@ app.whenReady().then(async () => {
       } finally {
         ipc.setAppCacheHarness(null);
         fs.rmSync(appBase, { recursive: true, force: true });
+      }
+    }
+
+    /* -- moving files to another drive (B1) --------------------------------- */
+    // A zone in a folder of this harness's own on the second drive (agreed
+    // 2026-09-25), chosen through the harness hook in place of the folder
+    // dialog; the plan, the copy, the check, the real Recycle Bin, the journal
+    // and the way back are the real ones, on files this harness made.
+    const secondRoot = (() => {
+      for (const letter of 'DEFGH') {
+        const root = `${letter}:\\`;
+        try {
+          if (fs.statSync(root).dev !== fs.statSync(path.parse(os.tmpdir()).root).dev) return root;
+        } catch {
+          // not there
+        }
+      }
+      return null;
+    })();
+    console.log(`\nMove to another drive (${secondRoot || 'no second drive'}):`);
+    if (!secondRoot) {
+      console.log('    (skipped: there is no second drive to move files to)');
+    } else {
+      const far = fs.mkdtempSync(path.join(secondRoot, 'cleandrive-harness-'));
+      const qBase = fs.mkdtempSync(path.join(os.tmpdir(), 'cleandrive-smoke-quarantine-'));
+      const iso = path.join(qBase, 'disk-image.iso');
+      const tmp = path.join(qBase, 'Temp', 'left-over.tmp');
+      fs.mkdirSync(path.dirname(tmp), { recursive: true });
+      fs.writeFileSync(iso, crypto.randomBytes(60 * 1024 * 1024));
+      fs.writeFileSync(tmp, crypto.randomBytes(4096));
+      const old = Date.now() / 1000 - 90 * 86400;
+      fs.utimesSync(iso, old, old);
+      const isoHash = crypto.createHash('sha256').update(fs.readFileSync(iso)).digest('hex');
+      ipc.setQuarantineHarness({ pick: async () => far, driveTypeOf: async () => 'Fixed' });
+      const js = (expr) => win.webContents.executeJavaScript(expr);
+      const drive = secondRoot.replace(/\\$/, '');
+      try {
+        await js(`document.querySelector('.tab[data-tab="settings"]').click()`);
+        await until(win, `window.Quarantine && window.Quarantine.debug().status !== null`);
+        const before = await js(`({ line: document.getElementById('quarantine-status').textContent, button: document.getElementById('quarantine-large').textContent })`);
+        check('with no folder chosen, the card says so and the buttons say "another drive"',
+          /No folder chosen/.test(before.line) && before.button === 'Move to another drive', before.line.slice(0, 60));
+
+        await js(`document.getElementById('quarantine-choose').click()`);
+        await until(win, `window.Quarantine.ready()`, 15000);
+        const chosen = await js(`({
+          facts: [...document.querySelectorAll('#quarantine-facts .pair-value')].map((e) => e.textContent),
+          button: document.getElementById('quarantine-large').textContent,
+          open: !document.getElementById('quarantine-open').hidden,
+          zone: window.Quarantine.debug().status.zone,
+        })`);
+        const { services } = require('../src/main/services');
+        const stored = (await services().settings.load()).quarantine.zone;
+        check('choosing a folder makes the zone in it, and the settings name it',
+          chosen.zone && chosen.zone.toLowerCase() === path.join(far, 'CleanDrive Quarantine').toLowerCase() && stored === chosen.zone &&
+            fs.existsSync(path.join(chosen.zone, 'README.txt')), chosen.zone);
+        check(`the card says where, on which drive, with how much room; the buttons now say "Move to ${drive}"`,
+          chosen.facts[0] === chosen.zone && new RegExp(`^${drive} · fixed drive · .+ free$`).test(chosen.facts[1]) &&
+            chosen.button === `Move to ${drive}` && chosen.open, chosen.facts.join(' | '));
+
+        const forged = await js(`window.cleandrive.saveSettings({ quarantine: { zone: 'C:\\\\Windows\\\\System32', retentionDays: 45 } })`);
+        const afterForge = (await services().settings.load()).quarantine;
+        check('a save from the window cannot move the zone -- only the folder dialog can -- but the rest of the card saves',
+          forged.ok !== false && afterForge.zone === chosen.zone && afterForge.retentionDays === 45);
+
+        await js(`document.querySelector('.tab[data-tab="usage"]').click()`);
+        await js(`setFolder(${JSON.stringify(qBase)})`);
+        await until(win, `document.getElementById('run-scan').disabled === false`);
+        await js(`window.__qScan = state.scan; document.getElementById('run-scan').click()`);
+        await until(win, `document.getElementById('run-scan').disabled === false && state.scan && state.scan !== window.__qScan`, 60000);
+        await js(`document.querySelector('.tab[data-tab="cleanup"]').click()`);
+        await wait(300);
+        const offered = await js(`(() => {
+          const tick = (name) => {
+            const row = [...document.querySelectorAll('#cleanup-groups .file-row')].find((r) => r.dataset.path.endsWith(name));
+            if (row) row.querySelector('input').click();
+            return Boolean(row);
+          };
+          document.getElementById('cleanup-select-none').click();
+          tick('left-over.tmp');
+          const tmpOnly = { q: document.getElementById('quarantine-cleanup').disabled, bin: document.getElementById('delete-cleanup').disabled };
+          document.getElementById('cleanup-select-none').click();
+          const found = tick('disk-image.iso');
+          const bar = document.getElementById('cleanup-actionbar');
+          const badges = [...bar.querySelectorAll('.frees-badge')].filter((b) => !b.hidden).map((b) => b.textContent);
+          const isoOnly = { q: document.getElementById('quarantine-cleanup').disabled, badges };
+          document.getElementById('cleanup-select-none').click();
+          return { tmpOnly, found, isoOnly };
+        })()`);
+        check('a temp file -- safe to delete -- is not offered another drive, only the bin',
+          offered.tmpOnly.q === true && offered.tmpOnly.bin === false);
+        check('a disk image is, with what that frees said beside the button',
+          offered.found && offered.isoOnly.q === false && offered.isoOnly.badges.includes('Original to the Recycle Bin — not freed yet'),
+          offered.isoOnly.badges.join(' | '));
+
+        const text = ipc.confirmQuarantineText({
+          count: 1, bytes: 60 * 1024 * 1024, deleteOriginal: false, refused: 0, retentionDays: 45,
+          zone: { path: chosen.zone, drive, type: 'Removable' }, cloud: { synced: 0, unsynced: 2, other: 0, unknown: 0 },
+        }, {});
+        check('the dialog: the copy is checked before the original is touched, and the bin frees nothing yet',
+          /SHA-256/.test(text.detail) && /frees nothing there until the bin is emptied/.test(text.detail) && text.buttons[0] === `Move to ${drive}`);
+        check('and it names a removable drive, and files OneDrive has not uploaded, for what they are',
+          /removable drive/.test(text.detail) && /2 of these are in OneDrive but not in sync/.test(text.detail) && /After 45 days/.test(text.detail));
+
+        await js(`deleteSelected([${JSON.stringify(iso)}], () => {}, { kind: 'quarantine', confirm: false })`);
+        await until(win, `/Moved 1 item/.test(document.getElementById('toast').textContent)`, 60000);
+        const receipt = await js(`document.getElementById('toast').textContent`);
+        const sessions = await services().journal.sessions();
+        const session = sessions.find((s) => s.kind === 'quarantine');
+        const copy = session && session.items[0] && session.items[0].to;
+        check(`moved: the receipt says ${drive}, that the copy was checked, and that the original is in the bin, not freed`,
+          new RegExp(`to ${drive}, each copy checked — the originals are in the Recycle Bin, not freed`).test(receipt), receipt.slice(0, 120));
+        check('the original is gone from its folder, and the copy on the other drive is byte for byte the same',
+          !fs.existsSync(iso) && copy && crypto.createHash('sha256').update(fs.readFileSync(copy)).digest('hex') === isoHash);
+        check('the journal has it, with the hash and where the original went',
+          session && session.items[0].sha256 === isoHash && session.items[0].original === 'bin' && session.end.freedOnSource === 0);
+
+        await js(`document.querySelector('.tab[data-tab="restore"]').click()`);
+        await until(win, `document.querySelector('.restore-session[data-kind="quarantine"]') !== null`, 15000);
+        const shown = await js(`(() => {
+          const s = document.querySelector('.restore-session[data-kind="quarantine"]');
+          return { title: s.querySelector('.restore-title strong').textContent, notes: [...s.querySelectorAll('.restore-note')].map((p) => p.textContent) };
+        })()`);
+        check(`Restore lists it as moved to ${drive}, still in the quarantine folder`,
+          shown.title === `Moved 1 item to ${drive}` && shown.notes.some((n) => /1 still in the quarantine folder/.test(n)), `${shown.title} | ${shown.notes.join(' | ')}`);
+        const back = await js(`window.cleandrive.restore([${JSON.stringify(`${session.id}:0`)}], { confirm: false })`);
+        check('and putting it back brings it home, checked, and takes the copy out of the zone',
+          back.ok !== false && fs.existsSync(iso) && !fs.existsSync(copy) &&
+            crypto.createHash('sha256').update(fs.readFileSync(iso)).digest('hex') === isoHash);
+
+        // The setting that frees the space: the original deleted outright.
+        await js(`document.querySelector('.tab[data-tab="settings"]').click()`);
+        await js(`(() => { const box = document.getElementById('quarantine-delete-original'); box.checked = true; box.dispatchEvent(new Event('change')); })()`);
+        await until(win, `window.Quarantine.deletesOriginals()`, 10000);
+        const badge = await js(`[...document.querySelectorAll('#large-actionbar .frees-badge')].map((x) => x.textContent)`);
+        check('with "delete the original" on, the badge says it frees the space', badge.includes('Frees the space — the original is deleted'), badge.join(' | '));
+        await js(`deleteSelected([${JSON.stringify(iso)}], () => {}, { kind: 'quarantine', confirm: false })`);
+        await until(win, `/Moved 1 item/.test(document.getElementById('toast').textContent) && /freed/.test(document.getElementById('toast').textContent)`, 60000);
+        const freedReceipt = await js(`document.getElementById('toast').textContent`);
+        const second = (await services().journal.sessions()).find((s) => s.kind === 'quarantine' && s.items[0] && s.items[0].original === 'deleted');
+        check('and it does: the original is deleted, and the receipt counts exactly its size as freed',
+          !fs.existsSync(iso) && second && second.end.freedOnSource === 60 * 1024 * 1024 && /60\.0 MB freed/.test(freedReceipt),
+          freedReceipt.slice(0, 120));
+        await services().settings.patch({ quarantine: { deleteOriginal: false } });
+      } finally {
+        ipc.setQuarantineHarness(null);
+        const { services } = require('../src/main/services');
+        await services().settings.patch({ quarantine: { zone: null } }).catch(() => {});
+        fs.rmSync(far, { recursive: true, force: true });
+        fs.rmSync(qBase, { recursive: true, force: true });
       }
     }
 

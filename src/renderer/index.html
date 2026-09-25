@@ -243,6 +243,7 @@
         <div class="actionbar" id="large-actionbar" hidden>
           <span class="actionbar-count" id="large-selection" data-i18n="app.nothingSelected">Nothing selected</span>
           <span class="actionbar-gap"></span>
+          <button class="btn btn-sm quarantine-go" id="quarantine-large" disabled>Move to another drive</button>
           <button class="btn btn-danger btn-sm" id="delete-large" disabled data-i18n="app.moveSelected">Move selected to Recycle Bin</button>
         </div>
 
@@ -316,6 +317,7 @@
         <div class="actionbar" id="cleanup-actionbar" hidden>
           <span class="actionbar-count" id="cleanup-selection" data-i18n="app.nothingSelected">Nothing selected</span>
           <span class="actionbar-gap"></span>
+          <button class="btn btn-sm quarantine-go" id="quarantine-cleanup" disabled>Move to another drive</button>
           <button class="btn btn-danger btn-sm" id="delete-cleanup" disabled data-i18n="app.moveSelected">Move selected to Recycle Bin</button>
         </div>
 
@@ -500,6 +502,7 @@
           <span class="actionbar-gap"></span>
           <button class="btn btn-sm" id="media-select-filtered" data-i18n="media.selectShown">Select everything shown</button>
           <button class="btn btn-sm" id="media-select-none" hidden data-i18n="app.clearSelection">Clear selection</button>
+          <button class="btn btn-sm quarantine-go" id="media-quarantine" disabled hidden>Move to another drive</button>
           <button class="btn btn-danger btn-sm" id="media-delete" disabled data-i18n="app.moveSelected">Move selected to Recycle Bin</button>
         </div>
 
@@ -546,6 +549,7 @@
         <div class="actionbar" id="dupes-actionbar" hidden>
           <span class="actionbar-count" id="selection-status" data-i18n="app.nothingSelected">Nothing selected</span>
           <span class="actionbar-gap"></span>
+          <button class="btn btn-sm quarantine-go" id="quarantine-dupes" disabled>Move to another drive</button>
           <button class="btn btn-danger btn-sm" id="delete-dupes" disabled data-i18n="app.moveSelected">Move selected to Recycle Bin</button>
         </div>
         <p class="empty" id="dupes-empty" hidden></p>
@@ -1083,6 +1087,38 @@
             <p class="card-note" id="snapshot-detail"></p>
           </section>
 
+          <section class="card" id="quarantine-card">
+            <h2 data-i18n="settings.quarantine.title">Move to another drive</h2>
+            <p class="card-note" data-i18n="settings.quarantine.note">
+              For files you may want back but not on this drive. Each one is copied to a folder on
+              another drive and the copy is checked before the original is touched. Put them back
+              from Restore; the app never deletes them there.
+            </p>
+            <ul class="path-list" id="quarantine-facts"></ul>
+            <p class="card-note" id="quarantine-status" role="status"></p>
+            <div class="panel-actions panel-actions-tight">
+              <button class="btn btn-sm" id="quarantine-choose" data-i18n="settings.quarantine.choose">Choose folder…</button>
+              <button class="btn btn-sm" id="quarantine-open" hidden data-i18n="settings.quarantine.open">Show in Explorer</button>
+            </div>
+            <label class="field field-row">
+              <span data-i18n="settings.quarantine.days">Days before the app mentions they are still there</span>
+              <input type="number" id="quarantine-days" min="1" max="365" step="1" />
+            </label>
+            <label class="field field-row">
+              <span data-i18n="settings.quarantine.max">Most the folder may hold, in GB (0 = no limit)</span>
+              <input type="number" id="quarantine-max" min="0" max="100000" step="1" />
+            </label>
+            <label class="check check-lead">
+              <input type="checkbox" id="quarantine-delete-original" />
+              <span data-i18n="settings.quarantine.deleteOriginal">Delete the original once its copy is checked</span>
+            </label>
+            <p class="card-note" data-i18n="settings.quarantine.deleteOriginalNote">
+              Off, the original goes to the Recycle Bin: nothing is lost, and nothing is freed until
+              the bin is emptied. On, the space comes back at once — and the copy on the other drive
+              is the only one left.
+            </p>
+          </section>
+
           <section class="card card-wide">
             <div class="card-head">
               <h2 data-i18n="settings.version.title">Version and updates</h2>
@@ -1171,6 +1207,7 @@
     <script src="changes.js"></script>
     <script src="updates.js"></script>
     <script src="snapshots.js"></script>
+    <script src="quarantine.js"></script>
     <script src="restore.js"></script>
     <script src="system.js"></script>
   </body>

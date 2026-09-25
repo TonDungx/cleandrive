@@ -15,6 +15,8 @@ const previewServe = require('./lib/preview/serve');
 const { ESTIMATED_FILES_PER_SEC } = require('./lib/trash');
 const { execute } = require('./actions/execute');
 const restoreEngine = require('./actions/restore');
+const quarantineHandler = require('./actions/quarantine');
+const quarantineZone = require('./lib/quarantine-zone');
 const systemMeasure = require('./system/measure');
 const systemBreakdown = require('./system/breakdown');
 const { ScanTree } = require('./analyzers/scan-tree');
@@ -56,7 +58,7 @@ let scanTreeSerial = 0;
  * of these the map stops drawing what moved; a restore puts files back and is
  * not one of them.
  */
-const LEAVES_ITS_FOLDER = new Set(['recycle']);
+const LEAVES_ITS_FOLDER = new Set(['recycle', 'quarantine']);
 
 /**
  * What "free up space" (B3) asks Windows and OneDrive with. A harness supplies
@@ -75,6 +77,68 @@ function setCloudDepsForHarness(deps) {
 let appCacheHarness = null;
 function setAppCacheHarness(harness) {
   appCacheHarness = harness || null;
+}
+
+/**
+ * What the quarantine (B1) would otherwise ask a person or Windows, for a
+ * harness: the folder "Choose…" returns (`pick`), what kind of drive a root
+ * is (`driveTypeOf`), and the Recycle Bin (`shell`). The app never sets these.
+ */
+let quarantineHarness = null;
+function setQuarantineHarness(harness) {
+  quarantineHarness = harness || null;
+}
+
+/**
+ * What a quarantine is told by the main process, never by the window: the
+ * folder, whether originals are deleted outright, the size limit. All of it
+ * is read from the settings at the moment the action starts.
+ */
+async function quarantineDeps() {
+  const { quarantine } = await services().settings.get();
+  const h = quarantineHarness || {};
+  return {
+    zone: quarantine.zone,
+    deleteOriginal: quarantine.deleteOriginal === true,
+    maxBytes: quarantine.maxGB * 1024 ** 3,
+    retentionDays: quarantine.retentionDays,
+    ...(cloudDeps ? { cloud: cloudDeps } : {}),
+    ...(appCacheHarness ? { appCacheEnv: appCacheHarness.env, runningProcessNames: appCacheHarness.runningProcessNames } : {}),
+    ...(h.driveTypeOf ? { driveTypeOf: h.driveTypeOf } : {}),
+    ...(h.shell ? { shell: h.shell } : {}),
+  };
+}
+
+/**
+ * The quarantine as the Settings card and the startup notice see it: the
+ * folder, whether it can take files now, its room, and what is in it.
+ */
+async function quarantineStatus() {
+  const settings = await services().settings.get();
+  const q = settings.quarantine;
+  const zone = await quarantineZone.check(q.zone, quarantineHarness || {});
+  const used = zone.ok ? await quarantineZone.usage(zone.zone) : { bytes: 0, files: 0 };
+  const held = await restoreEngine.quarantined(services().journal, { retentionDays: q.retentionDays });
+  const drive = q.zone ? path.parse(q.zone).root.replace(/\\$/, '') : null;
+  const systemDrive = (process.env.SystemDrive || 'C:').toUpperCase();
+  return {
+    zone: q.zone,
+    ok: zone.ok,
+    reason: zone.ok ? null : zone.reason,
+    reasonText: zone.ok || zone.reason === 'none' ? null : quarantineHandler.zoneReason(zone.reason),
+    drive,
+    onSystemDrive: Boolean(drive) && drive.toUpperCase() === systemDrive,
+    type: zone.type || null,
+    freeBytes: zone.freeBytes || 0,
+    totalBytes: zone.totalBytes || 0,
+    usedBytes: used.bytes,
+    files: used.files,
+    kept: held.kept,
+    expired: held.expired,
+    retentionDays: q.retentionDays,
+    maxGB: q.maxGB,
+    deleteOriginal: q.deleteOriginal,
+  };
 }
 
 /* ---- the System screen's state ------------------------------------------- */
@@ -416,11 +480,13 @@ function register() {
             source: 'manual',
             runId: 'manual',
             deps:
-              kind === 'dehydrate' && cloudDeps
-                ? cloudDeps
-                : kind === 'recycle' && appCacheHarness
-                  ? { appCacheEnv: appCacheHarness.env, runningProcessNames: appCacheHarness.runningProcessNames }
-                  : undefined,
+              kind === 'quarantine'
+                ? await quarantineDeps()
+                : kind === 'dehydrate' && cloudDeps
+                  ? cloudDeps
+                  : kind === 'recycle' && appCacheHarness
+                    ? { appCacheEnv: appCacheHarness.env, runningProcessNames: appCacheHarness.runningProcessNames }
+                    : undefined,
             // Every item is journalled as it moves. Nothing is purged because
             // of that -- the purge has its own switch, its own grace period and
             // its own corroboration against the bin -- but without the record
@@ -442,8 +508,14 @@ function register() {
             .history.addEvent({
               // "Moved to the bin" is the Recycle Bin's column; making a file
               // online-only moved nothing there, and its freed figure is the
-              // one it measured.
-              movedBytes: kind === 'recycle' ? result.movedBytes : 0,
+              // one it measured. A quarantine's originals went to the bin
+              // unless they were deleted outright, which is what it freed.
+              movedBytes:
+                kind === 'recycle'
+                  ? result.movedBytes
+                  : kind === 'quarantine'
+                    ? Math.max(0, result.movedBytes - result.freedBytes)
+                    : 0,
               freedBytes: result.freedBytes,
               files: result.moved.length,
               source: 'manual',
@@ -597,14 +669,18 @@ function register() {
    * licence must never make something the app did impossible to undo, so these
    * handlers are not given a `can` at all.
    */
+  // The days a quarantined file may sit before the Restore Center calls it
+  // expired. Said, never acted on.
+  const retention = async () => ({ retentionDays: (await services().settings.get()).quarantine.retentionDays });
+
   handle('journal:sessions', () =>
-    guard(async () => restoreEngine.listSessions(services().journal))
+    guard(async () => restoreEngine.listSessions(services().journal, { deps: await retention() }))
   );
 
   handle('journal:items', (_event, sessionId) =>
     guard(async () => {
       if (typeof sessionId !== 'string' || !/^s_[0-9a-f]{8}$/.test(sessionId)) throw new Error('Not a session id');
-      const items = await restoreEngine.listItems(services().journal, sessionId);
+      const items = await restoreEngine.listItems(services().journal, sessionId, { deps: await retention() });
       if (!items) throw new Error('No such session');
       return items;
     })
@@ -661,12 +737,47 @@ function register() {
     })
   );
 
+  /* ---- quarantine (B1) ----------------------------------------------------- */
+
+  handle('quarantine:status', () => guard(async () => quarantineStatus()));
+
+  // The folder is picked in the native dialog, here, and checked and made
+  // here: the window never names a path for files to be copied into.
+  handle('quarantine:choose', (event) =>
+    guard(async () => {
+      let picked = null;
+      if (quarantineHarness && typeof quarantineHarness.pick === 'function') {
+        picked = await quarantineHarness.pick();
+      } else {
+        const win = BrowserWindow.fromWebContents(event.sender);
+        const result = await dialog.showOpenDialog(win, {
+          title: t('dialog.chooseQuarantine', 'Choose where moved files go — on a different drive from the one you are freeing'),
+          properties: ['openDirectory', 'createDirectory'],
+        });
+        picked = result.canceled ? null : result.filePaths[0];
+      }
+      if (!picked) return { chosen: false, ...(await quarantineStatus()) };
+      const made = await quarantineZone.prepare(picked, quarantineHarness || {});
+      if (!made.ok) {
+        return { chosen: false, refusal: quarantineHandler.zoneReason(made.reason), ...(await quarantineStatus()) };
+      }
+      await services().settings.patch({ quarantine: { zone: made.zone } });
+      return { chosen: true, ...(await quarantineStatus()) };
+    })
+  );
+
   /* ---- automatic cleanup ------------------------------------------------ */
 
   handle('settings:get', () => guard(() => readState()));
 
   handle('settings:save', (event, next) =>
     guard(async () => {
+      // The quarantine folder is set only by `quarantine:choose`, which checks
+      // it and makes it; a save from the window keeps whatever is there.
+      if (next && next.quarantine && typeof next.quarantine === 'object') {
+        const { zone, ...rest } = next.quarantine;
+        next = { ...next, quarantine: rest };
+      }
       const { settings } = await services().settings.patch(next);
       // The Task Scheduler entries and the tray are both derived state, never a
       // second source of truth: whatever the settings say, the OS and the
@@ -1553,7 +1664,79 @@ async function confirmDehydrate(win, description) {
   return response === 0;
 }
 
+/**
+ * The words in front of moving files to another drive (B1), apart from the
+ * dialog so a harness can read exactly what a person would.
+ *
+ * In this order: what happens to the copy, then what happens to the original
+ * and so what it frees -- the one fact people get wrong about this -- then
+ * what kind of drive the copies are on, then anything about the files that
+ * a cloud service syncs, then how long they stay.
+ */
+function confirmQuarantineText(description, planned) {
+  const n = (v) => Number(v || 0).toLocaleString(language.current());
+  const zone = description.zone || { path: '', drive: '' };
+  const drive = zone.drive;
+  const size = formatBytes(description.bytes);
+  const lines = [
+    t('dialog.quarantine.copy', '{size} is copied to {zone}. Each copy is read back and checked against its original (SHA-256) before the original is touched.', {
+      size,
+      zone: zone.path,
+    }),
+    description.deleteOriginal
+      ? t('dialog.quarantine.deleteOriginal', 'Then each original is deleted from its drive — not moved to the Recycle Bin. The copy on {drive} is the only one left. This frees {size}.', { drive, size })
+      : t('dialog.quarantine.bin', 'Then each original goes to the Recycle Bin, which is on the same drive as the original — so this frees nothing there until the bin is emptied. “Delete the original”, in Settings, frees it at once instead.'),
+  ];
+  if (zone.type === 'Removable') {
+    lines.push(
+      t('dialog.quarantine.removable', '{drive} is a removable drive. If it is lost or unplugged, so are the copies on it — and once the originals are gone, they are the only ones.', { drive })
+    );
+  }
+  const c = description.cloud || {};
+  if (c.synced > 0) {
+    lines.push(
+      t('dialog.quarantine.synced', '{n} of these are in sync with OneDrive. Removing them from this folder removes them from OneDrive on every device. “Keep only in the cloud”, on What to delete, frees their space without deleting anything.', { n: n(c.synced) })
+    );
+  }
+  if (c.unsynced > 0) {
+    lines.push(
+      t('dialog.quarantine.unsynced', '{n} of these are in OneDrive but not in sync: OneDrive has not uploaded them, or not their latest changes. The copy on {drive} is the only complete one, and OneDrive removes any older version it holds when it next runs.', { n: n(c.unsynced), drive })
+    );
+  }
+  if ((c.other || 0) + (c.unknown || 0) > 0) {
+    lines.push(
+      t('dialog.quarantine.otherCloud', '{n} of these are in a folder a cloud service syncs, and the app cannot tell whether the service holds them. Removing them from the folder may remove them on every device that syncs it.', { n: n((c.other || 0) + (c.unknown || 0)) })
+    );
+  }
+  lines.push(
+    t('dialog.quarantine.kept', 'They stay there until you put them back from Restore, or delete them yourself. After {days} days the app mentions they are still there; it never deletes them.', {
+      days: n(description.retentionDays || 30),
+    })
+  );
+  const left = [];
+  if (description.sameVolume > 0) left.push(t('dialog.quarantine.sameVolume', '{n} are already on {drive}.', { n: n(description.sameVolume), drive }));
+  if (description.onlineOnly > 0) left.push(t('dialog.quarantine.onlineOnly', '{n} are only in the cloud, with nothing on this drive to free.', { n: n(description.onlineOnly) }));
+  const other = description.refused - (description.sameVolume || 0) - (description.onlineOnly || 0);
+  if (other > 0) left.push(t('dialog.quarantine.refused', '{n} more are left where they are; the reasons are listed afterwards.', { n: n(other) }));
+  const detail = lines.join('\n\n') + (left.length ? `\n\n${left.join(' ')}` : '') + skippedNote(planned || {});
+
+  return {
+    type: description.deleteOriginal ? 'warning' : 'question',
+    title: t('dialog.quarantine.title', 'Move to another drive'),
+    message: t('dialog.quarantine.message', 'Move {n} item(s) to {drive}?', { n: n(description.count), drive }),
+    detail,
+    buttons: [t('dialog.quarantine.go', 'Move to {drive}', { drive }), t('app.cancel', 'Cancel')],
+  };
+}
+
+async function confirmQuarantine(win, description, planned) {
+  const text = confirmQuarantineText(description, planned);
+  const { response } = await dialog.showMessageBox(win, { ...text, defaultId: 1, cancelId: 1, noLink: true });
+  return response === 0;
+}
+
 async function confirmAction(win, description, planned, options) {
+  if (description.kind === 'quarantine') return confirmQuarantine(win, description, planned);
   if (description.kind === 'dehydrate') return confirmDehydrate(win, description);
   if (description.kind !== 'recycle') return false;
 
@@ -1607,6 +1790,15 @@ async function confirmRestore(win, description) {
   const lines = [
     t('dialog.restore.detail', '{size} goes back to where it was deleted from.', { size: formatBytes(description.bytes) }),
   ];
+  // From another drive (B1): copied, checked, and only then taken out of the
+  // quarantine folder -- so it takes room where it lands before it frees any.
+  if (description.fromQuarantine > 0) {
+    lines.push(
+      t('dialog.restore.fromQuarantine', '{n} of them come back from the quarantine folder: each is copied back, checked against the copy that was made, and only then removed from that folder. They need room on the drive they go back to.', {
+        n: n(description.fromQuarantine),
+      })
+    );
+  }
   if (description.refused > 0) {
     lines.push(
       t('dialog.restore.refused', '{n} of the items chosen cannot be put back — they are no longer in the Recycle Bin, or the drive is not connected.', {
@@ -1649,8 +1841,14 @@ async function confirmRestore(win, description) {
     defaultId: cancelId,
     cancelId,
     noLink: true,
-    title: t('dialog.restore.title', 'Put back from the Recycle Bin'),
-    message: t('dialog.restore.message', 'Put back {n} item(s) from the Recycle Bin?', { n: n(description.count) }),
+    title:
+      description.fromQuarantine > 0
+        ? t('dialog.restore.titleAny', 'Put back')
+        : t('dialog.restore.title', 'Put back from the Recycle Bin'),
+    message:
+      description.fromQuarantine > 0
+        ? t('dialog.restore.messageAny', 'Put back {n} item(s) where they came from?', { n: n(description.count) })
+        : t('dialog.restore.message', 'Put back {n} item(s) from the Recycle Bin?', { n: n(description.count) }),
     detail: lines.join('\n\n'),
   });
 
@@ -1829,4 +2027,7 @@ module.exports = {
   setHandoffDepsForHarness,
   setCloudDepsForHarness,
   setAppCacheHarness,
+  setQuarantineHarness,
+  quarantineStatus,
+  confirmQuarantineText,
 };

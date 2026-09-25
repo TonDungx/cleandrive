@@ -144,6 +144,11 @@ class ActionJournal {
       // Only on a purge: when the item it removes was first recycled, which is
       // how the two records are matched up.
       ...(Number.isFinite(item.recycledAt) ? { recycledAt: iso(item.recycledAt) } : {}),
+      // Only on a quarantine (B1): what the copy was checked against, and where
+      // the original went -- `bin`, which the purge may later empty, or
+      // `deleted`, which nothing can.
+      ...(typeof item.sha256 === 'string' && /^[0-9a-f]{64}$/.test(item.sha256) ? { sha256: item.sha256 } : {}),
+      ...(item.original === 'bin' || item.original === 'deleted' ? { original: item.original } : {}),
     };
   }
 
@@ -284,6 +289,11 @@ class ActionJournal {
   /**
    * Drop month files older than the retention -- this month and the twelve
    * before it, by default. Whole files only; a line is never edited.
+   *
+   * Except a month that holds a quarantine (B1). Its copies stay on the other
+   * drive for as long as somebody leaves them there, which the app never
+   * decides, and the journal is how the Restore Center knows where each one
+   * came from.
    */
   async prune() {
     const cutoff = new Date(this.now());
@@ -293,6 +303,8 @@ class ActionJournal {
     let removed = 0;
     for (const file of await this.files()) {
       if (path.basename(file, '.jsonl') < oldest) {
+        const text = await fsp.readFile(file, 'utf8').catch(() => '');
+        if (text.includes('"kind":"quarantine"')) continue;
         await fsp.rm(file, { force: true });
         removed += 1;
       }

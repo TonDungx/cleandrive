@@ -190,6 +190,8 @@
     'map.movedSince':
       'Đã chuyển vào Thùng rác kể từ lần quét này, nên không còn được vẽ: {n} {files} ({size}). ' +
       'Chưa giải phóng cho tới khi dọn Thùng rác.',
+    'map.movedAway':
+      'Đã chuyển sang ổ khác kể từ lần quét này và xoá ở đây, nên không còn được vẽ: {n} {files} ({size}), đã giải phóng.',
     'map.hint':
       'Mỗi ô lớn theo dung lượng nó chứa. Tệp từ 10 MB trở lên có ô riêng; phần còn lại của một thư mục ' +
       'dùng chung một ô. Bấm vào thư mục để đi vào, hoặc bấm chuột phải vào một ô để xem thêm.',
@@ -1634,5 +1636,142 @@
     'dialog.restore.skip': 'Khôi phục, bỏ qua các mục đó',
     'dialog.restore.replace': 'Khôi phục, thay thế',
     'dialog.restore.go': 'Khôi phục',
+    'dialog.restore.titleAny': 'Khôi phục',
+    'dialog.restore.messageAny': 'Đưa {n} mục về đúng chỗ cũ?',
+    'dialog.restore.fromQuarantine':
+      '{n} mục trong số đó trở về từ thư mục cách ly: từng tệp được chép ngược lại, đối chiếu với bản đã chép ' +
+      'lúc cách ly, rồi mới được gỡ khỏi thư mục đó. Chúng cần có chỗ trống trên ổ mà chúng trở về.',
+
+    /* ---- chuyển sang ổ khác (cách ly, B1) ------------------------------- */
+    'quarantine.label': 'Chuyển sang ổ khác',
+    'quarantine.go': 'Chuyển sang {drive}',
+    'quarantine.goNowhere': 'Chuyển sang ổ khác',
+    'quarantine.chooseFirst': 'Hãy chọn nơi chứa tệp được chuyển trước — trong Cài đặt, mục “Chuyển sang ổ khác”.',
+    'quarantine.checking': 'Đang kiểm tra những gì chuyển được',
+    'quarantine.progressTitle': 'Đang chép sang {drive} và kiểm tra từng bản chép',
+    'quarantine.rate': '{size}/giây',
+    'quarantine.done': 'Đã chuyển {n} {items} ({size}) sang {drive}, từng bản chép đã được kiểm tra — {originals}',
+    'quarantine.freed': 'bản gốc đã bị xoá, giải phóng {size}',
+    'quarantine.inBin': 'bản gốc nằm trong Thùng rác, chưa giải phóng cho tới khi dọn Thùng rác',
+    'quarantine.skipped': '{n} mục giữ nguyên chỗ cũ',
+    'quarantine.stopped': 'Đã dừng. {n} {items} ({size}) đã nằm trên {drive} — {originals} · {left} mục giữ nguyên chỗ cũ.',
+    'quarantine.cancelled': 'Đã huỷ — không có gì được chuyển.',
+    'quarantine.nothing': 'Không có gì được chuyển. {reason}',
+    'quarantine.type.fixed': 'ổ cố định',
+    'quarantine.type.removable': 'ổ rời',
+
+    'quarantine.why.none': 'Chưa có thư mục cách ly — hãy chọn một thư mục trong Cài đặt',
+    'quarantine.why.unavailable': 'Ổ chứa thư mục cách ly đang không kết nối',
+    'quarantine.why.missing': 'Thư mục cách ly không còn nữa',
+    'quarantine.why.moved': 'Thư mục cách ly đã bị biến thành liên kết trỏ đi nơi khác, nên không được dùng',
+    'quarantine.why.notAZone': 'Thư mục đó không phải thư mục cách ly của CleanDrive',
+    'quarantine.why.network': 'Không thể đặt thư mục cách ly trên ổ mạng',
+    'quarantine.why.synced': 'Không được đặt thư mục cách ly bên trong thư mục đồng bộ với dịch vụ đám mây',
+    'quarantine.why.place': 'Thư mục cách ly nằm ở chỗ ứng dụng không ghi vào',
+    'quarantine.why.sameVolume': 'Đã nằm trên ổ chứa thư mục cách ly — chuyển sang đó không giải phóng được gì',
+    'quarantine.why.inZone': 'Đã nằm trong thư mục cách ly',
+    'quarantine.why.link': 'Là liên kết, không phải tệp',
+    'quarantine.why.onlineOnly': 'Chỉ nằm trên đám mây — ổ này không có gì để giải phóng',
+    'quarantine.why.full': 'Không đủ chỗ trên {drive} cho tất cả, cộng dư ra một gigabyte',
+    'quarantine.why.overLimit': 'Sẽ vượt quá dung lượng đã đặt cho thư mục cách ly trong Cài đặt',
+    'quarantine.why.changed': 'Tệp đã thay đổi trong lúc chép hoặc kể từ lúc được chọn, nên được giữ nguyên',
+    'quarantine.why.hash': 'Bản chép không khớp với bản gốc, nên bản gốc được giữ nguyên',
+    'quarantine.why.lost': 'Ổ cách ly không còn phản hồi, nên phần còn lại được giữ nguyên',
+    'quarantine.why.fullNow': 'Ổ cách ly đã đầy, nên phần còn lại được giữ nguyên',
+    'quarantine.why.stuck': 'Đã chép, nhưng không chuyển được bản gốc vào Thùng rác, nên bản chép đã được gỡ ra',
+    'quarantine.why.copyFailed': 'Không chép được tệp',
+
+    'frees.quarantineBin': 'Bản gốc vào Thùng rác — chưa giải phóng',
+    'frees.quarantineBinHint':
+      'Bản chép sang ổ kia, bản gốc vào Thùng rác, mà Thùng rác nằm cùng ổ với bản gốc — nên chưa giải phóng gì ' +
+      'cho tới khi dọn Thùng rác.',
+    'frees.quarantineYes': 'Giải phóng dung lượng — bản gốc bị xoá',
+    'frees.quarantineYesHint': 'Mỗi bản gốc bị xoá sau khi bản chép của nó trên ổ kia được kiểm tra; bản chép đó khi ấy là bản duy nhất.',
+
+    'dialog.chooseQuarantine': 'Chọn nơi chứa tệp được chuyển — trên một ổ khác với ổ bạn muốn giải phóng',
+    'dialog.quarantine.title': 'Chuyển sang ổ khác',
+    'dialog.quarantine.message': 'Chuyển {n} mục sang {drive}?',
+    'dialog.quarantine.go': 'Chuyển sang {drive}',
+    'dialog.quarantine.copy':
+      '{size} sẽ được chép sang {zone}. Mỗi bản chép được đọc lại và đối chiếu với bản gốc (SHA-256) trước khi ' +
+      'bản gốc bị đụng tới.',
+    'dialog.quarantine.bin':
+      'Sau đó mỗi bản gốc vào Thùng rác, mà Thùng rác nằm cùng ổ với bản gốc — nên trên ổ đó chưa giải phóng gì ' +
+      'cho tới khi dọn Thùng rác. Bật “Xoá bản gốc” trong Cài đặt để giải phóng ngay thay vì vậy.',
+    'dialog.quarantine.deleteOriginal':
+      'Sau đó mỗi bản gốc bị xoá khỏi ổ của nó — không vào Thùng rác. Bản chép trên {drive} là bản duy nhất còn ' +
+      'lại. Thao tác này giải phóng {size}.',
+    'dialog.quarantine.removable':
+      '{drive} là ổ rời. Nếu ổ bị mất hoặc bị rút ra, các bản chép trên đó cũng mất theo — và khi bản gốc không ' +
+      'còn, đó là bản duy nhất.',
+    'dialog.quarantine.synced':
+      '{n} mục trong số này đang đồng bộ với OneDrive. Gỡ chúng khỏi thư mục này là gỡ chúng khỏi OneDrive trên ' +
+      'mọi thiết bị. “Chỉ giữ trên đám mây”, trong Nên xoá gì, giải phóng dung lượng của chúng mà không xoá gì.',
+    'dialog.quarantine.unsynced':
+      '{n} mục trong số này nằm trong OneDrive nhưng chưa đồng bộ: OneDrive chưa tải chúng lên, hoặc chưa tải ' +
+      'những thay đổi mới nhất. Bản chép trên {drive} là bản đầy đủ duy nhất, và OneDrive sẽ gỡ mọi bản cũ hơn ' +
+      'nó đang giữ vào lần chạy tới.',
+    'dialog.quarantine.otherCloud':
+      '{n} mục trong số này nằm trong thư mục đồng bộ với một dịch vụ đám mây, và ứng dụng không biết dịch vụ ' +
+      'đó có giữ chúng hay không. Gỡ chúng khỏi thư mục có thể gỡ chúng trên mọi thiết bị đồng bộ thư mục đó.',
+    'dialog.quarantine.kept':
+      'Chúng nằm ở đó cho tới khi bạn đưa về từ Khôi phục, hoặc tự xoá. Sau {days} ngày ứng dụng sẽ nhắc là ' +
+      'chúng vẫn còn đó; ứng dụng không bao giờ xoá chúng.',
+    'dialog.quarantine.sameVolume': '{n} mục đã nằm trên {drive}.',
+    'dialog.quarantine.onlineOnly': '{n} mục chỉ nằm trên đám mây, ổ này không có gì để giải phóng.',
+    'dialog.quarantine.refused': '{n} mục khác được giữ nguyên chỗ cũ; lý do được liệt kê sau khi xong.',
+
+    'notify.quarantine.title': 'CleanDrive: vẫn còn tệp trong thư mục cách ly',
+    'notify.quarantine.body':
+      '{n} tệp đã nằm trong thư mục cách ly quá {days} ngày. Không có gì bị xoá — chúng được liệt kê trong Khôi phục.',
+
+    'settings.quarantine.title': 'Chuyển sang ổ khác',
+    'settings.quarantine.note':
+      'Dành cho những tệp bạn có thể muốn lấy lại nhưng không cần nằm trên ổ này. Mỗi tệp được chép sang một thư ' +
+      'mục trên ổ khác, và bản chép được kiểm tra trước khi bản gốc bị đụng tới. Đưa chúng về từ Khôi phục; ứng ' +
+      'dụng không bao giờ xoá chúng ở đó.',
+    'settings.quarantine.choose': 'Chọn thư mục…',
+    'settings.quarantine.change': 'Đổi thư mục…',
+    'settings.quarantine.open': 'Mở trong Explorer',
+    'settings.quarantine.days': 'Số ngày trước khi ứng dụng nhắc là chúng vẫn còn đó',
+    'settings.quarantine.max': 'Dung lượng tối đa của thư mục, tính bằng GB (0 = không giới hạn)',
+    'settings.quarantine.deleteOriginal': 'Xoá bản gốc khi bản chép đã được kiểm tra',
+    'settings.quarantine.deleteOriginalNote':
+      'Tắt: bản gốc vào Thùng rác — không mất gì, và chưa giải phóng gì cho tới khi dọn Thùng rác. Bật: dung ' +
+      'lượng trở lại ngay — và bản chép trên ổ kia là bản duy nhất còn lại.',
+    'settings.quarantine.none': 'Chưa chọn thư mục. Hãy chọn một thư mục trên ổ khác với ổ bạn muốn giải phóng.',
+    'settings.quarantine.folder': 'Thư mục',
+    'settings.quarantine.drive': 'Ổ đĩa',
+    'settings.quarantine.driveValue': '{drive} · {type} · còn trống {free}',
+    'settings.quarantine.holds': 'Đang chứa',
+    'settings.quarantine.holdsValue': '{n} {files} · {size}',
+    'settings.quarantine.systemDrive':
+      'Thư mục này nằm trên {drive}, ổ cài Windows. Tệp từ {drive} không chuyển vào đây được — làm vậy không ' +
+      'giải phóng được gì.',
+    'settings.quarantine.removable': '{drive} là ổ rời. Nếu ổ bị mất, các bản chép trên đó cũng mất theo.',
+    'settings.quarantine.expired':
+      '{n} tệp đã nằm ở đó quá {days} ngày. Không có gì bị xoá — chúng được liệt kê trong Khôi phục.',
+    'settings.quarantine.chosen': 'Tệp chuyển sang ổ khác sẽ nằm trong {zone}',
+
+    'restore.title.quarantine': 'Đã chuyển {n} {items} sang {drive}',
+    'restore.title.quarantineAnywhere': 'Đã chuyển {n} {items} sang ổ khác',
+    'restore.tally.inQuarantine': '{n} mục vẫn nằm trong thư mục cách ly',
+    'restore.tally.goneZone': '{n} mục không còn trong thư mục cách ly',
+    'restore.tally.expired': '{n} mục đã nằm quá số ngày đặt trong Cài đặt',
+    'restore.state.inQuarantine': 'đang cách ly',
+    'restore.state.goneZone': 'không còn trong thư mục',
+    'restore.row.inQuarantine': 'Đã chép sang {path} {when}, và bản chép đã được đối chiếu với bản gốc',
+    'restore.row.expired': 'đã nằm quá số ngày đặt trong Cài đặt',
+    'restore.row.unavailableZone': 'Ổ chứa thư mục cách ly đang không kết nối, nên không kiểm được bản chép',
+    'restore.row.goneZone': 'Không còn trong thư mục cách ly — đã bị gỡ ra ngoài ứng dụng này',
+    'restore.quarantineNote':
+      'Bản gốc đã vào Thùng rác. Khôi phục sẽ chép từng tệp ngược lại từ thư mục cách ly và kiểm tra nó; bản gốc ' +
+      'còn trong Thùng rác vẫn nằm yên ở đó.',
+    'restore.quarantineDeleted':
+      'Bản gốc đã bị xoá sau khi bản chép được kiểm tra, giải phóng {size}. Khôi phục sẽ chép từng tệp ngược lại và kiểm tra nó.',
+    'restore.progressTitleAny': 'Đang khôi phục',
+    'restore.why.goneZone': 'Không còn trong thư mục cách ly',
+    'restore.why.unavailableZone': 'Ổ chứa thư mục cách ly đang không kết nối',
+    'restore.why.hash': 'Bản chép không còn khớp với bản đã cách ly, nên không được khôi phục',
   };
 });

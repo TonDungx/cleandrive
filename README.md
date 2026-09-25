@@ -786,7 +786,9 @@ are now**:
 | *put back* | A restore session names it — and whether it is still where it was put |
 | *purged* | The app's own purge removed it for good; it cannot be put back |
 | *not in the bin* | Nothing in the bin matches any more: it was emptied, or restored in Explorer. If a file sits at its old path, the row says so |
-| *drive not connected* | The drive it was on is not there, so nothing can be said about it |
+| *in quarantine* | [Moved to another drive](#moving-to-another-drive-instead): its copy is in the quarantine folder, the size the journal recorded |
+| *not in the folder* | That copy is no longer in the quarantine folder — removed outside the app |
+| *drive not connected* | The drive it was on — or, for a quarantine, the drive its copy is on — is not there, so nothing can be said about it |
 
 That column is read from the disk every time the tab opens, not taken from the
 journal. The journal says what the app did; only the disk says what is true now,
@@ -797,6 +799,11 @@ empties the bin.
 same pipeline as a delete — a native confirmation with the count and the size,
 the progress panel with Stop, a receipt — and is recorded as a session of its
 own.
+
+A file moved to another drive comes back by copy: it is copied home, checked
+against the hash taken when it was quarantined, and only then taken out of the
+quarantine folder. A copy that no longer matches is not put back. Its original,
+if still in the Recycle Bin, is left there.
 
 When a file has appeared at the old path since, the confirmation asks rather
 than choosing: **keep both** (the restored one comes back as `name (restored)`),
@@ -907,7 +914,9 @@ the cleanup.
 
 ## Screen 9 — Settings
 
-Small on purpose. **Nothing in Settings changes what the app deletes.**
+Small on purpose. **Nothing in Settings changes what the app deletes**, with one
+exception, off until you switch it on: *Delete the original*, on the card for
+[moving files to another drive](#moving-to-another-drive-instead).
 
 | Card | What it holds |
 | --- | --- |
@@ -915,6 +924,7 @@ Small on purpose. **Nothing in Settings changes what the app deletes.**
 | **Language** | English or Vietnamese, or follow Windows |
 | **Company while scanning** | Which animal walks the progress bar, or none |
 | **Scan history** | How many folder snapshots to keep: the newest few, plus one a month |
+| **Move to another drive** | Where moved files go, how many days before the app mentions they are still there, the most that folder may hold, and *Delete the original* |
 | **Version and updates** | Which version you are running, and the update controls |
 
 The version lives here because "which version am I running" is the first thing
@@ -1023,12 +1033,58 @@ why — ending *not freed until the bin is emptied*, because it is not. It used 
 say "2.1 GB freed" after every move to the bin, which was the most misleading
 sentence the app printed.
 
+### Moving to another drive instead
+
+The Recycle Bin is on the same drive, so it frees nothing; deleting for good
+keeps nothing. **Move to D:** is the third choice: the file leaves the full
+drive and stays on the computer. Choose a folder on another drive once, in
+Settings; the app makes `CleanDrive Quarantine` inside it, with a `README.txt`
+saying what it is. The button then names that drive, on Disk usage, Duplicates
+and Photos & video, and on What to delete for everything but the groups marked
+safe — a temp file or a cache is not worth the copy.
+
+For each file, and nothing is done to the original until its copy is proved:
+
+1. it is copied, and hashed (SHA-256) as it is read;
+2. the original is checked to be unchanged by the copy;
+3. the copy is flushed to the drive, read back, and its hash compared — and
+   only then given its name. Until then it is `….partial`: a drive pulled out
+   mid-copy was measured to keep the half-written file, and under that name it
+   is never mistaken for a copy; the next move takes it out;
+4. the session's `manifest.jsonl`, on that drive, records which original the
+   copy is — so the drive explains itself without this computer;
+5. the path is checked once more to be the very file that was copied (a folder
+   on the way swapped for a junction is caught here);
+6. the original goes to the Recycle Bin — or, if *Delete the original* is on
+   in Settings, is deleted, which is the only way this frees its space;
+7. the journal records it.
+
+A step that fails leaves the original as it was and takes the copy back out.
+The drive filling up, or being pulled out, stops the batch there. Nothing is
+started without room for all of it plus a gigabyte. Files already on that
+drive, files in the folder itself, links and folders are refused; a network
+drive, or a folder a cloud service syncs, cannot hold the quarantine.
+
+**OneDrive files are judged by what Windows says about each one.** Only in the
+cloud: refused — there is nothing on this drive to free, and reading it would
+download it. Not in sync: allowed, and the dialog says the copy on the other
+drive is the only complete one, since OneDrive has not uploaded it or its
+latest changes. In sync: allowed, and the dialog says removing it removes it
+from OneDrive on every device, and that *Keep only in the cloud* frees the space
+without deleting anything. Other services get the general warning.
+
+Files stay there until they are put back from Restore or deleted by hand. The
+app never deletes them; after the days set in Settings (30 to begin with) it
+mentions, once a day at most, that they are still there. The receipt, the
+badge beside the button and Trends all say *not freed* while the originals are
+in the bin, and count as freed exactly what was deleted.
+
 ### One pipeline for every action
 
 Every screen's delete, the manual cleanup and the 02:00 run go through the same
 sequence — vet, probe, confirm, record, act — in `src/main/actions/`. Moving to
-the Recycle Bin, putting back from it, and making OneDrive files online-only are
-the actions today; each one the roadmap adds is another handler in the same
+the Recycle Bin, moving to another drive, putting back from either, and making
+OneDrive files online-only are the actions today; each one the roadmap adds is another handler in the same
 sequence rather than a path of its own. What an action frees is the handler's
 own figure: for the Recycle Bin that is nothing, and for OneDrive it is what the
 disk was measured to give back. The window can ask
@@ -1082,7 +1138,7 @@ the disk is, so the question can be answered without clicking anything.
 
 | Rule | Where you see it |
 | --- | --- |
-| Nothing is permanently deleted by a click | Every removal goes to the Recycle Bin. The single exception runs unattended, is off by default, and must clear four independent checks |
+| Nothing is permanently deleted by a click | Every removal goes to the Recycle Bin. Two exceptions, both off by default: the purge, which runs unattended and must clear four independent checks; and *Delete the original* when moving files to another drive, which deletes an original only once its copy there has been read back and matched, and says so in the confirmation |
 | Nothing is selected for you | Every bulk action names its scope and shows its count and size first |
 | Moved is never reported as freed | Two separate columns on Trends; stated in the confirmation dialog, beside every delete button, and in the receipt afterwards |
 | A guess is labelled a guess | Four confidence words, always beside the evidence |
@@ -1116,7 +1172,9 @@ the disk is, so the question can be answered without clicking anything.
   folder's size and its largest files, compressed, a few dozen kilobytes for a
   folder of fifteen thousand files — kept so two scans can later be compared.
   None of them holds the contents of any file. Snapshots and the journal do hold
-  file *names*, so none of it ever leaves the machine.
+  file *names*, so none of it ever leaves the machine. And, only if you move
+  files to another drive, the `CleanDrive Quarantine` folder on the drive you
+  chose: the files themselves, and a manifest of where each came from.
 - **Settings upgrade forward, once.** The settings file is versioned; the first
   save after an upgrade keeps the previous file as `settings.v1.json`, and the
   version before this one still reads the new file (that is tested against the
@@ -1142,7 +1200,9 @@ none lost, none torn.
 
 The journal is a claim, not a permission. The purge still acts only on items the
 Recycle Bin's own metadata corroborates, so a hand-edited line deletes nothing.
-Month files older than thirteen months are dropped at launch.
+Month files older than thirteen months are dropped at launch — except a month
+that moved files to another drive: those copies stay as long as somebody leaves
+them, and the journal is how Restore knows where each came from.
 
 It is also what the [Restore](#screen-7--restore) screen reads, and a restore is
 recorded in it like any other action — which is how the purge knows a file that
@@ -1181,6 +1241,12 @@ was put back is no longer the app's to remove.
   it measured within half a minute, and a OneDrive just started after a long
   time off can take minutes to catch up before it will touch anything new — six
   minutes, the one time that was measured.
+- **Moving to another drive is for files, by hand, to a local drive.** No
+  folders, no network drives, and not in the unattended run yet. Whether the
+  drive is removable is what Windows says, and [Unverified] a USB hard disk may
+  call itself fixed. The copy is read back after it is flushed to the drive,
+  but [Inference] that read can be answered from memory rather than from the
+  disk itself.
 - **The scheduled task only fires while somebody is logged on.** A machine left
   at the login screen at 02:00 runs the cleanup at the next opportunity instead.
 - **Moving the app** relocates the executable the scheduled task points at. The
@@ -1205,7 +1271,7 @@ The interface is plain HTML, CSS and JavaScript — no framework and no build st
 so what is in `src/renderer/` is what runs. All filesystem work happens in a
 separate process; the interface has no access to the disk, the network or Node at
 all, and reaches the system only through a fixed list of named operations —
-fifty-four of them, written down in `src/main/ipc-manifest.js`. A handler for a
+fifty-six of them, written down in `src/main/ipc-manifest.js`. A handler for a
 channel not in that file throws at startup, and `npm run test:ipc` holds the
 preload, the handlers and the manifest to the same list.
 
@@ -1251,6 +1317,12 @@ as soon as the System screen has its answers. `npm run verify:helper --
 --elevated` raises a real prompt to prove it; `npm run capture:system` records
 what those tools print, as the fixtures the parsers are tested against; and
 `npm run verify:system -- --elevated` measures the real drive end to end.
+`npm run verify:quarantine -- --elevated` makes a 64 MB virtual disk of its own,
+uses it as the quarantine drive, fills it and detaches it part way through a
+copy, and deletes it: the one program it runs elevated is
+`System32\diskpart.exe`, on scripts it writes itself. The drive type the
+quarantine card shows comes from a fixed PowerShell script given only a drive
+root such as `D:\`.
 
 The app ships with **two runtime dependencies**: one for auto-update, and
 `mammoth` for reading Word documents in the viewer. The second is a deliberate
@@ -1263,9 +1335,10 @@ Everything else, including the ZIP, Excel, PowerPoint, image and video readers,
 the charts and the tray icon, is written here. There are no binary assets in the
 repository; the icons are drawn in code.
 
-Test harnesses live in [`scripts/`](scripts/) — thirty-four suites in
+Test harnesses live in [`scripts/`](scripts/) — thirty-five suites in
 `npm test`, plus the Electron ones, covering the classification rules, the
-known apps' caches held to their real folders, the
+known apps' caches held to their real folders, moving files to another drive
+down to a folder swapped for a junction half way through, the
 candidate contract, the action pipeline, the map of the folder and what the
 window may ask of it, what two scans of a folder can honestly say changed, the
 journal (including two processes
@@ -1276,4 +1349,4 @@ against the released code, the translation dictionary, and an end-to-end run
 that boots the real application and reads its rendered interface back out.
 `npm run verify:restore` puts throwaway files back from the real Recycle Bin.
 `npm run shoot:lists`, `shoot:media`, `shoot:viewer`, `shoot:restore`,
-`shoot:system`, `shoot:treemap`, `shoot:changes`, `shoot:cloud` and `shoot:appcaches` take screenshots of the real screens.
+`shoot:system`, `shoot:treemap`, `shoot:changes`, `shoot:cloud`, `shoot:appcaches` and `shoot:quarantine` take screenshots of the real screens.

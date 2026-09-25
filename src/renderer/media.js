@@ -826,11 +826,17 @@ function syncCells() {
 // Beside the button, the sentence every screen's action carries: moving a
 // photograph to the Recycle Bin frees nothing until the bin is emptied.
 const mediaFrees = FreesBadge(false);
-$('media-delete').before(mediaFrees);
+pairUp(mediaFrees, $('media-delete'));
+// And beside "Move to D:" (B1), what that frees -- which depends on a setting.
+const mediaQuarantineFrees = FreesBadge(false, 'quarantine');
+pairUp(mediaQuarantineFrees, $('media-quarantine'));
 
 function updateSelection() {
   const count = media.selected.size;
   mediaFrees.hidden = count === 0;
+  mediaQuarantineFrees.hidden = count === 0;
+  $('media-quarantine').disabled = count === 0;
+  $('media-quarantine').hidden = count === 0;
   let bytes = 0;
   let synced = 0;
   for (const file of media.files) {
@@ -1251,7 +1257,8 @@ $('media-select-none').addEventListener('click', () => {
   renderGrid();
 });
 
-$('media-delete').addEventListener('click', async () => {
+// The same grid after either action: to the bin, or to another drive (B1).
+const onMediaAction = (kind) => async () => {
   await deleteSelected([...media.selected], (moved) => {
     const gone = new Set(moved.map((m) => m.path));
     media.files = media.files.filter((f) => !gone.has(f.path));
@@ -1262,8 +1269,10 @@ $('media-delete').addEventListener('click', async () => {
     media.focused = null;
     renderDetail(null);
     applyFilters();
-  }, { context: 'media' });
-});
+  }, { context: 'media', kind });
+};
+$('media-delete').addEventListener('click', onMediaAction('recycle'));
+$('media-quarantine').addEventListener('click', onMediaAction('quarantine'));
 
 $('ov-traits-more').addEventListener('click', () => {
   media.traitsExpanded = !media.traitsExpanded;

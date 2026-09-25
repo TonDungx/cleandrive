@@ -300,6 +300,31 @@ if (isHelper) {
       .journal.prune()
       .catch((err) => console.error('[journal] could not prune:', err.message));
 
+    // Files quarantined longer than the days in Settings (B1): said once a
+    // day at most, after the window has settled, and never acted on.
+    setTimeout(() => {
+      const svc = require('./services').services();
+      const notify = require('./lib/notify');
+      require('./lib/quarantine-notice')
+        .noteExpired({
+          journal: svc.journal,
+          settings: svc.settings,
+          stateFile: path.join(app.getPath('userData'), 'quarantine-notice.json'),
+          show: (n, days) =>
+            notify.show(
+              {
+                title: language.t('notify.quarantine.title', 'CleanDrive: files still in quarantine'),
+                body: language.t('notify.quarantine.body', '{n} file(s) have been in the quarantine folder longer than {days} days. Nothing is deleted — they are listed in Restore.', {
+                  n: n.toLocaleString(language.current()),
+                  days,
+                }),
+              },
+              () => revealWindow()
+            ),
+        })
+        .catch((err) => console.error('[quarantine] could not check for expired items:', err.message));
+    }, 15000).unref();
+
     // Deliberately only in the windowed branch. The scheduled run above never
     // reaches this line: a 2am maintenance task that silently replaced the
     // application binary is not something anyone asked for, and a headless

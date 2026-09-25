@@ -949,6 +949,15 @@
           })
         );
       }
+      if (map.level.removed && map.level.removed.deletedFiles > 0) {
+        lines.push(
+          t('map.movedAway', 'Moved to another drive since this scan and deleted here, so no longer drawn: {n} {files} ({size}), freed.', {
+            n: formatCount(map.level.removed.deletedFiles),
+            files: word(map.level.removed.deletedFiles, 'app.file', 'file', 'files'),
+            size: formatBytes(map.level.removed.deletedBytes),
+          })
+        );
+      }
       lines.push(
         view === 'map'
           ? t('map.hint', "Each tile is sized by what it holds. Files of 10 MB or more have tiles of their own; the rest of a folder's files share one. Click a folder to go into it, or right-click a tile for more.")

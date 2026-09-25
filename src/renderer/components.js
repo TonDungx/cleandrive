@@ -69,6 +69,20 @@
     const el = document.createElement('span');
     el.className = freesOnVolume ? 'frees-badge is-frees' : 'frees-badge is-not-freed';
     const word = () => {
+      if (kind === 'quarantine') {
+        // Another drive (B1) frees the space only when the original is
+        // deleted, which is a setting; otherwise the original is in the bin,
+        // on the drive it came from.
+        const frees = Boolean(root.Quarantine && root.Quarantine.deletesOriginals());
+        el.className = frees ? 'frees-badge is-frees' : 'frees-badge is-not-freed';
+        el.textContent = frees
+          ? t('frees.quarantineYes', 'Frees the space — the original is deleted')
+          : t('frees.quarantineBin', 'Original to the Recycle Bin — not freed yet');
+        el.title = frees
+          ? t('frees.quarantineYesHint', 'Each original is deleted once its copy on the other drive has been checked; that copy is then the only one.')
+          : t('frees.quarantineBinHint', 'The copy goes to the other drive and the original to the Recycle Bin, which is on the same drive as the original — so nothing is freed until the bin is emptied.');
+        return;
+      }
       if (kind === 'dehydrate') {
         // OneDrive frees it, after, and the app measures what it did -- so the
         // badge does not say "as soon as this finishes".
@@ -93,6 +107,7 @@
     // The action bars are built once, at load; the sentence beside their
     // button has to follow a change of language like everything else.
     if (typeof onLanguageChange === 'function') onLanguageChange(word);
+    if (kind === 'quarantine') document.addEventListener('quarantine-changed', word);
     return el;
   }
 
@@ -103,7 +118,8 @@
    * moves bytes between two places on the same drive, freeing nothing and
    * taking nothing, so its button carries no badge rather than a misleading one.
    */
-  const FREES = { recycle: false, restore: null, dehydrate: true };
+  // The quarantine's badge words itself from the settings; see FreesBadge.
+  const FREES = { recycle: false, restore: null, dehydrate: true, quarantine: false };
 
   /* ------------------------------------------------------------ action bar */
 
@@ -122,12 +138,25 @@
    * @param {Object<string, HTMLButtonElement>} options.buttons  one per action kind
    * @param {() => object[]} options.selected  the selected views
    */
+  /**
+   * A badge and the button it describes, kept together. With two actions on
+   * one bar (B1), a narrow window wrapped both sentences to the end and left
+   * nobody able to tell which one went with which button.
+   */
+  function pairUp(badge, button) {
+    const pair = document.createElement('span');
+    pair.className = 'action-pair';
+    button.before(pair);
+    pair.append(badge, button);
+    return pair;
+  }
+
   function ActionBar({ root, readout, buttons, selected }) {
     const badges = {};
     for (const [kind, button] of Object.entries(buttons)) {
       if (FREES[kind] === null) continue;
       badges[kind] = FreesBadge(FREES[kind] === true, kind);
-      button.before(badges[kind]);
+      pairUp(badges[kind], button);
     }
 
     function update() {
@@ -480,6 +509,7 @@
   root.EvidencePanel = EvidencePanel;
   root.evidenceText = evidenceText;
   root.FreesBadge = FreesBadge;
+  root.pairUp = pairUp;
   root.ActionBar = ActionBar;
   root.setActionRunning = setActionRunning;
   root.CandidateList = CandidateList;

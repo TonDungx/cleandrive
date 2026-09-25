@@ -105,7 +105,9 @@ class TrashLedger {
       if (!session) continue;
       if (session.kind === 'purge' || session.kind === 'restore') {
         settled.add(entryKey(line.from, Date.parse(line.recycledAt)));
-      } else if (session.kind === 'recycle') {
+      } else if (session.kind === 'recycle' || (session.kind === 'quarantine' && line.original === 'bin')) {
+        // A quarantined file's original goes to the bin like any other, and
+        // leaves it the same way: through the four-condition purge (B1).
         recycled.push({
           path: path.resolve(line.from),
           size: Number.isFinite(line.bytes) ? line.bytes : 0,

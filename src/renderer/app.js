@@ -328,19 +328,19 @@ const bars = {
   largest: ActionBar({
     root: $('large-actionbar'),
     readout: $('large-selection'),
-    buttons: { recycle: $('delete-large') },
+    buttons: { quarantine: $('quarantine-large'), recycle: $('delete-large') },
     selected: () => selectedOnUsage(),
   }),
   cleanup: ActionBar({
     root: $('cleanup-actionbar'),
     readout: $('cleanup-selection'),
-    buttons: { recycle: $('delete-cleanup') },
+    buttons: { quarantine: $('quarantine-cleanup'), recycle: $('delete-cleanup') },
     selected: () => selectedIn(state.cleanup && state.cleanup.groups, state.selectedCleanup),
   }),
   dupes: ActionBar({
     root: $('dupes-actionbar'),
     readout: $('selection-status'),
-    buttons: { recycle: $('delete-dupes') },
+    buttons: { quarantine: $('quarantine-dupes'), recycle: $('delete-dupes') },
     selected: () => selectedIn(state.dupes && state.dupes.groups, state.selectedDupes),
   }),
 };
@@ -441,7 +441,8 @@ function linkButton(label, handler, extra = '') {
   return btn;
 }
 
-$('delete-large').addEventListener('click', async () => {
+// The same list after either action: to the bin, or to another drive (B1).
+const onLargestAction = (kind) => async () => {
   await deleteSelected([...state.selectedLarge], (moved) => {
     // What moved leaves the list, as it does on every other screen. It used to
     // stay, ticked off, looking as though it was still on the disk.
@@ -453,8 +454,10 @@ $('delete-large').addEventListener('click', async () => {
       renderLargest(state.scan.largestFiles);
     }
     bars.largest.update();
-  });
-});
+  }, { kind });
+};
+$('delete-large').addEventListener('click', onLargestAction('recycle'));
+$('quarantine-large').addEventListener('click', onLargestAction('quarantine'));
 
 /* ------------------------------------------------------------------ cleanup */
 
@@ -672,7 +675,7 @@ $('cleanup-select-none').addEventListener('click', () => {
   updateCleanupSelection();
 });
 
-$('delete-cleanup').addEventListener('click', async () => {
+const onCleanupAction = (kind) => async () => {
   await deleteSelected([...state.selectedCleanup], (moved) => {
     const gone = new Set(moved.map((m) => m.path));
     state.cleanup.groups = state.cleanup.groups
@@ -689,8 +692,10 @@ $('delete-cleanup').addEventListener('click', async () => {
     state.cleanup.reviewBytes = total('review');
 
     renderCleanup(state.cleanup, state.accessTimes);
-  });
-});
+  }, { kind });
+};
+$('delete-cleanup').addEventListener('click', onCleanupAction('recycle'));
+$('quarantine-cleanup').addEventListener('click', onCleanupAction('quarantine'));
 
 /* ------------------------------------------------------------------ duplicates */
 
@@ -913,7 +918,7 @@ function syncCheckboxes() {
   for (const list of lists.dupes) list.sync();
 }
 
-$('delete-dupes').addEventListener('click', async () => {
+const onDupesAction = (kind) => async () => {
   await deleteSelected([...state.selectedDupes], (moved) => {
     const gone = new Set(moved.map((m) => m.path));
     state.selectedDupes.clear();
@@ -932,8 +937,10 @@ $('delete-dupes').addEventListener('click', async () => {
     state.dupes.totalGroups = state.dupes.groups.length;
     state.dupes.reclaimableBytes = state.dupes.groups.reduce((n, g) => n + g.wastedBytes, 0);
     renderDupes(state.dupes);
-  });
-});
+  }, { kind });
+};
+$('delete-dupes').addEventListener('click', onDupesAction('recycle'));
+$('quarantine-dupes').addEventListener('click', onDupesAction('quarantine'));
 
 /* ------------------------------------------------------------------ delete */
 
@@ -956,7 +963,18 @@ function formatDuration(ms) {
 
 /* ---- the shared progress panel, used by every delete path ---- */
 
-const DELETE_BUTTONS = ['delete-large', 'delete-dupes', 'delete-cleanup', 'media-delete', 'restore-selected', 'cloud-dehydrate'];
+const DELETE_BUTTONS = [
+  'delete-large',
+  'delete-dupes',
+  'delete-cleanup',
+  'media-delete',
+  'restore-selected',
+  'cloud-dehydrate',
+  'quarantine-large',
+  'quarantine-cleanup',
+  'quarantine-dupes',
+  'media-quarantine',
+];
 
 const progressPanel = {
   show(title) {
@@ -1029,9 +1047,30 @@ const progressPanel = {
       return;
     }
 
+    // Copying to another drive (B1) is paced by bytes, not by files: one ISO
+    // is most of the time.
+    if (p.phase === 'copying') {
+      $('dp-title').textContent = t('quarantine.progressTitle', 'Copying to {drive} and checking each copy', {
+        drive: window.Quarantine ? window.Quarantine.drive() : '',
+      });
+      $('dp-count').textContent = t('delete.progress', '{done} of {total} · {moved} of {size}', {
+        done: formatCount(p.done),
+        total: formatCount(p.total),
+        moved: formatBytes(p.freedBytes),
+        size: formatBytes(p.totalBytes),
+      });
+      $('dp-rate').textContent = p.bytesPerSec > 0 ? t('quarantine.rate', '{size}/s', { size: formatBytes(p.bytesPerSec) }) : '';
+      $('dp-eta').textContent = p.etaMs != null ? formatDuration(p.etaMs) : '';
+      if (p.currentPath) $('dp-current').textContent = elide(p.currentPath, 78);
+      $('dp-fill').style.width = `${p.totalBytes > 0 ? Math.min(100, (p.freedBytes / p.totalBytes) * 100) : 0}%`;
+      return;
+    }
+
     $('dp-title').textContent =
       p.phase === 'restoring'
-        ? t('restore.progressTitle', 'Putting back from the Recycle Bin')
+        ? p.from && p.from !== 'bin'
+          ? t('restore.progressTitleAny', 'Putting back')
+          : t('restore.progressTitle', 'Putting back from the Recycle Bin')
         : t('delete.title', 'Moving to Recycle Bin');
     // `freedBytes` in the progress frames is what has *moved*: nothing is
     // freed until the bin is emptied, and the words here say moved.
@@ -1079,6 +1118,10 @@ $('dp-cancel').addEventListener('click', async () => {
  */
 async function deleteSelected(paths, onDone, options = {}) {
   if (paths.length === 0) return;
+  if (options.kind === 'quarantine') {
+    const { kind, ...rest } = options;
+    return quarantineSelected(paths, onDone, rest);
+  }
 
   progressPanel.show(t('delete.checking', 'Checking what can be deleted'));
   let result;
@@ -1157,6 +1200,79 @@ async function deleteSelected(paths, onDone, options = {}) {
   if (result.failed.length) {
     console.warn('Skipped during delete:', result.failed);
   }
+}
+
+/**
+ * Move files to the quarantine folder on another drive (B1).
+ *
+ * The receipt says where they went and what happened to the originals,
+ * because that is what decides whether anything was freed: an original in
+ * the Recycle Bin is still on its drive.
+ */
+async function quarantineSelected(paths, onDone, options = {}) {
+  if (!window.Quarantine || !window.Quarantine.ready()) {
+    toast(t('quarantine.chooseFirst', 'Choose where moved files go first — Settings, “Move to another drive”.'), true);
+    window.Quarantine && window.Quarantine.showCard();
+    return;
+  }
+
+  progressPanel.show(t('quarantine.checking', 'Checking what can be moved'));
+  let result;
+  try {
+    result = unwrap(await api.quarantine(paths, options), t('quarantine.label', 'Move to another drive'));
+  } finally {
+    progressPanel.hide();
+  }
+  if (!result) return;
+
+  const moved = result.moved.length;
+  const drive = window.Quarantine.drive();
+  if (moved > 0 && !result.dryRun && window.SpaceMap) window.SpaceMap.refresh();
+  if (moved > 0) window.Quarantine.refresh();
+
+  // What the originals came to: in the bin frees nothing yet; deleted frees it.
+  const originals = () =>
+    result.freedBytes > 0
+      ? t('quarantine.freed', 'the originals are deleted, {size} freed', { size: formatBytes(result.freedBytes) })
+      : t('quarantine.inBin', 'the originals are in the Recycle Bin, not freed until it is emptied');
+
+  if (result.cancelled) {
+    if (moved > 0) {
+      toast(
+        t('quarantine.stopped', 'Stopped. {n} {items} ({size}) already on {drive} — {originals} · {left} left where they were.', {
+          n: formatCount(moved),
+          items: word(moved, 'app.item', 'item', 'items'),
+          size: formatBytes(result.movedBytes),
+          drive,
+          originals: originals(),
+          left: formatCount(result.remaining || 0),
+        })
+      );
+      onDone(result.moved);
+    } else {
+      toast(t('quarantine.cancelled', 'Cancelled — nothing was moved.'));
+    }
+    return;
+  }
+
+  if (moved > 0) {
+    const skipped = result.failed.length
+      ? ` · ${t('quarantine.skipped', '{n} left where they were', { n: formatCount(result.failed.length) })}`
+      : '';
+    toast(
+      t('quarantine.done', 'Moved {n} {items} ({size}) to {drive}, each copy checked — {originals}', {
+        n: formatCount(moved),
+        items: word(moved, 'app.item', 'item', 'items'),
+        size: formatBytes(result.movedBytes),
+        drive,
+        originals: originals(),
+      }) + skipped
+    );
+    onDone(result.moved);
+  } else {
+    toast(t('quarantine.nothing', 'Nothing was moved. {reason}', { reason: result.failed[0] ? result.failed[0].error : '' }), true);
+  }
+  if (result.failed.length) console.warn('Left where they were:', result.failed);
 }
 
 /* ------------------------------------------------------- language changes */

@@ -86,6 +86,10 @@ async function inspect(journal, { only = null, deps = {} } = {}) {
         size: Number.isFinite(line.bytes) ? line.bytes : 0,
         trashedAt: Date.parse(line.t),
         mtimeMs: line.mtime ? Date.parse(line.mtime) : null,
+        // A quarantine's copy on the other drive, and what it was checked against.
+        stored: session.kind === 'quarantine' && typeof line.to === 'string' ? line.to : null,
+        sha256: typeof line.sha256 === 'string' ? line.sha256 : null,
+        original: line.original || null,
       });
     });
   }
@@ -112,17 +116,26 @@ async function inspect(journal, { only = null, deps = {} } = {}) {
   return { sessions, records, status };
 }
 
-const STATES = ['inBin', 'restored', 'purged', 'gone', 'unavailable'];
+const STATES = ['inBin', 'inQuarantine', 'restored', 'purged', 'gone', 'unavailable'];
+
+/** The states an item can be put back from: the Recycle Bin, or a quarantine folder. */
+const RESTORABLE = new Set(['inBin', 'inQuarantine']);
 
 /** One session as the Restore Center lists it: what happened, and where it all is now. */
 function summarise(session, records, status) {
   const tally = Object.fromEntries(STATES.map((s) => [s, 0]));
   let restorableBytes = 0;
+  let restorableCount = 0;
+  let expired = 0;
   let bytes = 0;
   for (const record of records) {
     const st = status.get(record.id);
     if (st) tally[st.state] = (tally[st.state] || 0) + 1;
-    if (st && st.state === 'inBin') restorableBytes += record.size;
+    if (st && RESTORABLE.has(st.state)) {
+      restorableBytes += record.size;
+      restorableCount += 1;
+    }
+    if (st && st.expired) expired += 1;
     bytes += record.size;
   }
   const end = session.end || null;
@@ -139,7 +152,11 @@ function summarise(session, records, status) {
     freedOnSource: end ? end.freedOnSource || 0 : 0,
     undoable: Boolean(undoFor(session.kind)),
     tally: records.length ? tally : null,
-    restorable: { count: tally.inBin, bytes: restorableBytes },
+    restorable: { count: restorableCount, bytes: restorableBytes },
+    // Quarantined past the days set in Settings. Only said, never acted on.
+    expired,
+    // The drive a quarantine's copies went to, for its title.
+    drive: session.kind === 'quarantine' && records[0] && records[0].stored ? path.parse(records[0].stored).root.replace(/\\$/, '') : null,
   };
 }
 
@@ -156,6 +173,29 @@ async function listSessions(journal, { deps } = {}) {
   return sessions
     .filter((s) => s.kind !== 'handoff' && s.kind !== 'dehydrate')
     .map((s) => summarise(s, bySession.get(s.id) || [], status));
+}
+
+/**
+ * What the quarantine folders hold on the app's behalf: how many copies are
+ * still there, and how many have been there longer than `retentionDays`.
+ * Only quarantine sessions are located, so nothing here reads the bin.
+ */
+async function quarantined(journal, { retentionDays = null, deps = {} } = {}) {
+  const sessions = (await journal.sessions()).filter((s) => s.kind === 'quarantine');
+  const only = new Set(sessions.flatMap((s) => s.items.map((_, i) => `${s.id}:${i}`)));
+  if (only.size === 0) return { kept: 0, expired: 0, bytes: 0 };
+  const { records, status } = await inspect(journal, { only, deps: { ...deps, retentionDays } });
+  let kept = 0;
+  let expired = 0;
+  let bytes = 0;
+  for (const record of records) {
+    const st = status.get(record.id);
+    if (!st || st.state !== 'inQuarantine') continue;
+    kept += 1;
+    bytes += record.size;
+    if (st.expired) expired += 1;
+  }
+  return { kept, expired, bytes };
 }
 
 /** One session's items and where each is now. For `journal:items`. */
@@ -178,6 +218,8 @@ async function listItems(journal, sessionId, { deps } = {}) {
       to: st.to || null,
       stillThere: st.stillThere === true,
       existsAtOrigin: st.existsAtOrigin === true,
+      stored: st.stored || null,
+      expired: st.expired === true,
     };
   });
 }
@@ -228,15 +270,24 @@ const say = {
   folderInTheWay: () => i18n.t('restore.why.folderInTheWay', 'A folder is in the way, and folders are never moved to the bin'),
   displaceFailed: () => i18n.t('restore.why.displaceFailed', 'The file in the way could not be moved to the Recycle Bin'),
   failed: () => i18n.t('restore.why.failed', 'Could not put it back'),
+  // A quarantine's items are on another drive, not in the bin (B1).
+  goneZone: () => i18n.t('restore.why.goneZone', 'No longer in the quarantine folder'),
+  unavailableZone: () => i18n.t('restore.why.unavailableZone', 'The drive the quarantine folder is on is not connected'),
+  hash: () => i18n.t('restore.why.hash', 'The copy no longer matches what was quarantined, so it was not put back'),
 };
 
 /** The words for a state an item is in, when that state means "cannot be put back". */
-const whyNot = (state) => (say[state] || say.gone)();
+function whyNot(state, kind) {
+  if (kind === 'quarantine' && state === 'gone') return say.goneZone();
+  if (kind === 'quarantine' && state === 'unavailable') return say.unavailableZone();
+  return (say[state] || say.gone)();
+}
 
-/** What a failed put-back says, from the code `recyclebin.putBack` returned. */
-function putBackError(result) {
+/** What a failed put-back says, from the code `putBack` returned. */
+function putBackError(result, kind) {
   if (result && result.code === 'EEXIST') return say.inTheWay();
-  if (result && result.code === 'ENOENT') return say.gone();
+  if (result && result.code === 'EHASH') return say.hash();
+  if (result && result.code === 'ENOENT') return kind === 'quarantine' ? say.goneZone() : say.gone();
   return say.failed();
 }
 
@@ -303,9 +354,9 @@ module.exports = {
     for (const record of records) {
       if (token.cancelled) break;
       const st = status.get(record.id);
-      if (!st || st.state !== 'inBin') {
+      if (!st || !RESTORABLE.has(st.state)) {
         const state = st ? st.state : 'gone';
-        failed.push({ path: record.path, error: whyNot(state), code: state });
+        failed.push({ path: record.path, error: whyNot(state, record.kind), code: state });
         continue;
       }
       const refusal = await refuseTarget(record.path);
@@ -336,6 +387,10 @@ module.exports = {
       kind: 'restore',
       count: planned.plan.length,
       bytes: planned.totalBytes,
+      // Where they come back from, for the dialog's words: the bin, or a
+      // quarantine folder on another drive, copied back and checked.
+      fromBin: planned.plan.filter((item) => item.kind !== 'quarantine').length,
+      fromQuarantine: planned.plan.filter((item) => item.kind === 'quarantine').length,
       conflicts: planned.conflicts,
       conflictFolders: planned.conflictFolders,
       refused: planned.failed.length,
@@ -364,6 +419,9 @@ module.exports = {
     let movedBytes = 0;
     let recordError = null;
     const totalBytes = planned.plan.reduce((n, item) => n + item.size, 0);
+    // For the progress panel's title: out of the bin, or back from another drive.
+    const quarantined = planned.plan.filter((item) => item.kind === 'quarantine').length;
+    const from = quarantined === 0 ? 'bin' : quarantined === planned.plan.length ? 'quarantine' : 'mixed';
 
     const report = (currentPath) => {
       if (!ctx || !ctx.onProgress) return;
@@ -372,6 +430,7 @@ module.exports = {
       const ratePerSec = elapsedMs > 0 ? (done / elapsedMs) * 1000 : 0;
       ctx.onProgress({
         phase: 'restoring',
+        from,
         done,
         total: planned.plan.length,
         freedBytes: movedBytes,
@@ -452,7 +511,7 @@ module.exports = {
           // to the bin and then finding nothing to put in its place would
           // leave them with less than they started with.
           if (!(await undo.ready(item.located))) {
-            failed.push({ path: item.path, error: say.gone(), code: 'gone' });
+            failed.push({ path: item.path, error: whyNot('gone', item.kind), code: 'gone' });
             reportThrottled(item.path);
             continue;
           }
@@ -479,7 +538,7 @@ module.exports = {
         }
 
         if (!result || !result.ok) {
-          failed.push({ path: item.path, error: putBackError(result), code: result ? result.code : 'EFAIL' });
+          failed.push({ path: item.path, error: putBackError(result, item.kind), code: result ? result.code : 'EFAIL' });
           reportThrottled(item.path);
           continue;
         }
@@ -525,6 +584,7 @@ module.exports = {
   inspect,
   listSessions,
   listItems,
+  quarantined,
   refuseTarget,
   renamed,
 };

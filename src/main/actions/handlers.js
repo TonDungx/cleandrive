@@ -30,4 +30,5 @@ module.exports = Object.freeze({
   restore: require('./restore'),
   handoff: require('./handoff'),
   dehydrate: require('./dehydrate'),
+  quarantine: require('./quarantine'),
 });

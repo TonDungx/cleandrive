@@ -41,6 +41,9 @@ const INVOKE = Object.freeze([
   'journal:items',
   'journal:restore',
 
+  'quarantine:status',
+  'quarantine:choose',
+
   'shell:reveal',
   'shell:open',
 

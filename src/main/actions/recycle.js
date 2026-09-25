@@ -187,4 +187,7 @@ module.exports = {
   },
 
   undo,
+
+  // The quarantine applies the same rule to what it copies away.
+  leaveOpenApps,
 };

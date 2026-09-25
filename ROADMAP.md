@@ -126,7 +126,7 @@ Thời lượng tương đối chỉ mang tính minh hoạ. [Speculation] Tôi k
 | A1 | Bóc tách dung lượng hệ thống | P1 | ✅ Đã code xong (2026-09-24) |
 | A3 | Treemap / Sunburst | P1 | ✅ Đã code xong (2026-09-24) — chỉ Treemap, Sunburst đã bỏ |
 | A5 | Snapshot diff | P1 | ✅ Đã code xong (2026-09-25) — lịch chụp hằng tuần dời sang G3 |
-| B1 | Quarantine sang ổ khác | P1 | |
+| B1 | Quarantine sang ổ khác | P1 | ✅ Đã code xong (2026-09-25) — đã kiểm trên D: thật và trên ổ ảo VHDX thật (đầy, rút ổ giữa chừng) |
 | B3 | OneDrive "Free up space" | P1 | ✅ Đã code xong (2026-09-25) — đã kiểm trên OneDrive thật |
 | D4 | Cache app phổ biến | P1 | ✅ Đã code xong (2026-09-25) — 6 app đã kiểm trên máy này; các app còn lại chưa đưa vào |
 | I1 | Restore Center | P1 | ✅ Đã code xong (2026-09-24) |
@@ -783,6 +783,20 @@ helper.request
 **Tự động:** được, nếu người dùng chọn `quarantine` làm hành động của một hồ sơ tự động (G4) **và** vùng quarantine đang truy cập được.
 
 **Kiểm thử:** `scripts/action-quarantine.mjs`: rút ổ đích giữa chừng, đầy ổ đích, hash lệch, đường dẫn gốc bị thay bằng junction giữa chừng.
+
+> **✅ Đã code xong (2026-09-25).** Code ở `src/main/lib/quarantine-zone.js` (tạo và kiểm vùng, dung lượng, tên do app sinh, dọn bản dở), handler `src/main/actions/quarantine.js` (plan, apply, `undo`), `lib/quarantine-notice.js` (nhắc hết hạn), cùng các chỗ nối: `execute.js` (truyền `sessionId`), `journal.js` (trường `sha256`, `original`), `ledger.js`, `restore.js` (trạng thái `inQuarantine`, `quarantined()`), `ipc.js` (`quarantineDeps`, `quarantine:status`, `quarantine:choose`, `confirmQuarantineText`), settings v4, `main.js`. Giao diện: card `src/renderer/quarantine.js` trong Settings, nút "Chuyển sang D:" trên bốn thanh thao tác, màn Restore. Harness: `scripts/test-quarantine.js` (74 kiểm tra; vùng cách ly thật trên D:, Thùng rác giả), `scripts/verify-quarantine.js --elevated` (ổ ảo VHDX 64 MB thật, 13 kiểm tra, người dùng tự chạy và bấm UAC), 15 kiểm tra mới trong `smoke.js` (D: thật, Thùng rác thật, file thử của harness), ảnh chụp `npm run shoot:quarantine`. Khác với đặc tả ở trên:
+> - **Bản gốc vào Thùng rác theo mặc định** (đã chốt), nên badge cạnh nút **không** ghi "Giải phóng ổ C" như đặc tả. Nó đổi theo tuỳ chọn: "Bản gốc vào Thùng rác — chưa giải phóng", hoặc "Giải phóng dung lượng — bản gốc bị xoá". Biên lai và Trends tính đúng từng mục: bản gốc nào bị xoá thì mới tính là đã giải phóng.
+> - **Dòng journal ghi sau khi xử lý bản gốc**, không ghi trước khi đưa vào Thùng rác như bước 2 của đặc tả, vì journal chỉ ghi điều đã xảy ra (quy tắc 4.3). Trước bước đó, `manifest.jsonl` trên chính ổ cách ly đã ghi bản chép nào là của tệp gốc nào (thêm so với đặc tả), nên ổ vẫn tự giải thích được nếu máy kia không còn.
+> - **Đo được trên VHDX thật:** ổ bị rút giữa lúc chép thì bản chép dở **vẫn nằm lại** khi gắn ổ lại. Vì vậy bản chép được ghi dưới tên `….partial`, chỉ đổi sang tên thật sau khi đã đọc lại và khớp SHA-256. Lần chuyển sau sẽ dọn các `.partial` (chỉ là bản dở, bản gốc vẫn nguyên). Lần chạy đầu phát hiện ra việc này; lần chạy thứ ba xác nhận cách sửa.
+> - **Tệp OneDrive theo trạng thái** (đã chốt): chỉ trên đám mây thì từ chối; chưa đồng bộ thì cho, hộp thoại nói bản trên ổ kia là bản đầy đủ duy nhất; đã đồng bộ thì cho, kèm cảnh báo xoá trên mọi thiết bị và gợi ý "Chỉ giữ trên đám mây". Đo lúc này: 12 tệp / 8,5 GB chưa đồng bộ (cloud đầy), đều mang cờ placeholder, nên không phân biệt được "chưa từng tải lên" với "đã tải rồi sửa".
+> - **Hết hạn:** thông báo lúc mở app, tối đa một lần mỗi ngày, cùng con số trên card Settings và màn Restore. Không đặt ở tray như đặc tả, vì tray chỉ có khi bật theo dõi ổ đĩa (mặc định tắt). Không bao giờ tự xoá. Journal giữ lại mọi tháng có quarantine, dù cũ hơn 13 tháng.
+> - **Nơi có nút:** Disk usage (tệp lớn và bản đồ), Duplicates (trừ thành phần của chương trình), Photos & video, và các nhóm `review` của "Nên xoá gì". Không có trên nhóm `safe` (tạm, cache, cache app).
+> - **Vùng cách ly:** chỉ ổ cục bộ; không nhận ổ mạng, không nhận thư mục đồng bộ cloud. Phải là thư mục thật tên `CleanDrive Quarantine` có README (junction bị từ chối). "Khác ổ" so bằng `stat.dev`, đo được chính là số serial của volume. Loại ổ lấy từ .NET DriveInfo qua PowerShell (script cố định, đường dẫn tuyệt đối). [Unverified] Ổ USB loại HDD có thể tự báo là `Fixed`. Kiểm trước khi chép: đủ chỗ cho cả lô cộng 1 GB. Dung lượng tối đa mặc định là 0 (không giới hạn).
+> - **Khôi phục từ vùng cách ly:** chép về, đối chiếu với SHA-256 lúc cách ly, rồi mới gỡ bản trên ổ kia. Bản không còn khớp thì không khôi phục. Bản gốc còn trong Thùng rác được để yên, và không còn là việc của purge.
+> - **Xoá bản gốc** (tuỳ chọn, tắt sẵn): đo được là `unlink` của Node trên Windows tự gỡ thuộc tính read-only rồi xoá. Nhánh "xoá hỏng thì đưa vào Thùng rác" chưa dựng được tình huống thật để kiểm, vì tệp bị khoá thì cũng không vào Thùng rác được.
+> - Chưa chạy tự động (G4 chưa có): `unattendedEligible: false`. Harness là `.js` CommonJS, không phải `.mjs`. Settings lên v4. Vùng cách ly chỉ đặt được qua `quarantine:choose`; `settings:save` từ cửa sổ bỏ qua trường `zone`.
+> - **Sửa kèm:** (a) ở cửa sổ hẹp, câu "giải phóng hay không" bị dồn xuống cuối thanh, tách khỏi nút của nó; giờ mỗi câu đi cùng nút (`pairUp`). (b) Ghi chú của bản đồ thư mục phân biệt tệp vào Thùng rác với bản gốc đã bị xoá. (c) Tiêu đề hộp thoại và bảng tiến độ khi khôi phục không còn nói "từ Thùng rác" với mục đến từ ổ khác.
+> - Khi harness VHDX cố ý tháo ổ, Windows Explorer hiện hộp thoại riêng "Z:\ is unavailable"; đó là Explorer, bấm OK là đóng.
 
 ---
 

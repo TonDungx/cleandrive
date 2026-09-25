@@ -47,7 +47,7 @@ function toCandidate(record, context) {
     // The classifier lists the deciding fact first and the facts that support
     // it after, so position is rank.
     evidence: origin.evidence.map((sentence, i) => ({ rank: i + 1, ...sentence })),
-    actions: ['recycle'],
+    actions: ['recycle', 'quarantine'],
     unattendedEligible: false,
     meta: {
       name: record.name,

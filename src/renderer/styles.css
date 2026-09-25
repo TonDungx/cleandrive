@@ -2283,10 +2283,21 @@ main {
   .evidence-row { padding-left: 10px; }
 }
 
+/* A button and the sentence about what it frees, which never part. */
+.action-pair {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+.action-pair:not(:has(> :not([hidden]))) { display: none; }
+
 /*
- * Where the bar cannot fit its sentence and its button on one line, the
- * sentence about freeing goes underneath rather than off the edge. It was
- * measured going off the edge at 700px, taking the delete button with it.
+ * Where the bar cannot fit everything on one line, each action -- its
+ * sentence and its button -- takes a line of its own rather than going off
+ * the edge. It was measured going off the edge at 700px, taking the delete
+ * button with it; and with two actions (B1), sending both sentences to the
+ * end left them beside neither button.
  */
 @media (max-width: 1000px) {
   .actionbar:has(.frees-badge:not([hidden])) {
@@ -2296,10 +2307,9 @@ main {
     border-radius: var(--radius);
   }
 
-  .actionbar .frees-badge {
-    order: 10;
+  .actionbar:has(.frees-badge:not([hidden])) .action-pair {
     flex-basis: 100%;
-    text-align: right;
+    justify-content: flex-end;
   }
 }
 

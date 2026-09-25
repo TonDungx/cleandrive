@@ -37,8 +37,11 @@ const { ALLOWED_ADVISOR_NAMES } = require('../automatic/allowed-categories');
  *   1 -> 2   `snapshots`: how many folder snapshots to keep (roadmap 0.6/0.7)
  *   2 -> 3   known apps' caches (D4) join `autoClean.categories` wherever
  *            `gpucache` was on -- see the migration for why
+ *   3 -> 4   `quarantine`: where files moved to another drive go, how long
+ *            before they are called expired, and whether originals are
+ *            deleted outright (B1)
  */
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 
 const MIGRATIONS = Object.freeze([
   {
@@ -65,6 +68,19 @@ const MIGRATIONS = Object.freeze([
       if (!categories || !categories.some((c) => String(c).toLowerCase() === 'gpucache')) return { ...raw, version: 3 };
       const added = APP_CATEGORIES.filter((c) => !categories.includes(c));
       return { ...raw, version: 3, autoClean: { ...auto, categories: [...categories, ...added] } };
+    },
+  },
+  {
+    from: 3,
+    to: 4,
+    migrate(raw) {
+      // Additive, and off: no folder is chosen, and nothing is ever deleted
+      // outright until somebody switches that on.
+      return {
+        ...raw,
+        version: 4,
+        quarantine: { zone: null, retentionDays: 30, maxGB: 0, deleteOriginal: false, ...(raw.quarantine || {}) },
+      };
     },
   },
 ]);
@@ -145,7 +161,7 @@ const THEMES = ['system', 'light', 'dark'];
 const LANGUAGES = ['system', ...i18n.CODES];
 
 /** The top-level groups `patch` merges one level into. */
-const SECTIONS = ['autoClean', 'purge', 'monitor', 'appearance', 'updates', 'trends', 'snapshots'];
+const SECTIONS = ['autoClean', 'purge', 'monitor', 'appearance', 'updates', 'trends', 'snapshots', 'quarantine'];
 
 /** Hard ceilings. These are not preferences -- they bound the blast radius. */
 const LIMITS = {
@@ -167,6 +183,11 @@ const LIMITS = {
   // recent one, or the next scan would have nothing to be compared with.
   snapshotKeepRecent: { min: 1, max: 100, fallback: 12 },
   snapshotKeepMonthly: { min: 0, max: 60, fallback: 12 },
+  // Days before a quarantined file is called expired -- which is only said,
+  // never acted on -- and the most the folder may hold, in GB (0: no limit
+  // but the drive's own room).
+  quarantineRetentionDays: { min: 1, max: 365, fallback: 30 },
+  quarantineMaxGB: { min: 0, max: 100000, fallback: 0 },
   roots: 32,
   whitelist: 256,
   skipIfRunning: 64,
@@ -266,6 +287,17 @@ function defaults() {
       // few hundred kilobytes each for a home folder.
       keepRecent: LIMITS.snapshotKeepRecent.fallback,
       keepMonthly: LIMITS.snapshotKeepMonthly.fallback,
+    },
+    quarantine: {
+      // The `CleanDrive Quarantine` folder on another drive, once somebody has
+      // chosen where. Only `quarantine:choose` sets it, after checking it.
+      zone: null,
+      retentionDays: LIMITS.quarantineRetentionDays.fallback,
+      maxGB: LIMITS.quarantineMaxGB.fallback,
+      // Off by default (decided 2026-09-24). With it off the original goes to
+      // the Recycle Bin, which frees nothing on its drive until the bin is
+      // emptied; with it on the copy on the other drive is the only one left.
+      deleteOriginal: false,
     },
     updates: {
       // On by default. This is distributed to people with no support channel,
@@ -614,6 +646,29 @@ function coerceSettings(input, { minMinutes = 1 } = {}) {
     ),
   };
 
+  const rawQuarantine = isObject(raw.quarantine) ? raw.quarantine : {};
+  let zone = null;
+  if (typeof rawQuarantine.zone === 'string' && rawQuarantine.zone.trim() !== '') {
+    if (path.isAbsolute(rawQuarantine.zone.trim())) zone = path.resolve(rawQuarantine.zone.trim());
+    else warnings.push(`quarantine.zone: "${rawQuarantine.zone}" is not absolute, ignored`);
+  }
+  const quarantine = {
+    zone,
+    retentionDays: clampInt(
+      rawQuarantine.retentionDays === undefined ? base.quarantine.retentionDays : rawQuarantine.retentionDays,
+      LIMITS.quarantineRetentionDays,
+      'quarantine.retentionDays',
+      warnings
+    ),
+    maxGB: clampInt(
+      rawQuarantine.maxGB === undefined ? base.quarantine.maxGB : rawQuarantine.maxGB,
+      LIMITS.quarantineMaxGB,
+      'quarantine.maxGB',
+      warnings
+    ),
+    deleteOriginal: bool(rawQuarantine.deleteOriginal, base.quarantine.deleteOriginal),
+  };
+
   return {
     settings: {
       version: SCHEMA_VERSION,
@@ -624,6 +679,7 @@ function coerceSettings(input, { minMinutes = 1 } = {}) {
       updates,
       trends,
       snapshots,
+      quarantine,
     },
     warnings,
   };
