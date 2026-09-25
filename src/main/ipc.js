@@ -68,6 +68,15 @@ function setCloudDepsForHarness(deps) {
   cloudDeps = deps || null;
 }
 
+/**
+ * Where a harness keeps the "AppData" its known-app caches (D4) live in, and
+ * what it says is running. The app never sets these.
+ */
+let appCacheHarness = null;
+function setAppCacheHarness(harness) {
+  appCacheHarness = harness || null;
+}
+
 /* ---- the System screen's state ------------------------------------------- */
 
 /**
@@ -270,7 +279,18 @@ function register() {
         const collected = await analyzers.collect(
           'scan',
           // cloudFiles: which OneDrive files could be made online-only (B3).
-          { root: folder, options: { collectTree: true, cloudFiles: true }, deps: cloudDeps ? { cloud: cloudDeps } : undefined },
+          {
+            root: folder,
+            options: {
+              collectTree: true,
+              cloudFiles: true,
+              ...(appCacheHarness && appCacheHarness.env ? { appCacheEnv: appCacheHarness.env } : {}),
+            },
+            deps: {
+              ...(cloudDeps ? { cloud: cloudDeps } : {}),
+              ...(appCacheHarness && appCacheHarness.runningProcessNames ? { runningProcessNames: appCacheHarness.runningProcessNames } : {}),
+            },
+          },
           { token, onProgress: send, can: licenseState.canNow() }
         );
         // The tree stays in this process: the snapshot store keeps it, and the
@@ -296,6 +316,7 @@ function register() {
               complete: !summary.cancelled,
               scannedAt: summary.scannedAt,
               accessTimes: summary.accessTimes,
+              openApps: summary.openApps,
             }),
           };
         }
@@ -394,7 +415,12 @@ function register() {
             can: licenseState.canNow(),
             source: 'manual',
             runId: 'manual',
-            deps: kind === 'dehydrate' && cloudDeps ? cloudDeps : undefined,
+            deps:
+              kind === 'dehydrate' && cloudDeps
+                ? cloudDeps
+                : kind === 'recycle' && appCacheHarness
+                  ? { appCacheEnv: appCacheHarness.env, runningProcessNames: appCacheHarness.runningProcessNames }
+                  : undefined,
             // Every item is journalled as it moves. Nothing is purged because
             // of that -- the purge has its own switch, its own grace period and
             // its own corroboration against the bin -- but without the record
@@ -1802,4 +1828,5 @@ module.exports = {
   setHelperClientForHarness,
   setHandoffDepsForHarness,
   setCloudDepsForHarness,
+  setAppCacheHarness,
 };

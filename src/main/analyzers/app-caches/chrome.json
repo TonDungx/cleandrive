@@ -1,0 +1,16 @@
+{
+  "id": "chrome",
+  "name": "Google Chrome",
+  "hint": "Pages, scripts and images Chrome saved to load sites faster, and the graphics code it compiled. Chrome fetches or rebuilds them when it needs them; nothing you saved, and no sign-in, is kept here.",
+  "processes": ["chrome.exe"],
+  "verified": "2026-09-25",
+  "roots": [
+    {
+      "base": "LOCALAPPDATA",
+      "path": ["Google", "Chrome", "User Data"],
+      "profiles": "^(Default|Profile [0-9]+|Guest Profile|System Profile)$",
+      "inProfile": ["Cache", "Code Cache", "GPUCache", "DawnGraphiteCache", "DawnWebGPUCache"],
+      "atRoot": ["GrShaderCache", "ShaderCache", "GraphiteDawnCache"]
+    }
+  ]
+}

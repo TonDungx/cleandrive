@@ -118,8 +118,10 @@ async function make(file, { bytes = 64, ageDays = 0, content = 'x' } = {}) {
     good({ category: 'media.image' }), /unattended/);
   refuses('unattendedEligible left unset', good({ unattendedEligible: undefined }), /boolean/);
 
-  check('the whitelist is six advisor categories, all of them safe',
-    ALLOWED.length === 6 && ALLOWED.every((c) => CATEGORIES[categories.advisorName(c)].verdict === 'safe'),
+  // Six of the advisor's own, and one per known app's cache (D4) -- each of
+  // those taken only while its app is closed (test-appcaches.js).
+  check('the whitelist is twelve advisor categories, all of them safe',
+    ALLOWED.length === 12 && ALLOWED.every((c) => CATEGORIES[categories.advisorName(c)].verdict === 'safe'),
     ALLOWED.join(', '));
   check('no review category is on it',
     Object.entries(CATEGORIES).filter(([, v]) => v.verdict === 'review')

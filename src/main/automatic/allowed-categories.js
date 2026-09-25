@@ -21,6 +21,16 @@ const ALLOWED = Object.freeze([
   'cleanup.log',
   'cleanup.gpucache',
   'cleanup.buildoutput',
+  // Known apps' caches (D4), one per definition in analyzers/app-caches/,
+  // written out here by hand like the rest. The run takes one only while that
+  // app is closed, asked right before it chooses (autoclean.js); a harness
+  // holds this list and the definitions to the same set.
+  'cleanup.app.chrome',
+  'cleanup.app.edge',
+  'cleanup.app.teams',
+  'cleanup.app.discord',
+  'cleanup.app.zoom',
+  'cleanup.app.figma',
 ]);
 
 const SET = new Set(ALLOWED);

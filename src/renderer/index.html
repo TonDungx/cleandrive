@@ -347,10 +347,12 @@
         </div>
 
         <section class="card" id="protected-card" hidden>
-          <h2 data-i18n="cleanup.neverDeleted">Never deleted</h2>
+          <h2 data-i18n="cleanup.neverDeleted">Held back</h2>
           <p class="card-note" data-i18n="cleanup.neverDeletedNote">
-            These locations were skipped during the scan and the delete guards refuse
-            them, so nothing here can be removed by this app — by you, or by mistake.
+            These folders hold installed programs, or the settings and data programs keep, so
+            the scan holds back in them: nothing here is called safe except what a program
+            rebuilds by itself — GPU and crash files, and a known app’s own cache, shown above
+            under the app’s name and only while that app is closed.
           </p>
           <ul class="files" id="protected-list"></ul>
         </section>

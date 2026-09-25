@@ -19,6 +19,7 @@
 const path = require('node:path');
 const { isProtectedPath, extOf } = require('./util');
 const { message: m } = require('../../i18n');
+const APP_CACHES = require('../analyzers/app-caches');
 
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -82,6 +83,14 @@ const CATEGORIES = {
     hint: 'Big files you have not opened in a long time. Nothing here is junk by itself.',
   },
 };
+
+// One per known app (D4): its cache folders, checked by hand on a real machine
+// (analyzers/app-caches/). Safe while the app is closed -- the scan and the
+// unattended run both check that -- and named for the app, so a group reads
+// "Microsoft Edge — cache" rather than one more "Caches".
+for (const def of APP_CACHES.DEFINITIONS) {
+  CATEGORIES[`app.${def.id}`] = { verdict: 'safe', label: `${def.name} — cache`, hint: def.hint, app: def.id };
+}
 
 const VERDICT_ORDER = { safe: 0, review: 1, protected: 2, keep: 3 };
 
@@ -619,7 +628,27 @@ class Advisor {
   add(file, dirTag, blockKind = 'none') {
     const result = classifyFile(file, dirTag, this.now, blockKind);
     if (!result) return null;
+    return this._record(file, result);
+  }
 
+  /**
+   * A file inside one of a known app's cache folders (D4).
+   *
+   * Decided by the app's definition, not by the folder's name or by where it
+   * sits: the definition was checked against the real folders, and it names
+   * the cache folders and nothing else. That is what lets a cache under
+   * Roaming, which the rules above leave alone, be offered at all.
+   */
+  addKnown(file, def) {
+    return this._record(file, {
+      category: `app.${def.id}`,
+      verdict: 'safe',
+      source: 'app',
+      reason: m('reason.appcache.known', "{app}'s own cache folder — it rebuilds what is here when it needs it", { app: def.name }),
+    });
+  }
+
+  _record(file, result) {
     let bucket = this.buckets.get(result.category);
     if (!bucket) {
       bucket = { category: result.category, bytes: 0, count: 0, files: [], overflow: false };

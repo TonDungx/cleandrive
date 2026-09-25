@@ -1,0 +1,16 @@
+{
+  "id": "edge",
+  "name": "Microsoft Edge",
+  "hint": "Pages, scripts and images Edge saved to load sites faster, and the graphics code it compiled. Edge fetches or rebuilds them when it needs them; nothing you saved, and no sign-in, is kept here.",
+  "processes": ["msedge.exe"],
+  "verified": "2026-09-25",
+  "roots": [
+    {
+      "base": "LOCALAPPDATA",
+      "path": ["Microsoft", "Edge", "User Data"],
+      "profiles": "^(Default|Profile [0-9]+|Guest Profile|System Profile)$",
+      "inProfile": ["Cache", "Code Cache", "GPUCache", "DawnGraphiteCache", "DawnWebGPUCache"],
+      "atRoot": ["GrShaderCache", "ShaderCache", "GraphiteDawnCache"]
+    }
+  ]
+}

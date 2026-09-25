@@ -1525,7 +1525,10 @@ app.whenReady().then(async () => {
 
       console.log(`    state "${autoUi.state}" · disk ${autoUi.disk} · defaults ${autoUi.checked.join(', ')}`);
       check('the Automatic panel opens', autoUi.panelVisible);
-      check('only safe categories are offered', autoUi.categories === 6, String(autoUi.categories));
+      check('only safe categories are offered -- six kinds, and six known apps’ caches', autoUi.categories === 12, String(autoUi.categories));
+      check('the known apps’ caches are on by default, each taken only while its app is closed',
+        ['app.chrome', 'app.edge', 'app.teams', 'app.discord', 'app.zoom', 'app.figma'].every((c) => autoUi.checked.includes(c)),
+        autoUi.checked.join(','));
       check('build output is not enabled by default', !autoUi.checked.includes('buildoutput'),
         autoUi.checked.join(','));
       check('automatic cleanup starts switched off', autoUi.enabled === false);
@@ -2551,6 +2554,117 @@ app.whenReady().then(async () => {
         else process.env.OneDrive = savedOneDrive;
         cloudLib.reset();
         fs.rmSync(cloudBase, { recursive: true, force: true });
+      }
+    }
+
+    /* -- known apps' caches ------------------------------------------------ */
+    // An "AppData" this harness builds, laid out as Chrome's and Discord's are
+    // in the fixtures, and a process list it chooses, through the harness hook
+    // -- the scan, the screen, the pipeline and the Recycle Bin are the real
+    // ones, and only this folder's files ever reach them.
+    console.log('\nKnown apps’ caches (What to delete, AppData stood in for):');
+    {
+      const appBase = fs.mkdtempSync(path.join(os.tmpdir(), 'cleandrive-smoke-apps-'));
+      const L = path.join(appBase, 'AppData', 'Local');
+      const R = path.join(appBase, 'AppData', 'Roaming');
+      const chromeRoot = path.join(L, 'Google', 'Chrome', 'User Data');
+      const KB = 1024;
+      const make = (full, bytes) => {
+        fs.mkdirSync(path.dirname(full), { recursive: true });
+        fs.writeFileSync(full, Buffer.alloc(bytes, 7));
+        return full;
+      };
+      const chromeCache = [
+        make(path.join(chromeRoot, 'Default', 'Cache', 'Cache_Data', 'f_000001'), 300 * KB),
+        make(path.join(chromeRoot, 'Default', 'Code Cache', 'js', 'index'), 200 * KB),
+        make(path.join(chromeRoot, 'GrShaderCache', 'data_1'), 100 * KB),
+      ];
+      const siteData = make(path.join(chromeRoot, 'Default', 'IndexedDB', 'https_mail.example_0.indexeddb.leveldb', '000003.log'), 400 * KB);
+      const discordCache = make(path.join(R, 'discord', 'Cache', 'Cache_Data', 'f_1'), 50 * KB);
+      const fake = { running: new Set(['chrome.exe', 'explorer.exe']) };
+      ipc.setAppCacheHarness({ env: { LOCALAPPDATA: L, APPDATA: R }, runningProcessNames: async () => fake.running });
+      const js = (expr) => win.webContents.executeJavaScript(expr);
+      const scanIt = async () => {
+        await js(`document.querySelector('.tab[data-tab="usage"]').click()`);
+        await js(`setFolder(${JSON.stringify(appBase)})`);
+        await until(win, `document.getElementById('run-scan').disabled === false`);
+        await js(`window.__appScanBefore = state.scan; document.getElementById('run-scan').click()`);
+        await until(win, `document.getElementById('run-scan').disabled === false && state.scan && state.scan !== window.__appScanBefore`, 60000);
+        await js(`document.querySelector('.tab[data-tab="cleanup"]').click()`);
+        await wait(300);
+      };
+      const read = () =>
+        js(`
+          (() => {
+            const group = (c) => document.querySelector('#cleanup-groups section.group[data-category="' + c + '"]');
+            const rows = (s) => (s ? [...s.querySelectorAll('.file-row')] : []);
+            const view = (s) => s && {
+              title: s.querySelector('.group-head strong').textContent,
+              badge: s.querySelector('.group-head .badge').textContent,
+              selectAllHidden: s.querySelector('.group-select').hidden,
+              disabled: rows(s).map((r) => r.querySelector('input').disabled),
+              why: (s.querySelector('.group-open') || {}).textContent || null,
+            };
+            return {
+              chrome: view(group('app.chrome')),
+              discord: view(group('app.discord')),
+              chromeFiles: rows(group('app.chrome')).map((r) => r.dataset.path).sort(),
+              anywhere: [...document.querySelectorAll('#cleanup-groups .file-row')].map((r) => r.dataset.path),
+              safeBytes: state.cleanup.safeBytes,
+            };
+          })()
+        `);
+      try {
+        await scanIt();
+        const open = await read();
+        check('Chrome’s cache folders are one group of its own, under its name',
+          open.chrome && /Google Chrome/.test(open.chrome.title) &&
+            JSON.stringify(open.chromeFiles) === JSON.stringify([...chromeCache].sort()), open.chromeFiles.map((p) => path.basename(p)).join(', '));
+        check('and a site’s own data beside them is in no group at all', !open.anywhere.includes(siteData));
+        check('Chrome open: marked open, nothing in it can be ticked, and it says what to do',
+          open.chrome.badge === 'open' && open.chrome.selectAllHidden && open.chrome.disabled.every(Boolean) &&
+            open.chrome.why === 'Google Chrome is open. Close it and scan again to clear its cache.', open.chrome.why || '');
+        check('Discord, closed, is safe and can be ticked', open.discord && open.discord.badge === 'safe to delete' &&
+          !open.discord.selectAllHidden && open.discord.disabled.every((d) => !d), open.discord && open.discord.badge);
+        const picked = await js(`(() => {
+          document.getElementById('select-safe').click();
+          const safe = [...state.selectedCleanup];
+          document.querySelector('#cleanup-groups section.group[data-category="app.chrome"] .file-row input').click();
+          return { safe, after: [...state.selectedCleanup] };
+        })()`);
+        check('"Select everything marked safe" takes Discord’s and not the open app’s, and the total counts only Discord’s',
+          JSON.stringify(picked.safe) === JSON.stringify([discordCache]) && open.safeBytes === 50 * KB, `${picked.safe.length} selected`);
+        check('and a click on an open app’s row does not tick it', JSON.stringify(picked.after) === JSON.stringify([discordCache]));
+
+        fake.running = new Set(['explorer.exe']);
+        await scanIt();
+        const shut = await read();
+        check('closed and scanned again: safe, and every row can be ticked',
+          shut.chrome.badge === 'safe to delete' && !shut.chrome.selectAllHidden && shut.chrome.disabled.every((d) => !d) && shut.chrome.why === null &&
+            shut.safeBytes === 650 * KB, shut.chrome.badge);
+
+        // Ticked while closed; opened again before the click on Delete.
+        fake.running = new Set(['chrome.exe']);
+        await js(`deleteSelected(${JSON.stringify(chromeCache)}, () => {}, { confirm: false })`);
+        const refused = await js(`document.getElementById('toast').textContent`);
+        check('opened again before the click: nothing of it moves, and the reason is its name',
+          /Nothing was deleted/.test(refused) && /Google Chrome is open/.test(refused) && chromeCache.every((f) => fs.existsSync(f)), refused.slice(0, 80));
+
+        fake.running = new Set(['explorer.exe']);
+        await js(`deleteSelected(${JSON.stringify(chromeCache)}, () => {}, { confirm: false })`);
+        const moved = await js(`document.getElementById('toast').textContent`);
+        check('closed at the click: all three go to the Recycle Bin, and the site data stays',
+          /Moved 3 items/.test(moved) && chromeCache.every((f) => !fs.existsSync(f)) && fs.existsSync(siteData), moved.slice(0, 80));
+
+        fake.running = null;
+        await scanIt();
+        const blind = await read();
+        check('no process list: nothing of any known app is offered, and the group says why',
+          blind.discord && blind.discord.badge === 'could not check' && blind.discord.disabled.every(Boolean) &&
+            /Could not tell whether Discord is open/.test(blind.discord.why || '') && blind.safeBytes === 0, blind.discord && blind.discord.why);
+      } finally {
+        ipc.setAppCacheHarness(null);
+        fs.rmSync(appBase, { recursive: true, force: true });
       }
     }
 

@@ -35,8 +35,10 @@ const { ALLOWED_ADVISOR_NAMES } = require('../automatic/allowed-categories');
  * which is what it has always done with a key it did not know.
  *
  *   1 -> 2   `snapshots`: how many folder snapshots to keep (roadmap 0.6/0.7)
+ *   2 -> 3   known apps' caches (D4) join `autoClean.categories` wherever
+ *            `gpucache` was on -- see the migration for why
  */
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 
 const MIGRATIONS = Object.freeze([
   {
@@ -46,6 +48,23 @@ const MIGRATIONS = Object.freeze([
       // Additive. The defaults are what the snapshot store used before there
       // was anywhere to change them.
       return { ...raw, version: 2, snapshots: { keepRecent: 12, keepMonthly: 12, ...(raw.snapshots || {}) } };
+    },
+  },
+  {
+    from: 2,
+    to: 3,
+    migrate(raw) {
+      // Chrome's and Edge's compiled-code and GPU caches used to be "GPU &
+      // compiled-code caches"; they now belong to each browser's own
+      // category, which the run only touches while that browser is closed.
+      // Somebody who had the GPU category on was having those caches cleaned,
+      // so they keep having them cleaned -- now safely. Nobody else gains
+      // anything they did not ask for.
+      const auto = isObject(raw.autoClean) ? raw.autoClean : null;
+      const categories = auto && Array.isArray(auto.categories) ? auto.categories : null;
+      if (!categories || !categories.some((c) => String(c).toLowerCase() === 'gpucache')) return { ...raw, version: 3 };
+      const added = APP_CATEGORIES.filter((c) => !categories.includes(c));
+      return { ...raw, version: 3, autoClean: { ...auto, categories: [...categories, ...added] } };
     },
   },
 ]);
@@ -85,7 +104,10 @@ function migrate(raw) {
  * are not looking" are different bars. A developer can opt into it.
  */
 const SAFE_CATEGORIES = [...ALLOWED_ADVISOR_NAMES];
-const DEFAULT_CATEGORIES = ['temp', 'cache', 'crashdump', 'log', 'gpucache'];
+// Known apps' caches (D4) are on by default: the run only takes one while that
+// app is closed, and a browser's cache is among the most rebuilt things on a disk.
+const APP_CATEGORIES = SAFE_CATEGORIES.filter((c) => c.startsWith('app.'));
+const DEFAULT_CATEGORIES = ['temp', 'cache', 'crashdump', 'log', 'gpucache', ...APP_CATEGORIES];
 
 /**
  * Process image names that mean "somebody is working right now". An unattended

@@ -1,0 +1,70 @@
+{
+  "id": "discord",
+  "captured": "2026-09-24",
+  "note": "Folder names on the machine the definition was checked on, two levels deep; accounts blanked.",
+  "roots": [
+    {
+      "base": "APPDATA",
+      "path": [
+        "discord"
+      ],
+      "folders": [
+        "1.0.9258",
+        "Cache",
+        "Cache/Cache_Data",
+        "Cache/No_Vary_Search",
+        "Code Cache",
+        "Code Cache/js",
+        "Code Cache/wasm",
+        "Crashpad",
+        "Crashpad/attachments",
+        "Crashpad/reports",
+        "DawnCache",
+        "DawnGraphiteCache",
+        "DawnWebGPUCache",
+        "Dictionaries",
+        "GPUCache",
+        "IndexedDB",
+        "IndexedDB/site-1",
+        "Local Storage",
+        "Local Storage/leveldb",
+        "MediaFoundationWidevineCdm",
+        "MediaFoundationWidevineCdm/x64",
+        "MediaFoundationWidevineCdm/x86",
+        "Network",
+        "Service Worker",
+        "Service Worker/CacheStorage",
+        "Session Storage",
+        "Shared Dictionary",
+        "Shared Dictionary/cache",
+        "VideoDecodeStats",
+        "WebStorage",
+        "WebStorage/1",
+        "WebStorage/2",
+        "WidevineCdm",
+        "WidevineCdm/4.10.2934.0",
+        "blob_storage",
+        "blob_storage/id1",
+        "component_crx_cache",
+        "logs",
+        "module_data",
+        "module_data/crashlogs",
+        "module_data/discord_hook",
+        "module_data/discord_utils",
+        "module_data/discord_voice",
+        "sentry",
+        "sentry/queue",
+        "shared_proto_db",
+        "shared_proto_db/metadata"
+      ],
+      "matched": [
+        "Cache",
+        "Code Cache",
+        "DawnCache",
+        "DawnGraphiteCache",
+        "DawnWebGPUCache",
+        "GPUCache"
+      ]
+    }
+  ]
+}

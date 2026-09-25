@@ -30,6 +30,7 @@ const {
 const { message: m } = require('../../i18n');
 const cloudState = require('./cloud-state');
 const { looksDehydrated } = require('./media/cloud');
+const appCaches = require('../analyzers/app-caches');
 
 const DEFAULTS = {
   followSymlinks: false,
@@ -84,6 +85,9 @@ const HARD_DEPTH_CAP = 100;
 function walk(root, options, handlers) {
   const opts = { ...DEFAULTS, ...options };
   const { onFile, onDir, onSkip, onBlocked, token = new CancelToken() } = handlers;
+  // A known app's cache folder (D4), decided once when a folder is entered
+  // and carried down to everything inside it, like the directory tag.
+  const knownCache = typeof opts.knownCache === 'function' ? opts.knownCache : null;
 
   return new Promise((resolve) => {
     const rootPath = path.resolve(root);
@@ -94,6 +98,7 @@ function walk(root, options, handlers) {
         depth: 0,
         tag: tagDirectory(path.basename(rootPath), null),
         blocked: 'none',
+        known: knownCache ? knownCache(rootPath) : null,
       },
     ];
     const errors = [];
@@ -116,7 +121,7 @@ function walk(root, options, handlers) {
     };
 
     async function processDir(task) {
-      const { dir, top, depth, tag, blocked } = task;
+      const { dir, top, depth, tag, blocked, known } = task;
 
       let entries;
       try {
@@ -202,6 +207,9 @@ function walk(root, options, handlers) {
             depth: depth + 1,
             tag: tagDirectory(name, tag, isProject),
             blocked: blockedHere,
+            // A cache folder is sticky; anywhere else inside a known app, the
+            // folder below may be one.
+            known: known && known.folder ? known : knownCache ? knownCache(full) : known,
           });
           continue;
         }
@@ -221,7 +229,7 @@ function walk(root, options, handlers) {
         // on, is therefore 3,343 stats deep on one worker while fifteen others
         // have nothing to do.
         if (opts.statFiles === false) {
-          onFile(full, null, top, tag, blockedHere);
+          onFile(full, null, top, tag, blockedHere, known);
           continue;
         }
 
@@ -234,7 +242,7 @@ function walk(root, options, handlers) {
         }
         if (!stats.isFile()) continue;
 
-        onFile(full, stats, top, tag, blockedHere);
+        onFile(full, stats, top, tag, blockedHere, known);
       }
     }
 
@@ -276,6 +284,10 @@ function walk(root, options, handlers) {
  */
 async function scan(rootPath, options = {}, handlers = {}) {
   const opts = { ...DEFAULTS, ...options };
+  // Known apps' caches (D4) are recognised by every scan -- the window's and
+  // the unattended run's -- so both see the same categories. `appCacheEnv`
+  // is for a harness that keeps its "AppData" somewhere of its own.
+  if (opts.knownCache === undefined) opts.knownCache = appCaches.matcher(opts.appCacheEnv || process.env);
   const token = handlers.token || new CancelToken();
   const started = Date.now();
   const root = path.resolve(rootPath);
@@ -328,7 +340,7 @@ async function scan(rootPath, options = {}, handlers = {}) {
     largest.length = Math.min(largest.length, keep);
   };
 
-  const onFile = (full, stats, top, tag, blocked) => {
+  const onFile = (full, stats, top, tag, blocked, known) => {
     const size = stats.size;
     totalSize += size;
     totalFiles++;
@@ -363,7 +375,13 @@ async function scan(rootPath, options = {}, handlers = {}) {
       atimeMs: stats.atimeMs,
     };
 
-    const verdict = advisor.add(record, tag, blocked || 'none');
+    // Inside a known app (D4): its cache folders are the app's own category;
+    // anything else there is left alone, whatever its folder is called.
+    const verdict = known
+      ? known.folder
+        ? advisor.addKnown(record, known.def)
+        : null
+      : advisor.add(record, tag, blocked || 'none');
 
     if (cloudFiles && size >= opts.cloudMinBytes && cloudState.oneDriveRootOf(full, oneDrive)) {
       if (looksDehydrated(stats)) {

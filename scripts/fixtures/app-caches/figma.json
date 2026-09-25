@@ -1,0 +1,67 @@
+{
+  "id": "figma",
+  "captured": "2026-09-24",
+  "note": "Folder names on the machine the definition was checked on, two levels deep; accounts blanked.",
+  "roots": [
+    {
+      "base": "APPDATA",
+      "path": [
+        "Figma",
+        "DesktopProfile"
+      ],
+      "folders": [
+        "v39",
+        "v39/Crashpad",
+        "v39/DawnGraphiteCache",
+        "v39/DawnWebGPUCache",
+        "v39/IndexedDB",
+        "v39/Local Storage",
+        "v39/Network",
+        "v39/Session Storage",
+        "v39/Shared Dictionary",
+        "v39/WebStorage",
+        "v39/blob_storage",
+        "v41",
+        "v41/Crashpad",
+        "v41/DawnGraphiteCache",
+        "v41/DawnWebGPUCache",
+        "v41/IndexedDB",
+        "v41/Local Storage",
+        "v41/Network",
+        "v41/Session Storage",
+        "v41/Shared Dictionary",
+        "v41/VideoDecodeStats",
+        "v41/WebStorage",
+        "v41/blob_storage",
+        "v41/shared_proto_db",
+        "v42",
+        "v42/Cache",
+        "v42/Code Cache",
+        "v42/Crashpad",
+        "v42/DawnGraphiteCache",
+        "v42/DawnWebGPUCache",
+        "v42/GPUCache",
+        "v42/IndexedDB",
+        "v42/Local Storage",
+        "v42/Network",
+        "v42/Session Storage",
+        "v42/Shared Dictionary",
+        "v42/VideoDecodeStats",
+        "v42/WebStorage",
+        "v42/blob_storage",
+        "v42/shared_proto_db"
+      ],
+      "matched": [
+        "v39/DawnGraphiteCache",
+        "v39/DawnWebGPUCache",
+        "v41/DawnGraphiteCache",
+        "v41/DawnWebGPUCache",
+        "v42/Cache",
+        "v42/Code Cache",
+        "v42/DawnGraphiteCache",
+        "v42/DawnWebGPUCache",
+        "v42/GPUCache"
+      ]
+    }
+  ]
+}

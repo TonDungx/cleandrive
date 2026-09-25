@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 'use strict';
 
-// Settings schema v2: the migration forward, the copy kept of the old file,
-// and what the released build makes of a file this one wrote.
+// Settings schema v3: the migrations forward, the copy kept of the old file,
+// and what the previous build makes of a file this one wrote.
 //   node scripts/test-settings-migration.js
 //
-// The last part runs the *released* settings.js -- read out of git at HEAD --
-// against a version 2 file, because "an older build still reads it" is a claim
-// about code that is not in the working tree any more.
+// The last part runs the *previous* settings.js -- read out of git at HEAD --
+// against a file this one wrote, because "an older build still reads it" is a
+// claim about code that is not in the working tree any more.
 
 const fs = require('node:fs');
 const fsp = fs.promises;
@@ -40,18 +40,37 @@ const V1 = {
 (async () => {
   const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'cleandrive-settings-v2-'));
 
-  console.log('\nsettings: version 1 to 2\n');
+  console.log('\nsettings: version 1 to 3\n');
 
-  check('this build writes version 2', SCHEMA_VERSION === 2);
+  check('this build writes version 3', SCHEMA_VERSION === 3);
   {
     const { raw, from, steps } = migrate(V1);
-    check('a version 1 file is migrated in one step', from === 1 && steps === 1 && raw.version === 2);
+    check('a version 1 file is migrated a step at a time, to 3', from === 1 && steps === 2 && raw.version === 3);
     check('it gains the snapshot section, at the defaults', raw.snapshots.keepRecent === 12 && raw.snapshots.keepMonthly === 12);
     check('and loses nothing it had', JSON.stringify(raw.autoClean) === JSON.stringify(V1.autoClean) &&
       raw.purge.afterDays === 14 && raw.appearance.theme === 'dark');
     const unversioned = migrate({ appearance: { theme: 'light' } });
-    check('a file with no version is read as version 1', unversioned.from === 1 && unversioned.raw.version === 2);
+    check('a file with no version is read as version 1', unversioned.from === 1 && unversioned.raw.version === 3);
     check('migration does not change the object it was given', V1.version === 1 && V1.snapshots === undefined);
+  }
+
+  console.log('\nsettings: version 2 to 3 -- known apps’ caches\n');
+
+  {
+    // The GPU category used to cover Chrome's and Edge's compiled-code caches.
+    // Somebody who had it on keeps having those cleaned, now under each app's
+    // own category; somebody who did not gains nothing.
+    const on = { version: 2, autoClean: { enabled: true, categories: ['temp', 'gpucache'] } };
+    const withGpu = migrate(on).raw.autoClean.categories;
+    check('with the GPU category on, every known app’s cache is added',
+      ['app.chrome', 'app.edge', 'app.teams', 'app.discord', 'app.zoom', 'app.figma'].every((c) => withGpu.includes(c)) &&
+        withGpu[0] === 'temp' && withGpu[1] === 'gpucache', withGpu.join(', '));
+    const off = migrate({ version: 2, autoClean: { enabled: true, categories: ['temp', 'log'] } }).raw.autoClean.categories;
+    check('with it off, nothing is added', JSON.stringify(off) === '["temp","log"]', off.join(', '));
+    const unticked = migrate({ version: 3, autoClean: { categories: ['gpucache'] } }).raw.autoClean.categories;
+    check('a version 3 file is left alone -- an app somebody unticked stays unticked', JSON.stringify(unticked) === '["gpucache"]');
+    const read = coerceSettings(on).settings.autoClean.categories;
+    check('and the added names are ones the settings accept', read.includes('app.edge') && read.length === 8, read.join(', '));
   }
 
   {
@@ -63,7 +82,7 @@ const V1 = {
   }
 
   {
-    const { settings, warnings } = coerceSettings({ ...V1, version: 3, futureThing: { x: 1 } });
+    const { settings, warnings } = coerceSettings({ ...V1, version: 4, futureThing: { x: 1 } });
     check('a file from a newer build is read as far as this one understands it',
       settings.autoClean.minAgeDays === 30 && warnings.some((w) => /newer CleanDrive/.test(w)), warnings.join('; '));
   }
@@ -90,11 +109,11 @@ const V1 = {
     const loaded = await store.load();
     check('loading an old file does not write anything', (await fsp.readFile(file, 'utf8')) === original &&
       !fs.existsSync(path.join(dir, 'settings.v1.json')));
-    check('but hands back version 2 settings', loaded.version === 2 && loaded.snapshots.keepMonthly === 12);
+    check('but hands back version 3 settings', loaded.version === 3 && loaded.snapshots.keepMonthly === 12);
 
     await store.patch({ snapshots: { keepRecent: 3 } });
     const written = JSON.parse(await fsp.readFile(file, 'utf8'));
-    check('the first save writes version 2', written.version === 2 && written.snapshots.keepRecent === 3);
+    check('the first save writes version 3', written.version === 3 && written.snapshots.keepRecent === 3);
     check('patching one snapshot field keeps the other', written.snapshots.keepMonthly === 12);
     check('and keeps the old file, byte for byte, as settings.v1.json',
       (await fsp.readFile(path.join(dir, 'settings.v1.json'), 'utf8')) === original);
@@ -109,7 +128,7 @@ const V1 = {
     check('a new install keeps no copy -- there was nothing older', !fs.existsSync(path.join(dir, 'new', 'settings.v1.json')));
   }
 
-  console.log('\nsettings: the released build reading this build’s file\n');
+  console.log('\nsettings: the previous build reading this build’s file\n');
 
   {
     let released = null;
@@ -119,13 +138,30 @@ const V1 = {
         encoding: 'utf8',
         stdio: ['ignore', 'pipe', 'ignore'],
       });
-      if (/const SCHEMA_VERSION = 1;/.test(source)) {
+      // Only when HEAD is an older schema than the working tree; once this
+      // version is committed there is nothing older at HEAD to ask.
+      const headVersion = Number((/const SCHEMA_VERSION = (\d+);/.exec(source) || [])[1]);
+      if (headVersion < SCHEMA_VERSION) {
         // Laid out as it is in the repo, so its `require('../../i18n')` resolves.
         const sandbox = path.join(dir, 'released');
         await fsp.mkdir(path.join(sandbox, 'src', 'main', 'lib'), { recursive: true });
-        await fsp.mkdir(path.join(sandbox, 'src', 'i18n'), { recursive: true });
         await fsp.writeFile(path.join(sandbox, 'src', 'main', 'lib', 'settings.js'), source);
-        await fsp.copyFile(path.join(__dirname, '..', 'src', 'i18n', 'index.js'), path.join(sandbox, 'src', 'i18n', 'index.js'));
+        // What that settings.js requires, as HEAD has it too. A file HEAD does
+        // not have is one that version did not need.
+        for (const rel of ['src/i18n/index.js', 'src/main/lib/atomic.js', 'src/main/automatic/allowed-categories.js']) {
+          let body;
+          try {
+            body = execFileSync('git', ['show', `HEAD:${rel}`], {
+              cwd: path.join(__dirname, '..'),
+              encoding: 'utf8',
+              stdio: ['ignore', 'pipe', 'ignore'],
+            });
+          } catch {
+            continue;
+          }
+          await fsp.mkdir(path.join(sandbox, path.dirname(rel)), { recursive: true });
+          await fsp.writeFile(path.join(sandbox, rel), body);
+        }
         released = require(path.join(sandbox, 'src', 'main', 'lib', 'settings.js'));
       }
     } catch {
@@ -133,11 +169,11 @@ const V1 = {
     }
 
     if (!released) {
-      console.log('  (skipped: HEAD is not the version 1 release, or git is not available)');
+      console.log('  (skipped: HEAD is not an older schema, or git is not available)');
     } else {
       const ours = coerceSettings(V1).settings;
       const { settings, warnings } = released.coerceSettings(JSON.parse(JSON.stringify(ours)));
-      check('the released build reads every setting it knows from a version 2 file',
+      check(`the previous build reads every setting it knows from a version ${SCHEMA_VERSION} file`,
         settings.autoClean.minAgeDays === 30 && settings.purge.afterDays === 14 &&
           settings.appearance.theme === 'dark' && settings.trends.sampleTime === '09:30',
         warnings.join('; '));

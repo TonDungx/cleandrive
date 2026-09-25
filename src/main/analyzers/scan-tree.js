@@ -54,11 +54,13 @@ class ScanTree {
    * @param {number} [scan.scannedAt]
    * @param {object} [scan.accessTimes]
    */
-  constructor({ root, rows, files = new Map(), complete = true, scannedAt = Date.now(), accessTimes = null }) {
+  constructor({ root, rows, files = new Map(), complete = true, scannedAt = Date.now(), accessTimes = null, openApps = [] }) {
     this.root = path.resolve(root);
     this.complete = complete;
     this.scannedAt = scannedAt;
     this.accessTimes = accessTimes;
+    // Which known apps were open when the scan ended (D4); null is "could not tell".
+    this.openApps = Array.isArray(openApps) ? new Set(openApps) : null;
     this.removed = { files: 0, bytes: 0 };
     this._removedKeys = new Set();
     this._files = files;
@@ -229,7 +231,8 @@ class ScanTree {
         category: detail.category || null,
         source: detail.source || null,
       },
-      this.accessTimes
+      this.accessTimes,
+      this.openApps
     );
     try {
       validateCandidate(candidate);

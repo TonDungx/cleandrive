@@ -1,0 +1,14 @@
+{
+  "id": "discord",
+  "name": "Discord",
+  "hint": "Images, scripts and graphics code Discord saved to open faster. Discord fetches or rebuilds them; your messages and sign-in are not kept here.",
+  "processes": ["Discord.exe"],
+  "verified": "2026-09-25",
+  "roots": [
+    {
+      "base": "APPDATA",
+      "path": ["discord"],
+      "atRoot": ["Cache", "Code Cache", "GPUCache", "DawnCache", "DawnGraphiteCache", "DawnWebGPUCache"]
+    }
+  ]
+}

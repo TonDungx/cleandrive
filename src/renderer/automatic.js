@@ -20,6 +20,13 @@ const CATEGORY_LABELS = {
   log: ['category.log', 'Old log files'],
   gpucache: ['category.gpucache', 'GPU & compiled-code caches'],
   buildoutput: ['category.buildoutput', 'Build output'],
+  // Known apps' caches (D4): each taken only while that app is closed.
+  'app.chrome': ['category.app.chrome', 'Google Chrome — cache'],
+  'app.edge': ['category.app.edge', 'Microsoft Edge — cache'],
+  'app.teams': ['category.app.teams', 'Microsoft Teams — cache'],
+  'app.discord': ['category.app.discord', 'Discord — cache'],
+  'app.zoom': ['category.app.zoom', 'Zoom — cache'],
+  'app.figma': ['category.app.figma', 'Figma — cache'],
 };
 
 const WEEKDAY_KEYS = [
@@ -633,6 +640,9 @@ function renderRunResult(run) {
   if (skipped.tooRecent) parts.push(t('auto.result.tooRecent', '{n} too recent', { n: formatCount(skipped.tooRecent) }));
   if (skipped.whitelisted) parts.push(t('auto.result.excluded', '{n} excluded', { n: formatCount(skipped.whitelisted) }));
   if (skipped.guarded) parts.push(t('auto.result.guarded', '{n} protected', { n: formatCount(skipped.guarded) }));
+  if (skipped.appOpen) {
+    parts.push(t('auto.result.appOpen', '{n} left because their app was open', { n: formatCount(skipped.appOpen) }));
+  }
   if (parts.length > 0) body.append(resultLine(t('auto.result.leftAlone', 'Left alone'), parts.join(' · ')));
 
   for (const note of run.notes || []) {

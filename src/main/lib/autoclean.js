@@ -4,14 +4,14 @@ const fsp = require('node:fs/promises');
 const path = require('node:path');
 
 const { renameRetrying } = require('./atomic');
-const { execFile } = require('node:child_process');
-
+const { runningProcessNames } = require('./processes');
+const appCaches = require('../analyzers/app-caches');
 const { scan } = require('./scanner');
 const { CATEGORIES } = require('./advisor');
 const { planTrash, executeTrash } = require('./trash');
 const { fullestVolume } = require('./disk');
 const { findUserBins, purgeRecorded } = require('./recyclebin');
-const { CancelToken, pathKey, isUndeletablePath, IS_WIN } = require('./util');
+const { CancelToken, pathKey, isUndeletablePath } = require('./util');
 const { isAllowedUnattended } = require('../automatic/allowed-categories');
 const { execute } = require('../actions/execute');
 const { message: m } = require('../../i18n');
@@ -41,36 +41,7 @@ const DAY = 24 * 60 * 60 * 1000;
 /* preconditions                                                               */
 /* -------------------------------------------------------------------------- */
 
-/**
- * Image names of running processes, lowercased.
- *
- * `tasklist /FO CSV` is used because the image name column is a filename, not a
- * translated string -- the same reasoning that keeps scheduler.js away from
- * parsing localised output. A failure to enumerate returns null rather than an
- * empty set, so the caller can tell "nothing is running" apart from "we could
- * not find out", and treat the second as a reason not to delete anything.
- *
- * @returns {Promise<Set<string>|null>}
- */
-function runningProcessNames() {
-  if (!IS_WIN) return Promise.resolve(null);
-  return new Promise((resolve) => {
-    execFile(
-      'tasklist.exe',
-      ['/FO', 'CSV', '/NH'],
-      { windowsHide: true, timeout: 20000, maxBuffer: 8 * 1024 * 1024 },
-      (err, stdout) => {
-        if (err) return resolve(null);
-        const names = new Set();
-        for (const line of String(stdout).split(/\r?\n/)) {
-          const match = /^"([^"]+)"/.exec(line.trim());
-          if (match) names.add(match[1].toLowerCase());
-        }
-        resolve(names.size > 0 ? names : null);
-      }
-    );
-  });
-}
+/* Image names of running processes: lib/processes.js. */
 
 /** Which of the user's named apps are open right now. */
 async function blockingApps(skipIfRunning) {
@@ -115,13 +86,24 @@ function lastTouched(file) {
  *
  * @returns {{files: Array, bytes: number, skipped: object}}
  */
-function selectFiles(cleanup, settings, now = Date.now()) {
+function selectFiles(cleanup, settings, now = Date.now(), openApps = null) {
   const wanted = new Set(settings.categories);
   const minAge = settings.minAgeDays * DAY;
-  const skipped = { category: 0, tooRecent: 0, whitelisted: 0, guarded: 0 };
+  const skipped = { category: 0, tooRecent: 0, whitelisted: 0, guarded: 0, appOpen: 0 };
   const chosen = [];
 
   for (const group of (cleanup && cleanup.groups) || []) {
+    // A known app's cache (D4) is only ever taken while that app is closed.
+    // Not knowing which programs are running counts as open: the one answer
+    // that cannot delete a cache out from under a browser.
+    if (typeof group.category === 'string' && group.category.startsWith('app.')) {
+      const id = group.category.slice('app.'.length);
+      if (!openApps || openApps.has(id)) {
+        skipped.appOpen += group.count || 0;
+        continue;
+      }
+    }
+
     // Belt and braces. coerceSettings already refuses non-safe categories, but
     // this is the gate that actually deletes, so it re-checks the verdict here
     // rather than trusting a list that reached it through a JSON file.
@@ -199,7 +181,7 @@ function selectFiles(cleanup, settings, now = Date.now()) {
 async function runAutoClean(options) {
   const settings = options.settings;
   const auto = settings.autoClean;
-  const deps = { scan, planTrash, executeTrash, ...(options.deps || {}) };
+  const deps = { scan, planTrash, executeTrash, runningProcessNames, ...(options.deps || {}) };
   const token = options.token || new CancelToken();
   const onStage = options.onStage || (() => {});
   const now = Number.isFinite(options.now) ? options.now : Date.now();
@@ -219,7 +201,7 @@ async function runAutoClean(options) {
     purged: { files: 0, bytes: 0 },
     diskBefore: null,
     diskAfter: null,
-    skipped: { category: 0, tooRecent: 0, whitelisted: 0, guarded: 0 },
+    skipped: { category: 0, tooRecent: 0, whitelisted: 0, guarded: 0, appOpen: 0 },
     notes: [],
   };
 
@@ -300,7 +282,11 @@ async function runAutoClean(options) {
     run.scanned.bytes += result.totalSize || 0;
     run.scanned.errors += result.errorCount || 0;
 
-    const picked = selectFiles(result.cleanup, auto, now);
+    // Asked after the scan, not before it: a scan of a big folder takes
+    // minutes, and what counts is whether the app is open when its cache is
+    // about to go.
+    const open = appCaches.openApps(await deps.runningProcessNames());
+    const picked = selectFiles(result.cleanup, auto, now, open);
     for (const key of Object.keys(run.skipped)) run.skipped[key] += picked.skipped[key] || 0;
     if (picked.truncated) run.selected.truncated = true;
     selected.push(...picked.files);
@@ -363,6 +349,7 @@ async function runAutoClean(options) {
       deps: {
         planTrash: deps.planTrash,
         executeTrash: deps.executeTrash,
+        runningProcessNames: deps.runningProcessNames,
         shell: options.deps && options.deps.shell,
       },
     }

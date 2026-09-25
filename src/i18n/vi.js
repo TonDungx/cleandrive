@@ -201,10 +201,12 @@
     'cleanup.protected': 'Vị trí được bảo vệ',
     'cleanup.selectSafe': 'Chọn tất cả mục được đánh dấu an toàn',
     'cleanup.selectAllInGroup': 'chọn tất cả',
-    'cleanup.neverDeleted': 'Không bao giờ bị xoá',
+    'cleanup.neverDeleted': 'Được giữ lại',
     'cleanup.neverDeletedNote':
-      'Những vị trí này đã bị bỏ qua khi quét và các lớp bảo vệ cũng từ chối xoá chúng, nên không ' +
-      'thứ gì ở đây có thể bị ứng dụng này xoá — dù bạn cố ý hay nhầm lẫn.',
+      'Các thư mục này chứa chương trình đã cài, hoặc cài đặt và dữ liệu mà chương trình giữ, nên lượt quét ' +
+      'dè dặt ở đây: không gì trong này được gọi là an toàn, trừ thứ chương trình tự tạo lại — tệp GPU và tệp ' +
+      'lỗi, cùng thư mục đệm riêng của một ứng dụng quen thuộc, hiện ở trên theo tên ứng dụng và chỉ khi ứng ' +
+      'dụng đó đang đóng.',
     'cleanup.empty': 'Hãy quét một thư mục để xem thứ gì an toàn để xoá.',
     'cleanup.alreadyClean': 'Không có gì rõ ràng là bỏ được trong thư mục này — nó đã sạch.',
     'cleanup.showingLargest': 'Đang hiện {shown} tệp lớn nhất trong tổng số {total} tệp thuộc nhóm này.',
@@ -238,11 +240,47 @@
       'giữ gì ở đây, nên không mục nào được chọn sẵn cho bạn.',
     'category.stale.hint': 'Tệp lớn bạn đã lâu không mở. Bản thân chúng không phải là rác.',
 
+    // Known apps' caches (D4): one group per app.
+    'category.app.chrome': 'Google Chrome — bộ nhớ đệm',
+    'category.app.edge': 'Microsoft Edge — bộ nhớ đệm',
+    'category.app.teams': 'Microsoft Teams — bộ nhớ đệm',
+    'category.app.discord': 'Discord — bộ nhớ đệm',
+    'category.app.zoom': 'Zoom — bộ nhớ đệm',
+    'category.app.figma': 'Figma — bộ nhớ đệm',
+    'category.app.chrome.hint':
+      'Trang, script và hình ảnh Chrome lưu lại để mở web nhanh hơn, cùng mã đồ hoạ nó đã biên dịch. Chrome tự tải ' +
+      'lại hoặc tạo lại khi cần; không có gì bạn đã lưu, cũng không có phiên đăng nhập nào nằm ở đây.',
+    'category.app.edge.hint':
+      'Trang, script và hình ảnh Edge lưu lại để mở web nhanh hơn, cùng mã đồ hoạ nó đã biên dịch. Edge tự tải ' +
+      'lại hoặc tạo lại khi cần; không có gì bạn đã lưu, cũng không có phiên đăng nhập nào nằm ở đây.',
+    'category.app.teams.hint':
+      'Những gì Teams mới lưu lại để mở nhanh hơn, trong trình duyệt nhúng nó chạy trên đó. Teams tự tải lại hoặc ' +
+      'tạo lại; tin nhắn, tệp và phiên đăng nhập của bạn không nằm ở đây.',
+    'category.app.discord.hint':
+      'Hình ảnh, script và mã đồ hoạ Discord lưu lại để mở nhanh hơn. Discord tự tải lại hoặc tạo lại; tin nhắn ' +
+      'và phiên đăng nhập của bạn không nằm ở đây.',
+    'category.app.zoom.hint':
+      'Những gì các khung web nhúng của Zoom lưu lại để mở nhanh hơn. Zoom tự tải lại hoặc tạo lại; cuộc họp, ' +
+      'bản ghi và phiên đăng nhập của bạn không nằm ở đây.',
+    'category.app.figma.hint':
+      'Script, hình ảnh và mã đồ hoạ ứng dụng Figma lưu lại để mở nhanh hơn. Figma tự tải lại hoặc tạo lại; ' +
+      'tệp thiết kế của bạn nằm trên đám mây của Figma, không nằm ở đây.',
+    'cleanup.appOpen': 'đang mở',
+    'cleanup.appUnknown': 'không kiểm được',
+    'cleanup.appOpenHint': '{app} đang mở. Hãy đóng nó rồi quét lại để dọn bộ nhớ đệm của nó.',
+    'cleanup.appUnknownHint': 'Không biết được {app} có đang mở không, nên không đề xuất mục nào ở đây.',
+    'reason.appcache.known': 'Thư mục bộ nhớ đệm riêng của {app} — nó tự tạo lại những gì ở đây khi cần',
+    'evidence.app.open': '{app} đang mở — hãy đóng nó rồi quét lại',
+    'evidence.app.closed': '{app} không chạy lúc lượt quét kết thúc',
+    'evidence.app.unknown': 'Không biết được {app} có đang mở không, nên không đề xuất mục nào của nó',
+
     /* ---- verdicts, as the badge says them ------------------------------ */
     'verdict.safe': 'an toàn',
     'verdict.review': 'nên xem lại',
     'verdict.protected': 'được bảo vệ',
     'verdict.keep': 'giữ lại',
+    'cleanup.verdict.safe': 'xoá được an toàn',
+    'cleanup.verdict.review': 'tuỳ bạn',
     'cleanup.blocked': 'bị chặn',
     'cleanup.inUse': 'đang dùng',
 
@@ -743,6 +781,7 @@
     'auto.result.tooRecent': '{n} mục quá mới',
     'auto.result.excluded': '{n} mục bị loại trừ',
     'auto.result.guarded': '{n} mục được bảo vệ',
+    'auto.result.appOpen': '{n} mục được để lại vì ứng dụng của chúng đang mở',
     'auto.result.leftAlone': 'Đã bỏ qua',
     'auto.history.dryRun': 'chỉ báo cáo — {n} tệp sẽ bị lấy đi',
     'auto.history.real': 'đã chuyển {moved} · đã xoá vĩnh viễn {purged}',

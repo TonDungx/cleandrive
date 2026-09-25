@@ -128,7 +128,7 @@ Thời lượng tương đối chỉ mang tính minh hoạ. [Speculation] Tôi k
 | A5 | Snapshot diff | P1 | ✅ Đã code xong (2026-09-25) — lịch chụp hằng tuần dời sang G3 |
 | B1 | Quarantine sang ổ khác | P1 | |
 | B3 | OneDrive "Free up space" | P1 | ✅ Đã code xong (2026-09-25) — đã kiểm trên OneDrive thật |
-| D4 | Cache app phổ biến | P1 | |
+| D4 | Cache app phổ biến | P1 | ✅ Đã code xong (2026-09-25) — 6 app đã kiểm trên máy này; các app còn lại chưa đưa vào |
 | I1 | Restore Center | P1 | ✅ Đã code xong (2026-09-24) |
 | I2 | Accessibility (high-contrast, bàn phím, screen reader) | P1 | |
 | I3 | Menu chuột phải trong Explorer | P2 | |
@@ -1032,6 +1032,17 @@ Gộp `bin/`, `obj/`, `target/`, `dist/`, `build/`, `.next/`, `.nuxt/`, `.turbo/
 - Verdict `safe · strong`. Có thể `unattendedEligible` nhưng **phải** gắn điều kiện "skip while these apps are open" cho đúng tiến trình.
 
 **Mở rộng:** định nghĩa app nằm ở `src/main/analyzers/app-caches/*.json` để thêm app mới mà không cần sửa code. Mỗi file JSON bắt buộc phải có harness fixture đi kèm.
+
+> **✅ Đã code xong (2026-09-25).** Định nghĩa ở `src/main/analyzers/app-caches/` (`chrome`, `edge`, `teams`, `discord`, `zoom`, `figma`.json và `index.js`: `validate`, `matcher`, `openApps`), danh sách tiến trình ở `src/main/lib/processes.js`, `addKnown` trong `lib/advisor.js`, `knownCache` trong `lib/scanner.js`, `appCandidate`/`markOpenApps` trong `analyzers/scan.js`, kiểm lại ngay trước khi xoá trong `actions/recycle.js` (`leaveOpenApps`), chặn trong `lib/autoclean.js`, settings schema v3. Harness: `scripts/test-appcaches.js` (56 kiểm tra), fixture ở `scripts/fixtures/app-caches/` ghi bằng `npm run capture:appcaches` (chỉ đọc), 12 kiểm tra mới trong `smoke.js` (mục "Known apps' caches"), ảnh chụp `npm run shoot:appcaches`. Khác với đặc tả ở trên:
+> - **Chỉ 6 app** (đã chốt: chỉ phát hành app đã kiểm được): Chrome, Edge, Teams bản mới (`ms-teams.exe`, lấy từ manifest của package), Discord, Zoom, Figma. Firefox, Brave, Cốc Cốc, Teams classic, Slack, Spotify, Adobe Media Cache **không có trên máy test**. Camera Raw có thư mục nhưng `Cache2` rỗng và không có app chủ để biết tiến trình, nên **chưa đưa vào** (đã chốt).
+> - **Fixture là output thật:** tên thư mục trên máy này, sâu hai cấp dưới gốc của mỗi app. Tên site (`https_…`), thư mục tài khoản (phần `*` của Zoom) và chuỗi giống id đều được thay bằng `site-N`, `account-N`, `idN`; không ghi tên tệp hay kích thước. Harness dựng lại các thư mục đó và đòi định nghĩa chọn đúng các thư mục cache đã chọn trên máy thật. **Mọi tên trong danh sách phải thấy được trong fixture:** vì vậy đã bỏ `GraphiteDawnCache` của Zoom và `DawnCache` của Figma, hai tên không có trên máy này.
+> - **Ngoài danh sách là `keep`**, đúng đặc tả, và điều này sửa một rủi ro có từ trước: `Code Cache`/`GPUCache` của Chrome và Edge trước đây rơi vào category `gpucache`, `safe`, nằm trong whitelist chạy tự động, **mà không kiểm trình duyệt có đang mở không**. Giờ mọi thứ dưới gốc của một app đã biết không còn đi qua luật chung. `IndexedDB`, `Service Worker` (một profile Edge ở đây có 608 MB và 560 MB) không bao giờ được đề xuất.
+> - **Cache dưới Roaming** (Discord, Zoom, Figma) lần đầu được đề xuất, vì định nghĩa nói rõ thư mục nào là cache. Luật chung vẫn để yên phần còn lại của Roaming.
+> - **Chặn theo tiến trình của từng app** (đã chốt), ở ba chỗ: (1) lúc quét xong, app đang mở thì nhóm là `keep · certain`, không có action, không chọn được, không tính vào "An toàn để xoá", bằng chứng đầu tiên là "{app} đang mở — hãy đóng nó rồi quét lại"; (2) lượt chạy tự động hỏi lại ngay trước khi chọn tệp; (3) **ngay trước khi xoá**, `recycle.plan` hỏi lại, và tệp của app vừa mở sau lượt quét bị bỏ qua như "đang dùng". Chỗ (3) không có trong đặc tả: probe `r+` của Thùng rác chỉ bắt được tệp mở không chia sẻ, nên không dựa vào nó được. Không đọc được danh sách tiến trình thì không đề xuất và không lấy cache của app nào.
+> - **`tasklist` gọi bằng đường dẫn tuyệt đối** trong System32 với tham số cố định (`processes.js`). Lượt chạy tự động trước đây gọi `tasklist.exe` theo PATH; đã chuyển sang cùng hàm này.
+> - **Thêm app vẫn phải sửa code**, khác với "không cần sửa code": `FILES` trong `index.js` liệt kê từng file để một JSON lạ không tự được nạp, whitelist chạy tự động (`allowed-categories.js`, giờ là 12) liệt kê bằng tay, và mỗi app cần nhãn trong `automatic.js` cùng bản dịch. Harness kiểm các danh sách này khớp nhau.
+> - **Settings v3:** mỗi app là một category `app.<id>`, bật mặc định. Tệp v2 đang bật `gpucache` thì được thêm cả 6 (để ai đang được dọn cache Chrome/Edge vẫn được dọn); tệp đang tắt thì không thêm gì.
+> - **Sửa kèm:** (a) badge ở đầu nhóm ("safe to delete", "your call") chưa bao giờ được dịch; ảnh tiếng Việt bắt được. (b) Thẻ "Never deleted" nói các thư mục trong đó "bị bỏ qua khi quét và bị lớp bảo vệ từ chối xoá", **điều này sai từ trước**: chúng vẫn được quét, và `vet()` chỉ chặn vị trí hệ thống và thư mục cài chương trình. D4 làm cái sai này lộ ra: cache Chrome được đề xuất ngay trên dòng "Chrome\User Data\Default — bị chặn". Đổi thành "Held back / Được giữ lại", kèm câu mô tả đúng điều code làm.
 
 ---
 

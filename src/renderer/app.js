@@ -396,6 +396,8 @@ function renderLargest(files) {
   lists.largest = CandidateList($('largest-files'), {
     rows: files.slice(0, 50),
     selection: state.selectedLarge,
+    // A known app's cache while the app is open carries no action (D4).
+    selectable: (row) => !row.actions || row.actions.includes('recycle'),
     onChange: () => {
       bars.largest.update();
       window.SpaceMap.syncSelection();
@@ -456,10 +458,12 @@ $('delete-large').addEventListener('click', async () => {
 
 /* ------------------------------------------------------------------ cleanup */
 
-const VERDICT_TEXT = {
-  safe: 'safe to delete',
-  review: 'your call',
-};
+/** A group's verdict, as its head says it -- a phrase, where a row says one word. */
+function groupVerdictText(verdict) {
+  if (verdict === 'safe') return t('cleanup.verdict.safe', 'safe to delete');
+  if (verdict === 'review') return t('cleanup.verdict.review', 'your call');
+  return verdictWord(verdict);
+}
 
 function renderCleanup(cleanup, accessTimes) {
   state.cleanup = cleanup;
@@ -535,17 +539,26 @@ function renderCleanupGroup(group) {
   size.className = group.verdict === 'safe' ? 'group-waste' : '';
   size.textContent = `${formatBytes(group.bytes)} · ${formatCount(group.count)} ${word(group.count, 'app.file', 'file', 'files')}`;
 
+  // A known app that is open (D4): its cache is shown, and nothing in it can
+  // be ticked -- the rows carry no action -- until the app is closed and the
+  // folder scanned again.
+  const open = group.app && group.app.open !== false;
+  const tickable = (file) => !file.actions || file.actions.includes('recycle');
+
   const selectAll = document.createElement('button');
   selectAll.className = 'group-select';
   selectAll.textContent = t('cleanup.selectAllInGroup', 'select all');
+  selectAll.hidden = open;
   selectAll.addEventListener('click', () => {
-    for (const file of group.files) state.selectedCleanup.add(file.path);
+    for (const file of group.files) if (tickable(file)) state.selectedCleanup.add(file.path);
     syncCleanupCheckboxes();
     updateCleanupSelection();
   });
 
   head.append(
-    makeBadge(group.verdict, VERDICT_TEXT[group.verdict] || group.verdict),
+    open
+      ? makeBadge('keep', group.app.open === null ? t('cleanup.appUnknown', 'could not check') : t('cleanup.appOpen', 'open'))
+      : makeBadge(group.verdict, groupVerdictText(group.verdict)),
     title,
     size,
     selectAll
@@ -558,6 +571,15 @@ function renderCleanupGroup(group) {
   hint.className = 'group-hint';
   hint.textContent = t(`category.${group.category}.hint`, group.hint);
   body.appendChild(hint);
+  if (open) {
+    const why = document.createElement('p');
+    why.className = 'group-hint group-open';
+    why.textContent =
+      group.app.open === null
+        ? t('cleanup.appUnknownHint', 'Could not tell whether {app} is open, so none of this is offered.', { app: group.app.name })
+        : t('cleanup.appOpenHint', '{app} is open. Close it and scan again to clear its cache.', { app: group.app.name });
+    body.appendChild(why);
+  }
 
   const list = document.createElement('ul');
   list.className = 'files';
@@ -566,6 +588,7 @@ function renderCleanupGroup(group) {
       rows: group.files,
       selection: state.selectedCleanup,
       onChange: updateCleanupSelection,
+      selectable: tickable,
       meta: (file) => `${timeLabel(file)} · ${tm(file.reason)}`,
       // The group head already says the verdict; each row says how sure.
       badge: (file) => evidencePill(file, { verdict: false }),

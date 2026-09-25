@@ -1,0 +1,26 @@
+{
+  "id": "figma",
+  "name": "Figma",
+  "hint": "Scripts, images and graphics code the Figma desktop app saved to open faster. Figma fetches or rebuilds them; your files live in Figma's cloud, not here.",
+  "processes": [
+    "Figma.exe"
+  ],
+  "verified": "2026-09-25",
+  "roots": [
+    {
+      "base": "APPDATA",
+      "path": [
+        "Figma",
+        "DesktopProfile"
+      ],
+      "profiles": "^v[0-9]+$",
+      "inProfile": [
+        "Cache",
+        "Code Cache",
+        "GPUCache",
+        "DawnGraphiteCache",
+        "DawnWebGPUCache"
+      ]
+    }
+  ]
+}

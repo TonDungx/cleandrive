@@ -394,7 +394,8 @@ an automatic cleanup.
 The same scan, read a different way: not "what is big" but "what is disposable".
 
 Every file receives exactly one of four verdicts — **safe**, **review**,
-**protected**, **keep** — and lands in one of ten categories:
+**protected**, **keep** — and lands in one of ten categories, or in a
+[known app's own cache](#known-apps-caches):
 
 temporary files · caches · GPU and compiled-code caches · application caches ·
 crash dumps · old log files · build output · old installers · large archives and
@@ -419,6 +420,7 @@ disk images · large and untouched.
   | A `.bak` file — it can be somebody's only backup | likely |
   | Inside a folder merely called *Cache* | likely |
   | A GPU, shader or compiled-code cache; a crash dump; a log untouched for a week | strong |
+  | A known app's own cache folder, with the app closed | strong |
   | `bin`/`obj`/`out` beside a project file — nothing checks the project is idle | likely |
   | An installer in Downloads a month old — it could be a portable app | likely |
   | A large archive or disk image | strong |
@@ -430,8 +432,9 @@ disk images · large and untouched.
   actually verified, like two files hashing the same.
 - **Protected locations**, listed with the reason each was refused, so a user can
   see the app declining to suggest something rather than silently omitting it.
-- **Application folders** that were excluded because their contents belong to an
-  installed program.
+- **Held back**: the folders that hold installed programs, or programs' settings
+  and data. Nothing in them is called safe except GPU and crash files and a known
+  app's own cache.
 
 ### The thresholds, in one place
 
@@ -447,6 +450,26 @@ a millisecond apart cannot land on opposite sides of a threshold.
 *Select everything marked safe* (which skips every `review` group), *select all*
 within one category, and *clear selection*. A live readout shows `n selected ·
 total size`, and the delete button stays disabled until something is ticked.
+
+### Known apps' caches
+
+For six apps — Google Chrome, Microsoft Edge, the new Microsoft Teams, Discord,
+Zoom and Figma — the scan knows which of their folders are cache, and each gets a
+group under its own name. Only the folders on that app's list count: `Cache`,
+`Code Cache`, `GPUCache` and the shader caches, in each profile. Everything else
+in the app's folder — `IndexedDB`, `Service Worker`, `Local Storage`, sign-ins,
+extensions — is left alone, even where it is bigger. Each list was checked
+against the app's real folders on a real machine
+([`src/main/analyzers/app-caches/`](src/main/analyzers/app-caches/)), and an app
+is shipped only when that could be done; Adobe Camera Raw is not.
+
+An app's cache is offered only while the app is closed. The scan asks Windows
+which programs are running as it finishes. An open app's group says *open*,
+nothing in it can be ticked, and it is not in *Safe to delete*: close the app
+and scan again. If the list of running programs cannot be read, no app's cache
+is offered. The check is made again just before anything moves, so an app
+opened between the scan and the click keeps its cache — those files are skipped
+as in use.
 
 ### Available in the cloud
 
@@ -835,6 +858,7 @@ would have taken; you decide whether to let it.
 | Age | Untouched for at least *N* days, taking the **later** of access and modification time: a file written a year ago but opened yesterday is in use |
 | Whitelist | Nothing under a listed folder |
 | Running apps | If any named program is open, the whole run is skipped. If the app cannot determine what is running, it also skips |
+| Known apps | A [known app's cache](#known-apps-caches) is taken only while that app is closed, checked after the scan and again just before anything moves; if what is running cannot be read, no app's cache is taken. On by default, one tick per app |
 | Disk pressure | Optionally, only when the volume is over *N*% full |
 | Cap | At most *N* files per run |
 
@@ -1211,7 +1235,11 @@ into the script) to read each file's sync state through the Cloud Files API,
 and `attrib +U -P` — the command Microsoft documents for Files On-Demand — to
 make a file online-only. `npm run verify:dehydrate` checks the real OneDrive
 reading only; with `-- --write` it makes three small files of its own
-online-only, measures it, and deletes them again.
+online-only, measures it, and deletes them again. `tasklist` is also how a
+known app's cache waits for the app to close — the same absolute path, the same
+fixed arguments — and `npm run capture:appcaches` records, reading only, the
+folder names those apps keep on this machine: the fixtures their definitions
+are tested against, with sites' and accounts' names blanked.
 
 A few paths need an administrator. They go through a **helper**: the same
 executable started with `--helper` through a UAC prompt the user answered,
@@ -1235,8 +1263,9 @@ Everything else, including the ZIP, Excel, PowerPoint, image and video readers,
 the charts and the tray icon, is written here. There are no binary assets in the
 repository; the icons are drawn in code.
 
-Test harnesses live in [`scripts/`](scripts/) — thirty-three suites in
+Test harnesses live in [`scripts/`](scripts/) — thirty-four suites in
 `npm test`, plus the Electron ones, covering the classification rules, the
+known apps' caches held to their real folders, the
 candidate contract, the action pipeline, the map of the folder and what the
 window may ask of it, what two scans of a folder can honestly say changed, the
 journal (including two processes
@@ -1247,4 +1276,4 @@ against the released code, the translation dictionary, and an end-to-end run
 that boots the real application and reads its rendered interface back out.
 `npm run verify:restore` puts throwaway files back from the real Recycle Bin.
 `npm run shoot:lists`, `shoot:media`, `shoot:viewer`, `shoot:restore`,
-`shoot:system`, `shoot:treemap`, `shoot:changes` and `shoot:cloud` take screenshots of the real screens.
+`shoot:system`, `shoot:treemap`, `shoot:changes`, `shoot:cloud` and `shoot:appcaches` take screenshots of the real screens.

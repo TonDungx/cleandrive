@@ -22,6 +22,8 @@ const { isAllowedUnattended } = require('../automatic/allowed-categories');
 const { all } = require('./categories');
 const { streamWhile } = require('./channel');
 const cloudState = require('../lib/cloud-state');
+const appCaches = require('./app-caches');
+const { runningProcessNames } = require('../lib/processes');
 
 const ID = 'scan';
 
@@ -84,6 +86,70 @@ const ATIME_UNTRACKED = m(
   'Windows is not recording when files are opened here, so this age is when it was last modified'
 );
 
+/* ---- known apps' caches (D4) ---------------------------------------------- */
+
+/**
+ * Which known apps are open, as the scan ends: a Set of ids, or null when the
+ * process list could not be read.
+ */
+async function openAppsNow(deps = {}) {
+  const list = deps.runningProcessNames || runningProcessNames;
+  return appCaches.openApps(await list());
+}
+
+const appOf = (category) => (typeof category === 'string' && category.startsWith('app.') ? appCaches.byId(category.slice(4)) : null);
+
+/**
+ * A known app's cache file, as a candidate.
+ *
+ * Safe while the app is closed. While it is open -- or when there was no way
+ * to tell -- the file is `keep` with no action at all, and the first reason
+ * says why and what to do: an app's cache is not a thing to take out from
+ * under it.
+ */
+function appCandidate(file, def, open) {
+  const category = `cleanup.app.${def.id}`;
+  const shut = !!open && !open.has(def.id);
+  const state = !open
+    ? m('evidence.app.unknown', 'Could not tell whether {app} is open, so nothing of it is offered', { app: def.name })
+    : shut
+      ? m('evidence.app.closed', '{app} was not running when the scan finished', { app: def.name })
+      : m('evidence.app.open', '{app} is open — close it and scan again', { app: def.name });
+  return {
+    id: candidateId(ID, file.path),
+    path: file.path,
+    kind: 'file',
+    bytes: file.size,
+    category,
+    verdict: shut ? 'safe' : 'keep',
+    confidence: shut ? 'strong' : open ? 'certain' : 'likely',
+    evidence: shut ? [evidence(1, file.reason), evidence(2, state)] : [evidence(1, state), evidence(2, file.reason)],
+    actions: shut ? ['recycle'] : [],
+    unattendedEligible: shut && isAllowedUnattended(category),
+    meta: { mtimeMs: file.mtimeMs, atimeMs: file.atimeMs },
+  };
+}
+
+/**
+ * The groups, told which apps are open: an open app's group is `keep`, marked
+ * `open`, and out of the "safe to delete" total.
+ */
+function markOpenApps(cleanup, open) {
+  if (!cleanup || !Array.isArray(cleanup.groups)) return;
+  for (const group of cleanup.groups) {
+    const def = appOf(group.category);
+    if (!def) continue;
+    const shut = !!open && !open.has(def.id);
+    group.app ={ id: def.id, name: def.name, open: open ? !shut : null };
+    if (!shut) group.verdict = 'keep';
+  }
+  const total = (verdict) => cleanup.groups.filter((g) => g.verdict === verdict).reduce((n, g) => n + g.bytes, 0);
+  cleanup.safeBytes = total('safe');
+  cleanup.reviewBytes = total('review');
+  const order = { safe: 0, review: 1, protected: 2, keep: 3 };
+  cleanup.groups.sort((a, b) => order[a.verdict] - order[b.verdict] || b.bytes - a.bytes);
+}
+
 function cleanupCandidate(file, category, verdict, accessTimes) {
   const list = [evidence(1, file.reason)];
   if (category === 'stale' && !(accessTimes && accessTimes.tracked === true)) {
@@ -126,7 +192,9 @@ function plainCandidate(file) {
  * A file the scan recorded with the advisor's verdict beside it -- a row of
  * the largest list, or a tile on the map of the folder -- as a candidate.
  */
-function fileCandidate(file, accessTimes) {
+function fileCandidate(file, accessTimes, open = null) {
+  const def = appOf(file.category);
+  if (def) return appCandidate(file, def, open);
   return file.category && file.verdict !== 'keep'
     ? cleanupCandidate(file, file.category, file.verdict, accessTimes)
     : plainCandidate(file);
@@ -137,7 +205,7 @@ function fileCandidate(file, accessTimes) {
  *
  * @returns {{candidates: object[], cleanupIds: Map<string, string[]>, largestIds: string[]}}
  */
-function toCandidates(result) {
+function toCandidates(result, open = null) {
   const byId = new Map();
   const cleanupIds = new Map();
   const accessTimes = result.accessTimes;
@@ -145,7 +213,8 @@ function toCandidates(result) {
   for (const group of (result.cleanup && result.cleanup.groups) || []) {
     const ids = [];
     for (const file of group.files) {
-      const candidate = cleanupCandidate(file, group.category, group.verdict, accessTimes);
+      const def = appOf(group.category);
+      const candidate = def ? appCandidate(file, def, open) : cleanupCandidate(file, group.category, group.verdict, accessTimes);
       byId.set(candidate.id, candidate);
       ids.push(candidate.id);
     }
@@ -159,7 +228,7 @@ function toCandidates(result) {
   const largestIds = [];
   for (const file of result.largestFiles || []) {
     const id = candidateId(ID, file.path);
-    if (!byId.has(id)) byId.set(id, fileCandidate(file, accessTimes));
+    if (!byId.has(id)) byId.set(id, fileCandidate(file, accessTimes, open));
     largestIds.push(id);
   }
 
@@ -300,7 +369,13 @@ const analyzer = {
       })
     );
 
-    const { candidates, cleanupIds, largestIds } = toCandidates(result);
+    // Which known apps are open decides what their caches are (D4), so it is
+    // asked once the walk is done, and before any candidate is made.
+    const open = result.cleanup && result.cleanup.groups.some((g) => appOf(g.category))
+      ? await openAppsNow(ctx.deps)
+      : new Set();
+    markOpenApps(result.cleanup, open);
+    const { candidates, cleanupIds, largestIds } = toCandidates(result, open);
 
     // Only when the folder scanned holds OneDrive files at all: a scan of
     // Downloads has nothing to say about OneDrive, and says nothing.
@@ -321,8 +396,11 @@ const analyzer = {
     }
     for (const candidate of candidates) yield { type: 'candidate', candidate };
     if (found) for (const candidate of found.candidates) yield { type: 'candidate', candidate };
-    yield { type: 'summary', summary: toSummary(result, cleanupIds, largestIds, found ? found.summary : null) };
+    const summary = toSummary(result, cleanupIds, largestIds, found ? found.summary : null);
+    // For the map of the folder, whose file tiles are candidates too.
+    summary.openApps = open ? [...open] : null;
+    yield { type: 'summary', summary };
   },
 };
 
-module.exports = { analyzer, confidenceFor, toCandidates, fileCandidate, cloudCandidate, cloudFindings, ID };
+module.exports = { analyzer, confidenceFor, toCandidates, fileCandidate, cloudCandidate, cloudFindings, appCandidate, markOpenApps, ID };

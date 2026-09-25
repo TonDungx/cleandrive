@@ -1,0 +1,33 @@
+{
+  "id": "zoom",
+  "name": "Zoom",
+  "hint": "What Zoom's built-in web views saved to open faster. Zoom fetches or rebuilds it; your meetings, recordings and sign-in are not kept here.",
+  "processes": [
+    "Zoom.exe"
+  ],
+  "verified": "2026-09-25",
+  "roots": [
+    {
+      "base": "APPDATA",
+      "path": [
+        "Zoom",
+        "data",
+        "WebviewCacheX64",
+        "*",
+        "EBWebView"
+      ],
+      "profiles": "^(Default|WV2Profile_[A-Za-z0-9_]+)$",
+      "inProfile": [
+        "Cache",
+        "Code Cache",
+        "GPUCache",
+        "DawnGraphiteCache",
+        "DawnWebGPUCache"
+      ],
+      "atRoot": [
+        "GrShaderCache",
+        "ShaderCache"
+      ]
+    }
+  ]
+}

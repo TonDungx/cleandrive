@@ -21,8 +21,49 @@ const path = require('node:path');
 const { planTrash, executeTrash } = require('../lib/trash');
 const { findUserBins, listItems, matchRecorded, putBack } = require('../lib/recyclebin');
 const { pool } = require('../lib/util');
+const appCaches = require('../analyzers/app-caches');
+const { runningProcessNames } = require('../lib/processes');
 
 const exists = (p) => fsp.lstat(p).then(() => true, () => false);
+
+/**
+ * A known app's folder, checked again at the last moment (D4).
+ *
+ * The scan said the app was closed -- or the file was picked from another
+ * list -- but it may have been opened since, and nothing is taken from under
+ * an app that is open now. Its files are refused as in use, which the dialog
+ * and the receipt already say. When the process list cannot be read they are
+ * refused too, the scan's rule. The list is read once, and only when some
+ * item is in such a folder.
+ */
+async function leaveOpenApps(planned, deps = {}) {
+  const match = appCaches.matcher(deps.appCacheEnv || process.env);
+  const owners = new Map();
+  for (const item of planned.plan) {
+    const hit = match(item.path);
+    if (hit) owners.set(item, hit.def);
+  }
+  if (owners.size === 0) return planned;
+
+  const open = appCaches.openApps(await (deps.runningProcessNames || runningProcessNames)());
+  const plan = [];
+  const refused = [];
+  for (const item of planned.plan) {
+    const def = owners.get(item);
+    if (!def || (open && !open.has(def.id))) plan.push(item);
+    else if (open) refused.push({ path: item.path, error: `${def.name} is open`, code: 'EBUSY' });
+    else refused.push({ path: item.path, error: `Could not tell whether ${def.name} is open` });
+  }
+  if (refused.length === 0) return planned;
+  return {
+    ...planned,
+    plan,
+    failed: [...planned.failed, ...refused],
+    inUse: [...(planned.inUse || []), ...refused.filter((r) => r.code === 'EBUSY')],
+    totalBytes: plan.reduce((n, item) => n + item.size, 0),
+    estimatedMs: Math.round((planned.estimatedMs || 0) * (plan.length / planned.plan.length)),
+  };
+}
 
 /**
  * The way back, for the Restore Center.
@@ -93,9 +134,10 @@ module.exports = {
   },
 
   /** Vet and probe: the only I/O before the user has said yes. */
-  plan(items, options, ctx) {
+  async plan(items, options, ctx) {
     const plan = (ctx.deps && ctx.deps.planTrash) || planTrash;
-    return plan(items, { ...options, allowDirectories: false }, { token: ctx.token, onProgress: ctx.onProgress });
+    const planned = await plan(items, { ...options, allowDirectories: false }, { token: ctx.token, onProgress: ctx.onProgress });
+    return leaveOpenApps(planned, ctx.deps || {});
   },
 
   /** What the confirmation says, before anything has moved. */

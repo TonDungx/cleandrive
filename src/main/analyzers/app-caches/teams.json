@@ -1,0 +1,16 @@
+{
+  "id": "teams",
+  "name": "Microsoft Teams",
+  "hint": "What the new Teams app saved to open faster, in the browser engine it runs in. Teams fetches or rebuilds it; your chats, files and sign-in are not kept here.",
+  "processes": ["ms-teams.exe"],
+  "verified": "2026-09-25",
+  "roots": [
+    {
+      "base": "LOCALAPPDATA",
+      "path": ["Packages", "MSTeams_8wekyb3d8bbwe", "LocalCache", "Microsoft", "MSTeams", "EBWebView"],
+      "profiles": "^(Default|WV2Profile_[A-Za-z0-9_]+)$",
+      "inProfile": ["Cache", "Code Cache", "GPUCache", "DawnGraphiteCache", "DawnWebGPUCache"],
+      "atRoot": ["GrShaderCache", "ShaderCache", "GraphiteDawnCache"]
+    }
+  ]
+}
