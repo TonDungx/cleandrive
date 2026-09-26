@@ -23,6 +23,7 @@ const path = require('node:path');
 const tools = require('../src/main/dev/tools');
 const devMeasure = require('../src/main/dev/measure');
 const devAnalyzer = require('../src/main/analyzers/dev');
+const containers = require('../src/main/dev/containers');
 const analyzers = require('../src/main/analyzers');
 const { validateCandidate } = require('../src/main/analyzers/contract');
 const { isAllowedUnattended } = require('../src/main/automatic/allowed-categories');
@@ -131,7 +132,10 @@ async function main() {
     await file(path.join(vs, 'BackupFiles', 'recovered.cs'), 8192);
     await file(path.join(vs, 'SettingsBackup_9ea411bd', 'settings.vssettings'), 4096);
 
-    const model = await devMeasure.scan({ env, deps: { runningProcessNames: async () => new Set(['explorer.exe']) } });
+    // The container half reads the registry and runs `wsl --version`; both are
+    // injected so this harness never depends on what is installed here.
+    const noMachines = { exportKey: async () => null, wslVersion: async () => null };
+    const model = await devMeasure.scan({ env, deps: { runningProcessNames: async () => new Set(['explorer.exe']), ...noMachines } });
 
     const found = new Set(model.tools.map((tool) => tool.id));
     check('the caches that are there are found',
@@ -169,8 +173,8 @@ async function main() {
     const out = await analyzers.collect('dev', { model }, { strict: true, can: () => true });
     for (const c of out.candidates) validateCandidate(c);
     check('every row validates as a candidate', out.summary.rejected === 0 && out.candidates.length > 0, `${out.candidates.length} rows`);
-    check('the categories are the three this screen declared',
-      out.candidates.every((c) => ['dev.packageCache', 'dev.sdk', 'dev.ideCache'].includes(c.category)),
+    check('the categories are the five this screen declared',
+      out.candidates.every((c) => ['dev.packageCache', 'dev.sdk', 'dev.ideCache', 'dev.wslDistro', 'dev.dockerDisk'].includes(c.category)),
       [...new Set(out.candidates.map((c) => c.category))].join(', '));
 
     const packageRows = out.candidates.filter((c) => c.category === 'dev.packageCache');
@@ -198,7 +202,7 @@ async function main() {
       ['open', new Set(['code.exe']), 'keep', 'none'],
       ['unreadable', null, 'keep', 'none'],
     ]) {
-      const other = await devMeasure.scan({ env, deps: { runningProcessNames: async () => names } });
+      const other = await devMeasure.scan({ env, deps: { runningProcessNames: async () => names, ...noMachines } });
       const rows = await analyzers.collect('dev', { model: other }, { strict: true, can: () => true });
       const vscode = rows.candidates.filter((c) => c.meta.toolId === 'vscode');
       check(`with the editor ${label}, its cache is ${verdict} and offers ${actions}`,
@@ -222,7 +226,7 @@ async function main() {
     await fsp.mkdir(bare, { recursive: true });
     const nothing = await devMeasure.scan({
       env: { USERPROFILE: bare, LOCALAPPDATA: path.join(bare, 'l'), APPDATA: path.join(bare, 'r'), ProgramFiles: path.join(bare, 'p') },
-      deps: { runningProcessNames: async () => new Set() },
+      deps: { runningProcessNames: async () => new Set(), ...noMachines },
     });
     check('a machine with no developer tools says so rather than failing',
       nothing.tools.length === 0 && nothing.missing.length === tools.TOOLS.length,
@@ -230,6 +234,95 @@ async function main() {
     const empty = await analyzers.collect('dev', { model: nothing }, { strict: true, can: () => true });
     check('and produces no rows and a total of zero',
       empty.candidates.length === 0 && empty.summary.totalBytes === 0 && empty.summary.groups.length === 0);
+
+    /* ---- WSL and Docker (C3) ---- */
+
+    console.log('\ndeveloper: Linux and container disks\n');
+
+    {
+      // The registry is the source, so a distro is described without starting
+      // anything. Its shape here is the real one from this machine, with the
+      // paths pointed at the harness's own folders.
+      const ubuntuDir = path.join(root, 'wsl', '{e0b47061-d036-4d86-ab46-bdfc443c4c0c}');
+      const dockerDir = path.join(root, 'AppData', 'Local', 'Docker', 'wsl', 'main');
+      await file(path.join(ubuntuDir, 'ext4.vhdx'), 32768);
+      await file(path.join(dockerDir, 'ext4.vhdx'), 4096);
+      await file(path.join(root, 'AppData', 'Local', 'Docker', 'wsl', 'disk', 'docker_data.vhdx'), 65536);
+
+      const lxss = {
+        'HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Lxss': { DefaultVersion: 2 },
+        'HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Lxss\\{e0b47061-d036-4d86-ab46-bdfc443c4c0c}': {
+          State: 1, DistributionName: 'Ubuntu', Version: 2, BasePath: ubuntuDir, VhdFileName: 'ext4.vhdx',
+        },
+        // Docker's own distribution arrives with the `\\?\` prefix, as it does here.
+        'HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Lxss\\{6150eddf-6ad2-4f61-8ec3-c559f825026e}': {
+          State: 1, DistributionName: 'docker-desktop', Version: 2, BasePath: `\\\\?\\${dockerDir}`, VhdFileName: 'ext4.vhdx',
+        },
+        // A stray subkey that is not a distribution.
+        'HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Lxss\\AppxInstallerCache': { Something: 1 },
+      };
+      const withWsl = { exportKey: async () => lxss, wslVersion: async () => '2.7.14.0' };
+
+      const machines = await containers.scan({ env, deps: withWsl });
+      check('both distributions are read from the registry, without starting anything',
+        machines.distros.length === 2 && machines.distros.some((d) => d.name === 'Ubuntu'),
+        machines.distros.map((d) => d.name).join(', '));
+      check('a subkey that is not a distribution is skipped',
+        !machines.distros.some((d) => /AppxInstallerCache/.test(d.name)));
+      check('the \\\\?\\ prefix on a base path is taken off before it is used',
+        machines.distros.every((d) => !d.basePath.startsWith('\\\\?\\') && d.disk),
+        machines.distros.map((d) => d.basePath).join(' | '));
+      check('Docker\u2019s own distribution is recognised as Docker\u2019s',
+        machines.distros.find((d) => d.name === 'docker-desktop').belongsToDocker &&
+          !machines.distros.find((d) => d.name === 'Ubuntu').belongsToDocker);
+      check('Docker\u2019s data disk is found, and it is not the distribution\u2019s disk',
+        machines.docker && /docker_data\.vhdx$/.test(machines.docker.path) &&
+          machines.docker.bytes > machines.distros.find((d) => d.name === 'docker-desktop').bytes,
+        machines.docker ? machines.docker.path : 'not found');
+
+      // The steps, and who gets which.
+      const ubuntu = machines.distros.find((d) => d.name === 'Ubuntu');
+      const dockerDistro = machines.distros.find((d) => d.name === 'docker-desktop');
+      check('a distribution is told to shut down before anything else',
+        ubuntu.steps[0].id === 'shutdown' && ubuntu.steps[0].command === 'wsl --shutdown');
+      check('and on WSL 2 it is offered the sparse switch this machine really has',
+        ubuntu.steps.some((step) => step.command === 'wsl --manage Ubuntu --set-sparse true'),
+        ubuntu.steps.map((step) => step.command).join(' | '));
+      check('the step that destroys everything is marked as destroying everything',
+        ubuntu.steps.find((step) => step.id === 'unregister').destroys === true);
+      check('Docker\u2019s own distribution is never offered an unregister',
+        !dockerDistro.steps.some((step) => step.id === 'unregister'),
+        dockerDistro.steps.map((step) => step.id).join(', '));
+      check('and Docker\u2019s data disk is cleared with Docker\u2019s own commands',
+        machines.docker.steps.map((step) => step.command).join(' | ') === 'docker system df | docker system prune -a --volumes');
+
+      // An old WSL must not be told to use a switch it does not have.
+      const old = await containers.scan({ env, deps: { exportKey: async () => lxss, wslVersion: async () => '1.0.0.0' } });
+      check('an older WSL is not told to use a switch it does not have',
+        old.sparseSupported === false &&
+          !old.distros.some((d) => d.steps.some((step) => step.id === 'sparse')),
+        old.distros.flatMap((d) => d.steps.map((step) => step.id)).join(', '));
+      const none = await containers.scan({ env, deps: { exportKey: async () => null, wslVersion: async () => null } });
+      check('a machine with no WSL at all says so rather than failing',
+        none.distros.length === 0 && none.sparseSupported === false && none.totalBytes >= 0);
+
+      const full = await devMeasure.scan({ env, deps: { runningProcessNames: async () => new Set(['explorer.exe']), ...withWsl } });
+      const rows = await analyzers.collect('dev', { model: full }, { strict: true, can: () => true });
+      const machineRows = rows.candidates.filter((c) => ['dev.wslDistro', 'dev.dockerDisk'].includes(c.category));
+      for (const c of machineRows) validateCandidate(c);
+      check('every disk becomes a row', machineRows.length === 3, String(machineRows.length));
+      check('and not one of them offers anything to click that acts',
+        machineRows.every((c) => c.actions.join() === 'none' && c.verdict === 'review' && !c.unattendedEligible),
+        [...new Set(machineRows.map((c) => `${c.verdict}/${c.actions.join()}`))].join(', '));
+      check('their sizes are in the screen\u2019s total',
+        rows.summary.machineBytes > 0 && rows.summary.totalBytes >= rows.summary.machineBytes,
+        `${rows.summary.machineBytes} of ${rows.summary.totalBytes}`);
+      check('Docker\u2019s row says it is not the distribution\u2019s disk',
+        machineRows.find((c) => c.category === 'dev.dockerDisk').evidence.some((e) => e.i18n === 'evidence.dev.dockerSeparate'));
+      check('and a distribution\u2019s row does not call the file date a last boot',
+        machineRows.filter((c) => c.category === 'dev.wslDistro')
+          .every((c) => c.evidence.some((e) => e.i18n === 'evidence.dev.wslWritten')));
+    }
 
     /* ---- the licence ---- */
 

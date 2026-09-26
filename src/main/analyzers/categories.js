@@ -69,6 +69,10 @@ declare('games.downloading', { screen: 'games' });
 declare('dev.packageCache', { screen: 'dev' });
 declare('dev.sdk', { screen: 'dev' });
 declare('dev.ideCache', { screen: 'dev' });
+// A WSL distribution's disk and Docker's data disk (C3). Both are explained
+// and never touched: what clears them does not go through the Recycle Bin.
+declare('dev.wslDistro', { screen: 'dev' });
+declare('dev.dockerDisk', { screen: 'dev' });
 
 function isDeclared(id) {
   return DECLARED.has(id);

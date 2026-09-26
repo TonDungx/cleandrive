@@ -99,6 +99,15 @@ app.whenReady().then(async () => {
     await theme('dark');
     await shoot('dev-dark');
 
+    // The Linux and container disks: the biggest things here, and the ones
+    // with steps rather than a single command.
+    await js(`
+      const section = document.querySelector('#dev-groups .dev-group[data-kind="machine"]');
+      if (section) section.scrollIntoView({ block: 'start' });
+    `);
+    await wait(400);
+    await shoot('dev-machines-dark');
+
     // The package caches, further down: one number and one command each.
     await js(`
       const section = document.querySelector('#dev-groups .dev-group[data-kind="packageCache"]');

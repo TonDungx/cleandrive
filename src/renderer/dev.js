@@ -28,9 +28,20 @@
     packageCache: () => t('dev.group.packages', 'Package caches'),
     sdk: () => t('dev.group.sdk', 'SDKs and toolchains'),
     ideCache: () => t('dev.group.ide', 'Editor caches'),
+    machine: () => t('dev.group.machines', 'Linux and container disks'),
+  };
+
+  /** What each step does, said before the command rather than after it. */
+  const STEP_WHAT = {
+    shutdown: () => t('dev.step.shutdown', 'Stop everything first — the disk cannot be changed while it is running:'),
+    sparse: () => t('dev.step.sparse', 'Then let the disk give space back as it is freed inside it:'),
+    unregister: () => t('dev.step.unregister', 'Or remove the whole distribution. Everything inside it goes, permanently, and none of it reaches the Recycle Bin:'),
+    df: () => t('dev.step.df', 'See what is in it first:'),
+    prune: () => t('dev.step.prune', 'Then remove images, volumes and stopped containers. This is permanent and nothing reaches the Recycle Bin:'),
   };
 
   const KIND_WHAT = {
+    machine: () => t('dev.group.machines.what', 'A Linux distribution keeps everything inside it in one file, and Docker keeps every image and volume in another. These are usually the biggest things on a developer’s machine, and the app does not touch any of them: what clears them deletes data outright, and none of it reaches the Recycle Bin.'),
     packageCache: () => t('dev.group.packages.what', 'Packages your tools downloaded. Each one clears its own with the command shown — the app does not touch these, because the tool that made them knows which are still needed and a walk of the folder does not.'),
     sdk: () => t('dev.group.sdk.what', 'Whole toolchains. Removing a piece is the vendor’s own manager’s job; taking folders out by hand leaves it believing they are still there.'),
     ideCache: () => t('dev.group.ide.what', 'Data your editors write again when they need it. These the app will move to the Recycle Bin — and only while the editor that owns them is closed.'),
@@ -150,6 +161,60 @@
   }
 
   /**
+   * A Linux or container disk: a size, and the steps in the order they have to
+   * happen. Every command is shown to be read and copied; the app runs none.
+   */
+  function renderMachine(row) {
+    const card = document.createElement('section');
+    card.className = 'dev-tool';
+    card.dataset.machine = row.name;
+
+    const head = document.createElement('div');
+    head.className = 'dev-tool-head';
+    const name = document.createElement('strong');
+    name.textContent = row.name;
+    const size = document.createElement('span');
+    size.className = 'dev-tool-size';
+    size.textContent = formatBytes(row.size);
+    head.append(name, size);
+    const pill = evidencePill(row);
+    pill.setAttribute('aria-expanded', String(view.open.has(row.id)));
+    pill.addEventListener('click', () => {
+      if (view.open.has(row.id)) view.open.delete(row.id);
+      else view.open.add(row.id);
+      render();
+    });
+    head.appendChild(pill);
+    card.appendChild(head);
+
+    const where = document.createElement('p');
+    where.className = 'dev-place';
+    where.textContent = row.path;
+    where.title = row.path;
+    card.appendChild(where);
+
+    for (const step of row.steps || []) {
+      const what = document.createElement('p');
+      what.className = step.destroys ? 'dev-step dev-step-destroys' : 'dev-step';
+      what.textContent = STEP_WHAT[step.id] ? STEP_WHAT[step.id]() : '';
+      if (what.textContent) card.appendChild(what);
+      card.appendChild(copyButton(step.command));
+    }
+
+    const actions = document.createElement('div');
+    actions.className = 'dev-tool-actions';
+    const reveal = document.createElement('button');
+    reveal.className = 'btn btn-sm btn-quiet';
+    reveal.textContent = t('dev.reveal', 'Open folder');
+    reveal.addEventListener('click', () => api.reveal(row.path));
+    actions.appendChild(reveal);
+    card.appendChild(actions);
+
+    if (view.open.has(row.id)) card.appendChild(EvidencePanel(row));
+    return card;
+  }
+
+  /**
    * Moving an editor's cache to the bin, through the same pipeline and the
    * same confirmation as every other delete on any other screen.
    */
@@ -223,7 +288,7 @@
     $('dev-stats').hidden = false;
     setText($('dstat-total'), formatBytes(summary.totalBytes));
     setText($('dstat-packages'), formatBytes(summary.packageCacheBytes));
-    setText($('dstat-sdk'), formatBytes(summary.sdkBytes));
+    setText($('dstat-sdk'), formatBytes(summary.machineBytes || 0));
     setText($('dstat-free'), formatBytes(summary.freeableBytes));
 
     renderNotes(summary);
@@ -235,6 +300,23 @@
     };
 
     const nodes = [];
+
+    const machines = viewsOf(summary.rows.machines || [], byId).sort((a, b) => b.size - a.size);
+    if (machines.length) {
+      const section = document.createElement('section');
+      section.className = 'dev-group';
+      section.dataset.kind = 'machine';
+      const title = document.createElement('h2');
+      title.className = 'dev-group-title';
+      title.textContent = `${KIND_TITLE.machine()} · ${formatBytes(summary.machineBytes || 0)}`;
+      const what = document.createElement('p');
+      what.className = 'dev-group-what';
+      what.textContent = KIND_WHAT.machine();
+      section.append(title, what);
+      for (const row of machines) section.appendChild(renderMachine(row));
+      nodes.push(section);
+    }
+
     for (const kind of ['ideCache', 'packageCache', 'sdk']) {
       const groups = summary.groups.filter((group) => group.kind === kind).sort((a, b) => b.bytes - a.bytes);
       if (groups.length === 0) continue;

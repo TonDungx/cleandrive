@@ -25,6 +25,7 @@ const { measureTree } = require('../system/walk');
 const { runningProcessNames } = require('../lib/processes');
 
 const tools = require('./tools');
+const containers = require('./containers');
 
 /** An IDE cache larger than this is not listed file by file. */
 const MAX_CACHE_FILES = 20000;
@@ -191,9 +192,15 @@ async function scan({ token = null, onProgress = () => {}, env = process.env, de
     });
   }
 
+  // WSL and Docker (C3). Cheap -- a registry read, a few stats and one
+  // `wsl --version` -- and nothing here is ever acted on by the app.
+  onProgress({ phase: 'containers' });
+  const machines = await containers.scan({ env, deps });
+
   return {
     at: Date.now(),
     tools: found,
+    machines,
     // What was looked for and not found, so the screen can say "no pnpm here"
     // rather than leaving somebody wondering whether it looked.
     missing: tools.TOOLS.filter((tool) => !found.some((f) => f.id === tool.id)).map((tool) => ({ id: tool.id, name: tool.name, kind: tool.kind })),

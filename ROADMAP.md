@@ -164,7 +164,7 @@ Thứ tự làm (người dùng chốt 2026-09-26): A4 → D1 → D2 → C1–C5
 | --- | --- | --- | --- |
 | A2 | Quét nhanh qua MFT / USN | P1 | |
 | A4 | Quét nhiều gốc, nhiều ổ, ổ ngoài, ổ mạng | P1 | ✅ Đã code xong (2026-09-26) — ổ mạng chỉ đọc (đã đo), ổ rời chỉ đọc cho tới khi đo; chưa đo trên ổ cứng gắn ngoài |
-| C1–C5 | Developer Pack | P1 | C2, C4 ✅ Đã code xong (2026-09-26) — chỉ ship công cụ có thật; cache gói chỉ hiện lệnh, cache IDE xoá được khi IDE đóng. C1, C3, C5 đang làm |
+| C1–C5 | Developer Pack | P1 | C2, C3, C4 ✅ Đã code xong (2026-09-26) — chỉ ship công cụ có thật; cache gói chỉ hiện lệnh, cache IDE xoá được khi IDE đóng; WSL và Docker chỉ giải thích. C1, C5 đang làm |
 | D1 | App đã cài: dung lượng & lần dùng cuối | P1 | ✅ Đã code xong (2026-09-26) — bỏ nguồn last-access (đã đo là không đáng tin), dung lượng tách hai cột đo được / bên cài khai; Prefetch cần quyền quản trị, chưa ai bấm |
 | D2 | Thư viện game | P1 | ✅ Đã code xong (2026-09-26) — chỉ Steam (đã đo: không có launcher nào khác); dung lượng Steam ghi là chính xác nên một cột; thư mục mồ côi chỉ phát hiện, không xoá |
 
@@ -996,6 +996,17 @@ Gộp `bin/`, `obj/`, `target/`, `dist/`, `build/`, `.next/`, `.nuxt/`, `.turbo/
 > - **Nói ra cả thứ không tìm thấy** ("Không có trên máy này, và đã tìm: pnpm, yarn…"), để không ai phải đoán xem app có buồn tìm hay không.
 > - **Android SDK không có lệnh nào để hiện**, vì trình quản lý của nó là một cửa sổ bên trong Android Studio; dòng đó giải thích và mở thư mục. **.NET SDK** thì hiện `dotnet --list-sdks` để xem bản nào cũ, và handoff `apps` sang danh sách ứng dụng của Windows — đúng nơi đã cài nó vào.
 > - **Sửa kèm harness:** `test-entitlements.js` có ba câu mô tả trạng thái trước khi Pro·Dev mở (`addons.length === 0`, `!can('pro.dev')`, "analyzer duy nhất sau feature key là games"). Đã đổi theo quyết định, và thêm câu kiểm rằng **một license Pro không có add-on vẫn không bao gồm `pro.dev`** — nó đang mở vì bản build này nói thế, không phải vì luật entitlement thôi phân biệt. `test-a11y.js` đổi từ mười một tab sang mười hai.
+> **✅ C3 đã code xong (2026-09-26).** `src/main/dev/containers.js`, hai category mới `dev.wslDistro` và `dev.dockerDisk`, nhóm "Ổ đĩa Linux và container" ở đầu tab Lập trình. Trên máy này: **85,0 GB** — Docker 53,7 GB, Ubuntu 31,2 GB, docker-desktop 96 MB. `test-dev.js` nay 71 kiểm tra, `smoke.js` 18. Khác với đặc tả, tất cả do đo ngày 2026-09-26:
+>
+> - **Danh sách distro đọc từ registry, không chạy `wsl.exe`.** `HKCU\…\Lxss\{guid}` có `DistributionName`, `Version`, `BasePath`, `VhdFileName` — đọc xong là đủ, không khởi động gì. (`wsl --list --verbose` cũng chạy được, 71 ms, và không làm máy ảo bật lên — nhưng registry thì không cần tiến trình nào.)
+> - **⚠️ Đường dẫn trong đặc tả sai trên máy này.** Đặc tả đoán distro nằm dưới `%LOCALAPPDATA%\Packages`; Ubuntu ở đây nằm tại `%LOCALAPPDATA%\wsl\{e0b47061-…}`, vị trí của các bản WSL mới. `BasePath` nói thẳng ra, nên không phải đoán. `BasePath` của docker-desktop còn có tiền tố `\\?\` phải cắt đi.
+> - **⚠️ Ổ dữ liệu của Docker KHÔNG phải ổ của distro docker-desktop.** Distro docker-desktop có `ext4.vhdx` **96 MB**; còn **53,7 GB** nằm ở `Docker\wsl\disk\docker_data.vhdx`, nơi chứa image và volume. Bảo người dùng `--set-sparse` cái distro sẽ thu nhỏ đúng 0 byte. Hai dòng riêng, lời khuyên riêng, và bằng chứng của dòng Docker nói thẳng điều này.
+> - **`Optimize-VHD` KHÔNG có trên máy này** (module Hyper-V chưa cài) — đúng thứ đặc tả đề xuất đầu tiên. Đổi lại, **`wsl --manage <Distro> --set-sparse true` thì có**: WSL ở đây là 2.7.14.0 và `wsl --help` liệt kê đúng công tắc đó. Nên dấu [Unverified] của đặc tả ("các bản WSL mới có thể có lệnh sparse riêng") **đã xác minh là có**. App chạy `wsl.exe --version` một lần (đường dẫn tuyệt đối trong System32, tham số cố định, chỉ đọc) để biết có nên khuyên dùng công tắc đó không; WSL 1.x thì không hiện lệnh không tồn tại.
+> - **Các file `.vhdx` KHÔNG sparse — chiếm đúng 100%** (Docker 57,65 GB khai / 57,65 GB thật; Ubuntu 33,47 / 33,47). Ngược hẳn bài học D2, và đáng nói ra: đây là byte thật đang nằm trên ổ.
+> - **Không chạy lệnh nào, tất cả đều là các bước để đọc và copy**, theo đúng thứ tự phải làm: tắt trước, rồi sparse, rồi (nếu muốn) `--unregister`. Bước nào xoá dữ liệu thì có cờ `destroys`, và trên màn hình nó in màu cảnh báo, đậm, với câu giải thích đặt **trước** dòng lệnh chứ không phải sau.
+> - **`docker-desktop` không bao giờ được đề xuất `--unregister`**: gỡ nó là gỡ engine của Docker, không phải một quyết định về dung lượng.
+> - **"Lần khởi động cuối" không đọc được**, đúng như đặc tả ngờ ("nếu đo được"). Thay bằng mtime của file `.vhdx`, và bằng chứng nói rõ đó là lúc ổ đĩa thay đổi chứ không phải lúc khởi động — không có cách nào đọc mốc kia mà không bật distro lên.
+
 
 
 ---

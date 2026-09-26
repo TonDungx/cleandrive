@@ -169,16 +169,102 @@ function ideCacheCandidate(file, tool) {
   };
 }
 
+/**
+ * A WSL distribution's virtual disk (C3).
+ *
+ * Nothing about it is a `safe`, and nothing about it is acted on. Every one of
+ * the commands on this row deletes something that does not go to the Recycle
+ * Bin, so the row is a set of steps to read, in the order they have to happen.
+ */
+function distroCandidate(distro, machines) {
+  const list = [
+    evidence(1, m('evidence.dev.wslWhat', 'The virtual disk of the {name} Linux distribution. Everything installed inside it lives in this one file', {
+      name: distro.name,
+    })),
+  ];
+  if (distro.disk) {
+    list.push(evidence(2, m('evidence.dev.wslSize', '{size}, and all of it is really on the disk — this is not a file that claims more than it uses', {
+      size: formatBytes(distro.disk.bytes),
+    })));
+    list.push(evidence(3, m('evidence.dev.wslWritten', 'Last written to {when}. That is when the disk changed, not when you last started the distribution — there is no way to read that without starting it', {
+      when: new Date(distro.disk.writtenMs).toISOString().slice(0, 10),
+    })));
+  } else {
+    list.push(evidence(2, m('evidence.dev.wslNoDisk', 'Its disk file is not where the registry says it is, so nothing about its size can be said')));
+  }
+  if (distro.belongsToDocker) {
+    list.push(evidence(list.length + 1, m('evidence.dev.wslDocker', 'Docker Desktop installed this one and runs in it. Removing it uninstalls Docker’s engine, and it is not where Docker’s images are kept')));
+  }
+  if (machines.sparseSupported) {
+    list.push(evidence(list.length + 1, m('evidence.dev.wslSparse', 'WSL {version} can make this disk give space back as it is freed inside. It has to be shut down first, and the app never runs either command', {
+      version: machines.wslVersion,
+    })));
+  } else {
+    list.push(evidence(list.length + 1, m('evidence.dev.wslOld', 'This WSL is too old to make the disk give space back on its own, so the file only ever grows')));
+  }
+
+  return {
+    id: candidateId(ID, `wsl:${distro.guid}`),
+    path: distro.disk ? distro.disk.path : `${distro.basePath}\\${distro.vhdName}`,
+    kind: distro.disk ? 'file' : 'virtual',
+    bytes: Math.max(0, Math.round(distro.bytes)),
+    category: 'dev.wslDistro',
+    verdict: 'review',
+    confidence: distro.disk ? 'strong' : 'guess',
+    evidence: list,
+    actions: ['none'],
+    unattendedEligible: false,
+    meta: {
+      kind: 'wsl',
+      name: distro.name,
+      version: distro.version,
+      belongsToDocker: distro.belongsToDocker,
+      basePath: distro.basePath,
+      claimedBytes: distro.disk ? distro.disk.claimedBytes : 0,
+      writtenMs: distro.disk ? distro.disk.writtenMs : null,
+      steps: distro.steps,
+    },
+  };
+}
+
+/** Docker Desktop's data disk, which is where images and volumes live. */
+function dockerCandidate(docker) {
+  return {
+    id: candidateId(ID, docker.path),
+    path: docker.path,
+    kind: 'file',
+    bytes: Math.max(0, Math.round(docker.bytes)),
+    category: 'dev.dockerDisk',
+    verdict: 'review',
+    confidence: 'strong',
+    evidence: [
+      evidence(1, m('evidence.dev.dockerWhat', 'Docker Desktop’s data disk: every image you have pulled, every volume, and every container that was ever built')),
+      evidence(2, m('evidence.dev.dockerSize', '{size}, all of it really on the disk', { size: formatBytes(docker.bytes) })),
+      evidence(3, m('evidence.dev.dockerSeparate', 'This is not the docker-desktop distribution’s own disk, which is a tenth of a gigabyte. Making that one sparse would shrink nothing here')),
+      evidence(4, m('evidence.dev.dockerPrune', 'Docker clears it with its own commands. “docker system df” shows what is in it first, and the prune below removes images, volumes and stopped containers for good — none of it goes to the Recycle Bin')),
+    ],
+    actions: ['none'],
+    unattendedEligible: false,
+    meta: {
+      kind: 'docker',
+      name: 'Docker Desktop',
+      claimedBytes: docker.claimedBytes,
+      writtenMs: docker.writtenMs,
+      steps: docker.steps,
+    },
+  };
+}
+
 const analyzer = {
   id: ID,
   feature: 'pro.dev',
   requiresElevation: false,
-  categories: ['dev.packageCache', 'dev.sdk', 'dev.ideCache'],
+  categories: ['dev.packageCache', 'dev.sdk', 'dev.ideCache', 'dev.wslDistro', 'dev.dockerDisk'],
 
   /** @param {object} ctx  { model } from dev/measure.js */
   async *run(ctx, token) {
     const model = ctx.model;
-    const rows = { packageCaches: [], sdks: [], ideCaches: [] };
+    const rows = { packageCaches: [], sdks: [], ideCaches: [], machines: [] };
 
     for (const tool of model.tools) {
       if (token && token.cancelled) break;
@@ -205,6 +291,19 @@ const analyzer = {
       }
     }
 
+    const machines = model.machines || { distros: [], docker: null, sparseSupported: false, wslVersion: null, totalBytes: 0 };
+    for (const distro of machines.distros) {
+      if (token && token.cancelled) break;
+      const candidate = distroCandidate(distro, machines);
+      rows.machines.push(candidate.id);
+      yield { type: 'candidate', candidate };
+    }
+    if (machines.docker) {
+      const candidate = dockerCandidate(machines.docker);
+      rows.machines.push(candidate.id);
+      yield { type: 'candidate', candidate };
+    }
+
     const { tools: toolList, ...rest } = model;
     const byKind = (kind) => toolList.filter((tool) => tool.kind === kind);
     yield {
@@ -225,7 +324,10 @@ const analyzer = {
           places: tool.places.map((p) => ({ dir: p.dir, bytes: p.bytes, files: p.files })),
           truncated: tool.truncated,
         })),
-        totalBytes: toolList.reduce((sum, tool) => sum + tool.bytes, 0),
+        totalBytes: toolList.reduce((sum, tool) => sum + tool.bytes, 0) + (machines.totalBytes || 0),
+        machineBytes: machines.totalBytes || 0,
+        wslVersion: machines.wslVersion,
+        sparseSupported: machines.sparseSupported,
         packageCacheBytes: byKind('packageCache').reduce((sum, tool) => sum + tool.bytes, 0),
         sdkBytes: byKind('sdk').reduce((sum, tool) => sum + tool.bytes, 0),
         ideCacheBytes: byKind('ideCache').reduce((sum, tool) => sum + tool.bytes, 0),
@@ -239,4 +341,4 @@ const analyzer = {
   },
 };
 
-module.exports = { analyzer, ID, packageCacheCandidate, sdkCandidate, ideCacheCandidate, WHAT };
+module.exports = { analyzer, ID, packageCacheCandidate, sdkCandidate, ideCacheCandidate, distroCandidate, dockerCandidate, WHAT };

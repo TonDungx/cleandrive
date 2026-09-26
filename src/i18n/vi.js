@@ -1506,7 +1506,42 @@
 
     'dev.stat.total': 'Tất cả',
     'dev.stat.packages': 'Cache gói',
-    'dev.stat.sdk': 'SDK',
+
+    'dev.stat.machines': 'Linux và Docker',
+    'dev.group.machines': 'Ổ đĩa Linux và container',
+    'dev.group.machines.what':
+      'Một bản Linux giữ mọi thứ bên trong nó trong đúng một tệp, còn Docker giữ mọi image và volume trong một tệp khác. Đây thường là những thứ to nhất trên máy của người lập trình, và app không đụng vào bất kỳ cái nào: thứ dọn được chúng là xoá thẳng, và không có gì đi qua Thùng rác cả.',
+
+    'dev.step.shutdown': 'Dừng hết trước đã — không đổi được ổ đĩa khi nó đang chạy:',
+    'dev.step.sparse': 'Rồi cho ổ đĩa trả lại chỗ mỗi khi bên trong nó được giải phóng:',
+    'dev.step.unregister':
+      'Hoặc gỡ hẳn cả bản phân phối. Mọi thứ bên trong sẽ mất vĩnh viễn, và không có gì đi qua Thùng rác:',
+    'dev.step.df': 'Xem trong đó có gì trước đã:',
+    'dev.step.prune':
+      'Rồi xoá image, volume và container đã dừng. Việc này là vĩnh viễn và không có gì đi qua Thùng rác:',
+
+    'evidence.dev.wslWhat':
+      'Ổ đĩa ảo của bản Linux {name}. Mọi thứ cài bên trong nó đều nằm trong đúng một tệp này',
+    'evidence.dev.wslSize':
+      '{size}, và toàn bộ chỗ đó nằm thật trên ổ — đây không phải loại tệp khai nhiều hơn phần nó dùng',
+    'evidence.dev.wslWritten':
+      'Ghi lần cuối vào {when}. Đó là lúc ổ đĩa thay đổi, không phải lúc bạn khởi động bản phân phối lần cuối — không có cách nào đọc được mốc đó mà không khởi động nó lên',
+    'evidence.dev.wslNoDisk':
+      'Tệp ổ đĩa của nó không nằm ở chỗ registry khai, nên không thể nói gì về dung lượng',
+    'evidence.dev.wslDocker':
+      'Docker Desktop đã cài bản này và chạy bên trong nó. Gỡ nó đi là gỡ luôn engine của Docker, và đây cũng không phải nơi Docker giữ image',
+    'evidence.dev.wslSparse':
+      'WSL {version} có thể làm ổ đĩa này trả lại chỗ mỗi khi bên trong được giải phóng. Phải tắt nó trước, và app không bao giờ chạy lệnh nào trong hai lệnh đó',
+    'evidence.dev.wslOld':
+      'Bản WSL này quá cũ để ổ đĩa tự trả lại chỗ, nên tệp đó chỉ có phình to thêm',
+
+    'evidence.dev.dockerWhat':
+      'Ổ dữ liệu của Docker Desktop: mọi image bạn từng tải, mọi volume, và mọi container từng được dựng',
+    'evidence.dev.dockerSize': '{size}, toàn bộ nằm thật trên ổ',
+    'evidence.dev.dockerSeparate':
+      'Đây không phải ổ đĩa riêng của bản phân phối docker-desktop, cái đó chỉ khoảng một phần mười gigabyte. Làm cái đó sparse sẽ không thu nhỏ được gì ở đây',
+    'evidence.dev.dockerPrune':
+      'Docker dọn nó bằng chính lệnh của Docker. “docker system df” cho xem trong đó có gì trước, còn lệnh prune bên dưới xoá hẳn image, volume và container đã dừng — không có gì đi qua Thùng rác',
     'dev.stat.free': 'Xoá được ngay',
 
     'dev.group.packages': 'Cache gói',

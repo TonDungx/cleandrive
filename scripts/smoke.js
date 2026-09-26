@@ -3133,7 +3133,9 @@ app.whenReady().then(async () => {
           packageVerdicts: [...new Set(out.candidates.filter((c) => c.category === 'dev.packageCache').map((c) => c.verdict))],
           commands: out.candidates.filter((c) => c.meta.command).map((c) => c.meta.command),
           openTools: s.groups.filter((g) => g.isOpen === true).map((g) => g.name),
-          cards: document.querySelectorAll('#dev-groups .dev-tool').length,
+          // Only the tool cards: the Linux and container disks are cards in a
+          // group of their own and are counted with them.
+          cards: document.querySelectorAll('#dev-groups .dev-group:not([data-kind="machine"]) .dev-tool').length,
           stats: ['dstat-total', 'dstat-packages', 'dstat-sdk', 'dstat-free'].map((id) => document.getElementById(id).textContent),
           notes: [...document.querySelectorAll('#dev-note p')].map((p) => p.textContent),
           paths: out.candidates.map((c) => c.path),
@@ -3208,6 +3210,35 @@ app.whenReady().then(async () => {
       })()`);
       check('without the feature the screen says which one it needs',
         /Pro/.test(locked), locked.slice(0, 80));
+
+      // WSL and Docker (C3), against whatever this machine really has.
+      const machines = await js(`(() => {
+        const out = window.devScreen.view.result;
+        const rows = out.candidates.filter((c) => c.category === 'dev.wslDistro' || c.category === 'dev.dockerDisk');
+        return {
+          n: rows.length,
+          actions: [...new Set(rows.flatMap((c) => c.actions))],
+          verdicts: [...new Set(rows.map((c) => c.verdict))],
+          commands: rows.flatMap((c) => (c.meta.steps || []).map((s) => s.command)),
+          destroys: rows.flatMap((c) => (c.meta.steps || []).filter((s) => s.destroys).map((s) => s.command)),
+          dockerDistroUnregister: rows.filter((c) => c.meta.belongsToDocker).flatMap((c) => (c.meta.steps || []).map((s) => s.id)),
+          cards: document.querySelectorAll('#dev-groups .dev-group[data-kind="machine"] .dev-tool').length,
+          shownCommands: [...document.querySelectorAll('#dev-groups .dev-group[data-kind="machine"] code')].map((e) => e.textContent),
+        };
+      })()`);
+      if (machines.n > 0) {
+        check('every Linux or container disk is shown and none of them can be acted on',
+          machines.actions.every((a) => a === 'none') && machines.verdicts.every((v) => v === 'review') &&
+            machines.cards === machines.n,
+          `${machines.n} disks, ${machines.cards} cards, ${machines.verdicts.join(',')}/${machines.actions.join(',')}`);
+        check('their commands are shown on screen to be read and copied',
+          machines.shownCommands.length >= machines.commands.length && machines.shownCommands.includes('wsl --shutdown'),
+          machines.shownCommands.slice(0, 3).join(' | '));
+        check('the steps that destroy data are marked as destroying it',
+          machines.destroys.every((c) => /--unregister|prune/.test(c)), machines.destroys.join(' | ') || 'none here');
+        check('Docker’s own distribution is never offered an unregister',
+          !machines.dockerDistroUnregister.includes('unregister'), machines.dockerDistroUnregister.join(', ') || 'no docker distro here');
+      }
     }
 
     /* -- console cleanliness --------------------------------------------- */

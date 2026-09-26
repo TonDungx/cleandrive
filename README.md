@@ -102,7 +102,7 @@ while skimming.
 | **Duplicates** | What do I have more than one copy of? | One folder you choose |
 | **Apps** | What is installed, how big is it, when did I last start it? | The installed-apps list, and the folders it names |
 | **Games** | Which games am I keeping and not playing? | The Steam library |
-| **Developer** | What have my development tools filled the disk with? | Package caches, SDKs and editor caches |
+| **Developer** | What have my development tools filled the disk with? | Package caches, SDKs, editor caches, WSL and Docker |
 | **Trends** | Is this getting worse, and how fast? | Every volume the app knows about |
 | **Restore** | What did the app do, and can I have it back? | Everything in the Action Journal |
 | **Automatic** | Can this happen without me? | A policy you write |
@@ -978,8 +978,10 @@ said out loud rather than listed as if they were worth removing.
 ## Screen 8 — Developer
 
 What a developer's tools have quietly filled the disk with: the packages they
-downloaded, the toolchains they installed, and the caches the editors write.
-14.3 GB on the machine this was built on.
+downloaded, the toolchains they installed, the caches the editors write, and the
+virtual disks WSL and Docker keep everything else in.
+
+99 GB on the machine this was built on, most of it in two virtual disks.
 
 Only tools that were on that machine are shipped, which is the same rule the
 known apps' caches follow. Found and shipped: npm, Gradle, NuGet, pip, Maven,
@@ -987,6 +989,30 @@ the Android SDK, the .NET SDKs, Visual Studio Code, Cursor, JetBrains and
 Visual Studio. Looked for and absent, so not shipped: pnpm, yarn, uv, cargo,
 Go modules and Composer. The screen says which ones it looked for and did not
 find, so nobody has to wonder whether it bothered.
+
+### The biggest thing on the screen, and the one it touches least
+
+A Linux distribution keeps everything inside it in one file, and Docker keeps
+every image and volume in another. 85 GB between them here: Docker's data disk
+53.7 GB, Ubuntu 31.2 GB. None of it is sparse — those are real occupied bytes,
+not a file claiming more than it uses.
+
+The app does not touch any of it. Each row is the steps, in the order they have
+to happen, shown to read and copy: shut everything down first, then let the disk
+give space back as it is freed inside it, and — only if you mean it — remove the
+distribution entirely. The steps that delete data say so before the command, not
+after, because none of what they remove reaches the Recycle Bin.
+
+Two things it gets right that are easy to get wrong. **Docker's data disk is not
+the `docker-desktop` distribution's disk** — that one is 96 MB here, and making
+it sparse would shrink nothing; Docker's own `docker system df` and
+`docker system prune` are what clear the big one. And **the `docker-desktop`
+distribution is never offered a removal**, because removing it uninstalls
+Docker's engine rather than freeing space.
+
+The distributions are read from the registry, so nothing is started to list
+them. Where a distribution's disk was last written is shown, and called that —
+not a last boot, which cannot be read without starting it.
 
 ### Two halves, and they behave differently
 

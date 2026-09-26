@@ -377,10 +377,38 @@ app.whenReady().then(async () => {
       evidence: [ev(1, 'evidence.dev.ideOpen', 'Code is open — close it and scan again', { name: 'Visual Studio Code' })],
       meta: { kind: 'ideCache', toolId: 'vscode', name: 'Visual Studio Code', isOpen: true, openProcesses: ['code.exe'] },
     });
+    const distro = {
+      id: 'm1', path: 'C:\\Users\\X\\AppData\\Local\\wsl\\{guid}\\ext4.vhdx', kind: 'file', bytes: 3.3e10,
+      category: 'dev.wslDistro', verdict: 'review', confidence: 'strong',
+      evidence: [ev(1, 'evidence.dev.wslWhat', 'The virtual disk of the Ubuntu Linux distribution', { name: 'Ubuntu' })],
+      actions: ['none'], unattendedEligible: false,
+      meta: {
+        kind: 'wsl', name: 'Ubuntu', version: 2, belongsToDocker: false, claimedBytes: 3.3e10, writtenMs: Date.now(),
+        steps: [
+          { id: 'shutdown', command: 'wsl --shutdown' },
+          { id: 'sparse', command: 'wsl --manage Ubuntu --set-sparse true' },
+          { id: 'unregister', command: 'wsl --unregister Ubuntu', destroys: true },
+        ],
+      },
+    };
+    const dockerDisk = {
+      id: 'm2', path: 'C:\\Users\\X\\AppData\\Local\\Docker\\wsl\\disk\\docker_data.vhdx', kind: 'file', bytes: 5.7e10,
+      category: 'dev.dockerDisk', verdict: 'review', confidence: 'strong',
+      evidence: [ev(1, 'evidence.dev.dockerWhat', 'Docker Desktop’s data disk')],
+      actions: ['none'], unattendedEligible: false,
+      meta: {
+        kind: 'docker', name: 'Docker Desktop', claimedBytes: 5.7e10, writtenMs: Date.now(),
+        steps: [
+          { id: 'df', command: 'docker system df' },
+          { id: 'prune', command: 'docker system prune -a --volumes', destroys: true },
+        ],
+      },
+    };
     window.devScreen.view.result = {
-      candidates: [cache, sdk, ide, held],
+      candidates: [cache, sdk, ide, held, distro, dockerDisk],
       summary: {
-        rows: { packageCaches: ['c1'], sdks: ['s1'], ideCaches: ['i1', 'i2'] },
+        rows: { packageCaches: ['c1'], sdks: ['s1'], ideCaches: ['i1', 'i2'], machines: ['m1', 'm2'] },
+        machineBytes: 9e10,
         groups: [
           { id: 'npm', name: 'npm', kind: 'packageCache', bytes: 2.6e9, fileCount: 33138, isOpen: false, openProcesses: [], command: 'npm cache clean --force', places: [{ dir: 'C:\\Users\\X\\AppData\\Local\\npm-cache', bytes: 2.6e9, files: 33138 }], truncated: false },
           { id: 'android-sdk', name: 'Android SDK', kind: 'sdk', bytes: 4.2e9, fileCount: 50179, isOpen: false, openProcesses: [], command: null, places: [{ dir: 'C:\\Users\\X\\AppData\\Local\\Android\\Sdk', bytes: 4.2e9, files: 50179 }], truncated: false },
@@ -394,7 +422,7 @@ app.whenReady().then(async () => {
     };
     window.devScreen.render();`);
   await openDev();
-  check('the Developer screen draws its cards', await until(`document.querySelectorAll('#dev-groups .dev-tool').length >= 4`, 10000));
+  check('the Developer screen draws its cards', await until(`document.querySelectorAll('#dev-groups .dev-tool').length >= 6`, 10000));
 
   await openTrends();
   await tab('restore');
