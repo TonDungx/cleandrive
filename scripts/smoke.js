@@ -2823,6 +2823,176 @@ app.whenReady().then(async () => {
       }
     }
 
+    /* -- installed apps (D1) ----------------------------------------------- */
+
+    console.log('\nInstalled apps (the Apps tab, against this machine’s real registry):');
+    {
+      const js = (expr) => win.webContents.executeJavaScript(expr);
+      await js(`document.querySelector('.tab[data-tab="apps"]').click()`);
+      const before = await js(`document.querySelectorAll('#apps-list .apps-row').length`);
+      check('the tab opens with nothing listed until it is asked', before === 0, String(before));
+
+      await js(`document.getElementById('apps-scan').click()`);
+      const finished = await until(
+        win,
+        `document.getElementById('apps-cancel').hidden && document.querySelectorAll('#apps-list .apps-row').length > 1`,
+        300000
+      );
+      check('a scan of the real machine finishes and lists something', finished);
+
+      const seen = await js(`(() => {
+        const rows = [...document.querySelectorAll('#apps-list .apps-row:not(.apps-head)')];
+        const cell = (row, sel) => { const el = row.querySelector(sel); return el ? el.textContent.trim() : ''; };
+        return {
+          rows: rows.length,
+          head: [...document.querySelectorAll('#apps-list .apps-head .apps-headcell')].map((c) => c.textContent.trim()),
+          named: rows.filter((r) => cell(r, '.apps-name')).length,
+          withUninstall: rows.filter((r) => r.querySelector('.apps-col-actions .btn')).length,
+          protectedRows: rows.filter((r) => r.querySelector('.apps-protection')).length,
+          noSize: rows.filter((r) => cell(r, '.apps-col-size') === '—').length,
+          declaredItalic: Boolean(document.querySelector('#apps-list .apps-declared')),
+          stats: ['astat-count', 'astat-measured', 'astat-unmeasured', 'astat-review'].map((id) => document.getElementById(id).textContent),
+          notes: [...document.querySelectorAll('#apps-note p')].map((p) => p.textContent),
+          status: document.getElementById('apps-status').textContent,
+        };
+      })()`);
+
+      check('every row carries a name', seen.named === seen.rows, `${seen.named} of ${seen.rows}`);
+      // Rows are indexed by id in the window: two rows sharing an id are one
+      // row drawn twice. Four Office entries here all name one folder.
+      const ids = await js(`window.appsScreen.view.result.candidates.map((c) => c.id)`);
+      check('no app is drawn twice, even where several share one install folder',
+        new Set(ids).size === ids.length, `${new Set(ids).size} ids for ${ids.length} rows`);
+      // Two apps really can share a display name -- a program installed both
+      // from the Store and as a desktop app, or two versions of one launcher.
+      // What must not happen is two rows a person cannot tell apart, so the
+      // line under the name has to differ where the name does not.
+      const lines = await js(`[...document.querySelectorAll('#apps-list .apps-row:not(.apps-head)')].map((r) =>
+        r.querySelector('.apps-name').textContent + ' | ' + r.querySelector('.apps-publisher').textContent)`);
+      check('and where two share a name, the line under it tells them apart',
+        new Set(lines).size === lines.length,
+        `${new Set(lines).size} distinct of ${lines.length}`);
+      check('the two size columns are separate, and headed as what they are',
+        seen.head.includes('Measured') && seen.head.includes('Declared'), seen.head.join(' | '));
+      check('some rows have no measured size at all, and show a dash rather than the installer’s figure',
+        seen.noSize > 0, `${seen.noSize} of ${seen.rows}`);
+      check('part of Windows is listed without anything to do about it', seen.protectedRows > 0, String(seen.protectedRows));
+      check('and everything else offers the handoff', seen.withUninstall > 0, String(seen.withUninstall));
+      check('the four figures at the top are filled in', seen.stats.every((v) => v && v !== '–'), seen.stats.join(' / '));
+      check('the screen says how far the launch records go back, and that silence is not disuse',
+        seen.notes.some((n) => /No record.|no record/.test(n) || /records .*go back/.test(n)),
+        seen.notes.map((n) => n.slice(0, 60)).join(' | '));
+      check('and says last-access time is not used, with the measurement behind it',
+        seen.notes.some((n) => /last opened/.test(n) && /antivirus/.test(n)),
+        seen.notes.map((n) => n.slice(0, 40)).join(' | '));
+
+      // No app is ever safe, and none of it can reach the unattended run.
+      const verdicts = await js(`(() => {
+        const out = window.appsScreen.view.result;
+        const set = {};
+        for (const c of out.candidates) set[c.verdict] = (set[c.verdict] || 0) + 1;
+        return {
+          set,
+          unattended: out.candidates.filter((c) => c.unattendedEligible).length,
+          actions: [...new Set(out.candidates.flatMap((c) => c.actions))],
+          categories: [...new Set(out.candidates.map((c) => c.category))],
+          everyRowHasEvidence: out.candidates.every((c) => Array.isArray(c.evidence) && c.evidence.length > 0),
+          total: out.summary.totalMeasuredBytes,
+          rowSum: out.candidates.reduce((n, c) => n + c.bytes, 0),
+        };
+      })()`);
+      check('no installed app is ever called safe', !verdicts.set.safe, JSON.stringify(verdicts.set));
+      check('none of it is ever eligible for an unattended run', verdicts.unattended === 0, String(verdicts.unattended));
+      check('the only thing any row offers is opening Windows’ own list',
+        verdicts.actions.every((a) => a === 'handoff' || a === 'none'), verdicts.actions.join(', '));
+      check('every row arrives with its evidence', verdicts.everyRowHasEvidence);
+      check('the categories are the two this screen declared',
+        verdicts.categories.every((c) => c === 'apps.installed' || c === 'apps.store'), verdicts.categories.join(', '));
+      check('the total counts each folder once, so it is not the sum of the rows',
+        verdicts.total <= verdicts.rowSum, `total ${verdicts.total} <= rows ${verdicts.rowSum}`);
+
+      // Sorting by when each was last started puts the oldest first and the
+      // ones nothing was written down about last -- "unknown" is not "longest ago".
+      const order = await js(`(() => {
+        const sort = document.getElementById('apps-sort');
+        sort.value = 'lastUsed';
+        sort.dispatchEvent(new Event('change'));
+        const rows = [...document.querySelectorAll('#apps-list .apps-row:not(.apps-head)')];
+        return rows.map((r) => r.querySelector('.apps-col-when').textContent.trim());
+      })()`);
+      const firstUnknown = order.indexOf('no record');
+      const lastKnown = order.map((v, i) => (v === 'no record' ? -1 : i)).reduce((a, b) => Math.max(a, b), -1);
+      check('sorted by last started, the ones with no record come after the ones with one',
+        firstUnknown === -1 || lastKnown === -1 || firstUnknown > lastKnown,
+        `first unknown at ${firstUnknown}, last known at ${lastKnown}`);
+
+      // A row's evidence opens, and shows the command the app registered --
+      // to copy, never to run.
+      const opened = await js(`(() => {
+        const pick = () => [...document.querySelectorAll('#apps-list .apps-row:not(.apps-head)')].find((r) => r.querySelector('.apps-col-actions .btn'));
+        pick().querySelector('.apps-col-badge .badge-button').click();
+        // render() redraws the list, so the row object from before the click
+        // is not the one now on screen.
+        const row = pick();
+        const panel = row.nextElementSibling;
+        return {
+          isPanel: Boolean(panel && panel.classList.contains('apps-evidence-row')),
+          reasons: panel ? panel.querySelectorAll('li, p').length : 0,
+          command: panel && panel.querySelector('code') ? panel.querySelector('code').textContent : '',
+          expanded: row.querySelector('.apps-col-badge .badge-button').getAttribute('aria-expanded'),
+        };
+      })()`);
+      check('a row’s evidence opens under it', opened.isPanel && opened.reasons > 0 && opened.expanded === 'true',
+        `${opened.reasons} reasons, expanded=${opened.expanded}`);
+      check('and where the app registered an uninstall command, it is shown as text to copy',
+        opened.command === '' || /\.exe|msiexec/i.test(opened.command), opened.command.slice(0, 80));
+
+      // Free keeps the list and the sizes; the launch dates are Pro.
+      const free = await js(`(() => {
+        const out = window.appsScreen.view.result;
+        return { allowed: out.summary.lastUsedAllowed, withDates: out.candidates.filter((c) => c.meta.lastUsed).length };
+      })()`);
+      check('on this build the launch dates are available (Pro is open until Phase 6)',
+        free.allowed === true && free.withDates >= 0, `${free.withDates} rows with a date`);
+
+      // Without the dates there is nothing to sort by, and the control has to
+      // say so rather than sitting on "Last used" over a size-ordered list.
+      const gated = await js(`(() => {
+        const out = window.appsScreen.view.result;
+        out.summary.lastUsedAllowed = false;
+        window.appsScreen.view.sort = 'lastUsed';
+        window.appsScreen.render();
+        const sort = document.getElementById('apps-sort');
+        return {
+          optionOff: sort.querySelector('option[value="lastUsed"]').disabled,
+          fellBack: sort.value,
+          staleOff: document.getElementById('apps-only-stale').disabled,
+          upsell: !document.getElementById('apps-upsell').hidden,
+          stillSized: document.querySelectorAll('#apps-list .apps-row:not(.apps-head)').length > 1,
+        };
+      })()`);
+      check('with the launch dates locked, sorting by them is turned off and falls back to size',
+        gated.optionOff && gated.fellBack === 'size', `option disabled=${gated.optionOff}, value=${gated.fellBack}`);
+      check('the filter that needs them is off too, and the reason is on screen',
+        gated.staleOff && gated.upsell);
+      check('and the list itself is still there, with its sizes', gated.stillSized);
+      await js(`(() => {
+        window.appsScreen.view.result.summary.lastUsedAllowed = true;
+        window.appsScreen.view.sort = 'size';
+        window.appsScreen.render();
+      })()`);
+
+      // Redrawing with nothing changed must not rebuild the rows underneath
+      // whoever is standing on them.
+      const stable = await js(`(() => {
+        const host = document.getElementById('apps-list');
+        const first = host.querySelector('.apps-row:not(.apps-head)');
+        window.appsScreen.render();
+        return host.querySelector('.apps-row:not(.apps-head)') === first;
+      })()`);
+      check('a redraw that changes nothing leaves the rows in place', stable);
+    }
+
     /* -- console cleanliness --------------------------------------------- */
     console.log('\nConsole:');
     check('no renderer errors', rendererErrors.length === 0, rendererErrors.join(' | '));

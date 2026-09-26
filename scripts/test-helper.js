@@ -215,8 +215,30 @@ const withTimeout = (promise, ms, label) =>
     check('the drive letter comes from the environment and is a drive letter', /^[A-Z]:$/.test(drive), drive);
 
     check('the list is what this phase ships',
-      JSON.stringify(Object.keys(OPS)) === JSON.stringify(['ping', 'system.breakdown', 'shadowstorage.query', 'dism.analyze', 'ntfs.info', 'storagereserve.query']),
+      JSON.stringify(Object.keys(OPS)) === JSON.stringify(['ping', 'system.breakdown', 'prefetch.list', 'shadowstorage.query', 'dism.analyze', 'ntfs.info', 'storagereserve.query']),
       Object.keys(OPS).join(', '));
+
+    // `prefetch.list` (D1) lists one fixed folder. It takes no arguments at
+    // all, which is what keeps it from being pointed anywhere else, and it
+    // opens none of the files it lists.
+    const listing = source.slice(source.indexOf("'prefetch.list'"), source.indexOf("'shadowstorage.query'"));
+    check('the prefetch listing takes no arguments, so nothing in a request can move it',
+      /^'prefetch\.list'\(\)/.test(listing), listing.split('\n')[0]);
+    check('it names its folder from the environment, never from a request',
+      /process\.env\.SystemRoot/.test(listing) && /'Prefetch'/.test(listing));
+    check('and it reads no file it lists', !/readFile|createReadStream|\.open\(/.test(listing));
+
+    const reply = await OPS['prefetch.list']();
+    // Unelevated this is refused, which is the whole reason the op exists.
+    check('unelevated it says it could not read the folder rather than guessing',
+      reply.available === false ? reply.reason === 'EPERM' || reply.reason === 'EACCES' || reply.reason === 'ENOENT'
+        : Array.isArray(reply.files),
+      reply.available ? `${reply.files.length} files` : String(reply.reason));
+    if (reply.available) {
+      check('and what it hands back is names and times, never contents',
+        reply.files.every((f) => Object.keys(f).join(',') === 'name,mtimeMs,size'),
+        JSON.stringify(reply.files[0] || {}));
+    }
   }
 
   console.log('\nhelper: which folders it will measure\n');

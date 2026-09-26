@@ -25,10 +25,11 @@ and the notifications.
 - [Screen 3 — What to delete](#screen-3--what-to-delete)
 - [Screen 4 — Photos & video](#screen-4--photos--video)
 - [Screen 5 — Duplicates](#screen-5--duplicates)
-- [Screen 6 — Trends](#screen-6--trends)
-- [Screen 7 — Restore](#screen-7--restore)
-- [Screen 8 — Automatic](#screen-8--automatic)
-- [Screen 9 — Settings](#screen-9--settings)
+- [Screen 6 — Apps](#screen-6--apps)
+- [Screen 7 — Trends](#screen-7--trends)
+- [Screen 8 — Restore](#screen-8--restore)
+- [Screen 9 — Automatic](#screen-9--automatic)
+- [Screen 10 — Settings](#screen-10--settings)
 - [The file viewer](#the-file-viewer)
 - [Deleting](#deleting)
 - [Disk alerts and the tray](#disk-alerts-and-the-tray)
@@ -97,6 +98,7 @@ while skimming.
 | **What to delete** | Which of it is safe to remove, and why? | The same scan |
 | **Photos & video** | What is in my picture library, and where did it come from? | Curated photo folders |
 | **Duplicates** | What do I have more than one copy of? | One folder you choose |
+| **Apps** | What is installed, how big is it, when did I last start it? | The installed-apps list, and the folders it names |
 | **Trends** | Is this getting worse, and how fast? | Every volume the app knows about |
 | **Restore** | What did the app do, and can I have it back? | Everything in the Action Journal |
 | **Automatic** | Can this happen without me? | A policy you write |
@@ -170,7 +172,7 @@ use. **Show the introduction again** is on the Version card in Settings.
 
 ### The sidebar
 
-Nine tabs down the left, each with an icon and a label. Two of them carry a
+Ten tabs down the left, each with an icon and a label. Two of them carry a
 **badge** when there is something to report: *What to delete* shows the total
 size it considers safe to remove, *Photos & video* shows how many files it found.
 
@@ -842,7 +844,75 @@ you are allowed to do.
 
 ---
 
-## Screen 6 — Trends
+## Screen 6 — Apps
+
+What is installed, what each one occupies, and when each was last started. The
+app never uninstalls anything here: a row's button opens Windows' own list of
+installed apps, and the command the program's own uninstaller registered is
+shown to copy, never run.
+
+### Where the list comes from
+
+The three places Windows keeps installed programs — the machine-wide list, the
+one for 32-bit programs, and your own — plus the apps that came from the
+Microsoft Store. On the machine this was built on that is 638 registry entries,
+of which 162 are programs somebody installed; the other 476 are what Windows
+leaves out of its own list too: shared runtimes, driver packages and updates.
+The number left out is shown, not quietly dropped.
+
+Listing needs no administrator rights and took about 26 seconds here.
+
+### Two size columns, and why they are never added together
+
+- **Measured** is its folders, read and added up the same way the System screen
+  reads anything. Blank where there is nothing to read — only 69 of the 162
+  programs record where they installed to, and 58 of those folders still exist.
+- **Declared** is the figure the installer wrote into the registry. It is shown
+  in its own column, in italics, and it is never part of a total. Of the 36
+  programs here that have both, only 24 are within a factor of two either way:
+  one declares 19 MB and occupies 482 MB, another declares 3,080 MB and occupies
+  634 MB.
+
+Where several programs installed into one folder — Microsoft 365 registers
+itself once per language — each row shows that folder's size, and says so, while
+the total at the top counts the folder once.
+
+### When it was last started
+
+Two of Windows' own records, ranked and never added up:
+
+- **What you opened from Explorer and the Start menu**, which is free and
+  immediate. On this machine those records go back about four months.
+- **Windows' own Prefetch records**, behind the **Add Windows' launch records…**
+  button — the folder is closed to a normal program, so this raises one
+  administrator prompt, and only when the button is pressed.
+
+**A file's "last opened" time is deliberately not used**, although Windows is
+recording it here. Measured: 70% of the programs under `Program Files` had been
+read in the past week, while Windows had records of 94 programs actually being
+started in four months; of 30 programs that could be matched to a real launch,
+all 30 had a newer "last opened" time and only 5 were within a week of it. What
+moves it is the antivirus, the search indexer and the backup — not you starting
+the program. (A size-only scan does not move it: that was checked separately.)
+
+**No record is not the same as not used**, and the screen says so rather than
+implying otherwise. Windows only writes these records for what you open from
+Explorer and the Start menu, so a program started from a pinned taskbar button,
+a desktop shortcut, or by another program leaves no trace. A row with no record
+is `keep` with the reason; only a row that *has* a record, older than 90 days,
+is `review`.
+
+### What it will not do
+
+**Uninstall anything, ever.** No app is marked `safe` — the strongest verdict on
+this screen is `review` — and nothing here can be part of an automatic cleanup.
+Parts of Windows are `protected`, and the row says which of four things made it
+so: Windows signed the package itself, Windows' own "cannot be removed" flag,
+it is installed inside the Windows folder, or it registered no uninstaller.
+
+---
+
+## Screen 7 — Trends
 
 Whether the problem is getting worse, and how fast.
 
@@ -932,7 +1002,7 @@ because the two numbers measure different things.
 
 ---
 
-## Screen 7 — Restore
+## Screen 8 — Restore
 
 Everything the app has done to a file, newest first, and the way back from each
 of it. It is free on every tier and it is never behind a licence: whatever the
@@ -991,7 +1061,7 @@ can ask for something the app did to be undone and for nothing else.
 
 ---
 
-## Screen 8 — Automatic
+## Screen 9 — Automatic
 
 Cleanup on a timetable, with no window open. Off by default, and designed so that
 every ambiguity resolves towards doing nothing — there is no dialog in front of
@@ -1075,7 +1145,7 @@ the cleanup.
 
 ---
 
-## Screen 9 — Settings
+## Screen 10 — Settings
 
 Small on purpose. **Nothing in Settings changes what the app deletes**, with one
 exception, off until you switch it on: *Delete the original*, on the card for
@@ -1373,7 +1443,7 @@ Month files older than thirteen months are dropped at launch — except a month
 that moved files to another drive: those copies stay as long as somebody leaves
 them, and the journal is how Restore knows where each came from.
 
-It is also what the [Restore](#screen-7--restore) screen reads, and a restore is
+It is also what the [Restore](#screen-8--restore) screen reads, and a restore is
 recorded in it like any other action — which is how the purge knows a file that
 was put back is no longer the app's to remove.
 

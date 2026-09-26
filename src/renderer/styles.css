@@ -2457,6 +2457,199 @@ main {
   color: var(--text-2);
 }
 
+
+/* ------------------------------------------------------------------ apps */
+/*
+ * The Apps screen (D1). A table, built from a grid so that the two size
+ * columns line up down the page: a number that is a measurement and a number
+ * that is an installer's claim sit side by side, and the eye has to be able
+ * to tell which column it is in.
+ */
+
+.apps-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin: 10px 0 8px;
+  font-size: 12.5px;
+  color: var(--text-2);
+}
+
+.apps-sort,
+.apps-filter {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.apps-upsell {
+  color: var(--text-3);
+  margin-left: auto;
+}
+
+.apps-list {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+.apps-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 96px 96px 116px auto auto;
+  align-items: center;
+  gap: 4px 12px;
+  padding: 9px 14px;
+  border-top: 1px solid var(--border-soft);
+  min-width: 0;
+}
+
+.apps-row:first-child {
+  border-top: 0;
+}
+
+.apps-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--surface-2);
+  font-size: 11.5px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+.apps-headcell {
+  font-weight: 600;
+}
+
+.apps-col-name {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.apps-name {
+  font-size: 13px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.apps-publisher {
+  font-size: 11.5px;
+  color: var(--text-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.apps-col-size,
+.apps-col-when {
+  font-variant-numeric: tabular-nums;
+  font-size: 12.5px;
+  text-align: right;
+  color: var(--text-2);
+}
+
+/* The installer's own figure is not a measurement, and does not read like one. */
+.apps-declared {
+  color: var(--text-3);
+  font-style: italic;
+}
+
+.apps-col-when {
+  text-align: left;
+}
+
+.apps-unknown,
+.apps-locked {
+  color: var(--text-3);
+}
+
+.apps-col-badge,
+.apps-col-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.apps-protection {
+  font-size: 11.5px;
+  color: var(--text-3);
+  white-space: nowrap;
+}
+
+.apps-evidence-row {
+  border-top: 1px solid var(--border-soft);
+  background: var(--surface-2);
+  padding: 10px 14px 14px;
+}
+
+.apps-command-label {
+  margin: 10px 0 6px;
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+.apps-empty {
+  padding: 18px 14px;
+  color: var(--text-3);
+  font-size: 12.5px;
+}
+
+.apps-note p {
+  margin: 0 0 6px;
+}
+
+.apps-note p:last-child {
+  margin-bottom: 0;
+}
+
+/*
+ * Narrow: the two size columns are the first thing to lose, because a number
+ * with no column header beside it is worse than no number. The name, the last
+ * start and the buttons keep their places.
+ */
+@media (max-width: 900px) {
+  .apps-row {
+    grid-template-columns: minmax(0, 1fr) 88px 104px auto;
+  }
+
+  .apps-row > .apps-declared {
+    display: none;
+  }
+}
+
+@media (max-width: 680px) {
+  .apps-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    row-gap: 6px;
+  }
+
+  .apps-head {
+    display: none;
+  }
+
+  .apps-col-size,
+  .apps-col-when {
+    grid-column: 1;
+    text-align: left;
+  }
+
+  .apps-col-badge,
+  .apps-col-actions {
+    grid-column: 2;
+  }
+}
+
 @media (max-width: 760px) {
   .evidence-row { padding-left: 10px; }
 }

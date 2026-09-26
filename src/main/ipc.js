@@ -18,6 +18,7 @@ const restoreEngine = require('./actions/restore');
 const quarantineHandler = require('./actions/quarantine');
 const quarantineZone = require('./lib/quarantine-zone');
 const systemMeasure = require('./system/measure');
+const appsMeasure = require('./apps/measure');
 const systemBreakdown = require('./system/breakdown');
 const { ScanTree, MultiScanTree } = require('./analyzers/scan-tree');
 const scanRoots = require('./analyzers/scan-roots');
@@ -49,7 +50,7 @@ const contextMenu = require('./lib/context-menu');
 const launchTarget = require('./launch-target');
 
 // One in-flight job of each kind at a time; a new run supersedes the old one.
-const tokens = { scan: null, dupes: null, trash: null, auto: null, media: null, thumbs: null, system: null };
+const tokens = { scan: null, dupes: null, trash: null, auto: null, media: null, thumbs: null, system: null, apps: null };
 
 /* ---- the Disk usage map's state -------------------------------------------- */
 
@@ -769,6 +770,64 @@ function register() {
       )
     )
   );
+
+  /* ---- the Apps screen (D1) ---------------------------------------------- */
+
+  /*
+   * Installed programs, what each occupies and when each was last started.
+   *
+   * The scan needs no administrator rights and takes about half a minute
+   * here, so it waits for a click and can be stopped, like the System walk.
+   * Prefetch is the one part that does need rights, and it has its own
+   * channel and its own button: `apps:prefetch` re-runs the scan with the
+   * launch records only an administrator can read, and raises exactly one
+   * UAC prompt when it is pressed.
+   */
+  let appsState = null;
+
+  async function presentApps() {
+    const { candidates, summary } = await analyzers.collect(
+      'apps',
+      { model: appsState, can: licenseState.canNow() },
+      { can: licenseState.canNow() }
+    );
+    return { candidates, summary };
+  }
+
+  async function runAppsScan(event, { prefetch = null } = {}) {
+    if (tokens.apps) tokens.apps.cancel();
+    const token = new CancelToken();
+    tokens.apps = token;
+    const send = (payload) => {
+      if (!event.sender.isDestroyed()) event.sender.send('apps:progress', payload);
+    };
+    try {
+      appsState = await appsMeasure.scan({ token, onProgress: send, prefetch });
+      return await presentApps();
+    } finally {
+      if (tokens.apps === token) tokens.apps = null;
+    }
+  }
+
+  handle('apps:last', () => guard(async () => (appsState ? await presentApps() : { candidates: null, summary: null })));
+
+  handle('apps:scan', (event) => guard(async () => runAppsScan(event)));
+
+  handle('apps:prefetch', (event) =>
+    guard(async () => {
+      const send = (payload) => {
+        if (!event.sender.isDestroyed()) event.sender.send('apps:progress', payload);
+      };
+      const listing = await appsMeasure.elevate({ client: helperClientFor(), onProgress: send });
+      if (listing.declined) return { declined: true, ...(appsState ? await presentApps() : { candidates: null, summary: null }) };
+      return runAppsScan(event, { prefetch: listing });
+    })
+  );
+
+  handle('apps:cancel', () => {
+    if (tokens.apps) tokens.apps.cancel();
+    return { ok: true };
+  });
 
   /* ---- what changed in a folder (snapshot diff) -------------------------- */
 

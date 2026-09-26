@@ -242,6 +242,55 @@ app.whenReady().then(async () => {
       usedBytes: (60 + i * 0.4) * 5e9, freeBytes: (40 - i * 0.4) * 5e9, totalBytes: 5e11,
     }));
     renderChart(document.getElementById('trend-chart'), series, { warn: 85, critical: 95 });`);
+  // Apps: four rows covering every shape the screen draws -- measured,
+  // declared-only, no record, and part of Windows. Constructed readings,
+  // labelled as such here; `smoke.js` is what runs the screen against the
+  // real registry.
+  const openApps = () => run(`
+    selectTab(document.getElementById('tab-apps'));
+    const now = Date.now();
+    const ev = (rank, i18n, en, params) => ({ rank, i18n, en, params });
+    const row = (n, over) => Object.assign({
+      id: 'a' + n, path: 'C:\\\\Program Files\\\\App' + n, kind: 'folder', bytes: 2.5e9 - n * 3e8,
+      category: 'apps.installed', verdict: 'keep', confidence: 'strong',
+      evidence: [ev(1, 'evidence.apps.measured', 'Its install folder measured by reading every folder in it: {size} in {files} files', { size: '2.3 GB', files: '1,200' })],
+      actions: ['handoff'], unattendedEligible: false,
+      meta: {
+        appId: 'a' + n, source: 'registry', name: 'Example App ' + n, publisher: 'Acme Software', version: '2.1.0',
+        installLocation: 'C:\\\\Program Files\\\\App' + n, installDate: '', measuredBytes: 2e9, dataBytes: 5e8,
+        declaredBytes: 1.8e9, dataFolders: [], lastUsed: { at: now - (10 + n * 40) * 86400000, source: 'userAssist', confidence: 'strong', sources: ['userAssist'] },
+        lastUsedAllowed: true, protection: null, sharesLocationWith: 0,
+        uninstallCommand: '"C:\\\\Program Files\\\\App' + n + '\\\\unins000.exe"', handoff: 'apps', staleDays: 90, alsoIn: [],
+      },
+    }, over || {});
+    const rows = [
+      row(1),
+      row(2, { verdict: 'review' }),
+      row(3, {
+        bytes: 0, confidence: 'guess',
+        evidence: [ev(1, 'evidence.apps.noRecord', 'No record of it being started in the {n} months these records cover.', { n: '4' })],
+        meta: Object.assign(row(3).meta, { measuredBytes: null, dataBytes: 0, installLocation: '', lastUsed: null }),
+      }),
+      row(4, {
+        verdict: 'protected', category: 'apps.store', actions: ['none'],
+        evidence: [ev(1, 'evidence.apps.systemPackage', 'Windows signed this as part of itself')],
+        meta: Object.assign(row(4).meta, { source: 'store', protection: 'systemPackage', uninstallCommand: '', name: 'Bio Enrollment' }),
+      }),
+    ];
+    window.appsScreen.view.result = {
+      candidates: rows,
+      summary: {
+        rows: rows.map((r) => r.id), lastUsedAllowed: true, staleDays: 90, coverMonths: 4,
+        totalMeasuredBytes: 6.2e9, durationMs: 26000, cancelled: false, storeAvailable: true,
+        counts: { shown: 4, measured: 3, hiddenTotal: 473 },
+        userAssist: { available: true, entries: 166, oldestMs: now - 120 * 86400000, newestMs: now },
+        prefetch: null,
+      },
+    };
+    window.appsScreen.render();`);
+  await openApps();
+  check('the Apps screen draws its rows', await until(`document.querySelectorAll('#apps-list .apps-row').length >= 5`, 10000));
+
   await openTrends();
   await tab('restore');
   await until(`document.querySelector('[data-restore-toggle]')`, 15000);
@@ -268,10 +317,11 @@ app.whenReady().then(async () => {
       incomplete: r.incomplete.reduce((n, v) => n + v.nodes.length, 0),
     }))`);
 
-  const SCREENS = ['usage', 'system', 'cleanup', 'media', 'dupes', 'trends', 'restore', 'auto', 'settings'];
+  const SCREENS = ['usage', 'system', 'cleanup', 'media', 'dupes', 'apps', 'trends', 'restore', 'auto', 'settings'];
   const axeScreens = async (label) => {
     for (const screen of SCREENS) {
       if (screen === 'trends') await openTrends();
+      else if (screen === 'apps') await openApps();
       else await tab(screen);
       await wait(250);
       const result = await axeRun();
@@ -350,7 +400,7 @@ app.whenReady().then(async () => {
   }
   for (const mode of ['light', 'dark']) {
     await setTheme(mode);
-    for (const screen of ['usage', 'cleanup', 'dupes', 'media', 'restore', 'settings']) {
+    for (const screen of ['usage', 'cleanup', 'dupes', 'media', 'apps', 'restore', 'settings']) {
       await tab(screen);
       await wait(250);
       const hover = await contrastUnder(['hover'], HOVERED);
@@ -375,7 +425,7 @@ app.whenReady().then(async () => {
   let nodes = await axTree();
   const tabs = nodes.filter((n) => n.role && n.role.value === 'tab' && !n.ignored);
   const selected = tabs.filter((n) => prop(n, 'selected') === true);
-  check('nine tabs, and exactly one says it is selected', tabs.length === 9 && selected.length === 1,
+  check('ten tabs, and exactly one says it is selected', tabs.length === 10 && selected.length === 1,
     `${tabs.length} tabs, selected: ${selected.map((n) => n.name && n.name.value).join(', ')}`);
   check('the selected one is the screen on show', selected[0] && /Trends/.test(selected[0].name.value), selected[0] && selected[0].name.value);
 

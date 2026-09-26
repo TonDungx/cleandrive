@@ -17,8 +17,14 @@
  * drive letter from `SystemDrive` rather than from the request. Their output
  * comes back as text; it is parsed in the unelevated process
  * (`system/parse.js`), so the code that runs as administrator stays as small
- * as it can be. `mft.enumerate` and `usn.query` (A2) and `prefetch.list` (D1)
- * come later.
+ * as it can be. `mft.enumerate` and `usn.query` (A2) come later.
+ *
+ * D1 brings `prefetch.list`, which lists one folder and reads no file in it.
+ * A prefetch file's contents would say exactly when a program last started;
+ * getting at them means decompressing and parsing a Microsoft format, and
+ * doing that here would put a parser for untrusted input inside the
+ * administrator process to save a few seconds' accuracy. The listing gives
+ * the name and the modified time, and that is all that leaves.
  *
  * DISM writes its own log under `C:\Windows\Logs\DISM` while it analyses; that
  * is DISM's doing and the only thing on disk any of these touch.
@@ -26,6 +32,7 @@
 
 const path = require('node:path');
 const { execFile } = require('node:child_process');
+const { promises: fsp } = require('node:fs');
 
 const { measureTree } = require('../system/walk');
 
@@ -111,6 +118,9 @@ function runTool(name) {
 /** At most this many folders in one request: more than the walk ever lists. */
 const MAX_DIRS = 5000;
 
+/** Windows keeps 1024 prefetch files at most; this is room to spare. */
+const MAX_PREFETCH = 4096;
+
 /**
  * The folders a request may ask to have measured: absolute, already in their
  * normal form, on the system drive, and nothing that could be a pattern.
@@ -147,6 +157,40 @@ const OPS = Object.freeze({
     return { sums, ms: Date.now() - started };
   },
 
+  /**
+   * What is in the Prefetch folder: one entry per program Windows has seen
+   * start, named after the program and a hash of where it started from.
+   *
+   * A normal process is refused this folder outright (EPERM, measured on this
+   * machine), which is the only reason it is here. Nothing is opened: each
+   * entry's name, size and modified time, and no path but the fixed one
+   * below -- the request carries no arguments at all, so there is nothing in
+   * it to point somewhere else.
+   */
+  async 'prefetch.list'() {
+    const started = Date.now();
+    const dir = path.join(process.env.SystemRoot || 'C:\\Windows', 'Prefetch');
+    let entries;
+    try {
+      entries = await fsp.readdir(dir, { withFileTypes: true });
+    } catch (err) {
+      return { available: false, reason: err.code || 'EUNKNOWN', files: [], ms: Date.now() - started };
+    }
+    const files = [];
+    for (const entry of entries) {
+      if (!entry.isFile() || !/\.pf$/i.test(entry.name)) continue;
+      if (files.length >= MAX_PREFETCH) break;
+      try {
+        const stat = await fsp.stat(path.join(dir, entry.name));
+        files.push({ name: entry.name, mtimeMs: stat.mtimeMs, size: stat.size });
+      } catch {
+        // One file being gone between the listing and the stat is not a
+        // reason to lose the other thousand.
+      }
+    }
+    return { available: true, files, ms: Date.now() - started };
+  },
+
   'shadowstorage.query'() {
     return runTool('shadowstorage');
   },
@@ -168,4 +212,4 @@ function has(op) {
   return typeof op === 'string' && Object.prototype.hasOwnProperty.call(OPS, op);
 }
 
-module.exports = { OPS, TOOLS, has, integrityLevel, system32, systemDrive, acceptableDir, MAX_DIRS };
+module.exports = { OPS, TOOLS, has, integrityLevel, system32, systemDrive, acceptableDir, MAX_DIRS, MAX_PREFETCH };

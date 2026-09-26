@@ -88,7 +88,7 @@
     'app.minutes': 'phút',
     'app.min': 'phút',
     'app.seconds': 'giây',
-    'app.unit.seconds': 'giây',
+    'app.seconds': '{n} giây',
     'app.unknownError': 'Lỗi không xác định',
     'app.cancelledPartial': 'Đã huỷ — kết quả chưa đầy đủ.',
 
@@ -1489,6 +1489,111 @@
      * exists (Tùy chọn nguồn, Bảo vệ hệ thống, Dọn dẹp ổ đĩa).
      */
     'app.tab.system': 'Hệ thống',
+
+    /* ---- Ứng dụng đã cài (D1) -------------------------------------------- */
+
+    'app.tab.apps': 'Ứng dụng',
+    'progress.apps': 'Đang đọc danh sách ứng dụng đã cài',
+    'apps.scan': 'Liệt kê ứng dụng đã cài',
+    'apps.prefetch': 'Thêm bản ghi khởi chạy của Windows…',
+    'apps.ready':
+      'Đọc danh sách chương trình đã cài mà Windows giữ, rồi đo các thư mục từng ứng dụng khai báo. Không cần quyền quản trị, mất khoảng nửa phút.',
+    'apps.done': '{n} ứng dụng, đo được {size}, trong {time}.',
+    'apps.declined': 'Hộp thoại quyền quản trị bị từ chối nên không đọc được bản ghi khởi chạy của Windows.',
+
+    'apps.stat.count': 'Ứng dụng',
+    'apps.stat.measured': 'Đo được',
+    'apps.stat.unmeasured': 'Không có dung lượng',
+    'apps.stat.review': 'Nên xem lại',
+
+    'apps.tableLabel': 'Ứng dụng đã cài',
+    'apps.col.name': 'Ứng dụng',
+    'apps.col.measured': 'Đo được',
+    'apps.col.measured.what': 'Các thư mục của nó, đọc và cộng lại. Để trống khi không có thư mục nào để đọc.',
+    'apps.col.declared': 'Bên cài khai',
+    'apps.col.declared.what':
+      'Con số trình cài đặt tự ghi vào registry. Thường sai, và không bao giờ được cộng vào số đo được.',
+    'apps.col.lastUsed': 'Mở lần cuối',
+    'apps.col.lastUsed.what': 'Lấy từ các bản ghi Windows lưu về những gì đã được mở.',
+
+    'apps.fromStore': 'Microsoft Store',
+    'apps.uninstall': 'Gỡ cài đặt…',
+    'apps.reveal': 'Mở thư mục',
+    'apps.empty': 'Không có mục nào khớp.',
+    'apps.noMeasure': 'Không có gì để đo: ứng dụng không ghi lại thư mục cài, hoặc thư mục đó không còn.',
+    'apps.measureBreakdown': 'Thư mục cài {install}, thư mục dữ liệu {data}',
+    'apps.declaredWhat': 'Con số của chính trình cài đặt, không phải số đo',
+    'apps.lastUsed.none': 'không có bản ghi',
+    'apps.lastUsed.locked': 'Pro',
+    'apps.lastUsedVia': 'Theo {source}',
+    'apps.source.prefetch': 'Prefetch',
+    'apps.source.userAssist': 'Start menu và Explorer',
+    'apps.source.shortcut': 'lối tắt của nó',
+
+    'apps.sortBy': 'Sắp xếp theo',
+    'apps.sort.size': 'Dung lượng',
+    'apps.sort.lastUsed': 'Mở lần cuối',
+    'apps.sort.name': 'Tên',
+    'apps.onlyStale': 'Chỉ những ứng dụng không có bản ghi gần đây',
+    'apps.onlyStaleDays': 'Chỉ những ứng dụng không có bản ghi trong {n} ngày',
+    'apps.needsPro': 'Thời điểm mở lần cuối của từng ứng dụng, và việc sắp xếp theo nó, thuộc gói Pro.',
+
+    'apps.protection.systemPackage': 'Một phần của Windows',
+    'apps.protection.noRemove': 'Windows không cho gỡ',
+    'apps.protection.inWindows': 'Cài bên trong Windows',
+    'apps.protection.noUninstaller': 'Không có trình gỡ cài đặt',
+
+    'apps.commandLabel': 'Lệnh mà trình gỡ cài đặt của chính ứng dụng này đã đăng ký. App không bao giờ chạy nó:',
+    'apps.copied': 'Đã chép lệnh gỡ cài đặt',
+
+    'apps.phase.registry': 'Đang đọc danh sách chương trình đã cài mà Windows giữ…',
+    'apps.phase.store': 'Đang hỏi Windows về các ứng dụng từ Microsoft Store…',
+    'apps.phase.folders': 'Đang tìm thư mục mà mỗi ứng dụng lưu dữ liệu…',
+    'apps.phase.prefetch': 'Đang đọc bản ghi khởi chạy của Windows…',
+    'apps.phase.measuring': 'Đang đo thư mục… {done}/{total}',
+
+    'apps.note.cancelled': 'Danh sách bị dừng giữa chừng nên một số ứng dụng chưa có dung lượng.',
+    'apps.note.unmeasured':
+      '{n} ứng dụng không ghi lại nơi đã cài, hoặc thư mục của chúng không còn, nên không có gì để đo. Chỗ nào trình cài đặt để lại con số thì nó nằm ở cột “Bên cài khai”, và đó là lời khai của trình cài đặt, không phải số đo.',
+    'apps.note.hidden':
+      'Còn {n} mục nữa trong registry bị bỏ ra, đúng những mục Windows cũng bỏ khỏi danh sách của nó: runtime dùng chung, gói driver và bản cập nhật.',
+    'apps.note.cover':
+      'Các bản ghi khởi chạy trên máy này lùi về khoảng {n} tháng, và Windows chỉ ghi lại những gì bạn mở từ Explorer và Start menu. “Không có bản ghi” nghĩa là không có gì được ghi lại, không phải là ứng dụng không được dùng. Muốn thêm bản ghi Prefetch của chính Windows thì cần quyền quản trị.',
+    'apps.note.noRecords':
+      'Windows không có bản ghi khởi chạy nào cho tài khoản này, nên không thể nói gì về lần mở cuối của bất kỳ ứng dụng nào.',
+    'apps.note.prefetch': 'Đã gộp cả bản ghi khởi chạy của chính Windows: {n} chương trình, đo với sự cho phép của bạn.',
+    'apps.note.noAtime':
+      'Thời điểm “mở lần cuối” của tệp không được dùng ở đây. Trên máy này, 70% chương trình trong Program Files đã bị đọc trong tuần vừa rồi — bởi phần mềm diệt virus, bộ lập chỉ mục tìm kiếm và bản sao lưu, chứ không phải do ai đó khởi chạy chúng.',
+    'apps.note.noStore': 'Windows không chịu liệt kê các ứng dụng Microsoft Store, nên chúng vắng mặt trong danh sách này.',
+
+    'evidence.apps.systemPackage': 'Windows đã ký gói này như một phần của chính nó',
+    'evidence.apps.noRemove': 'Windows đánh dấu đây là mục không thể gỡ từ danh sách ứng dụng đã cài',
+    'evidence.apps.inWindows': 'Nó được cài bên trong thư mục Windows',
+    'evidence.apps.noUninstaller': 'Nó không đăng ký trình gỡ cài đặt nào, nên Windows không đưa ra cách nào để gỡ',
+    'evidence.apps.viaPrefetch': 'Mở lần cuối cách đây {n} ngày, theo bản ghi Prefetch của chính Windows',
+    'evidence.apps.viaUserAssist':
+      'Mở lần cuối cách đây {n} ngày, theo những gì Windows ghi lại về thứ bạn mở từ Explorer và Start menu',
+    'evidence.apps.viaShortcut':
+      'Lối tắt của nó được mở lần cuối cách đây {n} ngày, theo những gì Windows ghi lại về thứ bạn mở từ Explorer và Start menu',
+    'evidence.apps.matchedByPath': 'Bản ghi này trỏ tới một chương trình nằm trong chính thư mục của ứng dụng',
+    'evidence.apps.matchedByName': 'Khớp theo tên tệp chương trình, mà một ứng dụng khác cũng có thể trùng tên',
+    'evidence.apps.noRecord':
+      'Không có bản ghi nào về việc nó được khởi chạy trong {n} tháng mà các bản ghi này bao phủ. Windows chỉ ghi lại thứ bạn mở từ Explorer và Start menu, nên một nút ghim trên thanh tác vụ hay một chương trình khác khởi chạy nó sẽ không để lại dấu vết',
+    'evidence.apps.noRecords':
+      'Windows không có bản ghi khởi chạy nào trên máy này, nên không thể nói gì về lần dùng cuối của mục này',
+    'evidence.apps.measured': 'Thư mục cài được đo bằng cách đọc mọi thư mục bên trong: {size} trong {files} tệp',
+    'evidence.apps.measuredPartial': 'Có {n} thư mục bên trong không đọc được, nên nó chứa ít nhất chừng này',
+    'evidence.apps.locationGone': 'Thư mục mà nó khai là đã cài vào không còn nữa',
+    'evidence.apps.locationBroad':
+      'Nó khai cả một ổ đĩa hoặc một thư mục dùng chung là thư mục cài, đo chỗ đó sẽ ra nhiều hơn ứng dụng này rất nhiều',
+    'evidence.apps.noLocation': 'Nó không ghi lại nơi đã cài vào, nên không đo được thư mục của nó',
+    'evidence.apps.declared':
+      'Trình cài đặt của nó khai {size}. Con số đó là thứ trình cài đặt tự ghi và thường sai — trên máy này nó dao động từ một phần tư dung lượng thật tới hai mươi lăm lần',
+    'evidence.apps.dataStrong': '{size} trong {folder}, khớp với một cái tên mà ứng dụng này tự nhận',
+    'evidence.apps.dataGuess': '{size} trong {folder}, chỉ khớp với ứng dụng này qua tên',
+    'evidence.apps.shared':
+      'Có {n} ứng dụng khác cũng cài vào đúng thư mục này, nên dung lượng này là của thư mục, không phải của riêng ứng dụng này. Tổng ở trên chỉ đếm nó một lần',
+    'evidence.apps.alsoIn': 'Cùng một chương trình được đăng ký thêm {n} lần nữa, và ở đây chỉ đếm một lần',
     'system.measure': 'Đo ổ này',
     'system.measureElevated': 'Đo với quyền quản trị…',
     'system.size': 'dung lượng',

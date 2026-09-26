@@ -50,6 +50,12 @@ for (const key of [
   declare(`system.${key}`, { screen: 'system' });
 }
 
+// "Apps": one per installed program (D1). Never `safe`, never on the automatic
+// whitelist -- the app's whole part in removing one is opening Windows' own
+// list and showing the command the program's uninstaller registered.
+declare('apps.installed', { screen: 'apps' });
+declare('apps.store', { screen: 'apps' });
+
 function isDeclared(id) {
   return DECLARED.has(id);
 }

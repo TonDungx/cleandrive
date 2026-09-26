@@ -42,7 +42,10 @@ function formatBytes(bytes) {
 const uiLocale = () => (window.CleanDriveI18n ? window.CleanDriveI18n.getLanguage() : 'en');
 
 const formatCount = (n) => (n || 0).toLocaleString(uiLocale());
-const formatSeconds = (ms) => `${(ms / 1000).toFixed(1)}${t('app.unit.seconds', 's')}`;
+// The unit carries its own separator: English writes `17.7s` closed up and
+// Vietnamese writes `17.7 giây` with a space, and deciding that here would
+// make it English's rule for every language.
+const formatSeconds = (ms) => t('app.seconds', '{n}s', { n: (ms / 1000).toFixed(1) });
 
 /**
  * The right word for a count.
