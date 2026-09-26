@@ -123,6 +123,15 @@ function fromRegistryEntry(entry) {
   const location = cleanLocation(str('InstallLocation'));
   const uninstall = str('QuietUninstallString') || str('UninstallString');
 
+  // Steam writes a `Steam App <appid>` entry per game, and what it writes
+  // there goes stale: three of them on this machine name `E:\SteamLibrary`,
+  // a drive that no longer exists, because the library was moved to D: and
+  // nothing went back to fix them. One even holds the game's Vietnamese name
+  // as mojibake while the manifest beside the game has it right. So the row
+  // is marked as a game and stops claiming anything about where it is; the
+  // Games screen reads Steam's own files and knows.
+  const steamAppId = /^Steam App (\d+)$/i.exec(entry.id);
+
   return {
     id: `reg:${entry.hive}:${entry.id}`,
     source: 'registry',
@@ -143,6 +152,7 @@ function fromRegistryEntry(entry) {
     uninstallCommand: uninstall,
     // Windows' own "this cannot be removed from here" flag.
     noRemove: num('NoRemove') === 1,
+    steamAppId: steamAppId ? steamAppId[1] : null,
     windowsInstaller: num('WindowsInstaller') === 1,
     hidden,
   };

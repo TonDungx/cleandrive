@@ -56,6 +56,13 @@ for (const key of [
 declare('apps.installed', { screen: 'apps' });
 declare('apps.store', { screen: 'apps' });
 
+// "Games": the Steam library (D2). A game is never `safe` and is never acted
+// on by the app -- Steam has to do it, or it stops recognising the game. The
+// leftovers Steam keeps no record of are files, and those can go to the bin.
+declare('games.steam', { screen: 'games' });
+declare('games.orphan', { screen: 'games' });
+declare('games.downloading', { screen: 'games' });
+
 function isDeclared(id) {
   return DECLARED.has(id);
 }

@@ -1,0 +1,44 @@
+"AppState"
+{
+	"appid"		"648800"
+	"universe"		"1"
+	"LauncherPath"		"C:\\Program Files (x86)\\Steam\\steam.exe"
+	"name"		"Raft"
+	"StateFlags"		"4"
+	"installdir"		"Raft"
+	"LastUpdated"		"1739621829"
+	"LastPlayed"		"1740299646"
+	"SizeOnDisk"		"7116122279"
+	"StagingSize"		"0"
+	"buildid"		"10199006"
+	"LastOwner"		"76561190000000000"
+	"UpdateResult"		"0"
+	"BytesToDownload"		"2200831760"
+	"BytesDownloaded"		"2200831760"
+	"BytesToStage"		"7219053830"
+	"BytesStaged"		"7219053830"
+	"TargetBuildID"		"10199006"
+	"AutoUpdateBehavior"		"0"
+	"AllowOtherDownloadsWhileRunning"		"0"
+	"ScheduledAutoUpdate"		"0"
+	"InstalledDepots"
+	{
+		"648801"
+		{
+			"manifest"		"577422474383592005"
+			"size"		"7116122279"
+		}
+	}
+	"SharedDepots"
+	{
+		"228990"		"228980"
+	}
+	"UserConfig"
+	{
+		"language"		"english"
+	}
+	"MountedConfig"
+	{
+		"language"		"english"
+	}
+}

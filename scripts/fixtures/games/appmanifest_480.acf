@@ -1,0 +1,48 @@
+"AppState"
+{
+	"appid"		"480"
+	"universe"		"1"
+	"LauncherPath"		"C:\\Program Files (x86)\\Steam\\steam.exe"
+	"name"		"Spacewar"
+	"StateFlags"		"4"
+	"installdir"		"Spacewar"
+	"LastUpdated"		"1720108492"
+	"LastPlayed"		"1739033903"
+	"SizeOnDisk"		"1906055"
+	"StagingSize"		"0"
+	"buildid"		"3538192"
+	"LastOwner"		"76561190000000000"
+	"UpdateResult"		"0"
+	"BytesToDownload"		"85751344"
+	"BytesDownloaded"		"85751344"
+	"BytesToStage"		"85850313"
+	"BytesStaged"		"85850313"
+	"TargetBuildID"		"3538192"
+	"AutoUpdateBehavior"		"0"
+	"AllowOtherDownloadsWhileRunning"		"0"
+	"ScheduledAutoUpdate"		"0"
+	"InstalledDepots"
+	{
+		"481"
+		{
+			"manifest"		"3183503801510301321"
+			"size"		"1906055"
+		}
+	}
+	"InstallScripts"
+	{
+		"481"		"installscript.vdf"
+	}
+	"SharedDepots"
+	{
+		"229006"		"228980"
+	}
+	"UserConfig"
+	{
+		"language"		"english"
+	}
+	"MountedConfig"
+	{
+		"language"		"english"
+	}
+}

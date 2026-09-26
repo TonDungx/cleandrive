@@ -1,0 +1,41 @@
+"AppState"
+{
+	"appid"		"2456350"
+	"universe"		"1"
+	"LauncherPath"		"C:\\Program Files (x86)\\Steam\\steam.exe"
+	"name"		"The Scourge | Tai Ương"
+	"StateFlags"		"4"
+	"installdir"		"The-Scourge"
+	"LastUpdated"		"1785589709"
+	"LastPlayed"		"1775394802"
+	"SizeOnDisk"		"15727786201"
+	"StagingSize"		"0"
+	"buildid"		"23484837"
+	"LastOwner"		"76561190000000000"
+	"DownloadType"		"1"
+	"UpdateResult"		"0"
+	"BytesToDownload"		"5904646640"
+	"BytesDownloaded"		"5904646640"
+	"BytesToStage"		"11061206265"
+	"BytesStaged"		"11061206265"
+	"TargetBuildID"		"23484837"
+	"AutoUpdateBehavior"		"0"
+	"AllowOtherDownloadsWhileRunning"		"0"
+	"ScheduledAutoUpdate"		"0"
+	"InstalledDepots"
+	{
+		"2456351"
+		{
+			"manifest"		"2351428523794223538"
+			"size"		"15727786201"
+		}
+	}
+	"UserConfig"
+	{
+		"language"		"english"
+	}
+	"MountedConfig"
+	{
+		"language"		"english"
+	}
+}

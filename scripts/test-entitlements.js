@@ -99,7 +99,22 @@ check('and the override narrows it for testing a tier',
   check('but nothing past Pro unlocks in a release by setting a variable',
     !can('pro.dev') && !can('biz.cli') && !can('biz.audit'));
 }
-check('and nothing the app does today is paid', registry.list().every((a) => a.feature === 'free'));
+// The games library (D2) is the first analyzer behind a feature key. Every
+// other one is free, and that one still runs today because a release build has
+// Pro open until Phase 6 -- which is what this checks, rather than that no
+// analyzer is ever gated.
+{
+  const paid = registry.list().filter((a) => a.feature !== 'free');
+  check('the only analyzer behind a feature key is the games library',
+    paid.length === 1 && paid[0].id === 'games' && paid[0].feature === 'pro.games',
+    paid.map((a) => `${a.id}:${a.feature}`).join(', ') || 'none');
+  check('every analyzer names a feature that exists',
+    registry.list().every((a) => a.feature === 'free' || FEATURES[a.feature]),
+    registry.list().map((a) => a.feature).join(', '));
+  const open = canNow({ channel: 'stable', env: {} });
+  check('and on a release build today it still runs for everyone',
+    registry.list().every((a) => open(a.feature)));
+}
 
 console.log('\nentitlements: what the window learns\n');
 

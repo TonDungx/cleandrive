@@ -26,10 +26,11 @@ and the notifications.
 - [Screen 4 — Photos & video](#screen-4--photos--video)
 - [Screen 5 — Duplicates](#screen-5--duplicates)
 - [Screen 6 — Apps](#screen-6--apps)
-- [Screen 7 — Trends](#screen-7--trends)
-- [Screen 8 — Restore](#screen-8--restore)
-- [Screen 9 — Automatic](#screen-9--automatic)
-- [Screen 10 — Settings](#screen-10--settings)
+- [Screen 7 — Games](#screen-7--games)
+- [Screen 8 — Trends](#screen-8--trends)
+- [Screen 9 — Restore](#screen-9--restore)
+- [Screen 10 — Automatic](#screen-10--automatic)
+- [Screen 11 — Settings](#screen-11--settings)
 - [The file viewer](#the-file-viewer)
 - [Deleting](#deleting)
 - [Disk alerts and the tray](#disk-alerts-and-the-tray)
@@ -99,6 +100,7 @@ while skimming.
 | **Photos & video** | What is in my picture library, and where did it come from? | Curated photo folders |
 | **Duplicates** | What do I have more than one copy of? | One folder you choose |
 | **Apps** | What is installed, how big is it, when did I last start it? | The installed-apps list, and the folders it names |
+| **Games** | Which games am I keeping and not playing? | The Steam library |
 | **Trends** | Is this getting worse, and how fast? | Every volume the app knows about |
 | **Restore** | What did the app do, and can I have it back? | Everything in the Action Journal |
 | **Automatic** | Can this happen without me? | A policy you write |
@@ -172,7 +174,7 @@ use. **Show the introduction again** is on the Version card in Settings.
 
 ### The sidebar
 
-Ten tabs down the left, each with an icon and a label. Two of them carry a
+Eleven tabs down the left, each with an icon and a label. Two of them carry a
 **badge** when there is something to report: *What to delete* shows the total
 size it considers safe to remove, *Photos & video* shows how many files it found.
 
@@ -912,7 +914,66 @@ it is installed inside the Windows folder, or it registered no uninstaller.
 
 ---
 
-## Screen 7 — Trends
+## Screen 7 — Games
+
+The Steam library: what is installed, how big each game is, and when it was
+last played. **The app never removes a game.** Deleting a game's folder leaves
+Steam still listing it and failing to start it, so a game's only button hands
+over to Steam, with the same command Steam registers as that game's uninstaller.
+
+Only Steam is read. On the machine this was built on there was no Epic, GOG,
+EA, Ubisoft or Battle.net library to check against — the Epic launcher is
+installed with no games in it — and nothing ships here that could not be
+verified against a real installation.
+
+### What it reads, and what it does not
+
+Steam's own files, not the Windows registry. Steam writes a registry entry per
+game, and three of them here point at a drive that no longer exists, because
+the library was moved and nothing went back to correct them; one holds a game's
+Vietnamese name as mojibake while the file beside the game has it right. The
+registry is used for one thing: finding where Steam itself is installed.
+
+**Sizes are Steam's own figures, and they are exact.** Every game here was
+measured against a real walk of its folder and the two agreed to three decimal
+places, 47.05 GB against 47.05 GB. So there is one size column on this screen,
+where the Apps screen needs two, and no long scan to open it.
+
+**Last played is the later of two records.** Steam writes one beside the game
+and one per signed-in account, and neither is reliably the newer: three of nine
+games here had been played more recently than the file beside them said, one of
+them by 499 days. Every account folder on the machine is read — the question is
+whether anyone has played it here — and only that one date is taken from them.
+
+A game is `review` when it has not been played for six months, which is longer
+than the ninety days the Apps screen uses: not opening a program for three
+months usually means you are done with it, and not playing a game for three
+months usually means it is summer. No game is ever `safe`, and none of this can
+be part of an automatic cleanup.
+
+### What Steam left behind
+
+Two things Steam keeps no account of, shown under the games:
+
+- **Unfinished downloads.** Steam does not always clear `steamapps\downloading`:
+  1.77 GB here for a game that is installed and working, the oldest piece from
+  July 2025. These are loose files, so they can go to the Recycle Bin — but
+  only while Steam is closed, and never automatically. Steam fetches any of it
+  again if it turns out to be needed.
+- **Folders no game claims**, which an interrupted uninstall leaves behind.
+  These are reported and nothing more: the app does not delete folders, and a
+  game whose manifest went missing would look exactly the same. Check it in
+  Steam, then remove it yourself.
+
+**A leftover's size is what it occupies, not what it claims.** Steam creates a
+file at its finished size and fills it in as the download arrives, so one file
+here claims 7.6 GB and holds nothing at all. The figures on this screen are the
+space that would actually come back; files holding nothing yet are counted and
+said out loud rather than listed as if they were worth removing.
+
+---
+
+## Screen 8 — Trends
 
 Whether the problem is getting worse, and how fast.
 
@@ -1002,7 +1063,7 @@ because the two numbers measure different things.
 
 ---
 
-## Screen 8 — Restore
+## Screen 9 — Restore
 
 Everything the app has done to a file, newest first, and the way back from each
 of it. It is free on every tier and it is never behind a licence: whatever the
@@ -1061,7 +1122,7 @@ can ask for something the app did to be undone and for nothing else.
 
 ---
 
-## Screen 9 — Automatic
+## Screen 10 — Automatic
 
 Cleanup on a timetable, with no window open. Off by default, and designed so that
 every ambiguity resolves towards doing nothing — there is no dialog in front of
@@ -1145,7 +1206,7 @@ the cleanup.
 
 ---
 
-## Screen 10 — Settings
+## Screen 11 — Settings
 
 Small on purpose. **Nothing in Settings changes what the app deletes**, with one
 exception, off until you switch it on: *Delete the original*, on the card for
@@ -1443,7 +1504,7 @@ Month files older than thirteen months are dropped at launch — except a month
 that moved files to another drive: those copies stay as long as somebody leaves
 them, and the journal is how Restore knows where each came from.
 
-It is also what the [Restore](#screen-8--restore) screen reads, and a restore is
+It is also what the [Restore](#screen-9--restore) screen reads, and a restore is
 recorded in it like any other action — which is how the purge knows a file that
 was put back is no longer the app's to remove.
 

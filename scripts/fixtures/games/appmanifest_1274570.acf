@@ -1,0 +1,44 @@
+"AppState"
+{
+	"appid"		"1274570"
+	"universe"		"1"
+	"LauncherPath"		"C:\\Program Files (x86)\\Steam\\steam.exe"
+	"name"		"DEVOUR"
+	"StateFlags"		"4"
+	"installdir"		"Devour"
+	"LastUpdated"		"1722839859"
+	"LastPlayed"		"1723190009"
+	"SizeOnDisk"		"10367070006"
+	"StagingSize"		"0"
+	"buildid"		"14444349"
+	"LastOwner"		"76561190000000000"
+	"UpdateResult"		"0"
+	"BytesToDownload"		"5238105648"
+	"BytesDownloaded"		"5238105648"
+	"BytesToStage"		"10396282179"
+	"BytesStaged"		"10396282179"
+	"TargetBuildID"		"14444349"
+	"AutoUpdateBehavior"		"0"
+	"AllowOtherDownloadsWhileRunning"		"0"
+	"ScheduledAutoUpdate"		"0"
+	"InstalledDepots"
+	{
+		"1274571"
+		{
+			"manifest"		"3931911898223412442"
+			"size"		"10367070006"
+		}
+	}
+	"SharedDepots"
+	{
+		"228988"		"228980"
+	}
+	"UserConfig"
+	{
+		"language"		"english"
+	}
+	"MountedConfig"
+	{
+		"language"		"english"
+	}
+}

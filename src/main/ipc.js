@@ -19,6 +19,7 @@ const quarantineHandler = require('./actions/quarantine');
 const quarantineZone = require('./lib/quarantine-zone');
 const systemMeasure = require('./system/measure');
 const appsMeasure = require('./apps/measure');
+const gamesMeasure = require('./games/measure');
 const systemBreakdown = require('./system/breakdown');
 const { ScanTree, MultiScanTree } = require('./analyzers/scan-tree');
 const scanRoots = require('./analyzers/scan-roots');
@@ -50,7 +51,7 @@ const contextMenu = require('./lib/context-menu');
 const launchTarget = require('./launch-target');
 
 // One in-flight job of each kind at a time; a new run supersedes the old one.
-const tokens = { scan: null, dupes: null, trash: null, auto: null, media: null, thumbs: null, system: null, apps: null };
+const tokens = { scan: null, dupes: null, trash: null, auto: null, media: null, thumbs: null, system: null, apps: null, games: null };
 
 /* ---- the Disk usage map's state -------------------------------------------- */
 
@@ -826,6 +827,53 @@ function register() {
 
   handle('apps:cancel', () => {
     if (tokens.apps) tokens.apps.cancel();
+    return { ok: true };
+  });
+
+  /* ---- the Games screen (D2) --------------------------------------------- */
+
+  /*
+   * The Steam library. Almost nothing is walked: Steam records each game's
+   * size exactly, which this machine checked against a real walk of all of
+   * them. What is walked is what Steam keeps no figure for -- a folder no
+   * manifest claims, and whatever is left in `steamapps\downloading`.
+   *
+   * The whole screen is `pro.games`, so the analyzer answers `locked` rather
+   * than results when the licence does not include it; the scan still runs,
+   * because the window needs to know whether there is a Steam here at all.
+   */
+  let gamesState = null;
+
+  async function presentGames() {
+    const { candidates, summary, locked } = await analyzers.collect(
+      'games',
+      { model: gamesState },
+      { can: licenseState.canNow() }
+    );
+    return { candidates, summary, locked: locked || null, steam: { installed: gamesState.installed, path: gamesState.steamPath } };
+  }
+
+  handle('games:last', () => guard(async () => (gamesState ? await presentGames() : { candidates: null, summary: null })));
+
+  handle('games:scan', (event) =>
+    guard(async () => {
+      if (tokens.games) tokens.games.cancel();
+      const token = new CancelToken();
+      tokens.games = token;
+      const send = (payload) => {
+        if (!event.sender.isDestroyed()) event.sender.send('games:progress', payload);
+      };
+      try {
+        gamesState = await gamesMeasure.scan({ token, onProgress: send });
+        return await presentGames();
+      } finally {
+        if (tokens.games === token) tokens.games = null;
+      }
+    })
+  );
+
+  handle('games:cancel', () => {
+    if (tokens.games) tokens.games.cancel();
     return { ok: true };
   });
 

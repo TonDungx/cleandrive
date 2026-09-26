@@ -1490,6 +1490,99 @@
      */
     'app.tab.system': 'Hệ thống',
 
+
+    /* ---- Thư viện game (D2) ---------------------------------------------- */
+
+    'app.tab.games': 'Game',
+    'progress.games': 'Đang đọc thư viện game',
+    'games.scan': 'Tìm game của tôi',
+    'games.ready':
+      'Đọc chính các tệp của Steam để liệt kê những game đã cài, mỗi game chiếm bao nhiêu, và lần chơi cuối là khi nào.',
+    'games.done': '{n} game, {size}, trong {time}.',
+    'games.noSteam': 'Không tìm thấy bản cài Steam nào trên máy này. Ở đây chỉ đọc Steam.',
+    'games.needsPro': 'Thư viện game thuộc gói Pro.',
+
+    'games.stat.count': 'Game',
+    'games.stat.size': 'Trên ổ đĩa',
+    'games.stat.stale': 'Lâu chưa chơi',
+    'games.stat.leftovers': 'Đồ thừa',
+
+    'games.tableLabel': 'Game đã cài',
+    'games.col.name': 'Game',
+    'games.col.size': 'Trên ổ đĩa',
+    'games.col.size.what': 'Theo đúng con số Steam ghi. Đã đối chiếu với một lượt đo thật trên máy này và thấy khớp chính xác.',
+    'games.col.played': 'Chơi lần cuối',
+    'games.col.played.what':
+      'Lấy mốc muộn hơn giữa con số Steam ghi cạnh game và con số từng tài khoản trên máy này ghi lại.',
+
+    'games.neverPlayed': 'không có bản ghi',
+    'games.sharedRuntime': 'Các game khác dùng chung',
+    'games.viaAccount': 'Theo bản ghi của chính một tài khoản Steam',
+    'games.uninstall': 'Gỡ trong Steam…',
+    'games.reveal': 'Mở thư mục',
+    'games.handedOver': 'Đã nhờ Steam gỡ {name}. Steam là bên thực hiện, và sẽ hỏi bạn trước.',
+
+    'games.phase.finding': 'Đang tìm Steam…',
+    'games.phase.libraries': 'Đang đọc xem Steam để game ở những thư mục nào…',
+    'games.phase.manifests': 'Đang đọc những gì đã cài…',
+    'games.phase.played': 'Đang đọc lần chơi cuối của từng game…',
+    'games.phase.leftovers': 'Đang đo những thứ Steam để lại…',
+
+    'games.note.cancelled': 'Lượt quét bị dừng giữa chừng.',
+    'games.note.missingLibrary':
+      'Steam có khai một thư mục game ở {where}, mà ổ đó không gắn vào máy. Game trong đó không được tính ở đây.',
+    'games.note.accounts':
+      'Lần chơi cuối của mỗi game là mốc muộn hơn giữa con số Steam ghi cạnh game và con số mà {n} tài khoản Steam trên máy này ghi lại. Chỉ đọc đúng một mốc thời gian đó từ các tệp ấy.',
+    'games.note.neverDeletes':
+      'App không bao giờ gỡ game. Xoá thư mục game sẽ khiến Steam vẫn liệt kê nó mà chạy lại không lên — nên việc gỡ được giao cho Steam.',
+
+    'games.leftovers.title': 'Những thứ Steam để lại',
+    'games.leftovers.downloads':
+      '{size} trong {n} tệp thuộc các lần tải chưa xong. Nếu hoá ra vẫn cần, Steam sẽ tải lại.',
+    'games.leftovers.reserved':
+      'Còn {n} tệp nữa đã được đặt chỗ sẵn ở kích thước cuối cùng nhưng chưa ghi gì vào, nên chúng không chiếm chỗ và không được liệt kê.',
+    'games.leftovers.orphans':
+      '{n} thư mục trong thư mục game của Steam không thuộc game nào đang cài. Hãy kiểm tra từng cái trong Steam rồi tự xoá — app không xoá thư mục.',
+    'games.leftovers.steamOpen': 'Steam đang mở nên không có mục nào được đề xuất xoá. Hãy đóng Steam rồi xem lại.',
+    'games.leftovers.steamUnknown':
+      'Không kiểm được Steam có đang chạy hay không, nên không có mục nào được đề xuất xoá.',
+    'games.leftovers.more': 'và {n} mục nữa',
+
+    'evidence.games.played': 'Chơi lần cuối cách đây {n} ngày',
+    'evidence.games.viaManifest': 'Theo con số Steam ghi ngay cạnh game',
+    'evidence.games.viaAccount':
+      'Theo bản ghi của chính một tài khoản Steam trên máy này, mốc đó muộn hơn con số ghi cạnh game',
+    'evidence.games.neverPlayed': 'Steam không có bản ghi nào về việc game này từng được chơi trên máy này',
+    'evidence.games.redistributables':
+      'Không phải game: đây là bộ thư viện dùng chung mà Steam cài để các game khác dùng. Gỡ nó đi sẽ khiến những game phụ thuộc vào nó không chạy được',
+    'evidence.games.size': 'Steam ghi nhận nó là {size}, và máy này đã xác nhận con số đó là chính xác',
+    'evidence.games.partial':
+      'Steam không đánh dấu nó là đã cài xong, nên một phần chỗ này có thể là bản tải dở dừng giữa chừng',
+    'evidence.games.staging': 'Còn {size} nữa đang chờ sẵn cho một bản cập nhật chưa hoàn tất',
+    'evidence.games.library': 'Nằm trong thư viện Steam trên {library}',
+    'evidence.games.accounts': 'Có {n} tài khoản Steam trên máy này từng chơi nó',
+    'evidence.games.accountsUnread':
+      'Có {n} trong {total} tài khoản Steam trên máy này không đọc được, nên có thể còn một lần chơi mới hơn chưa được tính',
+    'evidence.games.uninstallOnly':
+      'Chỉ Steam mới gỡ được nó. Xoá thư mục sẽ khiến Steam vẫn liệt kê game, và game sẽ không chạy được',
+
+    'evidence.games.orphan':
+      'Một thư mục trong thư mục game của Steam mà không game nào đang cài nhận — thường là thứ một lần gỡ bị gián đoạn để lại',
+    'evidence.games.orphanSize': '{size} trong {files} tệp',
+    'evidence.games.orphanCheck':
+      'Hãy kiểm trong Steam trước: một game đang cài mà mất tệp manifest cũng trông y hệt thế này',
+    'evidence.games.orphanNoAction': 'App sẽ không xoá thư mục. Hãy mở nó ra và tự xoá khi bạn đã chắc',
+
+    'evidence.games.download': 'Một phần của lần tải Steam chưa xong, còn lại trong steamapps\\downloading',
+    'evidence.games.downloadAge': 'Ghi lần cuối cách đây {n} ngày',
+    'evidence.games.downloadRefetch':
+      'Nếu hoá ra vẫn cần, Steam sẽ tải lại; không có thứ gì đã cài phụ thuộc vào nó',
+    'evidence.games.downloadSparse':
+      'Nó được đặt chỗ sẵn ở mức {claimed} nhưng mới ghi được {actual}, nên xoá đi cũng chỉ lấy lại được chừng đó',
+    'evidence.games.steamOpen':
+      'Steam đang mở — hãy đóng Steam trước khi xoá những thứ này, phòng khi một trong số đó là bản tải đang chạy',
+    'evidence.games.steamUnknown': 'Không kiểm được Steam có đang chạy hay không, nên những mục này không được đề xuất',
+
     /* ---- Ứng dụng đã cài (D1) -------------------------------------------- */
 
     'app.tab.apps': 'Ứng dụng',
@@ -1584,6 +1677,8 @@
     'evidence.apps.measured': 'Thư mục cài được đo bằng cách đọc mọi thư mục bên trong: {size} trong {files} tệp',
     'evidence.apps.measuredPartial': 'Có {n} thư mục bên trong không đọc được, nên nó chứa ít nhất chừng này',
     'evidence.apps.locationGone': 'Thư mục mà nó khai là đã cài vào không còn nữa',
+    'evidence.apps.steamGame':
+      'Một game trên Steam. Vị trí và dung lượng của nó lấy từ chính các tệp của Steam, ở màn Game — mục mà Windows giữ cho nó sẽ cũ đi mỗi khi game được chuyển chỗ',
     'evidence.apps.locationBroad':
       'Nó khai cả một ổ đĩa hoặc một thư mục dùng chung là thư mục cài, đo chỗ đó sẽ ra nhiều hơn ứng dụng này rất nhiều',
     'evidence.apps.noLocation': 'Nó không ghi lại nơi đã cài vào, nên không đo được thư mục của nó',

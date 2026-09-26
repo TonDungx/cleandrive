@@ -192,7 +192,12 @@ async function scan({ token = null, onProgress = () => {}, prefetch = null, env 
   // "something is in there we could not see".
   const toMeasure = [];
   for (const app of apps) {
-    if (app.installLocation) {
+    // A Steam game's folder is whatever Steam's own files say, not what its
+    // registry entry said when it was installed. Measuring the stale path
+    // would report "the folder is gone" about a game that is sitting there.
+    if (app.steamAppId) {
+      app.locationFromSteam = true;
+    } else if (app.installLocation) {
       if (tooBroad(app.installLocation, env)) app.locationTooBroad = true;
       else if (!(await exists(app.installLocation))) app.locationMissing = true;
       else toMeasure.push(app.installLocation);
@@ -203,7 +208,7 @@ async function scan({ token = null, onProgress = () => {}, prefetch = null, env 
   const sizes = await measureAll(toMeasure, { token, onProgress });
 
   for (const app of apps) {
-    const measurable = app.installLocation && !app.locationTooBroad && !app.locationMissing;
+    const measurable = app.installLocation && !app.locationTooBroad && !app.locationMissing && !app.locationFromSteam;
     const install = measurable ? sizes.get(pathKey(app.installLocation)) : null;
     app.measured = install ? { bytes: install.bytes, files: install.files, refused: install.refused } : null;
 

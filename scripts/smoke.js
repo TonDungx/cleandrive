@@ -2993,6 +2993,120 @@ app.whenReady().then(async () => {
       check('a redraw that changes nothing leaves the rows in place', stable);
     }
 
+    /* -- the games library (D2) --------------------------------------------- */
+
+    console.log('\nGames (the Games tab, against this machine’s real Steam):');
+    {
+      const js = (expr) => win.webContents.executeJavaScript(expr);
+      await js(`document.querySelector('.tab[data-tab="games"]').click()`);
+      await js(`document.getElementById('games-scan').click()`);
+      const finished = await until(win, `document.getElementById('games-cancel').hidden`, 180000);
+      check('a scan of the real machine finishes', finished);
+
+      const found = await js(`(() => {
+        const out = window.gamesScreen.view.result;
+        return { hasResult: Boolean(out && out.summary), steam: out && out.steam ? out.steam.installed : null };
+      })()`);
+
+      if (!found.hasResult || !found.steam) {
+        // Nothing to hold the screen to on a machine with no Steam; that it
+        // says so rather than drawing an empty table is the whole check.
+        const said = await js(`document.getElementById('games-status').textContent`);
+        check('with no Steam on the machine, the screen says so', /Steam/.test(said), said.slice(0, 90));
+      } else {
+        const seen = await js(`(() => {
+          const out = window.gamesScreen.view.result;
+          const rows = [...document.querySelectorAll('#games-list .games-row:not(.games-head)')];
+          const cell = (row, sel) => { const el = row.querySelector(sel); return el ? el.textContent.trim() : ''; };
+          const byKind = {};
+          for (const c of out.candidates) byKind[c.meta.kind] = (byKind[c.meta.kind] || 0) + 1;
+          return {
+            rows: rows.length,
+            names: rows.map((r) => cell(r, '.games-name')),
+            head: [...document.querySelectorAll('#games-list .games-head .games-headcell')].map((c) => c.textContent.trim()),
+            stats: ['gstat-count', 'gstat-size', 'gstat-stale', 'gstat-leftovers'].map((id) => document.getElementById(id).textContent),
+            notes: [...document.querySelectorAll('#games-note p')].map((p) => p.textContent),
+            byKind,
+            verdicts: [...new Set(out.candidates.map((c) => c.verdict))],
+            actions: [...new Set(out.candidates.flatMap((c) => c.actions))],
+            categories: [...new Set(out.candidates.map((c) => c.category))],
+            unattended: out.candidates.filter((c) => c.unattendedEligible).length,
+            gameActions: [...new Set(out.candidates.filter((c) => c.meta.kind === 'game' && !c.meta.notAGame).flatMap((c) => c.actions))],
+            handoffs: out.candidates.filter((c) => c.meta.kind === 'game' && !c.meta.notAGame).map((c) => c.meta.handoff),
+            runtime: out.candidates.filter((c) => c.meta.notAGame).map((c) => c.meta.name + ':' + c.verdict + ':' + c.actions.join()),
+            claimed: out.summary.downloadClaimedBytes,
+            onDisk: out.summary.totalDownloadBytes,
+            leftoversHidden: document.getElementById('games-leftovers-card').hidden,
+          };
+        })()`);
+
+        check('the real Steam library is listed', seen.rows > 0 && seen.names.every(Boolean), `${seen.rows} games`);
+        check('the columns are the game, its size and when it was played',
+          seen.head.includes('On disk') && seen.head.includes('Last played'), seen.head.join(' | '));
+        check('the four figures at the top are filled in', seen.stats.every((v) => v && v !== '–'), seen.stats.join(' / '));
+        check('no game is ever called safe', !seen.verdicts.includes('safe'), seen.verdicts.join(', '));
+        check('none of it can be part of an unattended run', seen.unattended === 0, String(seen.unattended));
+        check('the categories are the three this screen declared',
+          seen.categories.every((c) => c === 'games.steam' || c === 'games.orphan' || c === 'games.downloading'),
+          seen.categories.join(', '));
+
+        check('a game is only ever handed to Steam, never deleted',
+          seen.gameActions.length === 1 && seen.gameActions[0] === 'handoff', seen.gameActions.join(', '));
+        check('and each handoff names that game’s own app id',
+          seen.handoffs.every((h) => /^steamUninstall:\d{1,10}$/.test(h)), seen.handoffs.slice(0, 3).join(', '));
+        // Steam's own shared runtime sits in the library looking like a game.
+        // Offering to uninstall it would break every game that needs it.
+        check('Steam’s own shared runtime is protected, not offered for removal',
+          seen.runtime.every((r) => /:protected:none$/.test(r)), seen.runtime.join(' | ') || 'none in this library');
+        check('the screen says the app never removes a game',
+          seen.notes.some((n) => /never removes a game/.test(n)), seen.notes.map((n) => n.slice(0, 40)).join(' | '));
+
+        // Steam sets a file to its finished size before downloading it. The
+        // screen has to lead with what is on the disk.
+        if (seen.byKind.download) {
+          check('leftover downloads are counted by what they occupy, not what they claim',
+            seen.onDisk <= seen.claimed, `on disk ${seen.onDisk} <= claimed ${seen.claimed}`);
+          check('and the leftovers card is shown', seen.leftoversHidden === false);
+        }
+
+        // Opening a row's evidence, and the redraw rule.
+        const opened = await js(`(() => {
+          const pick = () => document.querySelector('#games-list .games-row:not(.games-head)');
+          pick().querySelector('.games-col-badge .badge-button').click();
+          const row = pick();
+          const panel = row.nextElementSibling;
+          return {
+            isPanel: Boolean(panel && panel.classList.contains('games-evidence-row')),
+            reasons: panel ? panel.querySelectorAll('li, p').length : 0,
+            expanded: row.querySelector('.games-col-badge .badge-button').getAttribute('aria-expanded'),
+          };
+        })()`);
+        check('a game’s evidence opens under it', opened.isPanel && opened.reasons > 0 && opened.expanded === 'true',
+          `${opened.reasons} reasons`);
+
+        const stable = await js(`(() => {
+          const host = document.getElementById('games-list');
+          const first = host.querySelector('.games-row:not(.games-head)');
+          window.gamesScreen.render();
+          return host.querySelector('.games-row:not(.games-head)') === first;
+        })()`);
+        check('a redraw that changes nothing leaves the rows in place', stable);
+
+        // Free gets the screen locked, not an empty one.
+        const locked = await js(`(() => {
+          const out = window.gamesScreen.view.result;
+          window.gamesScreen.view.result = { candidates: null, summary: null, locked: 'pro.games', steam: out.steam };
+          window.gamesScreen.render();
+          const said = document.getElementById('games-status').textContent;
+          window.gamesScreen.view.result = out;
+          window.gamesScreen.render();
+          return said;
+        })()`);
+        check('without the feature the screen says which one it needs, not nothing',
+          /Pro/.test(locked), locked.slice(0, 80));
+      }
+    }
+
     /* -- console cleanliness --------------------------------------------- */
     console.log('\nConsole:');
     check('no renderer errors', rendererErrors.length === 0, rendererErrors.join(' | '));

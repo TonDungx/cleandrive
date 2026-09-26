@@ -41,6 +41,10 @@ const api = {
   cancelApps: () => ipcRenderer.invoke('apps:cancel'),
   scanAppsPrefetch: () => ipcRenderer.invoke('apps:prefetch'),
 
+  lastGames: () => ipcRenderer.invoke('games:last'),
+  scanGames: () => ipcRenderer.invoke('games:scan'),
+  cancelGames: () => ipcRenderer.invoke('games:cancel'),
+
   /* what changed in a folder between two of its scans */
   snapshotList: () => ipcRenderer.invoke('snapshot:list'),
   snapshotDiff: (root, older, newer) => ipcRenderer.invoke('snapshot:diff', { root, older, newer }),
@@ -120,6 +124,7 @@ const api = {
   onTrashProgress: (cb) => subscribe('action:progress', cb),
   onSystemProgress: (cb) => subscribe('system:progress', cb),
   onAppsProgress: (cb) => subscribe('apps:progress', cb),
+  onGamesProgress: (cb) => subscribe('games:progress', cb),
   onAutoCleanProgress: (cb) => subscribe('autoclean:progress', cb),
   onMediaProgress: (cb) => subscribe('media:progress', cb),
   /** Files as they are read, so the grid fills while the scan is still running. */

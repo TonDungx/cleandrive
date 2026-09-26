@@ -291,6 +291,59 @@ app.whenReady().then(async () => {
   await openApps();
   check('the Apps screen draws its rows', await until(`document.querySelectorAll('#apps-list .apps-row').length >= 5`, 10000));
 
+  // Games: a library of four, plus the two kinds of leftover. Constructed
+  // readings, labelled as such here; `smoke.js` runs the screen against the
+  // real Steam on this machine.
+  const openGames = () => run(`
+    selectTab(document.getElementById('tab-games'));
+    const now = Date.now();
+    const ev = (rank, i18n, en, params) => ({ rank, i18n, en, params });
+    const game = (n, over) => Object.assign({
+      id: 'g' + n, path: 'D:\\\\SteamLibrary\\\\steamapps\\\\common\\\\Game' + n, kind: 'folder',
+      bytes: 9e9 - n * 1e9, category: 'games.steam', verdict: 'keep', confidence: 'strong',
+      evidence: [ev(1, 'evidence.games.played', 'Last played {n} days ago', { n: String(n * 40) })],
+      actions: ['handoff'], unattendedEligible: false,
+      meta: {
+        kind: 'game', appid: String(100000 + n), name: 'Example Game ' + n, library: 'D:\\\\SteamLibrary',
+        installdir: 'Game' + n, lastPlayedAt: now - n * 40 * 86400000, playedSource: 'manifest',
+        fullyInstalled: true, stagingBytes: 0, updatedAt: now, accounts: 1,
+        handoff: 'steamUninstall:' + (100000 + n), staleDays: 180,
+      },
+    }, over || {});
+    const rows = [
+      game(1),
+      game(2),
+      game(3, { verdict: 'review' }),
+      {
+        id: 'o1', path: 'D:\\\\SteamLibrary\\\\steamapps\\\\common\\\\Abandoned', kind: 'folder', bytes: 4.2e9,
+        category: 'games.orphan', verdict: 'review', confidence: 'likely',
+        evidence: [ev(1, 'evidence.games.orphan', 'A folder in Steam\u2019s games folder that no installed game claims')],
+        actions: ['none'], unattendedEligible: false,
+        meta: { kind: 'orphan', name: 'Abandoned', library: 'D:\\\\SteamLibrary', files: 812, refused: 0 },
+      },
+      {
+        id: 'd1', path: 'D:\\\\SteamLibrary\\\\steamapps\\\\downloading\\\\depot_1_2.delta', kind: 'file',
+        bytes: 9.4e7, bytesOnDisk: 9.4e7, category: 'games.downloading', verdict: 'review', confidence: 'likely',
+        evidence: [ev(1, 'evidence.games.download', 'Part of a Steam download that did not finish')],
+        actions: ['recycle'], unattendedEligible: false,
+        meta: { kind: 'download', name: 'depot_1_2.delta', library: 'D:\\\\SteamLibrary', group: 'D:\\\\SteamLibrary', ageDays: 327, steamRunning: false },
+      },
+    ];
+    window.gamesScreen.view.result = {
+      candidates: rows,
+      steam: { installed: true, path: 'C:\\\\Program Files (x86)\\\\Steam' },
+      summary: {
+        rows: { games: ['g1', 'g2', 'g3'], orphans: ['o1'], downloads: ['d1'] },
+        staleDays: 180, totalGameBytes: 2.4e10, totalOrphanBytes: 4.2e9, totalDownloadBytes: 9.4e7,
+        downloadClaimedBytes: 7.6e9, emptyReservations: 4, downloadFiles: 1,
+        librariesPresent: 1, librariesMissing: [], accounts: { total: 16, read: 16 },
+        steamRunning: false, cancelled: false, durationMs: 6000,
+      },
+    };
+    window.gamesScreen.render();`);
+  await openGames();
+  check('the Games screen draws its rows', await until(`document.querySelectorAll('#games-list .games-row').length >= 4`, 10000));
+
   await openTrends();
   await tab('restore');
   await until(`document.querySelector('[data-restore-toggle]')`, 15000);
@@ -317,11 +370,12 @@ app.whenReady().then(async () => {
       incomplete: r.incomplete.reduce((n, v) => n + v.nodes.length, 0),
     }))`);
 
-  const SCREENS = ['usage', 'system', 'cleanup', 'media', 'dupes', 'apps', 'trends', 'restore', 'auto', 'settings'];
+  const SCREENS = ['usage', 'system', 'cleanup', 'media', 'dupes', 'apps', 'games', 'trends', 'restore', 'auto', 'settings'];
   const axeScreens = async (label) => {
     for (const screen of SCREENS) {
       if (screen === 'trends') await openTrends();
       else if (screen === 'apps') await openApps();
+      else if (screen === 'games') await openGames();
       else await tab(screen);
       await wait(250);
       const result = await axeRun();
@@ -400,7 +454,7 @@ app.whenReady().then(async () => {
   }
   for (const mode of ['light', 'dark']) {
     await setTheme(mode);
-    for (const screen of ['usage', 'cleanup', 'dupes', 'media', 'apps', 'restore', 'settings']) {
+    for (const screen of ['usage', 'cleanup', 'dupes', 'media', 'apps', 'games', 'restore', 'settings']) {
       await tab(screen);
       await wait(250);
       const hover = await contrastUnder(['hover'], HOVERED);
@@ -425,7 +479,7 @@ app.whenReady().then(async () => {
   let nodes = await axTree();
   const tabs = nodes.filter((n) => n.role && n.role.value === 'tab' && !n.ignored);
   const selected = tabs.filter((n) => prop(n, 'selected') === true);
-  check('ten tabs, and exactly one says it is selected', tabs.length === 10 && selected.length === 1,
+  check('eleven tabs, and exactly one says it is selected', tabs.length === 11 && selected.length === 1,
     `${tabs.length} tabs, selected: ${selected.map((n) => n.name && n.name.value).join(', ')}`);
   check('the selected one is the screen on show', selected[0] && /Trends/.test(selected[0].name.value), selected[0] && selected[0].name.value);
 

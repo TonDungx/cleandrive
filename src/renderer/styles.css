@@ -2650,6 +2650,208 @@ main {
   }
 }
 
+
+/* ----------------------------------------------------------------- games */
+/*
+ * The Games screen (D2). One size column rather than the two the installed
+ * apps screen needs: Steam's own figure was checked against a real walk of
+ * every game here and found exact, so there is no second, weaker number to
+ * keep apart from it.
+ */
+
+.games-list {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+.games-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 104px 128px auto auto;
+  align-items: center;
+  gap: 4px 12px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--border-soft);
+  min-width: 0;
+}
+
+.games-row:first-child {
+  border-top: 0;
+}
+
+.games-head {
+  background: var(--surface-2);
+  font-size: 11.5px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+.games-headcell {
+  font-weight: 600;
+}
+
+.games-col-name {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.games-name {
+  font-size: 13px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.games-library {
+  font-size: 11.5px;
+  color: var(--text-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.games-col-size {
+  font-variant-numeric: tabular-nums;
+  font-size: 12.5px;
+  text-align: right;
+  color: var(--text-2);
+}
+
+.games-col-when {
+  font-size: 12.5px;
+  color: var(--text-2);
+}
+
+.games-col-badge,
+.games-col-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.games-protection {
+  font-size: 11.5px;
+  color: var(--text-3);
+  white-space: nowrap;
+}
+
+.games-evidence-row {
+  border-top: 1px solid var(--border-soft);
+  background: var(--surface-2);
+  padding: 10px 14px 14px;
+}
+
+.games-note p {
+  margin: 0 0 6px;
+}
+
+.games-note p:last-child {
+  margin-bottom: 0;
+}
+
+/* ---- what Steam left behind ---- */
+
+.games-leftovers {
+  display: flex;
+  flex-direction: column;
+  margin-top: 10px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.games-leftover {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 92px auto;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 12px;
+  border-top: 1px solid var(--border-soft);
+  font-size: 12.5px;
+}
+
+.games-leftover:first-child {
+  border-top: 0;
+}
+
+.games-leftover-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.games-leftover-size {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  color: var(--text-2);
+}
+
+.games-leftover-more {
+  margin: 0;
+  padding: 8px 12px;
+  color: var(--text-3);
+  font-size: 12px;
+}
+
+/*
+ * Narrow: the date goes under the name rather than being squeezed, and the
+ * buttons keep their own column -- they are the only things here that act.
+ */
+@media (max-width: 860px) {
+  .games-row {
+    grid-template-columns: minmax(0, 1fr) 92px auto;
+    row-gap: 4px;
+  }
+
+  .games-head {
+    display: none;
+  }
+
+  .games-col-when {
+    grid-column: 1;
+    color: var(--text-3);
+  }
+
+  .games-col-badge,
+  .games-col-actions {
+    grid-column: 3;
+  }
+}
+
+@media (max-width: 620px) {
+  .games-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .games-col-size {
+    grid-column: 1;
+    text-align: left;
+  }
+
+  .games-col-badge,
+  .games-col-actions {
+    grid-column: 2;
+  }
+
+  .games-leftover {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .games-leftover-size {
+    grid-column: 1;
+    text-align: left;
+  }
+}
+
 @media (max-width: 760px) {
   .evidence-row { padding-left: 10px; }
 }

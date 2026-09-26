@@ -16,6 +16,7 @@ const BUILT_IN = [
   require('./media').analyzer,
   require('./system').analyzer,
   require('./apps').analyzer,
+  require('./games').analyzer,
 ];
 
 for (const analyzer of BUILT_IN) {

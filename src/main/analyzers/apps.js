@@ -89,7 +89,9 @@ function evidenceFor(app, summary, { lastUsedAllowed }) {
     }
   }
 
-  if (app.measured) {
+  if (app.locationFromSteam) {
+    add(m('evidence.apps.steamGame', 'A Steam game. Where it is and how big it is come from Steam’s own files, on the Games screen — the entry Windows has for it goes stale when a game is moved'));
+  } else if (app.measured) {
     add(m('evidence.apps.measured', 'Its install folder measured by reading every folder in it: {size} in {files} files', {
       size: formatBytes(app.measured.bytes), files: n(app.measured.files),
     }));
@@ -208,6 +210,7 @@ function toCandidate(app, summary, options) {
       lastUsedAllowed: options.lastUsedAllowed,
       protection: app.protection || null,
       sharesLocationWith: app.sharesLocationWith || 0,
+      steamAppId: app.steamAppId || null,
       // Shown for the person to copy, never run by the app. The one in the
       // registry is whatever the installer wrote there.
       uninstallCommand: app.protection ? '' : app.uninstallCommand || '',

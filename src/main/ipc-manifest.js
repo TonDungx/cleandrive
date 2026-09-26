@@ -41,6 +41,10 @@ const INVOKE = Object.freeze([
   'apps:cancel',
   'apps:prefetch',
 
+  'games:last',
+  'games:scan',
+  'games:cancel',
+
   'snapshot:list',
   'snapshot:diff',
 
@@ -109,6 +113,7 @@ const EVENTS = Object.freeze([
   'action:progress',
   'system:progress',
   'apps:progress',
+  'games:progress',
   'autoclean:progress',
   'media:progress',
   'media:batch',
