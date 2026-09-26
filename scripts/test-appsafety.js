@@ -55,6 +55,9 @@ async function buildFixture(root) {
   /* -- controls that MUST still be cleanable ----------------------------- */
   const project = path.join(root, 'work', 'my-app');
   await write(path.join(project, 'package.json'), '{"name":"mine"}');
+  // The .gitignore is what makes dist/ build output, not the package.json
+  // beside it: a vendored library has one of those too (see test-advisor.js).
+  await write(path.join(project, '.gitignore'), 'node_modules/\ndist/\n');
   await write(path.join(project, 'src', 'index.js'));
   await write(path.join(project, 'dist', 'bundle.js'));
 

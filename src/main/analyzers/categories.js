@@ -73,6 +73,13 @@ declare('dev.ideCache', { screen: 'dev' });
 // and never touched: what clears them does not go through the Recycle Bin.
 declare('dev.wslDistro', { screen: 'dev' });
 declare('dev.dockerDisk', { screen: 'dev' });
+// A project's dependency folder (C1) and what its builds left behind (C5).
+// The dependency folder is explained and handed back to the tool that fills
+// it -- 232,229 files across nineteen folders on this machine is not a list
+// anybody picks through. A build folder the project's own `.gitignore`
+// declares is listed and can go to the bin.
+declare('dev.dependencies', { screen: 'dev' });
+declare('dev.buildOutput', { screen: 'dev' });
 
 function isDeclared(id) {
   return DECLARED.has(id);

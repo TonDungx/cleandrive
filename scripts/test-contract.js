@@ -241,6 +241,8 @@ async function make(file, { bytes = 64, ageDays = 0, content = 'x' } = {}) {
   await make(path.join(dir, 'AppLike', 'Cache', 'blob.bin'), { bytes: 7 * MB });
   await make(path.join(dir, 'logs', 'old.log'), { bytes: 2 * MB, ageDays: 40 });
   await make(path.join(dir, 'project', 'package.json'), { content: '{}' });
+  // What makes obj/ build output is this line, not the package.json above it.
+  await make(path.join(dir, 'project', '.gitignore'), { content: 'obj\n' });
   await make(path.join(dir, 'project', 'obj', 'compiled.o'), { bytes: 4 * MB });
   await make(path.join(dir, 'Downloads', 'setup.exe'), { bytes: 30 * MB, ageDays: 90 });
   await make(path.join(dir, 'movie.mkv'), { bytes: 300 * MB });

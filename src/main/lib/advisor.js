@@ -274,12 +274,47 @@ function looksLikeProject(entries) {
  * Tag for a directory. A tag, once applied, is inherited by every
  * subdirectory beneath it.
  *
+ * **`buildoutput` needs the project's own `.gitignore` to say so**, not just a
+ * project file sitting beside the folder. Measured 2026-09-26 on this machine:
+ * the "project file beside it" rule alone called **774 files, 43.7 MB** of
+ * `D:\fda\fdaplus\frontend\app\base\static\vendors` build output -- Bootstrap's
+ * `dist`, echarts' `dist`, Chart.js' `dist`, every one of them committed to
+ * git and served by the page -- because a vendored library always ships a
+ * `package.json` next to its `dist`. An unattended run with build output
+ * enabled would have taken 400 of them. It is the same mistake the
+ * `looksLikeInstalledApp` check above was written for, one layer further in.
+ *
+ * A `.gitignore` line saying `dist/` is the developer stating in writing that
+ * the folder is regenerated. Against thirteen folders picked by hand it was
+ * right thirteen times where "a project file is beside it" was right eight,
+ * and it costs nothing where there is no `.gitignore` to read (lib/gitignore.js).
+ *
+ * **It replaces the project-marker test rather than joining it.** `D:\work\
+ * tow_tool` is a real project here whose `.gitignore` says, with a comment
+ * above it, that `build/` and `dist/` are what PyInstaller produces and how to
+ * rebuild them -- 222 MB -- and whose only marker is a `requirements.txt`,
+ * which is not on the list. Requiring both would keep believing Bootstrap and
+ * disbelieving the person who wrote it down. A `.gitignore` exists only where
+ * somebody set up a repository, which is the stronger signal of the two; it
+ * was `resources\app\package.json` inside VS Code that caused the original
+ * breakage, and no installed application ships a `.gitignore` naming `out`.
+ *
+ * **The name still has to be a build-output name**, and that conjunction is
+ * what makes this safe rather than reckless. Plenty of what a `.gitignore`
+ * lists is precious *because* it is not committed -- `tow_tool`'s own file
+ * holds `*.mat-khau.yaml`, the passwords for its accounts. Only the six names
+ * in `BUILD_DIR_NAMES` are ever read this way.
+ *
+ * `looksLikeProject` has not gone away -- the scan still needs it, to know
+ * where one project ends and a nested one begins (lib/scanner.js). It is no
+ * longer what decides this.
+ *
  * @param {string} name             directory basename
  * @param {string|null} parentTag   tag inherited from the parent
- * @param {boolean} parentIsProject whether the parent holds a project marker
+ * @param {boolean} declaredScratch whether a `.gitignore` above names this folder
  * @returns {string|null}
  */
-function tagDirectory(name, parentTag, parentIsProject = false) {
+function tagDirectory(name, parentTag, declaredScratch = false) {
   if (parentTag) return parentTag;
 
   const lower = name.toLowerCase();
@@ -287,7 +322,7 @@ function tagDirectory(name, parentTag, parentIsProject = false) {
   const tag = DIR_TAGS.get(lower);
   if (tag) return tag;
 
-  if (parentIsProject && BUILD_DIR_NAMES.has(lower)) return 'buildoutput';
+  if (declaredScratch && BUILD_DIR_NAMES.has(lower)) return 'buildoutput';
   return null;
 }
 

@@ -21,6 +21,7 @@ const systemMeasure = require('./system/measure');
 const appsMeasure = require('./apps/measure');
 const gamesMeasure = require('./games/measure');
 const devMeasure = require('./dev/measure');
+const devProjects = require('./dev/projects');
 const systemBreakdown = require('./system/breakdown');
 const { ScanTree, MultiScanTree } = require('./analyzers/scan-tree');
 const scanRoots = require('./analyzers/scan-roots');
@@ -52,7 +53,7 @@ const contextMenu = require('./lib/context-menu');
 const launchTarget = require('./launch-target');
 
 // One in-flight job of each kind at a time; a new run supersedes the old one.
-const tokens = { scan: null, dupes: null, trash: null, auto: null, media: null, thumbs: null, system: null, apps: null, games: null, dev: null };
+const tokens = { scan: null, dupes: null, trash: null, auto: null, media: null, thumbs: null, system: null, apps: null, games: null, dev: null, devProjects: null };
 
 /* ---- the Disk usage map's state -------------------------------------------- */
 
@@ -919,6 +920,87 @@ function register() {
 
   handle('dev:cancel', () => {
     if (tokens.dev) tokens.dev.cancel();
+    return { ok: true };
+  });
+
+  /* ---- the projects on the chosen folders (C1, C5) ----------------------- */
+
+  /*
+   * A second scan on the same screen, because it has a second input: the
+   * folders chosen on the Disk usage screen rather than the fixed places a
+   * tool keeps its cache. It costs a different amount every time -- 12.5 s for
+   * the whole of D:\ here, against 22.6 s for the tools half -- and it can
+   * have nothing to scan at all, which the reply says rather than guessing a
+   * folder on the user's behalf.
+   *
+   * Several folders at once is Pro, the same rule and the same message as the
+   * Disk usage screen, and the folders are made safe the same way (A4).
+   */
+  let devProjectsState = null;
+
+  async function presentDevProjects() {
+    const { candidates, summary, locked } = await analyzers.collect(
+      'devProjects',
+      { model: devProjectsState },
+      { can: licenseState.canNow() }
+    );
+    return { candidates, summary, locked: locked || null };
+  }
+
+  handle('dev:lastProjects', () =>
+    guard(async () => (devProjectsState ? await presentDevProjects() : { candidates: null, summary: null })));
+
+  handle('dev:scanProjects', (event, roots) =>
+    guard(async () => {
+      if (tokens.devProjects) tokens.devProjects.cancel();
+      const token = new CancelToken();
+      tokens.devProjects = token;
+      const send = (payload) => {
+        if (!event.sender.isDestroyed()) event.sender.send('dev:projectProgress', payload);
+      };
+      try {
+        const listing = await (scanHarness && scanHarness.volumes ? scanHarness.volumes() : volumes.list());
+        const prepared = await scanRoots.prepareRoots(roots, { drives: listing.drives });
+        if (prepared.roots.length === 0) {
+          const why = prepared.refused[0] ? prepared.refused[0].reason : 'missing';
+          throw Object.assign(
+            new Error(why === 'notFolder' ? 'That is not a folder' : 'That folder is not there any more'),
+            { code: 'ENOENT', quiet: true }
+          );
+        }
+        const can = licenseState.canNow();
+        if (prepared.roots.length > 1 && !can('pro.scan.multiroot')) {
+          throw Object.assign(new Error('Scanning several folders at once is part of CleanDrive Pro'), { code: 'ELOCKED', quiet: true });
+        }
+
+        devProjectsState = await devProjects.scan({
+          roots: prepared.roots.map((r) => r.root),
+          token,
+          onProgress: send,
+        });
+        // A folder the app may only read cannot offer its build output.
+        const readOnly = prepared.roots.filter((r) => r.readOnly);
+        const presented = await presentDevProjects();
+        if (readOnly.length === 0 || !presented.candidates) {
+          return { ...presented, merged: prepared.merged, chosenRoots: prepared.roots };
+        }
+        return {
+          ...presented,
+          candidates: presented.candidates.map((c) => {
+            const under = readOnly.find((r) => scanRoots.inside(c.path, r.root));
+            return under ? scanRoots.readOnlyCandidate(c, under.readOnly) : c;
+          }),
+          merged: prepared.merged,
+          chosenRoots: prepared.roots,
+        };
+      } finally {
+        if (tokens.devProjects === token) tokens.devProjects = null;
+      }
+    })
+  );
+
+  handle('dev:cancelProjects', () => {
+    if (tokens.devProjects) tokens.devProjects.cancel();
     return { ok: true };
   });
 

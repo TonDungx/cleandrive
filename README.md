@@ -102,7 +102,7 @@ while skimming.
 | **Duplicates** | What do I have more than one copy of? | One folder you choose |
 | **Apps** | What is installed, how big is it, when did I last start it? | The installed-apps list, and the folders it names |
 | **Games** | Which games am I keeping and not playing? | The Steam library |
-| **Developer** | What have my development tools filled the disk with? | Package caches, SDKs, editor caches, WSL and Docker |
+| **Developer** | What have my development tools filled the disk with? | Package caches, SDKs, editor caches, WSL and Docker, and your own projects |
 | **Trends** | Is this getting worse, and how fast? | Every volume the app knows about |
 | **Restore** | What did the app do, and can I have it back? | Everything in the Action Journal |
 | **Automatic** | Can this happen without me? | A policy you write |
@@ -1036,13 +1036,66 @@ product keeps `caches`, `index` and `log` — and, right beside them,
 Studio's folder is the same story, with `BackupFiles` and `SettingsBackup_*`
 next to its two caches. Only the named folders are ever touched.
 
+### Your own projects, on the folders you chose
+
+A second scan on the same screen, with a button of its own. The half above
+looks in fixed places — npm's cache is in the same folder on every machine.
+This one looks wherever you pointed the Disk usage screen, which can be nowhere
+at all until you have chosen something, and costs a different amount each time.
+Scanning the whole of `D:` here takes 12 seconds against 23 for the tools half,
+and a 4 GB `venv` alone accounts for 22 of them, so opening the tab to look at
+Docker's 53 GB does not make you wait for either.
+
+It does not look under `AppData`, in folders whose name starts with a dot, in
+the insides of installed applications, or in the package caches the half above
+already reports. Those rules are not tidiness: a walk of the Home folder
+without them found 222 "projects" in 68 seconds, and the first eight with a
+`node_modules` were the insides of Cursor and Discord. With them it finds 143
+in 17 seconds and none of those eight.
+
+**A project's dependencies are explained, never touched.** One row per project
+with its size, whether it has a lockfile, how long since anybody touched it,
+and the one command that brings it back — `npm ci`, `pip install -r
+requirements.txt`, `cargo build`. It is `safe` only when there is a lockfile
+*and* nothing outside the dependency folder has changed for sixty days. The
+"last touched" reading deliberately skips the dependency folder itself, because
+one `npm install` stamps 47,754 files with today's date and would make a
+project nobody has opened since February look like this morning's work.
+
+**A build folder can go to the Recycle Bin — but only when your own
+`.gitignore` says it is regenerated.** Not because a project file sits beside
+it. That rule is wrong, and measurably so: of the 113 build folders on this
+machine, 11 are declared that way and 102 are not, and the 102 include every
+vendored copy of Bootstrap, echarts and Chart.js — folders called `dist` with a
+`package.json` right next to them, committed to git, loaded by the page. They
+also include 1.30 GB of released APKs, versions 1.0.3 through 1.2.1, in a
+folder called `dist` that somebody meant to keep. Rebuilding gives you the
+current version, not the ten that shipped.
+
+A line in your `.gitignore` saying `dist/` is you stating in writing that the
+folder is regenerated, and the row quotes it back to you. The folders nobody
+declared are still listed, with their sizes, and marked as guesses that the app
+will not act on — so you can see they were found and left alone.
+
+The same test now decides what the disk scan calls build output, and what an
+automatic cleanup is allowed near. Before it, a run with build output switched
+on would have taken 400 files of vendored library off this machine.
+
 ### What it will not do
 
 **Run any of these commands.** It shows what each tool uses so you can read it
 first and copy it if you want it. Nothing on this screen can be part of an
 automatic cleanup. An SDK is never removed by the app either: the Android SDK
 Manager and Windows' own installed-apps list know which pieces something still
-needs, and taking folders out by hand leaves them believing otherwise.
+needs, and taking folders out by hand leaves them believing otherwise. Nor is a
+`node_modules` or a `venv`: nineteen of them here hold 232,229 files between
+them, and the tool that filled one knows what its lockfile pins in a way a walk
+of the folder never will.
+
+**Decide whether a program is running inside a project folder.** Windows
+reports where a process was started from, not which folder it is working in, so
+the question cannot be asked. Every dependency row says so rather than leaving
+you to assume it was checked.
 
 ---
 

@@ -48,6 +48,9 @@ const api = {
   lastDev: () => ipcRenderer.invoke('dev:last'),
   scanDev: () => ipcRenderer.invoke('dev:scan'),
   cancelDev: () => ipcRenderer.invoke('dev:cancel'),
+  lastDevProjects: () => ipcRenderer.invoke('dev:lastProjects'),
+  scanDevProjects: (roots) => ipcRenderer.invoke('dev:scanProjects', roots),
+  cancelDevProjects: () => ipcRenderer.invoke('dev:cancelProjects'),
 
   /* what changed in a folder between two of its scans */
   snapshotList: () => ipcRenderer.invoke('snapshot:list'),
@@ -130,6 +133,7 @@ const api = {
   onAppsProgress: (cb) => subscribe('apps:progress', cb),
   onGamesProgress: (cb) => subscribe('games:progress', cb),
   onDevProgress: (cb) => subscribe('dev:progress', cb),
+  onDevProjectsProgress: (cb) => subscribe('dev:projectProgress', cb),
   onAutoCleanProgress: (cb) => subscribe('autoclean:progress', cb),
   onMediaProgress: (cb) => subscribe('media:progress', cb),
   /** Files as they are read, so the grid fills while the scan is still running. */

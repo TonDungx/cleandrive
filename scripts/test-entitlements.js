@@ -117,8 +117,11 @@ check('and the override narrows it for testing a tier',
 {
   const paid = registry.list().filter((a) => a.feature !== 'free');
   check('the analyzers behind a feature key are the games library and the Developer Pack',
-    paid.length === 2 && paid.some((a) => a.id === 'games' && a.feature === 'pro.games') &&
-      paid.some((a) => a.id === 'dev' && a.feature === 'pro.dev'),
+    paid.length === 3 && paid.some((a) => a.id === 'games' && a.feature === 'pro.games') &&
+      paid.some((a) => a.id === 'dev' && a.feature === 'pro.dev') &&
+      // The Developer screen has two of them: its own tools, and the projects
+      // on whatever folders were chosen. One key covers both (C1, C5).
+      paid.some((a) => a.id === 'devProjects' && a.feature === 'pro.dev'),
     paid.map((a) => `${a.id}:${a.feature}`).join(', ') || 'none');
   check('every analyzer names a feature that exists',
     registry.list().every((a) => a.feature === 'free' || FEATURES[a.feature]),

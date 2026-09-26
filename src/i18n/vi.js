@@ -1572,6 +1572,64 @@
     'dev.note.neverRuns':
       'App không bao giờ chạy bất kỳ lệnh nào trong số này. Nó hiện ra lệnh mà từng công cụ dùng để bạn đọc trước, và chép lại nếu muốn.',
 
+    /* ---- Dự án của bạn (C1, C5) ------------------------------------------ */
+
+    'progress.devProjects': 'Đang xem qua các thư mục của bạn',
+    'dev.projects.title': 'Dự án của bạn',
+    'dev.projects.what':
+      'Xem qua các thư mục đã chọn ở tab Dung lượng đĩa để tìm dự án của chính bạn: thư viện của chúng nặng bao nhiêu, và các lần build để lại những gì.',
+    'dev.projects.scan': 'Xem qua các thư mục của tôi',
+    'dev.projects.ready': 'Sẵn sàng xem qua {folder}.',
+    'dev.projects.readyMany': 'Sẵn sàng xem qua {n} thư mục.',
+    'dev.projects.noRoots':
+      'Hãy chọn một thư mục ở tab Dung lượng đĩa trước — phần này xem qua đúng các thư mục đã chọn ở đó.',
+    'dev.projects.noRootsShort': 'Chưa chọn thư mục nào.',
+    'dev.projects.none':
+      'Không tìm thấy dự án nào có thư mục thư viện hoặc thư mục build trong các thư mục đã chọn.',
+    'dev.projects.done': '{n} dự án, {size}, trong {time}.',
+
+    'dev.projects.stat.projects': 'Dự án',
+    'dev.projects.stat.deps': 'Thư viện',
+    'dev.projects.stat.build': 'Thư mục build',
+
+    'dev.projects.group.deps': 'Thư viện, theo từng dự án',
+    'dev.projects.group.deps.what':
+      'Những gì mỗi dự án đã tải về để build chính nó. App không đụng tới thứ nào — lệnh trên từng dòng là cách nó quay lại.',
+    'dev.projects.group.build': 'Kết quả biên dịch mà dự án của bạn đã khai',
+    'dev.projects.group.build.what':
+      'Mỗi thư mục ở đây đều nằm dưới một dòng .gitignore nói rằng nó sẽ được tạo lại. Chỉ những thư mục đó mới được đề xuất.',
+    'dev.projects.group.guess': 'Những thư mục chỉ trông giống kết quả biên dịch',
+    'dev.projects.group.guess.what':
+      'Tên là build, dist hay bin, và không có gì nói chúng sẽ được tạo lại. Hiện ra để bạn biết là đã tìm thấy và đã để yên.',
+
+    'dev.projects.files': '{n} {files}',
+    'dev.projects.clear': 'Chuyển {count} vào Thùng rác',
+    'dev.projects.lock': 'lockfile: {list}',
+    'dev.projects.noLock': 'không có lockfile',
+    'dev.projects.today': 'vừa chạm hôm nay',
+    'dev.projects.idle': 'bỏ không {days} ngày',
+    'dev.projects.declaredBy': '.gitignore của nó ghi “{line}”',
+    'dev.projects.truncated':
+      'Chỉ những tệp đầu tiên ở đây được liệt kê, nên cũng chỉ những tệp đó chuyển đi được.',
+
+    'dev.projects.phase.walking': 'Đang xem qua thư mục… {dirs} thư mục, {projects} dự án',
+    'dev.projects.phase.builds': 'Đang đọc thư mục build… {at}/{of}',
+    'dev.projects.phase.measuring': 'Đang đo {name}… {at}/{of}',
+    'dev.projects.phase.touched': 'Đang xem {name} lần cuối bị chạm khi nào…',
+
+    'dev.projects.note.refused':
+      'Có {n} thư mục không đọc được, nên một phần các con số ở đây là mức sàn chứ không phải tổng.',
+    'dev.projects.note.rootAppData':
+      '{root} không được xem qua: nó nằm trong AppData, nơi các ứng dụng giữ bản sao của mọi thứ.',
+    'dev.projects.note.rootRefused':
+      '{root} không được xem qua: Windows và các chương trình đã cài nằm ở đó.',
+    'dev.projects.note.declared':
+      'Một thư mục build chỉ được đề xuất khi chính .gitignore của dự án gọi nó là thứ tạo lại được. Thư mục chỉ đơn thuần mang tên build hay dist thì được để yên — thư viện dự án đem theo cũng có một cái, và thư mục chứa các bản phát hành ai đó cố ý giữ cũng vậy.',
+    'dev.projects.note.dependencies':
+      'Thư mục thư viện không bao giờ bị đụng tới. Lệnh hiện ra sẽ đặt nó lại, và công cụ sở hữu nó biết lockfile ghim những gì theo cách app không biết.',
+    'dev.projects.note.notLookedIn':
+      'Không xem vào: mọi thứ dưới AppData, thư mục có tên bắt đầu bằng dấu chấm, ruột của các ứng dụng đã cài, và các cache gói đã liệt kê ở trên.',
+
     'evidence.dev.what.npm': 'Các gói npm đã tải về, giữ lại để lần cài sau khỏi tải lại',
     'evidence.dev.what.pip': 'Các gói Python pip đã tải về, giữ lại để lần cài sau khỏi tải lại',
     'evidence.dev.what.maven': 'Mọi thư viện Java mà Maven đã tải về, cho mọi dự án trên máy này',
@@ -1607,6 +1665,36 @@
     'evidence.dev.ideOpen': '{name} đang mở — hãy đóng nó rồi quét lại',
     'evidence.dev.processesUnknown':
       'Không kiểm được {name} có đang chạy hay không, nên không đề xuất gì ở đây',
+
+    /* ---- Dự án của bạn: thư viện và kết quả biên dịch (C1, C5) ------------ */
+
+    'evidence.dev.projectWhat':
+      'Thư viện của {name}, do chính công cụ của nó tải về: {size} trong {files} tệp',
+    'evidence.dev.projectLock':
+      'Có {lock}, ghim sẵn từng phiên bản — cài lại sẽ ra đúng những gì đang nằm đây',
+    'evidence.dev.projectNoLock':
+      'Không có lockfile, nên cài lại có thể ra phiên bản khác với những gì đang nằm đây',
+    'evidence.dev.projectUnknownAge':
+      'Không xác định được ngày tháng của thứ gì ở đây, nên không rõ nó bị bỏ không bao lâu',
+    'evidence.dev.projectStale':
+      'Ngoài thư mục thư viện ra, {days} ngày nay không có gì thay đổi',
+    'evidence.dev.projectRecent':
+      'Có thứ ở đây vừa đổi {days} ngày trước, nên đây là dự án đang dùng',
+    'evidence.dev.projectUncommitted':
+      'Các tệp của nó mới hơn mọi thứ git ghi lại — ở đây có việc chưa bao giờ được commit',
+    'evidence.dev.projectRestore':
+      'Nó quay lại bằng “{command}”, lệnh mà app chỉ hiện ra chứ không bao giờ chạy',
+    'evidence.dev.projectNoProcess':
+      'Chưa kiểm xem có chương trình nào đang chạy trong thư mục này: Windows cho biết tiến trình được khởi động từ đâu, chứ không cho biết nó đang làm việc ở thư mục nào',
+
+    'evidence.dev.buildWhat': 'Nằm trong {folder}, thứ mà {project} build đi build lại',
+    'evidence.dev.buildDeclared':
+      'Chính .gitignore của dự án có dòng “{line}” — người viết dòng đó đã nói thư mục này sẽ được tạo lại',
+    'evidence.dev.buildGuessWhat': 'Một thư mục tên {name}, chứa {size} trong {files} tệp',
+    'evidence.dev.buildNotDeclared':
+      'Không có .gitignore nào ở đây gọi nó là thứ tạo lại được, nên CleanDrive không coi đây là kết quả biên dịch. Một thư mục tên như vậy cũng rất có thể là thư viện dự án đem theo, hoặc những bản build ai đó cố tình giữ',
+    'evidence.dev.buildBeside':
+      'Có file dự án tương ứng nằm cạnh — điều đó một mình không đủ: mọi thư viện đem theo cũng có một cái',
 
     /* ---- Thư viện game (D2) ---------------------------------------------- */
 

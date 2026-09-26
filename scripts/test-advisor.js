@@ -48,10 +48,33 @@ async function buildFixture() {
   await make(path.join(dir, 'CrashDumps', 'app.dmp'), { bytes: 3 * MB });
   await make(path.join(dir, 'logs', 'old.log'), { bytes: 2 * MB, ageDays: 40 });
   await make(path.join(dir, 'logs', 'today.log'), { bytes: 1 * MB, ageDays: 0 });
-  // A real project: the marker file makes obj/ disposable build output.
+  // A real project. What makes obj/ disposable build output is the project's
+  // own .gitignore naming it -- a marker file beside it is not enough, and
+  // the vendored library below is why.
   await make(path.join(dir, 'project', 'package.json'), { content: '{}' });
+  await make(path.join(dir, 'project', '.gitignore'), { content: ['node_modules/', 'obj', '*.pyc'].join('\n') });
   await make(path.join(dir, 'project', 'obj', 'compiled.o'), { bytes: 4 * MB });
   await make(path.join(dir, 'project', 'src', 'main.c'), { bytes: 1 * MB });
+
+  // A vendored library inside that same project: a `dist` with a
+  // `package.json` beside it, exactly like the folder the old rule read, and
+  // committed to the repository rather than produced by it. Measured on this
+  // machine before the rule changed: 774 files, 43.7 MB of Bootstrap, echarts
+  // and Chart.js in a real project's `static\vendors` were called build
+  // output, and an unattended run with build output enabled would have taken
+  // 400 of them.
+  await make(path.join(dir, 'project', 'vendors', 'bootstrap', 'package.json'), { content: '{}' });
+  await make(path.join(dir, 'project', 'vendors', 'bootstrap', 'dist', 'bootstrap.min.css'), { bytes: 6 * MB });
+
+  // A project whose only marker is a requirements.txt, which is not on the
+  // marker list, and whose .gitignore says plainly what dist/ is. This is
+  // `D:\work\tow_tool` on the machine this was written on: 222 MB of
+  // PyInstaller output, with a comment above the line explaining it.
+  await make(path.join(dir, 'pyproject', 'requirements.txt'), { content: 'requests' });
+  await make(path.join(dir, 'pyproject', '.gitignore'), { content: ['# PyInstaller', 'dist/', '*.mat-khau.yaml'].join('\n') });
+  await make(path.join(dir, 'pyproject', 'dist', 'app.exe'), { bytes: 9 * MB });
+  // Ignored, precious, and not a build-output name: it must stay untouched.
+  await make(path.join(dir, 'pyproject', 'secrets.mat-khau.yaml'), { bytes: 2048 });
 
   // An installed program, not a project. Its bin/ holds the actual executable
   // and must never be suggested for deletion.
@@ -80,6 +103,8 @@ async function buildFixture() {
   const byCategory = Object.fromEntries(cleanup.groups.map((g) => [g.category, g]));
   const names = (cat) =>
     (byCategory[cat] ? byCategory[cat].files.map((f) => path.basename(f.path)) : []).sort();
+  /** Every file the advisor suggested at all, in any category. */
+  const all = () => cleanup.groups.flatMap((g) => g.files.map((f) => path.basename(f.path)));
 
   console.log(`Access times tracked: ${accessTimes.tracked}  (${accessTimes.detail})`);
   console.log(`Safe to delete:   ${formatBytes(cleanup.safeBytes)}`);
@@ -97,7 +122,22 @@ async function buildFixture() {
   check('editor lock file flagged', names('temp').includes('~$report.docx'));
   check('cache folder flagged', names('cache').includes('blob.bin'));
   check('crash dump flagged', names('crashdump').includes('app.dmp'));
-  check('build output flagged next to a project marker', names('buildoutput').includes('compiled.o'));
+  check('build output flagged when the project .gitignore names the folder', names('buildoutput').includes('compiled.o'));
+  check(
+    'a vendored library dist/ is NOT build output, though a package.json sits beside it',
+    !names('buildoutput').includes('bootstrap.min.css'),
+    names('buildoutput').join(', ')
+  );
+  check(
+    'build output found with no marker file at all, because .gitignore says so',
+    names('buildoutput').includes('app.exe'),
+    names('buildoutput').join(', ')
+  );
+  check(
+    'an ignored file that is not a build folder is never suggested',
+    !all().includes('secrets.mat-khau.yaml'),
+    'a .gitignore lists secrets precisely because they are not committed'
+  );
   check(
     'installed program bin/ NOT called build output',
     !names('buildoutput').includes('clang.exe'),
@@ -116,10 +156,12 @@ async function buildFixture() {
   check('document never suggested', !everything.includes('important.docx'));
   check('small old text file never suggested', !everything.includes('notes.txt'));
 
-  // temp(5MB leftover + 1KB lock) + cache 7 + dump 3 + log 2 + build 4
+  // temp(5MB leftover + 1KB lock) + cache 7 + dump 3 + log 2 + the two build
+  // folders a .gitignore declares: project/obj 4, pyproject/dist 9. Bootstrap's
+  // vendored dist/ is 6 MB and is deliberately not among them.
   check(
     'safe bytes exclude review categories',
-    cleanup.safeBytes === (5 + 7 + 3 + 2 + 4) * MB + 1024,
+    cleanup.safeBytes === (5 + 7 + 3 + 2 + 4 + 9) * MB + 1024,
     `${cleanup.safeBytes} bytes`
   );
   check('verdicts ordered safe before review', cleanup.groups[0].verdict === 'safe');

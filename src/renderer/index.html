@@ -686,6 +686,37 @@
         <div class="card-note dev-note" id="dev-note" hidden></div>
 
         <div class="dev-groups" id="dev-groups"></div>
+
+        <!--
+          Your own projects (C1, C5). A second button, because it has a second
+          input: the folders chosen on the Disk usage screen, rather than the
+          fixed places a tool keeps its cache. It costs a different amount
+          every time, and can have nothing to scan at all.
+        -->
+        <h2 class="dev-section-title" data-i18n="dev.projects.title">Your projects</h2>
+        <p class="dev-section-what" data-i18n="dev.projects.what">Looks through the folders chosen on the Disk usage screen for projects of your own: what their dependencies weigh, and what their builds left behind.</p>
+
+        <div class="panel-actions">
+          <button class="btn btn-primary" id="devp-scan" data-i18n="dev.projects.scan">Look through my folders</button>
+          <button class="btn" id="devp-cancel" hidden data-i18n="app.stop">Stop</button>
+          <span class="status" id="devp-status"></span>
+        </div>
+
+        <div class="progress progress-walk" id="devp-progress" hidden role="progressbar" data-i18n-aria="progress.devProjects" aria-label="Looking through your folders">
+          <span class="critters" aria-hidden="true"></span>
+          <span class="progress-track"><span class="progress-bar is-indeterminate"></span></span>
+        </div>
+
+        <div class="stats" id="devp-stats" hidden>
+          <div class="stat"><span class="stat-value" id="pstat-projects">–</span><span class="stat-label" data-i18n="dev.projects.stat.projects">Projects</span></div>
+          <div class="stat"><span class="stat-value" id="pstat-deps">–</span><span class="stat-label" data-i18n="dev.projects.stat.deps">Dependencies</span></div>
+          <div class="stat"><span class="stat-value" id="pstat-build">–</span><span class="stat-label" data-i18n="dev.projects.stat.build">Build folders</span></div>
+          <div class="stat"><span class="stat-value" id="pstat-free">–</span><span class="stat-label" data-i18n="dev.stat.free">Can go now</span></div>
+        </div>
+
+        <div class="card-note dev-note" id="devp-note" hidden></div>
+
+        <div class="dev-groups" id="devp-groups"></div>
       </section>
 
       <!-- ------------------------------------------------ trends -->
@@ -1583,6 +1614,7 @@
     <script src="apps.js"></script>
     <script src="games.js"></script>
     <script src="dev.js"></script>
+    <script src="dev-projects.js"></script>
     <!-- The list of keys, opened with ?. -->
     <script src="keys.js"></script>
     <!-- The user's own colours, in Settings. -->

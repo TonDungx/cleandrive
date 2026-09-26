@@ -18,6 +18,7 @@ const BUILT_IN = [
   require('./apps').analyzer,
   require('./games').analyzer,
   require('./dev').analyzer,
+  require('./dev-projects').analyzer,
 ];
 
 for (const analyzer of BUILT_IN) {

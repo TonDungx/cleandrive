@@ -3241,6 +3241,136 @@ app.whenReady().then(async () => {
       }
     }
 
+    /* -- your own projects (C1, C5) ----------------------------------------- */
+
+    console.log('\nDeveloper, your projects (the second scan on the same tab):');
+    {
+      const js = (expr) => win.webContents.executeJavaScript(expr);
+
+      // Built on D:, not in the system temp folder. `os.tmpdir()` here is
+      // under AppData, and everything under AppData is precisely what this
+      // scan refuses to walk into -- a fixture built there would make every
+      // check below pass for the wrong reason.
+      const projBase = path.join('D:', path.sep, 'cleandrive-smoke-projects');
+      fs.rmSync(projBase, { recursive: true, force: true });
+      const old = new Date(Date.now() - 400 * 24 * 60 * 60 * 1000);
+      const put = (rel, bytes, content) => {
+        const full = path.join(projBase, rel);
+        fs.mkdirSync(path.dirname(full), { recursive: true });
+        fs.writeFileSync(full, content === undefined ? 'x' : content);
+        if (bytes) {
+          const fd = fs.openSync(full, 'r+');
+          fs.ftruncateSync(fd, bytes);
+          fs.closeSync(fd);
+        }
+        fs.utimesSync(full, old, old);
+      };
+
+      // A project that declares its build folder, and is long untouched.
+      put(path.join('app', 'package.json'), 0, '{"name":"smoke"}');
+      put(path.join('app', 'package-lock.json'), 0, '{}');
+      put(path.join('app', '.gitignore'), 0, 'node_modules/\ndist/\n');
+      put(path.join('app', 'src', 'index.js'), 4096);
+      put(path.join('app', 'node_modules', 'dep', 'index.js'), 3 * 1024 * 1024);
+      put(path.join('app', 'dist', 'bundle.js'), 5 * 1024 * 1024);
+      // A vendored library inside it: a dist/ with a package.json beside it.
+      put(path.join('app', 'vendors', 'bootstrap', 'package.json'), 0, '{}');
+      put(path.join('app', 'vendors', 'bootstrap', 'dist', 'bootstrap.min.css'), 6 * 1024 * 1024);
+      // Releases somebody meant to keep: named dist, declared by nobody.
+      put(path.join('releases', 'package.json'), 0, '{}');
+      put(path.join('releases', 'dist', 'App-1.0.0.apk'), 7 * 1024 * 1024);
+
+      await js(`document.querySelector('.tab[data-tab="dev"]').click()`);
+      await js(`window.setRoots([${JSON.stringify(projBase)}]); window.devProjectsScreen.view.result = null;`);
+      await js(`document.getElementById('devp-scan').click()`);
+      const done = await until(win, `document.getElementById('devp-cancel').hidden && window.devProjectsScreen.view.result`, 300000);
+      check('a scan of the chosen folders finishes', done);
+
+      const seen = await js(`(() => {
+        const out = window.devProjectsScreen.view.result;
+        const s = out.summary;
+        const at = (name) => out.candidates.filter((c) => c.path.toLowerCase().indexOf(name) !== -1);
+        return {
+          projects: s.projectRows.length,
+          buildGroups: s.buildGroups.length,
+          declared: s.buildGroups.filter((g) => g.declared).map((g) => g.path),
+          guessed: s.buildGroups.filter((g) => !g.declared).map((g) => g.path),
+          depActions: [...new Set(out.candidates.filter((c) => c.category === 'dev.dependencies').flatMap((c) => c.actions))],
+          depVerdicts: [...new Set(out.candidates.filter((c) => c.category === 'dev.dependencies').map((c) => c.verdict))],
+          bundle: at('bundle.js').map((c) => c.verdict + '/' + c.actions.join(',')),
+          bootstrap: at('bootstrap.min.css').length,
+          apk: at('app-1.0.0.apk').length,
+          unattended: out.candidates.filter((c) => c.unattendedEligible).length,
+          cards: document.querySelectorAll('#devp-groups .dev-tool').length,
+          declaredCards: document.querySelectorAll('#devp-groups .dev-group[data-kind="buildDeclared"] .dev-tool').length,
+          guessCards: document.querySelectorAll('#devp-groups .dev-group[data-kind="buildGuess"] .dev-tool').length,
+          stats: ['pstat-projects', 'pstat-deps', 'pstat-build', 'pstat-free'].map((id) => document.getElementById(id).textContent),
+          notes: [...document.querySelectorAll('#devp-note p')].map((p) => p.textContent),
+          buttons: [...document.querySelectorAll('#devp-groups .btn-primary')].map((b) => b.textContent),
+          commands: [...document.querySelectorAll('#devp-groups code')].map((e) => e.textContent),
+        };
+      })()`);
+
+      check('the projects in the chosen folder are found', seen.projects >= 1, String(seen.projects) + ' with a dependency folder');
+      check('the four figures at the top are filled in', seen.stats.every((v) => v && v !== '\u2013'), seen.stats.join(' / '));
+      check('a dependency folder is explained and never offered',
+        seen.depActions.length === 1 && seen.depActions[0] === 'none',
+        seen.depVerdicts.join(',') + '/' + seen.depActions.join(','));
+      check('the command that puts it back is on screen to copy',
+        seen.commands.some((c) => c.indexOf('npm ci') !== -1), seen.commands.join(' | ') || 'none');
+
+      check('a build folder the project declared is offered, file by file',
+        seen.bundle.length === 1 && seen.bundle[0] === 'safe/recycle', seen.bundle.join(' | ') || 'not found');
+      check('a vendored library is never offered, though a package.json sits beside its dist',
+        seen.bootstrap === 0 && seen.guessed.some((p) => p.toLowerCase().indexOf('bootstrap') !== -1),
+        'on the real machine this rule was 774 files of Bootstrap, echarts and Chart.js');
+      check('a dist of releases nobody ignored is never offered',
+        seen.apk === 0 && seen.guessed.some((p) => p.toLowerCase().indexOf('releases') !== -1),
+        seen.guessed.join(' | '));
+      check('the two kinds of build folder are drawn apart',
+        seen.declaredCards >= 1 && seen.guessCards >= 2 && seen.cards === seen.projects + seen.buildGroups,
+        seen.declaredCards + ' declared, ' + seen.guessCards + ' only named that way');
+      check('only the declared one carries a button, and it counts in English',
+        seen.buttons.length === seen.declaredCards && !seen.buttons.some((b) => /1 files/.test(b)),
+        seen.buttons.join(' | ') || 'none');
+      check('nothing on this screen is ever part of an unattended run',
+        seen.unattended === 0,
+        'the unattended run scans with lib/scanner.js and never runs this analyzer');
+      check('the screen says what it did not look in',
+        seen.notes.some((n) => /AppData/.test(n)), seen.notes.length + ' notes');
+
+      // The screen redraws itself when data changes; it must not rebuild what
+      // is already on screen (the same rule test:idle checks elsewhere).
+      const stable = await js(`(() => {
+        const card = document.querySelector('#devp-groups .dev-tool');
+        window.devProjectsScreen.render();
+        return card === document.querySelector('#devp-groups .dev-tool');
+      })()`);
+      check('a redraw that changes nothing leaves the cards in place', stable);
+
+      // Nothing chosen is a state with something to say, not an empty table.
+      const none = await js(`(async () => {
+        window.devProjectsScreen.view.result = null;
+        // state is a top-level const of a classic script: in scope by name,
+        // and not a property of window. (No backticks in here -- this whole
+        // block is a template literal.)
+        state.roots = [];
+        await window.devProjectsScreen.run();
+        return {
+          status: document.getElementById('devp-status').textContent,
+          // The status line stays short; the sentence that says what to do
+          // about it is on the screen itself.
+          body: (document.querySelector('#devp-groups .dev-empty') || {}).textContent || '',
+          rows: document.querySelectorAll('#devp-groups .dev-tool').length,
+        };
+      })()`);
+      check('with no folder chosen it says what to do rather than showing an empty table',
+        /Disk usage|Dung lượng/.test(none.body) && none.rows === 0 && none.status.length > 0,
+        none.status + ' / ' + none.body.slice(0, 50));
+
+      fs.rmSync(projBase, { recursive: true, force: true });
+    }
+
     /* -- console cleanliness --------------------------------------------- */
     console.log('\nConsole:');
     check('no renderer errors', rendererErrors.length === 0, rendererErrors.join(' | '));

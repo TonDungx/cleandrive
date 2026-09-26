@@ -28,6 +28,7 @@ const {
   looksLikeAppData,
 } = require('./advisor');
 const { message: m } = require('../../i18n');
+const gitignore = require('./gitignore');
 const cloudState = require('./cloud-state');
 const { looksDehydrated } = require('./media/cloud');
 const appCaches = require('../analyzers/app-caches');
@@ -99,8 +100,16 @@ function walk(root, options, handlers) {
         tag: tagDirectory(path.basename(rootPath), null),
         blocked: 'none',
         known: knownCache ? knownCache(rootPath) : null,
+        // What the `.gitignore` files above this folder declare to be
+        // regenerated. A scan that starts inside a repository picks up the
+        // rules from the repository root down (lib/gitignore.js), so a scan of
+        // `project\src` reads the same rules as a scan of `project`. `null`
+        // means "not looked up yet", which happens once, for the root.
+        ignores: null,
       },
     ];
+    // One `.gitignore` chain per scan, shared by every worker.
+    const ignoreCache = new Map();
     const errors = [];
     let active = 0;
     let dirs = 0;
@@ -123,6 +132,12 @@ function walk(root, options, handlers) {
     async function processDir(task) {
       const { dir, top, depth, tag, blocked, known } = task;
 
+      // The root only: a scan may start well inside a repository, and the
+      // rules that matter were written at its root.
+      const inherited = task.ignores === null
+        ? await gitignore.scopeFor(dir, { cache: ignoreCache })
+        : task.ignores;
+
       let entries;
       try {
         entries = await fsp.readdir(dir, { withFileTypes: true });
@@ -138,6 +153,21 @@ function walk(root, options, handlers) {
       // whether a child named bin/obj/dist counts as disposable build output
       // or as an installed program's files.
       const isProject = tag ? false : looksLikeProject(entries);
+
+      // A project inside another project does not inherit its floating rules,
+      // so the outer repository's bare `bin` cannot reach a vendored library's
+      // (lib/gitignore.js). Read the file only where the listing in hand
+      // already shows one, so a folder without a `.gitignore` costs nothing at
+      // all. Measured over every build folder on D:\: 263 reads, 112 ms.
+      //
+      // The root is included. A scan started at `repo\packages\foo` would
+      // otherwise carry the outer repository's rules into it, and the reset
+      // costs that folder nothing: the `extend` below reads its own
+      // `.gitignore` again straight afterwards.
+      const base = isProject ? gitignore.atNestedProject(inherited) : inherited;
+      const ignores = gitignore.listingHasIgnoreFile(entries)
+        ? await gitignore.extend(base, dir)
+        : base;
 
       // Sticky, and it only ever tightens. 'hard' means nothing below may be
       // called safe; 'app' means only machine-generated GPU and crash
@@ -205,8 +235,9 @@ function walk(root, options, handlers) {
             dir: full,
             top: depth === 0 ? full : top,
             depth: depth + 1,
-            tag: tagDirectory(name, tag, isProject),
+            tag: tagDirectory(name, tag, gitignore.lookup(ignores, full, name).ignored),
             blocked: blockedHere,
+            ignores,
             // A cache folder is sticky; anywhere else inside a known app, the
             // folder below may be one.
             known: known && known.folder ? known : knownCache ? knownCache(full) : known,
