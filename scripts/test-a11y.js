@@ -344,6 +344,58 @@ app.whenReady().then(async () => {
   await openGames();
   check('the Games screen draws its rows', await until(`document.querySelectorAll('#games-list .games-row').length >= 4`, 10000));
 
+  // Developer: one card of each kind, including an editor that is open so the
+  // held-back state is drawn too. Constructed readings, labelled as such;
+  // `smoke.js` runs the screen against this machine's real tools.
+  const openDev = () => run(`
+    selectTab(document.getElementById('tab-dev'));
+    const ev = (rank, i18n, en, params) => ({ rank, i18n, en, params });
+    const cache = {
+      id: 'c1', path: 'C:\\Users\\X\\AppData\\Local\\npm-cache', kind: 'folder', bytes: 2.6e9,
+      category: 'dev.packageCache', verdict: 'review', confidence: 'strong',
+      evidence: [ev(1, 'evidence.dev.what.npm', 'Packages npm has downloaded')],
+      actions: ['none'], unattendedEligible: false,
+      meta: { kind: 'packageCache', toolId: 'npm', name: 'npm', command: 'npm cache clean --force', fileCount: 33138, places: [] },
+    };
+    const sdk = {
+      id: 's1', path: 'C:\\Users\\X\\AppData\\Local\\Android\\Sdk', kind: 'folder', bytes: 4.2e9,
+      category: 'dev.sdk', verdict: 'review', confidence: 'strong',
+      evidence: [ev(1, 'evidence.dev.what.androidSdk', 'Android platforms and build tools')],
+      actions: ['none'], unattendedEligible: false,
+      meta: { kind: 'sdk', toolId: 'android-sdk', name: 'Android SDK', command: null, handoff: null, manager: 'androidStudio', fileCount: 50179, places: [] },
+    };
+    const ide = {
+      id: 'i1', path: 'C:\\Users\\X\\AppData\\Roaming\\Cursor\\CachedData\\a.bin', kind: 'file',
+      bytes: 1.5e8, bytesOnDisk: 1.5e8, category: 'dev.ideCache', verdict: 'safe', confidence: 'strong',
+      evidence: [ev(1, 'evidence.dev.rebuilt', 'Cursor writes this again when it needs it', { name: 'Cursor' })],
+      actions: ['recycle'], unattendedEligible: false,
+      meta: { kind: 'ideCache', toolId: 'cursor', name: 'Cursor', isOpen: false, openProcesses: [] },
+    };
+    const held = Object.assign({}, ide, {
+      id: 'i2', path: 'C:\\Users\\X\\AppData\\Roaming\\Code\\CachedData\\b.bin', verdict: 'keep',
+      confidence: 'certain', actions: ['none'],
+      evidence: [ev(1, 'evidence.dev.ideOpen', 'Code is open — close it and scan again', { name: 'Visual Studio Code' })],
+      meta: { kind: 'ideCache', toolId: 'vscode', name: 'Visual Studio Code', isOpen: true, openProcesses: ['code.exe'] },
+    });
+    window.devScreen.view.result = {
+      candidates: [cache, sdk, ide, held],
+      summary: {
+        rows: { packageCaches: ['c1'], sdks: ['s1'], ideCaches: ['i1', 'i2'] },
+        groups: [
+          { id: 'npm', name: 'npm', kind: 'packageCache', bytes: 2.6e9, fileCount: 33138, isOpen: false, openProcesses: [], command: 'npm cache clean --force', places: [{ dir: 'C:\\Users\\X\\AppData\\Local\\npm-cache', bytes: 2.6e9, files: 33138 }], truncated: false },
+          { id: 'android-sdk', name: 'Android SDK', kind: 'sdk', bytes: 4.2e9, fileCount: 50179, isOpen: false, openProcesses: [], command: null, places: [{ dir: 'C:\\Users\\X\\AppData\\Local\\Android\\Sdk', bytes: 4.2e9, files: 50179 }], truncated: false },
+          { id: 'cursor', name: 'Cursor', kind: 'ideCache', bytes: 1.5e8, fileCount: 533, isOpen: false, openProcesses: [], command: null, places: [{ dir: 'C:\\Users\\X\\AppData\\Roaming\\Cursor\\CachedData', bytes: 1.5e8, files: 533 }], truncated: false },
+          { id: 'vscode', name: 'Visual Studio Code', kind: 'ideCache', bytes: 6e7, fileCount: 93, isOpen: true, openProcesses: ['code.exe'], command: null, places: [{ dir: 'C:\\Users\\X\\AppData\\Roaming\\Code\\CachedData', bytes: 6e7, files: 93 }], truncated: false },
+        ],
+        totalBytes: 7.01e9, packageCacheBytes: 2.6e9, sdkBytes: 4.2e9, ideCacheBytes: 2.1e8,
+        freeableBytes: 1.5e8, processesReadable: true, missing: [{ id: 'pnpm', name: 'pnpm', kind: 'packageCache' }],
+        cancelled: false, durationMs: 15600,
+      },
+    };
+    window.devScreen.render();`);
+  await openDev();
+  check('the Developer screen draws its cards', await until(`document.querySelectorAll('#dev-groups .dev-tool').length >= 4`, 10000));
+
   await openTrends();
   await tab('restore');
   await until(`document.querySelector('[data-restore-toggle]')`, 15000);
@@ -370,12 +422,13 @@ app.whenReady().then(async () => {
       incomplete: r.incomplete.reduce((n, v) => n + v.nodes.length, 0),
     }))`);
 
-  const SCREENS = ['usage', 'system', 'cleanup', 'media', 'dupes', 'apps', 'games', 'trends', 'restore', 'auto', 'settings'];
+  const SCREENS = ['usage', 'system', 'cleanup', 'media', 'dupes', 'apps', 'games', 'dev', 'trends', 'restore', 'auto', 'settings'];
   const axeScreens = async (label) => {
     for (const screen of SCREENS) {
       if (screen === 'trends') await openTrends();
       else if (screen === 'apps') await openApps();
       else if (screen === 'games') await openGames();
+      else if (screen === 'dev') await openDev();
       else await tab(screen);
       await wait(250);
       const result = await axeRun();
@@ -454,7 +507,7 @@ app.whenReady().then(async () => {
   }
   for (const mode of ['light', 'dark']) {
     await setTheme(mode);
-    for (const screen of ['usage', 'cleanup', 'dupes', 'media', 'apps', 'games', 'restore', 'settings']) {
+    for (const screen of ['usage', 'cleanup', 'dupes', 'media', 'apps', 'games', 'dev', 'restore', 'settings']) {
       await tab(screen);
       await wait(250);
       const hover = await contrastUnder(['hover'], HOVERED);
@@ -479,7 +532,7 @@ app.whenReady().then(async () => {
   let nodes = await axTree();
   const tabs = nodes.filter((n) => n.role && n.role.value === 'tab' && !n.ignored);
   const selected = tabs.filter((n) => prop(n, 'selected') === true);
-  check('eleven tabs, and exactly one says it is selected', tabs.length === 11 && selected.length === 1,
+  check('twelve tabs, and exactly one says it is selected', tabs.length === 12 && selected.length === 1,
     `${tabs.length} tabs, selected: ${selected.map((n) => n.name && n.name.value).join(', ')}`);
   check('the selected one is the screen on show', selected[0] && /Trends/.test(selected[0].name.value), selected[0] && selected[0].name.value);
 

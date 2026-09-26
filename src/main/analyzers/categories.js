@@ -63,6 +63,13 @@ declare('games.steam', { screen: 'games' });
 declare('games.orphan', { screen: 'games' });
 declare('games.downloading', { screen: 'games' });
 
+// "Developer": the tools a developer's disk fills up with (C2, C4). A package
+// cache is explained and handed to the tool that made it; an IDE's own cache
+// can go to the bin, and only while that IDE is closed.
+declare('dev.packageCache', { screen: 'dev' });
+declare('dev.sdk', { screen: 'dev' });
+declare('dev.ideCache', { screen: 'dev' });
+
 function isDeclared(id) {
   return DECLARED.has(id);
 }

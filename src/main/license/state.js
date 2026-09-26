@@ -30,8 +30,16 @@ const PRESETS = Object.freeze({
   free: { state: 'free' },
 });
 
-/** What a release build runs under until licences exist (see above). */
-const OPEN_PRO = Object.freeze({ state: 'active', tier: 'pro', addons: [] });
+/**
+ * What a release build runs under until licences exist (see above).
+ *
+ * The `dev` add-on joined it when the Developer Pack was built, decided
+ * 2026-09-26 along with the rest of Phase 2: the same reasoning as Pro, since
+ * there is still no way to buy either. Whether Pro·Dev stays an add-on or
+ * becomes part of Pro is a Phase 6 question, and the key stays separate so
+ * that question is still open.
+ */
+const OPEN_PRO = Object.freeze({ state: 'active', tier: 'pro', addons: ['dev'] });
 
 /**
  * @param {object} [options]  injectable, for the harness

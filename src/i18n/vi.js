@@ -1491,6 +1491,88 @@
     'app.tab.system': 'Hệ thống',
 
 
+
+    /* ---- Developer Pack (C2, C4) ------------------------------------------ */
+
+    'app.tab.dev': 'Lập trình',
+    'progress.dev': 'Đang đo các công cụ lập trình',
+    'dev.scan': 'Tìm công cụ lập trình',
+    'dev.ready':
+      'Tìm các kho cache gói, SDK và cache trình soạn thảo mà công cụ lập trình của bạn giữ lại, rồi đo từng cái.',
+    'dev.done': '{n} công cụ, {size}, trong {time}.',
+    'dev.needsPro': 'Developer Pack thuộc gói Pro·Dev.',
+    'dev.none': 'Không tìm thấy công cụ lập trình nào trên máy này.',
+    'dev.noneShort': 'Không tìm thấy gì.',
+
+    'dev.stat.total': 'Tất cả',
+    'dev.stat.packages': 'Cache gói',
+    'dev.stat.sdk': 'SDK',
+    'dev.stat.free': 'Xoá được ngay',
+
+    'dev.group.packages': 'Cache gói',
+    'dev.group.packages.what':
+      'Các gói mà công cụ của bạn đã tải về. Mỗi công cụ tự dọn cache của nó bằng lệnh hiện bên dưới — app không đụng vào, vì chính công cụ tạo ra chúng mới biết cái nào còn cần, còn đi bộ thư mục thì không.',
+    'dev.group.sdk': 'SDK và bộ công cụ',
+    'dev.group.sdk.what':
+      'Nguyên cả bộ công cụ. Gỡ bớt một phần là việc của trình quản lý chính chủ; bốc thư mục ra bằng tay sẽ khiến nó vẫn tưởng các phần đó còn đấy.',
+    'dev.group.ide': 'Cache trình soạn thảo',
+    'dev.group.ide.what':
+      'Dữ liệu mà trình soạn thảo sẽ ghi lại khi cần. Phần này app có chuyển vào Thùng rác — và chỉ khi trình soạn thảo sở hữu nó đang đóng.',
+
+    'dev.files': '{n} tệp',
+    'dev.isOpen': '{name} đang mở — hãy đóng nó rồi quét lại.',
+    'dev.processesUnknown': 'Không kiểm được {name} có đang chạy hay không, nên không đề xuất gì ở đây.',
+    'dev.clear': 'Chuyển {n} tệp vào Thùng rác',
+    'dev.openApps': 'Mở danh sách ứng dụng của Windows',
+    'dev.reveal': 'Mở thư mục',
+    'dev.copied': 'Đã chép: {text}',
+
+    'dev.phase.processes': 'Đang xem trình soạn thảo nào đang mở…',
+    'dev.phase.measuring': 'Đang đo {name}…',
+
+    'dev.note.cancelled': 'Lượt quét bị dừng giữa chừng.',
+    'dev.note.noProcesses':
+      'Không đọc được danh sách chương trình đang chạy, nên không cache trình soạn thảo nào được đề xuất — app sẽ không rút cache khỏi một trình soạn thảo mà nó không nhìn thấy.',
+    'dev.note.missing': 'Không có trên máy này, và đã tìm: {list}.',
+    'dev.note.neverRuns':
+      'App không bao giờ chạy bất kỳ lệnh nào trong số này. Nó hiện ra lệnh mà từng công cụ dùng để bạn đọc trước, và chép lại nếu muốn.',
+
+    'evidence.dev.what.npm': 'Các gói npm đã tải về, giữ lại để lần cài sau khỏi tải lại',
+    'evidence.dev.what.pip': 'Các gói Python pip đã tải về, giữ lại để lần cài sau khỏi tải lại',
+    'evidence.dev.what.maven': 'Mọi thư viện Java mà Maven đã tải về, cho mọi dự án trên máy này',
+    'evidence.dev.what.gradle':
+      'Thư viện đã tải và cache build của Gradle, cộng với chính các bản Gradle mà các dự án yêu cầu',
+    'evidence.dev.what.nuget': 'Các gói .NET đã khôi phục cho các dự án trên máy này',
+    'evidence.dev.what.androidSdk': 'Các bản Android platform, build tools, NDK và ảnh máy ảo',
+    'evidence.dev.what.dotnetSdk':
+      'Mọi phiên bản .NET SDK đã cài, kể cả những bản không còn gì build bằng nữa',
+    'evidence.dev.what.vscode':
+      'Dữ liệu biên dịch sẵn của Code cho phiên bản đang chạy, và các gói tiện ích nó tải về để cài',
+    'evidence.dev.what.cursor':
+      'Dữ liệu biên dịch sẵn của Cursor cho phiên bản đang chạy, và các gói tiện ích nó tải về để cài',
+    'evidence.dev.what.jetbrains':
+      'Chỉ mục và log mà IDE của JetBrains ghi cho từng dự án — sẽ dựng lại, chậm, ở lần mở dự án kế tiếp',
+    'evidence.dev.what.visualstudio':
+      'Các thư mục cache của chính Visual Studio. Bản sao lưu thiết lập và bản sao lưu tệp nằm ngay cạnh đó và không bao giờ bị đụng tới',
+    'evidence.dev.what.generic': 'Một kho cache mà công cụ lập trình của bạn giữ lại',
+
+    'evidence.dev.measured': '{size} trong {files} tệp, đo bằng cách đọc mọi thư mục bên trong',
+    'evidence.dev.command':
+      'Chính công cụ của nó dọn bằng “{command}”, lệnh đó biết cái gì còn cần. App chỉ hiện lệnh ra và không bao giờ chạy',
+    'evidence.dev.noCommand':
+      'Nó không có lệnh nào để dọn. Xoá thư mục đi thì công cụ sẽ tải lại thứ nó cần ở lần build kế tiếp',
+    'evidence.dev.places': 'Nằm ở {n} thư mục: {list}',
+    'evidence.dev.refused': 'Có {n} thư mục bên trong không đọc được, nên nó chứa ít nhất chừng này',
+    'evidence.dev.androidManager':
+      'Hãy gỡ bớt thành phần từ chính SDK Manager của Android Studio, nơi biết dự án nào còn cần cái gì. Bốc thư mục ra bằng tay sẽ khiến nó vẫn tưởng các thành phần đó còn đấy',
+    'evidence.dev.sdkManager':
+      'Hãy gỡ các phiên bản cũ đúng theo cách đã cài, từ danh sách ứng dụng đã cài của Windows',
+    'evidence.dev.listCommand': '“{command}” liệt kê những bản đã cài, để bạn thấy bản nào đã cũ',
+    'evidence.dev.rebuilt': '{name} sẽ ghi lại thứ này khi cần',
+    'evidence.dev.ideOpen': '{name} đang mở — hãy đóng nó rồi quét lại',
+    'evidence.dev.processesUnknown':
+      'Không kiểm được {name} có đang chạy hay không, nên không đề xuất gì ở đây',
+
     /* ---- Thư viện game (D2) ---------------------------------------------- */
 
     'app.tab.games': 'Game',

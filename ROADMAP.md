@@ -164,7 +164,7 @@ Thứ tự làm (người dùng chốt 2026-09-26): A4 → D1 → D2 → C1–C5
 | --- | --- | --- | --- |
 | A2 | Quét nhanh qua MFT / USN | P1 | |
 | A4 | Quét nhiều gốc, nhiều ổ, ổ ngoài, ổ mạng | P1 | ✅ Đã code xong (2026-09-26) — ổ mạng chỉ đọc (đã đo), ổ rời chỉ đọc cho tới khi đo; chưa đo trên ổ cứng gắn ngoài |
-| C1–C5 | Developer Pack | P1 | |
+| C1–C5 | Developer Pack | P1 | C2, C4 ✅ Đã code xong (2026-09-26) — chỉ ship công cụ có thật; cache gói chỉ hiện lệnh, cache IDE xoá được khi IDE đóng. C1, C3, C5 đang làm |
 | D1 | App đã cài: dung lượng & lần dùng cuối | P1 | ✅ Đã code xong (2026-09-26) — bỏ nguồn last-access (đã đo là không đáng tin), dung lượng tách hai cột đo được / bên cài khai; Prefetch cần quyền quản trị, chưa ai bấm |
 | D2 | Thư viện game | P1 | ✅ Đã code xong (2026-09-26) — chỉ Steam (đã đo: không có launcher nào khác); dung lượng Steam ghi là chính xác nên một cột; thư mục mồ côi chỉ phát hiện, không xoá |
 
@@ -984,6 +984,19 @@ Gộp `bin/`, `obj/`, `target/`, `dist/`, `build/`, `.next/`, `.nuxt/`, `.turbo/
 - `review · guess` khi chỉ có tên thư mục mà không có file dự án. Lý do: một thư mục `build/` bất kỳ không đủ để kết luận đó là build output.
 
 **Tự động:** chỉ C5 và cache IDE được `unattendedEligible`, và **tắt mặc định** (giống quy tắc "build output tắt mặc định" hiện có).
+> **✅ C2 và C4 đã code xong (2026-09-26).** Tab **Lập trình** mới (giữa Game và Xu hướng), `src/main/dev/` (`tools.js`, `measure.js`), analyzer `src/main/analyzers/dev.js` (`pro.dev`, category `dev.packageCache` / `dev.sdk` / `dev.ideCache`), 3 kênh IPC `dev:last/scan/cancel` + sự kiện `dev:progress` (73 kênh invoke), màn `src/renderer/dev.js`. **`OPEN_PRO` nay có `addons: ['dev']`** (đã chốt 2026-09-26, cùng lý do với Pro: vẫn chưa mua được). Harness: `scripts/test-dev.js` (54 kiểm tra, trong `npm test`), 14 kiểm tra mới trong `smoke.js`, `npm run shoot:dev`. C1, C3, C5 làm ở hai commit sau. Khác với đặc tả, tất cả đều do đo trên máy này ngày 2026-09-26:
+>
+> - **Chỉ ship công cụ có thật trên máy này** (nguyên tắc D4): npm 2,62 GB · Gradle 3,65 GB (+0,56 GB bản Gradle tải về) · NuGet 2,54 GB · pip 0,37 GB · Maven 0,00 GB. **Không ship pnpm, yarn, uv, cargo, go, Composer** — không có cái nào trên máy, kể cả mục pnpm mà đặc tả dặn kỹ "không xoá trực tiếp". Harness fail nếu có cái nào lọt vào.
+> - **C2 chỉ `handoff` (hiện lệnh để copy), KHÔNG có `recycle` từng thư mục con** như đặc tả. Lý do đo được: liệt kê từng tệp cache npm mất **13,8 s**, Gradle **21,8 s**, NuGet 6,7 s, pip 2,4 s — 45 giây cho một màn hình đáng lẽ mở ra là thấy. Và `npm cache clean --force` biết mục nào còn được tham chiếu, đi bộ thư mục thì không. Verdict là `review`, không bao giờ `safe`: app không phải bên ra quyết định ở đây.
+> - **Đổi lại, C4 cache IDE thì liệt kê thật và xoá được:** cả bốn cộng lại chỉ **2,4 s** (VS Code 0,1 · Cursor 0,2 · JetBrains 1,3 · Visual Studio 0,8). `safe · strong` khi IDE đóng, `keep` ngay khi nó mở — và `keep` cả khi **không đọc được danh sách tiến trình**, đúng luật của D4.
+> - **⚠️ Đường dẫn phải chính xác tới từng thư mục con, không lấy cả thư mục sản phẩm.** `%LOCALAPPDATA%\JetBrains\PyCharmCE2024.2` có `caches`, `index`, `log` — và có cả **`LocalHistory`**, tức toàn bộ lịch sử chỉnh sửa của bạn, không sao lưu ở đâu khác, cùng với `plugins` và `projects`. Visual Studio y hệt: `CacheService` và `WebView2Cache` nằm cạnh `BackupFiles` và `SettingsBackup_*`. Chỉ ba tên của JetBrains và hai tên của Visual Studio được chạm tới; harness dựng cây có đủ các thư mục nguy hiểm đó và đòi lượt quét đi vòng qua.
+> - **Thêm `.gradle\wrapper\dists`** (0,56 GB) mà đặc tả không nhắc: các bản Gradle mà từng dự án yêu cầu tải về.
+> - **Chưa mục nào `unattendedEligible`.** Đặc tả xếp cache IDE và build output của C5 vào diện chạy tự động cùng nhau, tắt mặc định; mà whitelist của lượt chạy tự động lại khoá theo tên category của advisor (`cleanup.*`). Nối dây cho nửa này bây giờ nghĩa là đụng vào lớp xoá tự động hai lần. Cả hai sẽ vào cùng lúc ở commit C5.
+> - **Tab luôn hiện**, khác đặc tả ("chỉ hiện khi phát hiện ít nhất một công cụ dev, hoặc bật trong Settings"). Lý do: một tab chỉ xuất hiện sau khi quét mà lại không quét được nếu không có tab là cái bẫy; và trạng thái rỗng vẫn kiểm được — harness chạy với một môi trường không có công cụ nào và đòi màn hình nói "không tìm thấy", chứ không phải bảng trống.
+> - **Nói ra cả thứ không tìm thấy** ("Không có trên máy này, và đã tìm: pnpm, yarn…"), để không ai phải đoán xem app có buồn tìm hay không.
+> - **Android SDK không có lệnh nào để hiện**, vì trình quản lý của nó là một cửa sổ bên trong Android Studio; dòng đó giải thích và mở thư mục. **.NET SDK** thì hiện `dotnet --list-sdks` để xem bản nào cũ, và handoff `apps` sang danh sách ứng dụng của Windows — đúng nơi đã cài nó vào.
+> - **Sửa kèm harness:** `test-entitlements.js` có ba câu mô tả trạng thái trước khi Pro·Dev mở (`addons.length === 0`, `!can('pro.dev')`, "analyzer duy nhất sau feature key là games"). Đã đổi theo quyết định, và thêm câu kiểm rằng **một license Pro không có add-on vẫn không bao gồm `pro.dev`** — nó đang mở vì bản build này nói thế, không phải vì luật entitlement thôi phân biệt. `test-a11y.js` đổi từ mười một tab sang mười hai.
+
 
 ---
 ### Nhóm D — Ứng dụng, game, app chat

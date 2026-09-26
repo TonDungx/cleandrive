@@ -88,16 +88,27 @@ check('and the override narrows it for testing a tier',
     currentLicense({ channel: 'dev', env: { CLEANDRIVE_ENTITLEMENTS: 'pro' } }).tier === 'pro');
 {
   // Decided 2026-09-24: until licences exist (Phase 6) a release build has Pro
-  // open to everyone, and Pro·Dev and Business closed.
+  // open to everyone. The `dev` add-on joined it on 2026-09-26 when the
+  // Developer Pack was built, for the same reason -- there is still no way to
+  // buy either. Business stays closed, and the keys stay separate so Phase 6
+  // can still take each back on its own.
   const stable = currentLicense({ channel: 'stable', env: { CLEANDRIVE_ENTITLEMENTS: 'all' } });
   const beta = currentLicense({ channel: 'beta', env: { CLEANDRIVE_ENTITLEMENTS: 'free' } });
   check('a release build has Pro open, whatever the override says',
-    stable.state === 'active' && stable.tier === 'pro' && stable.addons.length === 0 && stable.source === 'open' &&
+    stable.state === 'active' && stable.tier === 'pro' && stable.source === 'open' &&
       beta.tier === 'pro' && beta.state === 'active', `${stable.state} ${stable.tier}`);
-  const can = canNow({ channel: 'stable', env: { CLEANDRIVE_ENTITLEMENTS: 'all' } });
-  check('so the snapshot comparison runs there', can('pro.diff') && can('pro.quarantine'));
-  check('but nothing past Pro unlocks in a release by setting a variable',
-    !can('pro.dev') && !can('biz.cli') && !can('biz.audit'));
+  check('and the dev add-on with it, as its own key rather than folded into Pro',
+    stable.addons.length === 1 && stable.addons[0] === 'dev' && FEATURES['pro.dev'].addon === 'dev',
+    JSON.stringify(stable.addons));
+  const onStable = canNow({ channel: 'stable', env: { CLEANDRIVE_ENTITLEMENTS: 'all' } });
+  check('so the snapshot comparison runs there', onStable('pro.diff') && onStable('pro.quarantine'));
+  check('and so does the Developer Pack', onStable('pro.dev'));
+  check('but Business does not unlock in a release by setting a variable',
+    !onStable('biz.cli') && !onStable('biz.audit') && !onStable('biz.console') && !onStable('biz.policy'));
+  // The add-on is only open because this build says so, not because the
+  // entitlement rules stopped distinguishing it.
+  check('and a Pro licence without the add-on still does not include it',
+    !can({ state: 'active', tier: 'pro', addons: [] }, 'pro.dev'));
 }
 // The games library (D2) is the first analyzer behind a feature key. Every
 // other one is free, and that one still runs today because a release build has
@@ -105,8 +116,9 @@ check('and the override narrows it for testing a tier',
 // analyzer is ever gated.
 {
   const paid = registry.list().filter((a) => a.feature !== 'free');
-  check('the only analyzer behind a feature key is the games library',
-    paid.length === 1 && paid[0].id === 'games' && paid[0].feature === 'pro.games',
+  check('the analyzers behind a feature key are the games library and the Developer Pack',
+    paid.length === 2 && paid.some((a) => a.id === 'games' && a.feature === 'pro.games') &&
+      paid.some((a) => a.id === 'dev' && a.feature === 'pro.dev'),
     paid.map((a) => `${a.id}:${a.feature}`).join(', ') || 'none');
   check('every analyzer names a feature that exists',
     registry.list().every((a) => a.feature === 'free' || FEATURES[a.feature]),

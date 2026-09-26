@@ -27,10 +27,11 @@ and the notifications.
 - [Screen 5 — Duplicates](#screen-5--duplicates)
 - [Screen 6 — Apps](#screen-6--apps)
 - [Screen 7 — Games](#screen-7--games)
-- [Screen 8 — Trends](#screen-8--trends)
-- [Screen 9 — Restore](#screen-9--restore)
-- [Screen 10 — Automatic](#screen-10--automatic)
-- [Screen 11 — Settings](#screen-11--settings)
+- [Screen 8 — Developer](#screen-8--developer)
+- [Screen 9 — Trends](#screen-9--trends)
+- [Screen 10 — Restore](#screen-10--restore)
+- [Screen 11 — Automatic](#screen-11--automatic)
+- [Screen 12 — Settings](#screen-12--settings)
 - [The file viewer](#the-file-viewer)
 - [Deleting](#deleting)
 - [Disk alerts and the tray](#disk-alerts-and-the-tray)
@@ -101,6 +102,7 @@ while skimming.
 | **Duplicates** | What do I have more than one copy of? | One folder you choose |
 | **Apps** | What is installed, how big is it, when did I last start it? | The installed-apps list, and the folders it names |
 | **Games** | Which games am I keeping and not playing? | The Steam library |
+| **Developer** | What have my development tools filled the disk with? | Package caches, SDKs and editor caches |
 | **Trends** | Is this getting worse, and how fast? | Every volume the app knows about |
 | **Restore** | What did the app do, and can I have it back? | Everything in the Action Journal |
 | **Automatic** | Can this happen without me? | A policy you write |
@@ -174,7 +176,7 @@ use. **Show the introduction again** is on the Version card in Settings.
 
 ### The sidebar
 
-Eleven tabs down the left, each with an icon and a label. Two of them carry a
+Twelve tabs down the left, each with an icon and a label. Two of them carry a
 **badge** when there is something to report: *What to delete* shows the total
 size it considers safe to remove, *Photos & video* shows how many files it found.
 
@@ -973,7 +975,52 @@ said out loud rather than listed as if they were worth removing.
 
 ---
 
-## Screen 8 — Trends
+## Screen 8 — Developer
+
+What a developer's tools have quietly filled the disk with: the packages they
+downloaded, the toolchains they installed, and the caches the editors write.
+14.3 GB on the machine this was built on.
+
+Only tools that were on that machine are shipped, which is the same rule the
+known apps' caches follow. Found and shipped: npm, Gradle, NuGet, pip, Maven,
+the Android SDK, the .NET SDKs, Visual Studio Code, Cursor, JetBrains and
+Visual Studio. Looked for and absent, so not shipped: pnpm, yarn, uv, cargo,
+Go modules and Composer. The screen says which ones it looked for and did not
+find, so nobody has to wonder whether it bothered.
+
+### Two halves, and they behave differently
+
+**A package cache is explained, not deleted.** One row for the whole cache with
+its size, where it is, and the command its own tool uses to clear it — shown to
+copy, never run. The app does not touch these, for two measured reasons: listing
+npm's cache file by file took 13.8 seconds here and Gradle's 21.8, so a file
+list would make the screen slow for something nobody wants file by file; and
+`npm cache clean --force` knows which entries are still referenced, which a walk
+of the folder does not. These rows are `review`, never `safe`.
+
+**An editor's own cache is a file list, and it can go to the Recycle Bin.**
+All four together took 2.4 seconds to list. They are `safe` while that editor is
+closed, and `keep` the moment it is open — or when the list of running programs
+cannot be read at all, because the app will not take a cache from under an
+editor it cannot see.
+
+**The folders are named exactly, never a whole product folder.** A JetBrains
+product keeps `caches`, `index` and `log` — and, right beside them,
+`LocalHistory`: every edit you have made, backed up nowhere else. Visual
+Studio's folder is the same story, with `BackupFiles` and `SettingsBackup_*`
+next to its two caches. Only the named folders are ever touched.
+
+### What it will not do
+
+**Run any of these commands.** It shows what each tool uses so you can read it
+first and copy it if you want it. Nothing on this screen can be part of an
+automatic cleanup. An SDK is never removed by the app either: the Android SDK
+Manager and Windows' own installed-apps list know which pieces something still
+needs, and taking folders out by hand leaves them believing otherwise.
+
+---
+
+## Screen 9 — Trends
 
 Whether the problem is getting worse, and how fast.
 
@@ -1063,7 +1110,7 @@ because the two numbers measure different things.
 
 ---
 
-## Screen 9 — Restore
+## Screen 10 — Restore
 
 Everything the app has done to a file, newest first, and the way back from each
 of it. It is free on every tier and it is never behind a licence: whatever the
@@ -1122,7 +1169,7 @@ can ask for something the app did to be undone and for nothing else.
 
 ---
 
-## Screen 10 — Automatic
+## Screen 11 — Automatic
 
 Cleanup on a timetable, with no window open. Off by default, and designed so that
 every ambiguity resolves towards doing nothing — there is no dialog in front of
@@ -1206,7 +1253,7 @@ the cleanup.
 
 ---
 
-## Screen 11 — Settings
+## Screen 12 — Settings
 
 Small on purpose. **Nothing in Settings changes what the app deletes**, with one
 exception, off until you switch it on: *Delete the original*, on the card for
@@ -1504,7 +1551,7 @@ Month files older than thirteen months are dropped at launch — except a month
 that moved files to another drive: those copies stay as long as somebody leaves
 them, and the journal is how Restore knows where each came from.
 
-It is also what the [Restore](#screen-9--restore) screen reads, and a restore is
+It is also what the [Restore](#screen-10--restore) screen reads, and a restore is
 recorded in it like any other action — which is how the purge knows a file that
 was put back is no longer the app's to remove.
 

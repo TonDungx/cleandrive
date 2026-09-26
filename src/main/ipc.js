@@ -20,6 +20,7 @@ const quarantineZone = require('./lib/quarantine-zone');
 const systemMeasure = require('./system/measure');
 const appsMeasure = require('./apps/measure');
 const gamesMeasure = require('./games/measure');
+const devMeasure = require('./dev/measure');
 const systemBreakdown = require('./system/breakdown');
 const { ScanTree, MultiScanTree } = require('./analyzers/scan-tree');
 const scanRoots = require('./analyzers/scan-roots');
@@ -51,7 +52,7 @@ const contextMenu = require('./lib/context-menu');
 const launchTarget = require('./launch-target');
 
 // One in-flight job of each kind at a time; a new run supersedes the old one.
-const tokens = { scan: null, dupes: null, trash: null, auto: null, media: null, thumbs: null, system: null, apps: null, games: null };
+const tokens = { scan: null, dupes: null, trash: null, auto: null, media: null, thumbs: null, system: null, apps: null, games: null, dev: null };
 
 /* ---- the Disk usage map's state -------------------------------------------- */
 
@@ -874,6 +875,50 @@ function register() {
 
   handle('games:cancel', () => {
     if (tokens.games) tokens.games.cancel();
+    return { ok: true };
+  });
+
+  /* ---- the Developer screen (C2, C4) ------------------------------------- */
+
+  /*
+   * What a developer's tools have filled the disk with.
+   *
+   * The whole screen is `pro.dev`. A package cache is measured and explained;
+   * an IDE's own cache is listed file by file, because that is the half the
+   * app will actually move -- and only while that IDE is closed.
+   */
+  let devState = null;
+
+  async function presentDev() {
+    const { candidates, summary, locked } = await analyzers.collect(
+      'dev',
+      { model: devState },
+      { can: licenseState.canNow() }
+    );
+    return { candidates, summary, locked: locked || null };
+  }
+
+  handle('dev:last', () => guard(async () => (devState ? await presentDev() : { candidates: null, summary: null })));
+
+  handle('dev:scan', (event) =>
+    guard(async () => {
+      if (tokens.dev) tokens.dev.cancel();
+      const token = new CancelToken();
+      tokens.dev = token;
+      const send = (payload) => {
+        if (!event.sender.isDestroyed()) event.sender.send('dev:progress', payload);
+      };
+      try {
+        devState = await devMeasure.scan({ token, onProgress: send });
+        return await presentDev();
+      } finally {
+        if (tokens.dev === token) tokens.dev = null;
+      }
+    })
+  );
+
+  handle('dev:cancel', () => {
+    if (tokens.dev) tokens.dev.cancel();
     return { ok: true };
   });
 

@@ -3107,6 +3107,109 @@ app.whenReady().then(async () => {
       }
     }
 
+    /* -- the Developer Pack (C2, C4) ---------------------------------------- */
+
+    console.log('\nDeveloper (the Developer tab, against this machine’s real tools):');
+    {
+      const js = (expr) => win.webContents.executeJavaScript(expr);
+      await js(`document.querySelector('.tab[data-tab="dev"]').click()`);
+      await js(`document.getElementById('dev-scan').click()`);
+      const finished = await until(win, `document.getElementById('dev-cancel').hidden && window.devScreen.view.result`, 300000);
+      check('a scan of the real machine finishes', finished);
+
+      const seen = await js(`(() => {
+        const out = window.devScreen.view.result;
+        const s = out.summary;
+        const byCat = {};
+        for (const c of out.candidates) byCat[c.category] = (byCat[c.category] || 0) + 1;
+        return {
+          groups: s.groups.length,
+          kinds: [...new Set(s.groups.map((g) => g.kind))],
+          byCat,
+          verdicts: [...new Set(out.candidates.map((c) => c.verdict))],
+          actions: [...new Set(out.candidates.flatMap((c) => c.actions))],
+          unattended: out.candidates.filter((c) => c.unattendedEligible).length,
+          packageActions: [...new Set(out.candidates.filter((c) => c.category === 'dev.packageCache').flatMap((c) => c.actions))],
+          packageVerdicts: [...new Set(out.candidates.filter((c) => c.category === 'dev.packageCache').map((c) => c.verdict))],
+          commands: out.candidates.filter((c) => c.meta.command).map((c) => c.meta.command),
+          openTools: s.groups.filter((g) => g.isOpen === true).map((g) => g.name),
+          cards: document.querySelectorAll('#dev-groups .dev-tool').length,
+          stats: ['dstat-total', 'dstat-packages', 'dstat-sdk', 'dstat-free'].map((id) => document.getElementById(id).textContent),
+          notes: [...document.querySelectorAll('#dev-note p')].map((p) => p.textContent),
+          paths: out.candidates.map((c) => c.path),
+          processesReadable: s.processesReadable,
+        };
+      })()`);
+
+      check('the real tools on this machine are found', seen.groups > 0 && seen.cards === seen.groups,
+        `${seen.groups} tools, ${seen.cards} cards`);
+      check('the four figures at the top are filled in', seen.stats.every((v) => v && v !== '–'), seen.stats.join(' / '));
+      check('nothing on this screen is ever part of an unattended run', seen.unattended === 0, String(seen.unattended));
+
+      // A package cache is explained, never deleted by the app.
+      check('a package cache is never called safe',
+        !seen.packageVerdicts.includes('safe'), seen.packageVerdicts.join(', '));
+      check('and offers nothing that deletes',
+        seen.packageActions.every((a) => a === 'none'), seen.packageActions.join(', '));
+      check('the commands shown are the tools’ own, and none of them names a path',
+        seen.commands.every((c) => !/[\\/]/.test(c)), seen.commands.join(' | '));
+
+      // The exact-folder rule: a JetBrains product folder holds LocalHistory
+      // beside its caches, and Visual Studio's holds BackupFiles.
+      check('nothing a row points at is one of the folders that are not caches',
+        !seen.paths.some((p) => /LocalHistory|BackupFiles|SettingsBackup|\\plugins\\|\\projects\\/i.test(p)),
+        seen.paths.filter((p) => /LocalHistory|BackupFiles/i.test(p)).slice(0, 2).join(', ') || 'none');
+
+      check('the screen says the app never runs any of these commands',
+        seen.notes.some((n) => /never runs/.test(n)), seen.notes.map((n) => n.slice(0, 40)).join(' | '));
+
+      // An editor that is open keeps its cache. VS Code is running under this
+      // harness's own session on the machine this was written on.
+      if (seen.openTools.length) {
+        const held = await js(`(() => {
+          const out = window.devScreen.view.result;
+          const open = out.summary.groups.filter((g) => g.isOpen === true).map((g) => g.id);
+          const rows = out.candidates.filter((c) => open.includes(c.meta.toolId));
+          return { n: rows.length, verdicts: [...new Set(rows.map((c) => c.verdict))], actions: [...new Set(rows.flatMap((c) => c.actions))] };
+        })()`);
+        check('an editor that is open keeps its cache, and it cannot be selected',
+          held.verdicts.every((v) => v === 'keep') && held.actions.every((a) => a === 'none'),
+          `${seen.openTools.join(', ')}: ${held.verdicts.join(',')}/${held.actions.join(',')}`);
+      }
+
+      // Evidence opens, and a redraw that changes nothing leaves it alone.
+      const opened = await js(`(() => {
+        const card = document.querySelector('#dev-groups .dev-tool');
+        card.querySelector('.badge-button').click();
+        const again = document.querySelector('#dev-groups .dev-tool');
+        return {
+          reasons: again.querySelectorAll('.evidence li, .evidence p').length,
+          expanded: again.querySelector('.badge-button').getAttribute('aria-expanded'),
+        };
+      })()`);
+      check('a tool’s evidence opens under it', opened.reasons > 0 && opened.expanded === 'true', `${opened.reasons} reasons`);
+
+      const stable = await js(`(() => {
+        const host = document.getElementById('dev-groups');
+        const first = host.querySelector('.dev-tool');
+        window.devScreen.render();
+        return host.querySelector('.dev-tool') === first;
+      })()`);
+      check('a redraw that changes nothing leaves the cards in place', stable);
+
+      const locked = await js(`(() => {
+        const out = window.devScreen.view.result;
+        window.devScreen.view.result = { candidates: null, summary: null, locked: 'pro.dev' };
+        window.devScreen.render();
+        const said = document.getElementById('dev-status').textContent;
+        window.devScreen.view.result = out;
+        window.devScreen.render();
+        return said;
+      })()`);
+      check('without the feature the screen says which one it needs',
+        /Pro/.test(locked), locked.slice(0, 80));
+    }
+
     /* -- console cleanliness --------------------------------------------- */
     console.log('\nConsole:');
     check('no renderer errors', rendererErrors.length === 0, rendererErrors.join(' | '));
