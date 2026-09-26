@@ -23,6 +23,7 @@
     "test:a11y": "electron scripts/test-a11y.js",
     "test:onboarding": "electron scripts/test-onboarding.js",
     "test:explorer": "electron scripts/test-explorer.js",
+    "test:idle": "electron scripts/test-idle.js",
     "verify:trash": "electron scripts/verify-trash.js",
     "verify:autoclean": "electron scripts/verify-autoclean.js",
     "verify:monitor": "electron scripts/verify-monitor.js",

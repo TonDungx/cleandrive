@@ -17,6 +17,13 @@ const SVG_NS = 'http://www.w3.org/2000/svg';
 
 state.trends = null;
 
+/**
+ * Whether the measuring settings on screen are not the saved ones. Every disk
+ * reading redraws this tab, and used to put the saved values back a minute
+ * after somebody changed them.
+ */
+let trendsDirty = false;
+
 /** Smallest vertical span the chart will draw, in percentage points.
  *  Auto-scaling to a 0.2-point range would turn noise into a cliff. */
 const MIN_RANGE_PERCENT = 5;
@@ -49,9 +56,35 @@ function formatHorizon(days) {
 
 /* ---- the chart ---------------------------------------------------------- */
 
-function renderChart(host, series, thresholds) {
-  host.replaceChildren();
+/**
+ * Make `current` match `next`, keeping every node that can be kept.
+ *
+ * For the chart only: it has no listeners and no state outside its markup, so
+ * a node now showing other numbers is as good as a new one -- except that a
+ * screen reader standing on it keeps its place. The disk monitor moves the
+ * newest point at every reading, so without this the chart and its table were
+ * new nodes once a minute.
+ */
+function patchTree(current, next) {
+  for (const { name } of [...current.attributes]) {
+    if (!next.hasAttribute(name)) current.removeAttribute(name);
+  }
+  for (const { name, value } of [...next.attributes]) {
+    if (current.getAttribute(name) !== value) current.setAttribute(name, value);
+  }
+  const have = [...current.childNodes];
+  const want = [...next.childNodes];
+  want.forEach((node, i) => {
+    const old = have[i];
+    if (!old) current.appendChild(node);
+    else if (old.nodeType !== node.nodeType || old.nodeName !== node.nodeName) current.replaceChild(node, old);
+    else if (node.nodeType === Node.ELEMENT_NODE) patchTree(old, node);
+    else if (old.nodeValue !== node.nodeValue) old.nodeValue = node.nodeValue;
+  });
+  for (const old of have.slice(want.length)) old.remove();
+}
 
+function renderChart(host, series, thresholds) {
   if (series.length < 2) {
     const note = document.createElement('div');
     note.className = 'chart-empty';
@@ -66,7 +99,7 @@ function renderChart(host, series, thresholds) {
               'daily measurement keeps taking them whether or not the app is open.'
           )
         : t('trends.chart.one', 'One measurement so far. A second one, on a different day, is what makes a line.');
-    host.append(note);
+    replaceChildrenIfChanged(host, [note]);
     return;
   }
 
@@ -146,7 +179,14 @@ function renderChart(host, series, thresholds) {
   lastLabel.textContent = formatDay(tMax);
   svg.append(firstLabel, lastLabel);
 
-  host.append(svg, chartTable(series));
+  const table = chartTable(series);
+  const [drawn, readings] = host.children;
+  if (host.children.length === 2 && drawn.localName === 'svg' && readings.localName === 'table') {
+    patchTree(drawn, svg);
+    patchTree(readings, table);
+  } else {
+    host.replaceChildren(svg, table);
+  }
 }
 
 /** Rows the table under the chart reads out; the newest, when there are more. */
@@ -208,15 +248,13 @@ function chartTable(series) {
 /* ---- the lists ---------------------------------------------------------- */
 
 function renderFolderTrends(folders) {
-  const list = $('trend-folders');
-  list.replaceChildren();
+  const rows = [];
 
   if (folders.length === 0) {
     const empty = document.createElement('li');
     empty.className = 'path-empty';
     empty.textContent = t('trends.folders.none', 'No folders scanned yet.');
-    list.append(empty);
-    return;
+    rows.push(empty);
   }
 
   for (const folder of folders.slice(0, 12)) {
@@ -251,8 +289,9 @@ function renderFolderTrends(folders) {
     if (window.Changes && window.Changes.has(folder.root)) {
       row.append(linkButton(t('changes.link.row', 'What changed?'), () => window.Changes.open(folder.root), 'trend-changes-row'));
     }
-    list.append(row);
+    rows.push(row);
   }
+  replaceChildrenIfChanged($('trend-folders'), rows);
 }
 
 /**
@@ -263,26 +302,25 @@ function renderFolderTrends(folders) {
  */
 function renderChangesLink(report) {
   const host = $('trend-changes');
-  host.replaceChildren();
+  const parts = changesLinkParts(report);
+  replaceChildrenIfChanged(host, parts || []);
+  host.hidden = !parts;
+}
+
+/** What the line says, or null when it should not be there. */
+function changesLinkParts(report) {
   const growing = report.growth && report.growth.ok && report.growth.bytesPerMonth > 0 && report.volume;
-  if (!growing || !window.Changes) {
-    host.hidden = true;
-    return;
-  }
-  host.hidden = false;
+  if (!growing || !window.Changes) return null;
   const volume = report.volume.toUpperCase();
   const target = window.Changes.rootOn(report.volume);
   if (!target) {
-    host.append(
-      RefusalNote(t('changes.link.none', 'To see what is growing on {volume}, scan one of its folders now and again later.', { volume }))
-    );
-    return;
+    return [
+      RefusalNote(t('changes.link.none', 'To see what is growing on {volume}, scan one of its folders now and again later.', { volume })),
+    ];
   }
   if (!window.Changes.allowed()) {
     const hint = UpgradeHint('pro.diff', t('changes.upgrade', 'Comparing two scans of a folder is part of CleanDrive Pro.'));
-    if (hint) host.append(hint);
-    else host.hidden = true;
-    return;
+    return hint ? [hint] : null;
   }
   const lead = document.createElement('span');
   lead.textContent = t('changes.link.lead', '{volume} is growing {rate}.', { volume, rate: formatRate(report.growth.bytesPerMonth) });
@@ -298,12 +336,11 @@ function renderChangesLink(report) {
     span: window.Changes.span(target.days),
     volume,
   });
-  host.append(lead, ' ', go, ' ', scope);
+  return [lead, ' ', go, ' ', scope];
 }
 
 function renderSavings(savings) {
-  const list = $('trend-savings');
-  list.replaceChildren();
+  const list = [];
 
   const head = document.createElement('li');
   head.className = 'pair-row pair-head';
@@ -317,13 +354,14 @@ function renderSavings(savings) {
   h3.className = 'pair-freed';
   h3.textContent = t('trends.savings.freed', 'Freed');
   head.append(h1, h2, h3);
-  list.append(head);
+  list.push(head);
 
   if (savings.byMonth.length === 0) {
     const empty = document.createElement('li');
     empty.className = 'path-empty';
     empty.textContent = t('trends.savings.none', 'Nothing deleted through CleanDrive yet.');
-    list.append(empty);
+    list.push(empty);
+    replaceChildrenIfChanged($('trend-savings'), list);
     return;
   }
 
@@ -344,7 +382,7 @@ function renderSavings(savings) {
     freed.textContent = formatBytes(month.freedBytes);
 
     row.append(label, moved, freed);
-    list.append(row);
+    list.push(row);
   }
 
   const total = document.createElement('li');
@@ -359,7 +397,8 @@ function renderSavings(savings) {
   freed.className = 'pair-freed';
   freed.textContent = formatBytes(savings.freedBytes);
   total.append(label, moved, freed);
-  list.append(total);
+  list.push(total);
+  replaceChildrenIfChanged($('trend-savings'), list);
 }
 
 /* ---- where the measurements come from ----------------------------------- */
@@ -390,16 +429,21 @@ function samplingRow(label, value, title) {
  */
 function renderSampling(report) {
   const sampling = report.sampling;
-  const list = $('trend-sampling');
-  list.replaceChildren();
+  const list = [];
 
-  if (!sampling) return;
+  if (!sampling) {
+    replaceChildrenIfChanged($('trend-sampling'), list);
+    return;
+  }
 
-  $('trend-daily').checked = sampling.dailySample;
-  $('trend-time').value = sampling.sampleTime;
-  $('trend-time-row').hidden = !sampling.dailySample;
+  // The two fields hold what was saved, unless someone is changing them.
+  if (!trendsDirty) {
+    $('trend-daily').checked = sampling.dailySample;
+    $('trend-time').value = sampling.sampleTime;
+    $('trend-time-row').hidden = !sampling.dailySample;
+  }
 
-  list.append(samplingRow(
+  list.push(samplingRow(
     t('trends.sampler.daily', 'Daily Windows task'),
     !sampling.supported
       ? t('task.windowsOnly', 'Windows only')
@@ -415,18 +459,18 @@ function renderSampling(report) {
       : t('trends.sampler.closedHint', 'Runs with CleanDrive closed')
   ));
 
-  list.append(samplingRow(
+  list.push(samplingRow(
     t('trends.sampler.next', 'Next automatic measurement'),
     sampling.nextSampleAt ? formatWhen(sampling.nextSampleAt) : t('task.noneScheduled', 'none scheduled')
   ));
 
-  list.append(samplingRow(
+  list.push(samplingRow(
     t('trends.sampler.launch', 'When the app starts'),
     t('trends.sampler.always', 'always'),
     t('trends.sampler.launchHint', 'One measurement per launch')
   ));
 
-  list.append(samplingRow(
+  list.push(samplingRow(
     t('trends.sampler.monitor', 'While disk monitoring runs'),
     sampling.monitorRunning
       ? t('trends.sampler.monitorOn', 'on, at most one every 30 minutes')
@@ -434,21 +478,25 @@ function renderSampling(report) {
     t('trends.sampler.monitorHint', 'Readings the monitor already takes are recorded instead of discarded')
   ));
 
-  list.append(samplingRow(
+  list.push(samplingRow(
     t('trends.sampler.scan', 'When you run a scan'),
     t('trends.sampler.always', 'always'),
     t('trends.sampler.scanHint', 'A scan also records the folder size, which is what the folder list below compares')
   ));
 
+  replaceChildrenIfChanged($('trend-sampling'), list);
+
   const latest = report.latest;
-  $('trend-sampling-status').textContent = latest
-    ? t(
-        'trends.sampler.lastMeasurement',
-        'Last measurement {when}. Two measurements make a line; the growth figure needs four across ' +
-          'at least a week.',
-        { when: formatWhen(latest.at) }
-      )
-    : t('trends.sampler.noneYet', 'No measurement on file yet.');
+  setText($('trend-sampling-status'), trendsDirty
+    ? t('trends.unsaved', 'Unsaved changes to the measuring settings.')
+    : latest
+      ? t(
+          'trends.sampler.lastMeasurement',
+          'Last measurement {when}. Two measurements make a line; the growth figure needs four across ' +
+            'at least a week.',
+          { when: formatWhen(latest.at) }
+        )
+      : t('trends.sampler.noneYet', 'No measurement on file yet.'));
 }
 
 $('trend-sample').addEventListener('click', async () => {
@@ -472,14 +520,18 @@ $('trend-sample').addEventListener('click', async () => {
   );
 });
 
+function markTrendsDirty() {
+  trendsDirty = true;
+  setText($('trend-sampling-status'), t('trends.unsaved', 'Unsaved changes to the measuring settings.'));
+}
+
 $('trend-daily').addEventListener('change', () => {
   $('trend-time-row').hidden = !$('trend-daily').checked;
-  $('trend-sampling-status').textContent = t('trends.unsaved', 'Unsaved changes to the measuring settings.');
+  markTrendsDirty();
 });
 
-$('trend-time').addEventListener('change', () => {
-  $('trend-sampling-status').textContent = t('trends.unsaved', 'Unsaved changes to the measuring settings.');
-});
+$('trend-time').addEventListener('change', markTrendsDirty);
+$('trend-time').addEventListener('input', markTrendsDirty);
 
 $('trend-save').addEventListener('click', async () => {
   $('trend-sampling-status').textContent = t('app.saving', 'Saving…');
@@ -490,6 +542,7 @@ $('trend-save').addEventListener('click', async () => {
     t('app.label.saveSettings', 'Save settings')
   );
   if (!data) return;
+  trendsDirty = false;
 
   await refreshTrends($('trend-volume').value);
 
@@ -511,15 +564,19 @@ function applyTrends(report) {
   state.trends = report;
 
   const select = $('trend-volume');
-  const chosen = select.value;
-  select.replaceChildren();
-  for (const volume of report.volumes) {
-    const option = document.createElement('option');
-    option.value = volume;
-    option.textContent = volume;
-    option.selected = volume === (report.volume || chosen);
-    select.append(option);
+  const wanted = report.volume || select.value;
+  // Rebuilt only when the volumes are not the ones listed; a new list of
+  // options under the keyboard is a new list to a screen reader.
+  if ([...select.options].map((o) => o.value).join('\n') !== report.volumes.join('\n')) {
+    select.replaceChildren();
+    for (const volume of report.volumes) {
+      const option = document.createElement('option');
+      option.value = volume;
+      option.textContent = volume;
+      select.append(option);
+    }
   }
+  for (const option of select.options) option.selected = option.value === wanted;
   select.disabled = report.volumes.length <= 1;
 
   const monitor = state.auto ? state.auto.settings.monitor : null;
@@ -528,50 +585,50 @@ function applyTrends(report) {
     critical: monitor ? monitor.criticalPercent : null,
   });
 
-  $('trend-samples').textContent = `${formatCount(report.snapshots)} ${word(
+  setText($('trend-samples'), `${formatCount(report.snapshots)} ${word(
     report.snapshots,
     'trends.measurement',
     'measurement',
     'measurements'
-  )}`;
+  )}`);
 
   if (report.latest) {
-    $('tstat-used').textContent = `${report.latest.usedPercent.toFixed(1)}%`;
+    setText($('tstat-used'), `${report.latest.usedPercent.toFixed(1)}%`);
     $('tstat-used').title = t('trends.freeOf', '{free} free of {total}', {
       free: formatBytes(report.latest.freeBytes),
       total: formatBytes(report.latest.totalBytes),
     });
   } else {
-    $('tstat-used').textContent = '–';
+    setText($('tstat-used'), '–');
   }
 
   // Growth and prediction each print their own refusal when they have one.
   if (report.growth.ok) {
-    $('tstat-growth').textContent = formatRate(report.growth.bytesPerMonth);
+    setText($('tstat-growth'), formatRate(report.growth.bytesPerMonth));
     $('tstat-growth').title = t('trends.growthHint', 'Fitted through {n} measurements over {days} days (r² {r2})', {
       n: report.growth.n,
       days: report.growth.spanDays.toFixed(0),
       r2: report.growth.r2.toFixed(2),
     });
   } else {
-    $('tstat-growth').textContent = t('trends.notYet', 'not yet');
+    setText($('tstat-growth'), t('trends.notYet', 'not yet'));
     $('tstat-growth').title = tm(report.growth.reason);
   }
 
   if (report.prediction.ok) {
-    $('tstat-full').textContent = formatHorizon(report.prediction.days);
+    setText($('tstat-full'), formatHorizon(report.prediction.days));
     $('tstat-full').title = t('trends.fullHint', 'Around {date} at the current rate (r² {r2})', {
       date: new Date(report.prediction.at).toLocaleDateString(uiLocale()),
       r2: report.prediction.r2.toFixed(2),
     });
   } else {
-    $('tstat-full').textContent = report.prediction.beyondHorizon
+    setText($('tstat-full'), report.prediction.beyondHorizon
       ? t('trends.notSoon', 'not soon')
-      : t('trends.unknown', 'unknown');
+      : t('trends.unknown', 'unknown'));
     $('tstat-full').title = tm(report.prediction.reason);
   }
 
-  $('tstat-freed').textContent = formatBytes(report.savings.freedBytes);
+  setText($('tstat-freed'), formatBytes(report.savings.freedBytes));
   $('tstat-freed').title = t(
     'trends.freedHint',
     '{moved} was moved to the Recycle Bin; {freed} of that was permanently removed and is genuinely free.',
@@ -588,17 +645,17 @@ function applyTrends(report) {
       t('trends.axisCaveat', 'The vertical axis is scaled to the data, not to 0–100%, so small changes are visible.')
     );
   }
-  $('trend-caveat').textContent = caveat.join(' ');
+  setText($('trend-caveat'), caveat.join(' '));
 
   renderSampling(report);
   renderFolderTrends(report.folders);
   renderChangesLink(report);
   renderSavings(report.savings);
 
-  $('trend-status').textContent =
+  setText($('trend-status'),
     report.snapshots === 0
       ? t('trends.noHistory', 'No history yet.')
-      : t('trends.recorded', '{n} measurement(s) recorded.', { n: formatCount(report.snapshots) });
+      : t('trends.recorded', '{n} measurement(s) recorded.', { n: formatCount(report.snapshots) }));
 }
 
 async function refreshTrends(volume) {

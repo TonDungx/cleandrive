@@ -142,6 +142,57 @@ function unwrap(envelope, label) {
   return envelope.data;
 }
 
+/* ------------------------------------------------------------------ redraw */
+
+/**
+ * Change a line of text only when the words are different.
+ *
+ * Assigning `textContent` swaps the text node for a new one even when nothing
+ * changed, and a screen reader reading that line loses its place. Two screens
+ * redraw themselves on every reading the disk monitor takes -- once a minute
+ * by default -- so "nothing changed" is the usual case, not the rare one.
+ */
+function setText(el, text) {
+  const value = String(text);
+  if (el.textContent !== value) el.textContent = value;
+}
+
+/** What the keyboard can stand on inside a block that gets redrawn. */
+const FOCUSABLE = 'button, input, select, textarea, a[href], [tabindex]:not([tabindex="-1"])';
+
+/**
+ * Put new rows in `host` only when they differ from the rows already there.
+ *
+ * The lists on Automatic and Trends used to be rebuilt from nothing on every
+ * background write. Measured with the monitor on: a tick box with the keyboard
+ * on it was taken out of the page at the next reading, focus fell to the
+ * document, and Narrator went with it -- reading from a place the screen showed
+ * as empty. Identical markup is identical data here (every handler on these
+ * rows closes over something the row also shows, in its text or its title), so
+ * the rows in place are kept, listeners and all.
+ *
+ * When something did change with focus inside, focus goes to the control in
+ * the same position, or to the last one left, rather than to nowhere.
+ *
+ * Not for rows whose state lives in a property the markup does not show (a
+ * tick box's `checked`): identical markup would not mean identical rows.
+ */
+function replaceChildrenIfChanged(host, nodes) {
+  const next = document.createElement(host.tagName);
+  next.append(...nodes);
+  if (next.innerHTML === host.innerHTML) return false;
+
+  const active = document.activeElement;
+  const at = active && host.contains(active) ? [...host.querySelectorAll(FOCUSABLE)].indexOf(active) : -1;
+  host.replaceChildren(...next.childNodes);
+  if (at >= 0 && !host.contains(document.activeElement)) {
+    const left = [...host.querySelectorAll(FOCUSABLE)];
+    const target = left[Math.min(at, left.length - 1)];
+    if (target) target.focus();
+  }
+  return true;
+}
+
 /* ------------------------------------------------------------------ folder */
 
 async function setFolder(folder) {
@@ -197,6 +248,15 @@ $('pick-folder').addEventListener('click', async () => {
 const TABS = [...document.querySelectorAll('.tab[data-tab]')];
 
 function selectTab(tab, { focus = false } = {}) {
+  // A button that opens another screen (System's "Open Restore" and "Look
+  // inside with Disk usage", Explorer's menu arriving while the keyboard is
+  // somewhere in a screen) leaves the keyboard on a control that is
+  // about to be hidden, and a hidden control drops focus to the document --
+  // where Narrator starts reading from nothing. The new screen's tab takes it,
+  // and says which screen this is. A caller that knows better focuses its own
+  // control afterwards.
+  const active = document.activeElement;
+  const stranded = Boolean(active && active.closest('.panel') && !active.closest(`#panel-${tab.dataset.tab}`));
   for (const other of TABS) {
     const on = other === tab;
     other.classList.toggle('is-active', on);
@@ -210,7 +270,7 @@ function selectTab(tab, { focus = false } = {}) {
   // Chromium makes it focusable (it is what scrolls), and a focusable thing
   // with no name is read as nothing.
   document.querySelector('main').setAttribute('aria-labelledby', tab.id);
-  if (focus) tab.focus();
+  if (focus || stranded) tab.focus();
 }
 
 for (const tab of TABS) {

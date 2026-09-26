@@ -235,14 +235,27 @@ fields 1.3:1, a button's label on the dark theme's blue 3.2:1, and the green of 
   photo or a video, its size and its date; the disk-usage chart is followed by a
   table of its readings; the page says which language it is in, so the voice
   reading it is the right one.
+- **Left alone, the window stays where you left it.** The disk monitor's
+  readings (once a minute by default) update the figures in place: the control
+  you are on keeps the focus, the chart keeps its nodes while its newest reading
+  moves, and nothing typed but not yet saved on Automatic or Trends is put back.
+  Before this, both screens redrew themselves at every reading, which took the
+  focus off a tick box and dropped it on the page itself (measured).
 - Checked by `npm run test:a11y`: axe-core on every screen in both themes, in the
   user's own colours and in Vietnamese, and again with every kind of control
   forced into its hovered and focused look (a colour that only exists under the
   pointer was found only when the real pointer happened to rest there);
   Chromium's own accessibility tree; Tab walked through every screen; the keys
-  pressed; a contrast theme emulated.
-  [Unverified] What Narrator actually says has not been listened to — Windows'
-  UI Automation cannot see into this Electron's pages from outside to check it.
+  pressed; a contrast theme emulated. `npm run test:idle` takes real readings
+  the way the monitor does, on every screen, with the keyboard somewhere and an
+  edit unsaved.
+  Narrator was tried on the one test machine with 0.1.16 and confirmed to work
+  (as a whole, not item by item). It once jumped on its own while nothing was
+  touched, while another heavy job was running; with that job stopped, it was
+  confirmed to work. So the cause was not separated, and the redraw above was
+  fixed because it was a fault either way. [Unverified] The build with that fix has been
+  checked by `test:idle`, not listened to. Windows' UI Automation cannot see
+  into this Electron's pages from outside to check it.
 
 ### Language
 
@@ -1378,8 +1391,8 @@ was put back is no longer the app's to remove.
   that launch do not happen.
 - **No choice of accent colour on its own.** A Windows contrast theme, or your
   own colours, change every colour instead. Windows' contrast themes were
-  checked through an emulated one, not each of the real ones, and what Narrator
-  reads has not been listened to.
+  checked through an emulated one, not each of the real ones. Narrator was
+  tried with 0.1.16 and worked (see Keyboard and screen readers).
 
 ---
 

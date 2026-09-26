@@ -94,14 +94,13 @@ function formatWhenShort(timestamp) {
 
 function renderPathList(el, key, emptyText, verbatim) {
   const items = state.autoLists[key];
-  el.replaceChildren();
+  const rows = [];
 
   if (items.length === 0) {
     const empty = document.createElement('li');
     empty.className = 'path-empty';
     empty.textContent = emptyText;
-    el.append(empty);
-    return;
+    rows.push(empty);
   }
 
   for (const value of items) {
@@ -123,8 +122,9 @@ function renderPathList(el, key, emptyText, verbatim) {
     });
 
     row.append(text, remove);
-    el.append(row);
+    rows.push(row);
   }
+  replaceChildrenIfChanged(el, rows);
 }
 
 function renderAutoLists() {
@@ -136,13 +136,27 @@ function renderAutoLists() {
 
 function markAutoDirty() {
   autoDirty = true;
-  $('auto-status').textContent = t('auto.unsaved', 'Unsaved changes.');
+  setText($('auto-status'), t('auto.unsaved', 'Unsaved changes.'));
 }
 
 /* ---- form <-> settings -------------------------------------------------- */
 
 function buildCategoryChecks(selected) {
   const host = $('auto-categories');
+
+  // Built once, then only ticked and relabelled. Rebuilding them on every
+  // refresh took the box the keyboard was on out of the page.
+  const keys = Object.keys(CATEGORY_LABELS);
+  const boxes = [...host.querySelectorAll('input[type=checkbox]')];
+  if (boxes.length === keys.length && boxes.every((box, i) => box.dataset.category === keys[i])) {
+    for (const box of boxes) {
+      const [labelKey, labelEnglish] = CATEGORY_LABELS[box.dataset.category];
+      box.checked = selected.includes(box.dataset.category);
+      setText(box.nextElementSibling, t(labelKey, labelEnglish));
+    }
+    return;
+  }
+
   host.replaceChildren();
 
   for (const [key, [labelKey, labelEnglish]] of Object.entries(CATEGORY_LABELS)) {
@@ -163,9 +177,14 @@ function buildCategoryChecks(selected) {
   }
 }
 
-function readAutoForm() {
+/** The categories ticked on screen, which are not the saved ones while unsaved. */
+function checkedCategories() {
   const boxes = document.querySelectorAll('#auto-categories input[type=checkbox]');
-  const categories = [...boxes].filter((box) => box.checked).map((box) => box.dataset.category);
+  return [...boxes].filter((box) => box.checked).map((box) => box.dataset.category);
+}
+
+function readAutoForm() {
+  const categories = checkedCategories();
 
   return {
     autoClean: {
@@ -204,8 +223,55 @@ function readAutoForm() {
   };
 }
 
-function applyAutoState(data) {
+/**
+ * Draw the tab from what the main process holds.
+ *
+ * `form: false` leaves the fields, tick boxes and lists as they are on screen
+ * and redraws only their words and everything around them. Every background
+ * refresh passes it while the form holds unsaved edits: they used to be
+ * overwritten by the next disk-monitor reading, a minute after being typed,
+ * committed or not.
+ */
+function applyAutoState(data, { form = true } = {}) {
   state.auto = data;
+  const auto = data.settings.autoClean;
+
+  if (form) fillAutoForm(data);
+  buildCategoryChecks(form ? auto.categories : checkedCategories());
+  renderAutoLists();
+  syncScheduleRows();
+
+  const stateWord = auto.enabled
+    ? auto.dryRun
+      ? t('auto.state.reportOnly', 'Report only')
+      : t('app.on', 'On')
+    : t('app.off', 'Off');
+
+  setText($('astat-state'), stateWord);
+
+  // The same word in the bar that stays on screen. The tile scrolls away; the
+  // question it answers -- is any of this actually running -- does not.
+  const chip = $('auto-state');
+  setText(chip, stateWord);
+  chip.classList.toggle('is-on', auto.enabled && !auto.dryRun);
+  chip.classList.toggle('is-dry', auto.enabled && auto.dryRun);
+  setText($('astat-next'), auto.enabled ? formatWhenShort(data.scheduler.nextRunAt) : '–');
+  $('astat-next').title = auto.enabled ? formatWhen(data.scheduler.nextRunAt) : '';
+  setText($('astat-last'), data.lastRun ? formatWhenShort(data.lastRun.startedAt) : t('app.never', 'Never'));
+  $('astat-last').title = data.lastRun
+    ? `${formatWhen(data.lastRun.startedAt)} — ${tm(data.lastRun.reason) || data.lastRun.outcome}`
+    : '';
+
+  applyAutoNotices(data);
+  renderTaskFacts(data.tasks, null);
+
+  renderRunResult(data.lastRun);
+  renderRunHistory(data.history || []);
+  setText($('auto-status'), autoDirty ? t('auto.unsaved', 'Unsaved changes.') : describeSchedule(auto));
+}
+
+/** The saved settings into the fields. Only when nothing on screen is unsaved. */
+function fillAutoForm(data) {
   const auto = data.settings.autoClean;
 
   $('auto-enabled').checked = auto.enabled;
@@ -241,31 +307,10 @@ function applyAutoState(data) {
     skipIfRunning: [...auto.skipIfRunning],
     monitorVolumes: [...monitor.volumes],
   };
+}
 
-  buildCategoryChecks(auto.categories);
-  renderAutoLists();
-  syncScheduleRows();
-
-  const stateWord = auto.enabled
-    ? auto.dryRun
-      ? t('auto.state.reportOnly', 'Report only')
-      : t('app.on', 'On')
-    : t('app.off', 'Off');
-
-  $('astat-state').textContent = stateWord;
-
-  // The same word in the bar that stays on screen. The tile scrolls away; the
-  // question it answers -- is any of this actually running -- does not.
-  const chip = $('auto-state');
-  chip.textContent = stateWord;
-  chip.classList.toggle('is-on', auto.enabled && !auto.dryRun);
-  chip.classList.toggle('is-dry', auto.enabled && auto.dryRun);
-  $('astat-next').textContent = auto.enabled ? formatWhenShort(data.scheduler.nextRunAt) : '–';
-  $('astat-next').title = auto.enabled ? formatWhen(data.scheduler.nextRunAt) : '';
-  $('astat-last').textContent = data.lastRun ? formatWhenShort(data.lastRun.startedAt) : t('app.never', 'Never');
-  $('astat-last').title = data.lastRun
-    ? `${formatWhen(data.lastRun.startedAt)} — ${tm(data.lastRun.reason) || data.lastRun.outcome}`
-    : '';
+function applyAutoNotices(data) {
+  const auto = data.settings.autoClean;
 
   // A schedule that is switched on but has no task behind it would silently
   // never run, which is the failure this whole feature exists to avoid. Each
@@ -307,16 +352,10 @@ function applyAutoState(data) {
   }
   if (notes.length > 0) showNotice('auto-warnings', notes.join(' · '));
   else $('auto-warnings').hidden = true;
-
-  renderTaskFacts(data.tasks, null);
-
-  renderRunResult(data.lastRun);
-  renderRunHistory(data.history || []);
-  $('auto-status').textContent = describeSchedule(auto);
 }
 
 function showNotice(id, text) {
-  $(id).textContent = text;
+  setText($(id), text);
   $(id).hidden = false;
 }
 
@@ -359,22 +398,22 @@ function syncScheduleRows() {
   $('auto-time-row').hidden = kind === 'minutes';
 
   if (kind === 'minutes') {
-    $('auto-schedule-note').textContent = t(
+    setText($('auto-schedule-note'), t(
       'auto.note.minutes',
       'For testing that the schedule really is a Windows task: it keeps running with CleanDrive ' +
         'closed and after a restart. Each run is a real cleanup with your settings, so leave it in ' +
         'report-only mode unless you mean it.'
-    );
+    ));
   } else if (kind === 'monthly') {
-    $('auto-schedule-note').textContent = t(
+    setText($('auto-schedule-note'), t(
       'auto.note.monthly',
       'Days run to 28 only, so a monthly cleanup fires in February too.'
-    );
+    ));
   } else {
-    $('auto-schedule-note').textContent = t(
+    setText($('auto-schedule-note'), t(
       'auto.note.missed',
       'A run missed because the PC was off happens at the next opportunity.'
-    );
+    ));
   }
 }
 
@@ -409,30 +448,41 @@ function factRow(label, value, title, { name = false } = {}) {
  * at 02:00:34 and it exited 0" from "the settings file says it should have".
  */
 function renderTaskFacts(status, osInfo) {
-  const list = $('task-facts');
-  list.replaceChildren();
+  replaceChildrenIfChanged($('task-facts'), taskFactRows(status, osInfo));
+
+  if (!status || !status.supported) return;
+  const problems = [
+    ...(status.cleanup.problems || []),
+    ...(status.sampler.problems || []),
+  ];
+  if (problems.length > 0) showNotice('task-problems', problems.join(' '));
+  else $('task-problems').hidden = true;
+}
+
+function taskFactRows(status, osInfo) {
+  const list = [];
 
   if (!status) {
-    list.append(factRow(t('task.registration', 'Registration'), t('task.notCheckedYet', 'not checked yet')));
-    return;
+    list.push(factRow(t('task.registration', 'Registration'), t('task.notCheckedYet', 'not checked yet')));
+    return list;
   }
 
   if (!status.supported) {
-    list.append(factRow(t('task.registration', 'Registration'), t('task.windowsOnly', 'Windows only')));
-    return;
+    list.push(factRow(t('task.registration', 'Registration'), t('task.windowsOnly', 'Windows only')));
+    return list;
   }
 
   const cleanup = status.cleanup;
   const os = osInfo || cleanup.os;
 
-  list.append(factRow(
+  list.push(factRow(
     t('task.registeredTask', 'Registered task'),
     cleanup.installed ? `\\${cleanup.taskPath}` : t('task.none', 'none'),
     cleanup.installed ? t('task.visibleHint', 'Visible in Task Scheduler under this name') : '',
     { name: true }
   ));
 
-  list.append(factRow(
+  list.push(factRow(
     t('task.matches', 'Matches these settings'),
     cleanup.installed ? (cleanup.verified ? t('app.yes', 'yes') : t('app.no', 'no')) : '–',
     cleanup.problems && cleanup.problems.length > 0 ? cleanup.problems.join(' ') : ''
@@ -442,8 +492,8 @@ function renderTaskFacts(status, osInfo) {
   // that fell back to the app's own schedule when nothing was registered --
   // which is the precise confusion this card was built to remove: the screen
   // presenting an intention as though the OS had confirmed it.
-  list.append(factRow(t('task.settingsAskFor', 'These settings ask for'), cleanup.description));
-  list.append(factRow(
+  list.push(factRow(t('task.settingsAskFor', 'These settings ask for'), cleanup.description));
+  list.push(factRow(
     t('task.windowsHolds', 'Windows holds'),
     cleanup.registered
       ? describeRegistered(cleanup.registered)
@@ -453,30 +503,30 @@ function renderTaskFacts(status, osInfo) {
   if (os && os.error) {
     // Only the error. "Windows says last run: never" for a task Windows has
     // never heard of would be a fact about nothing, dressed as a reading.
-    list.append(factRow(t('task.couldNotAsk', 'Could not ask Windows'), os.error));
+    list.push(factRow(t('task.couldNotAsk', 'Could not ask Windows'), os.error));
   } else if (os) {
-    list.append(factRow(
+    list.push(factRow(
       t('task.lastRun', 'Windows says last run'),
       os.lastRunAt ? formatWhen(os.lastRunAt) : t('app.never.lower', 'never')
     ));
-    list.append(factRow(
+    list.push(factRow(
       t('task.nextRun', 'Windows says next run'),
       os.nextRunAt ? formatWhen(os.nextRunAt) : t('task.noneScheduled', 'none scheduled')
     ));
-    list.append(factRow(
+    list.push(factRow(
       t('task.result', 'Result of that run'),
       status.cleanup.osResult || '–',
       os.lastResult === null || os.lastResult === undefined
         ? ''
         : t('task.resultCode', 'Task Scheduler code {code}', { code: os.lastResult })
     ));
-    if (os.missedRuns) list.append(factRow(t('task.missed', 'Runs missed'), String(os.missedRuns)));
-    if (os.state) list.append(factRow(t('task.state', 'Task state'), os.state));
+    if (os.missedRuns) list.push(factRow(t('task.missed', 'Runs missed'), String(os.missedRuns)));
+    if (os.state) list.push(factRow(t('task.state', 'Task state'), os.state));
   } else {
-    list.append(factRow(t('task.lastRun', 'Windows says last run'), t('task.pressCheck', 'press “Check with Windows”')));
+    list.push(factRow(t('task.lastRun', 'Windows says last run'), t('task.pressCheck', 'press “Check with Windows”')));
   }
 
-  list.append(factRow(
+  list.push(factRow(
     t('task.sampler', 'Daily disk measurement'),
     status.sampler.installed
       ? status.sampler.verified
@@ -488,12 +538,7 @@ function renderTaskFacts(status, osInfo) {
     t('task.samplerHint', 'Used by the Trends tab; deletes nothing')
   ));
 
-  const problems = [
-    ...(cleanup.problems || []),
-    ...(status.sampler.problems || []),
-  ];
-  if (problems.length > 0) showNotice('task-problems', problems.join(' '));
-  else $('task-problems').hidden = true;
+  return list;
 }
 
 /** One line for a schedule read back out of the registered task. */
@@ -530,13 +575,13 @@ async function refreshTaskStatus({ quiet = false, fresh = false } = {}) {
   }
 
   renderTaskFacts(status, status.cleanup.os);
-  $('task-status').textContent = status.supported
+  setText($('task-status'), status.supported
     ? status.cleanup.installed
       ? status.cleanup.verified
         ? t('task.statusExact', 'Windows holds exactly what these settings describe.')
         : t('task.statusOther', 'Windows holds something other than these settings.')
       : t('task.statusNone', 'Windows has no CleanDrive cleanup task registered.')
-    : t('task.statusUnsupported', 'Scheduling is Windows only.');
+    : t('task.statusUnsupported', 'Scheduling is Windows only.'));
   return status;
 }
 
@@ -547,7 +592,8 @@ $('task-repair').addEventListener('click', async () => {
   const result = unwrap(await api.reconcileTasks(), t('task.label', 'Windows task'));
   if (!result) return;
 
-  applyAutoState(result.state);
+  // Re-registering reads the saved settings; it says nothing about the form.
+  applyAutoState(result.state, { form: !autoDirty });
   await refreshTaskStatus({ quiet: true });
 
   const { changes, problems } = result.reconciled;
@@ -595,7 +641,7 @@ function renderRunResult(run) {
     return;
   }
 
-  body.replaceChildren();
+  const rows = [];
 
   const outcome = document.createElement('div');
   outcome.className = `result-line run-outcome-${run.outcome}`;
@@ -606,27 +652,27 @@ function renderRunResult(run) {
   const right = document.createElement('span');
   right.textContent = tm(run.reason) || run.outcome;
   outcome.append(left, right);
-  body.append(outcome);
+  rows.push(outcome);
 
-  body.append(resultLine(t('auto.result.scanned', 'Files scanned'), formatCount(run.scanned.files)));
-  body.append(resultLine(
+  rows.push(resultLine(t('auto.result.scanned', 'Files scanned'), formatCount(run.scanned.files)));
+  rows.push(resultLine(
     t('auto.result.selected', 'Selected'),
     `${formatCount(run.selected.files)} · ${formatBytes(run.selected.bytes)}`
   ));
 
   if (!run.dryRun) {
-    body.append(resultLine(
+    rows.push(resultLine(
       t('auto.result.moved', 'Moved to Recycle Bin'),
       `${formatCount(run.trashed.files)} · ${formatBytes(run.trashed.bytes)}`
     ));
-    body.append(resultLine(
+    rows.push(resultLine(
       t('auto.result.purged', 'Permanently removed'),
       `${formatCount(run.purged.files)} · ${formatBytes(run.purged.bytes)}`
     ));
   }
 
   if (run.diskBefore && run.diskAfter && run.diskBefore.ok && run.diskAfter.ok) {
-    body.append(resultLine(
+    rows.push(resultLine(
       t('auto.statDisk', 'Disk in use'),
       t('auto.result.diskChange', '{before}% to {after}%', {
         before: run.diskBefore.usedPercent.toFixed(1),
@@ -643,23 +689,25 @@ function renderRunResult(run) {
   if (skipped.appOpen) {
     parts.push(t('auto.result.appOpen', '{n} left because their app was open', { n: formatCount(skipped.appOpen) }));
   }
-  if (parts.length > 0) body.append(resultLine(t('auto.result.leftAlone', 'Left alone'), parts.join(' · ')));
+  if (parts.length > 0) rows.push(resultLine(t('auto.result.leftAlone', 'Left alone'), parts.join(' · ')));
 
   for (const note of run.notes || []) {
     const para = document.createElement('p');
     para.className = 'result-note';
     para.textContent = tm(note);
-    body.append(para);
+    rows.push(para);
   }
 
+  replaceChildrenIfChanged(body, rows);
   card.hidden = false;
 }
 
 function renderRunHistory(runs) {
   const list = $('auto-history');
-  list.replaceChildren();
+  const rows = [];
 
   if (runs.length <= 1) {
+    replaceChildrenIfChanged(list, rows);
     $('auto-history-card').hidden = true;
     return;
   }
@@ -691,8 +739,9 @@ function renderRunHistory(runs) {
     size.textContent = formatBytes(run.dryRun ? run.selected.bytes : run.trashed.bytes);
 
     row.append(size, main);
-    list.append(row);
+    rows.push(row);
   }
+  replaceChildrenIfChanged(list, rows);
 
   $('auto-history-card').hidden = false;
 }
@@ -716,9 +765,9 @@ async function refreshMonitorStatus() {
   $('monitor-snooze-btn').disabled = !status.running;
 
   if (!status.running) {
-    badge.textContent = t('app.off', 'Off');
+    setText(badge, t('app.off', 'Off'));
     badge.className = 'card-badge';
-    line.textContent = t('monitor.notRunningNote', 'Not running. Nothing of CleanDrive stays in memory.');
+    setText(line, t('monitor.notRunningNote', 'Not running. Nothing of CleanDrive stays in memory.'));
     return;
   }
 
@@ -727,10 +776,10 @@ async function refreshMonitorStatus() {
 
   if (worst) {
     const level = LEVEL_WORDS[worst.level];
-    badge.textContent = `${worst.usage.usedPercent.toFixed(0)}% · ${level ? t(level[0], level[1]) : worst.level}`;
+    setText(badge, `${worst.usage.usedPercent.toFixed(0)}% · ${level ? t(level[0], level[1]) : worst.level}`);
     badge.className = `card-badge is-${worst.level}`;
   } else {
-    badge.textContent = t('monitor.noReadings', 'no readings');
+    setText(badge, t('monitor.noReadings', 'no readings'));
     badge.className = 'card-badge';
   }
 
@@ -746,10 +795,10 @@ async function refreshMonitorStatus() {
     parts.push(t('monitor.snoozedUntil', 'alerts snoozed until {when}', { when: formatWhen(status.snoozedUntil) }));
   }
 
-  line.textContent = parts.join(' · ');
-  $('monitor-snooze-btn').textContent = status.snoozed
+  setText(line, parts.join(' · '));
+  setText($('monitor-snooze-btn'), status.snoozed
     ? t('monitor.resume', 'Resume alerts')
-    : t('monitor.snooze', 'Snooze');
+    : t('monitor.snooze', 'Snooze'));
 }
 
 $('monitor-add-volume').addEventListener('click', () => addFolderTo('monitorVolumes'));
@@ -776,21 +825,21 @@ async function refreshPurgeStatus() {
   $('purge-now').disabled = preview.items === 0;
 
   if (preview.tracked === 0) {
-    $('purge-status').textContent = t('purge.nothingRecorded', 'Nothing recorded yet.');
+    setText($('purge-status'), t('purge.nothingRecorded', 'Nothing recorded yet.'));
   } else if (preview.items === 0) {
-    $('purge-status').textContent = t('purge.noneOldEnough', '{n} item(s) tracked, none older than {days} day(s) yet.', {
+    setText($('purge-status'), t('purge.noneOldEnough', '{n} item(s) tracked, none older than {days} day(s) yet.', {
       n: formatCount(preview.tracked),
       days: preview.afterDays,
-    });
+    }));
   } else {
     const suffix = $('purge-enabled').checked
       ? ''
       : t('purge.switchOnHint', ' — switch on above to do this on a schedule');
-    $('purge-status').textContent =
+    setText($('purge-status'),
       t('purge.ready', '{n} item(s) · {size} ready to free', {
         n: formatCount(preview.items),
         size: formatBytes(preview.bytes),
-      }) + suffix;
+      }) + suffix);
   }
 }
 
@@ -817,6 +866,9 @@ for (const id of [
     if (id === 'auto-kind') syncScheduleRows();
     markAutoDirty();
   });
+  // A number being typed is an edit before it is a change: `change` waits for
+  // the field to lose focus, and a background refresh can land before that.
+  $(id).addEventListener('input', markAutoDirty);
 }
 
 async function addFolderTo(key) {
@@ -934,6 +986,7 @@ async function performAutoRun(dryRun) {
     setAutoRunning(false);
     return;
   }
+  autoDirty = false;
   applyAutoState(saved);
 
   $('auto-status').textContent = dryRun
@@ -994,30 +1047,47 @@ $('purge-now').addEventListener('click', async () => {
  * while the 02:00 run sat in the log unread — the feature working perfectly and
  * the screen reporting that it had not.
  *
- * `silent` skips the unsaved-changes wording: a refresh triggered by a
- * background write is not the user typing.
+ * `form: false` keeps what is in the fields; see applyAutoState.
  */
-async function refreshAutoState({ silent = false } = {}) {
+async function refreshAutoState({ form = true } = {}) {
   const data = unwrap(await api.getSettings(), t('app.label.settings', 'Settings'));
-  if (data) applyAutoState(data);
+  if (data) applyAutoState(data, { form });
+  await refreshFigures();
+  return data;
+}
 
+/** The figures around the form: the disk in use, the bin, the monitor. */
+async function refreshFigures() {
   const usage = unwrap(await api.diskUsage(null), t('app.label.diskUsage', 'Disk usage'));
   if (usage && usage.ok) {
-    $('astat-disk').textContent = `${usage.usedPercent.toFixed(0)}%`;
+    setText($('astat-disk'), `${usage.usedPercent.toFixed(0)}%`);
     $('astat-disk').title =
       `${formatBytes(usage.freeBytes)} free of ${formatBytes(usage.totalBytes)} on ${usage.root}`;
   }
 
   await refreshPurgeStatus();
   await refreshMonitorStatus();
-  return data;
 }
 
 // A run that finished in the background, announced by the main process. The
 // whole point is that an open window notices without being clicked.
+//
+// Only what the written file can have changed is read again. The disk monitor
+// writes history.json at every reading, once a minute by default, and each one
+// used to redraw this whole tab -- the form, its tick boxes and its lists --
+// which is what took the keyboard and Narrator somewhere empty.
 api.onDataChanged(async (payload) => {
+  const files = payload && Array.isArray(payload.files) ? payload.files : null;
+  const wrote = (name) => !files || files.includes(name);
+  if (!wrote('settings.json') && !wrote('autoclean-log.json')) {
+    await refreshFigures();
+    return;
+  }
+
   const before = state.auto && state.auto.lastRun ? state.auto.lastRun.startedAt : 0;
-  const data = await refreshAutoState({ silent: true });
+  // Saved settings go into the fields only when it is the settings that were
+  // written, and only when nothing in the fields is unsaved.
+  const data = await refreshAutoState({ form: !autoDirty && wrote('settings.json') });
   if (!data || !data.lastRun || data.lastRun.startedAt === before) return;
 
   const run = data.lastRun;
@@ -1040,7 +1110,7 @@ api.onDataChanged(async (payload) => {
 // the tab still shows current figures.
 for (const tab of document.querySelectorAll('.tab[data-tab="auto"]')) {
   tab.addEventListener('click', () => {
-    if (!autoDirty) refreshAutoState({ silent: true });
+    refreshAutoState({ form: !autoDirty });
     // Opening the tab is the moment to spend a second asking Windows what it
     // actually holds. Not on every refresh: the file watcher can fire this tab
     // several times during one background run.
@@ -1053,7 +1123,7 @@ refreshAutoState();
 onLanguageChange(() => {
   // The whole tab is drawn from `state.auto`, so re-applying it is both the
   // simplest redraw and the one least likely to miss a corner.
-  if (state.auto) applyAutoState(state.auto);
+  if (state.auto) applyAutoState(state.auto, { form: !autoDirty });
   refreshPurgeStatus();
   refreshMonitorStatus();
   refreshTaskStatus({ quiet: true });

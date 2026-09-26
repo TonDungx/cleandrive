@@ -83,6 +83,14 @@ app.whenReady().then(async () => {
     if (level === 3 || level === 'error') errors.push(message);
   });
   await win.loadFile(path.join(__dirname, '..', 'src', 'renderer', 'index.html'), { query: { theme: 'light', lang: 'en' } });
+  // Reduced motion, as test-a11y has it, so axe reads colours once they have
+  // settled. Rows drawn under a resting pointer take their hover colours over
+  // 120 ms, and axe read the first row's View button half way there: 4.34:1,
+  // #2e69ec on #f1f3f7 -- between the accent on --surface-2 and the text colour
+  // on --surface-3, which is where it lands. Two runs in five, measured.
+  const dbg = win.webContents.debugger;
+  dbg.attach('1.3');
+  await dbg.sendCommand('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });
   await wait(500);
   const js = (expr) => win.webContents.executeJavaScript(`(async () => { ${expr} })()`);
   const until = async (expr, ms = 20000) => {
