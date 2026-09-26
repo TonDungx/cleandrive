@@ -319,6 +319,138 @@ body {
   flex-wrap: wrap;
 }
 
+.target .btn-sm {
+  flex: none;
+}
+
+/* ---- the folders of a scan (A4) ---- */
+
+/* One row per folder only once there is more than one, or once a folder turns
+   out to be somewhere the app only reads. What a badge says is a fact about
+   the drive, not a verdict, so none of them is green, amber or red. */
+.scan-roots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 14px;
+  padding: 0;
+  list-style: none;
+}
+
+.root-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  min-height: 28px;
+  padding: 3px 4px 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-2);
+  font-size: 12px;
+}
+
+.root-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+}
+
+.root-badge {
+  flex: none;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--text-2);
+  font-size: 11px;
+}
+
+.root-badge.is-readonly {
+  border-style: dashed;
+}
+
+.root-chip:not(:has(.root-remove)) {
+  padding-right: 10px;
+}
+
+.root-remove {
+  appearance: none;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-2);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.root-remove:hover {
+  background: var(--surface-3);
+  color: var(--text);
+}
+
+.roots-hint {
+  margin: -6px 0 14px;
+}
+
+/* ---- a whole drive ---- */
+
+.drives {
+  width: min(520px, calc(100vw - 32px));
+}
+
+.drives-note {
+  margin: 12px 0 10px;
+  color: var(--text-2);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.drives-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.drive-option {
+  appearance: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.drive-option:hover {
+  border-color: var(--accent-ring);
+  background: var(--accent-soft);
+}
+
+.drive-name {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.drive-facts {
+  color: var(--text-2);
+  font-size: 12px;
+}
+
 
 
 /* ==========================================================================
@@ -1672,13 +1804,15 @@ main {
 }
 
 .spacemap-row.is-rest .bar-name,
-.spacemap-row.is-others .bar-name {
+.spacemap-row.is-others .bar-name,
+.spacemap-row.is-unscanned .bar-name {
   color: var(--text-2);
   font-style: italic;
 }
 
 .spacemap-row.is-rest .bar-fill,
-.spacemap-row.is-others .bar-fill {
+.spacemap-row.is-others .bar-fill,
+.spacemap-row.is-unscanned .bar-fill {
   background: color-mix(in srgb, var(--accent) 34%, var(--surface));
 }
 

@@ -19,7 +19,9 @@ const quarantineHandler = require('./actions/quarantine');
 const quarantineZone = require('./lib/quarantine-zone');
 const systemMeasure = require('./system/measure');
 const systemBreakdown = require('./system/breakdown');
-const { ScanTree } = require('./analyzers/scan-tree');
+const { ScanTree, MultiScanTree } = require('./analyzers/scan-tree');
+const scanRoots = require('./analyzers/scan-roots');
+const volumes = require('./lib/volumes');
 const snapshotDiff = require('./snapshots/diff');
 const { HelperClient, appLauncher } = require('./helper/client');
 const licenseState = require('./license/state');
@@ -133,6 +135,16 @@ function copiesScopeFor(file) {
 let appCacheHarness = null;
 function setAppCacheHarness(harness) {
   appCacheHarness = harness || null;
+}
+
+/**
+ * What a scan of several folders (A4) would otherwise ask Windows or a
+ * person, for a harness: the drive listing (`volumes`: () => Promise<{drives}>),
+ * a drive's usage (`statfs`) and the folder "Choose folder" returns (`pick`).
+ */
+let scanHarness = null;
+function setScanHarness(harness) {
+  scanHarness = harness || null;
 }
 
 /**
@@ -370,6 +382,7 @@ function register() {
 
   handle('dialog:pickFolder', (event) =>
     guard(async () => {
+      if (scanHarness && scanHarness.pick) return scanHarness.pick();
       const win = BrowserWindow.fromWebContents(event.sender);
       const result = await dialog.showOpenDialog(win, {
         title: t('dialog.chooseFolder', 'Choose a folder to analyse'),
@@ -381,69 +394,117 @@ function register() {
 
   /* ---- scan ------------------------------------------------------------ */
 
-  // The window names a folder and nothing else. It used to be able to pass
+  // The window names folders and nothing else. It used to be able to pass
   // scanner options through as well -- follow links, stop skipping system
   // folders, name every file in the tree -- and nothing in the window ever
   // did, so nothing it sends is read.
-  handle('scan:run', (event, folder) =>
+  //
+  // One folder, or several (A4). Each is scanned on its own, as one always
+  // was, and keeps its own point in the history and its own snapshot, so a
+  // comparison with the last scan of the same folder still means what it
+  // meant. The reply joins them.
+  handle('scan:run', (event, folders) =>
     guard(async () => {
       if (tokens.scan) tokens.scan.cancel();
       const token = new CancelToken();
       tokens.scan = token;
 
-      const send = (payload) => {
-        if (!event.sender.isDestroyed()) event.sender.send('scan:progress', payload);
-      };
-
       try {
-        const collected = await analyzers.collect(
-          'scan',
-          // cloudFiles: which OneDrive files could be made online-only (B3).
-          {
-            root: folder,
-            options: {
-              collectTree: true,
-              cloudFiles: true,
-              ...(appCacheHarness && appCacheHarness.env ? { appCacheEnv: appCacheHarness.env } : {}),
-            },
-            deps: {
-              ...(cloudDeps ? { cloud: cloudDeps } : {}),
-              ...(appCacheHarness && appCacheHarness.runningProcessNames ? { runningProcessNames: appCacheHarness.runningProcessNames } : {}),
-            },
-          },
-          { token, onProgress: send, can: licenseState.canNow() }
-        );
-        // The tree stays in this process: the snapshot store keeps it, and the
-        // window reads it a level at a time through scan:children.
-        const { tree, treeFiles, ...summary } = collected.summary;
-
-        // A cancelled scan reports partial totals; recording those as a point
-        // on the trend would put a dip in the series that never happened.
-        if (!summary.cancelled) await recordSnapshot(summary, 'scan');
-        // The snapshot keeps even a stopped scan, marked incomplete: comparing
-        // against it later is allowed, and labelled a guess.
-        if (tree) await saveTreeSnapshot({ ...summary, tree });
-
-        let treeId = null;
-        if (tree) {
-          treeId = `t${++scanTreeSerial}`;
-          scanTree = {
-            id: treeId,
-            tree: new ScanTree({
-              root: summary.root,
-              rows: tree,
-              files: treeFiles,
-              complete: !summary.cancelled,
-              scannedAt: summary.scannedAt,
-              accessTimes: summary.accessTimes,
-              openApps: summary.openApps,
-            }),
-          };
+        const listing = await (scanHarness && scanHarness.volumes ? scanHarness.volumes() : volumes.list());
+        const prepared = await scanRoots.prepareRoots(folders, { drives: listing.drives });
+        if (prepared.roots.length === 0) {
+          const why = prepared.refused[0] ? prepared.refused[0].reason : 'missing';
+          throw Object.assign(new Error(why === 'notFolder' ? 'That is not a folder' : 'That folder is not there any more'), { code: 'ENOENT', quiet: true });
         }
-        return { ...summary, treeId, candidates: collected.candidates };
+        const can = licenseState.canNow();
+        if (prepared.roots.length > 1 && !can('pro.scan.multiroot')) {
+          throw Object.assign(new Error('Scanning several folders at once is part of CleanDrive Pro'), { code: 'ELOCKED', quiet: true });
+        }
+
+        const parts = [];
+        for (const [index, info] of prepared.roots.entries()) {
+          if (token.cancelled) break;
+          const send = (payload) => {
+            if (!event.sender.isDestroyed()) {
+              event.sender.send('scan:progress', { ...payload, root: info.root, rootIndex: index, roots: prepared.roots.length });
+            }
+          };
+          const collected = await analyzers.collect(
+            'scan',
+            // cloudFiles: which OneDrive files could be made online-only (B3).
+            {
+              root: info.root,
+              options: {
+                collectTree: true,
+                cloudFiles: info.readOnly === null,
+                ...(appCacheHarness && appCacheHarness.env ? { appCacheEnv: appCacheHarness.env } : {}),
+              },
+              deps: {
+                ...(cloudDeps ? { cloud: cloudDeps } : {}),
+                ...(appCacheHarness && appCacheHarness.runningProcessNames ? { runningProcessNames: appCacheHarness.runningProcessNames } : {}),
+              },
+            },
+            { token, onProgress: send, can }
+          );
+          // The tree stays in this process: the snapshot store keeps it, and the
+          // window reads it a level at a time through scan:children.
+          const { tree, treeFiles, ...summary } = collected.summary;
+
+          // A cancelled scan reports partial totals; recording those as a point
+          // on the trend would put a dip in the series that never happened.
+          if (!summary.cancelled) await recordSnapshot(summary, 'scan');
+          // The snapshot keeps even a stopped scan, marked incomplete: comparing
+          // against it later is allowed, and labelled a guess.
+          if (tree) await saveTreeSnapshot({ ...summary, tree });
+
+          const candidates = info.readOnly
+            ? collected.candidates.map((c) => scanRoots.readOnlyCandidate(c, info.readOnly))
+            : collected.candidates;
+          const unscanned = await scanRoots.unscannedOnDrive(info, summary, scanHarness && scanHarness.statfs ? { statfs: scanHarness.statfs } : {});
+          parts.push({ info: { ...info, unscanned }, summary, candidates, tree, treeFiles });
+        }
+
+        const trees = parts.filter((p) => p.tree).map((p) => new ScanTree({
+          root: p.summary.root,
+          rows: p.tree,
+          files: p.treeFiles,
+          complete: !p.summary.cancelled,
+          scannedAt: p.summary.scannedAt,
+          accessTimes: p.summary.accessTimes,
+          openApps: p.summary.openApps,
+          unscanned: p.info.unscanned,
+          readOnly: p.info.readOnly,
+        }));
+        let treeId = null;
+        if (trees.length > 0) {
+          treeId = `t${++scanTreeSerial}`;
+          scanTree = { id: treeId, tree: trees.length === 1 ? trees[0] : new MultiScanTree(trees) };
+        }
+
+        const summary = parts.length === 1 ? parts[0].summary : scanRoots.mergeScans(parts);
+        return {
+          ...summary,
+          // A stop between two folders leaves the rest unscanned; say so.
+          cancelled: summary.cancelled || parts.length < prepared.roots.length,
+          roots: parts.map((p) => p.info),
+          notScanned: prepared.roots.slice(parts.length).map((r) => r.root),
+          merged: prepared.merged,
+          refused: prepared.refused,
+          treeId,
+          candidates: parts.flatMap((p) => p.candidates),
+        };
       } finally {
         if (tokens.scan === token) tokens.scan = null;
       }
+    })
+  );
+
+  // The drives a whole-drive scan can start from (A4), with what the app may
+  // do on each.
+  handle('scan:drives', () =>
+    guard(async () => {
+      const listing = await (scanHarness && scanHarness.volumes ? scanHarness.volumes() : volumes.list({ fresh: true }));
+      return volumes.scannable(listing.drives).map((d) => ({ ...volumes.describe(d.root, listing.drives), totalBytes: d.totalBytes, freeBytes: d.freeBytes }));
     })
   );
 
@@ -477,12 +538,38 @@ function register() {
     };
 
     try {
+      // The same folders the scan takes (A4), made safe the same way. A share
+      // is left out -- hashing a network folder is F1's, with its own warning
+      // about speed -- and the reply says which were.
+      const listing = await (scanHarness && scanHarness.volumes ? scanHarness.volumes() : volumes.list());
+      const prepared = await scanRoots.prepareRoots(roots, { drives: listing.drives });
+      const local = prepared.roots.filter((r) => r.kind !== 'network');
+      if (local.length === 0) {
+        throw Object.assign(new Error('Duplicates are looked for on this computer’s drives only'), { code: 'ENETWORK', quiet: true });
+      }
+      const can = licenseState.canNow();
+      if (local.length > 1 && !can('pro.scan.multiroot')) {
+        throw Object.assign(new Error('Looking in several folders at once is part of CleanDrive Pro'), { code: 'ELOCKED', quiet: true });
+      }
       const { candidates, summary } = await analyzers.collect(
         'duplicates',
-        { roots, options: { ...options, cachePath: path.join(app.getPath('userData'), 'hash-cache.json') } },
-        { token, onProgress: send, can: licenseState.canNow() }
+        { roots: local.map((r) => r.root), options: { ...options, cachePath: path.join(app.getPath('userData'), 'hash-cache.json') } },
+        { token, onProgress: send, can }
       );
-      return { ...summary, candidates };
+      const readOnly = local.filter((r) => r.readOnly);
+      const guarded = readOnly.length === 0
+        ? candidates
+        : candidates.map((c) => {
+          const under = readOnly.find((r) => scanRoots.inside(c.path, r.root));
+          return under ? scanRoots.readOnlyCandidate(c, under.readOnly) : c;
+        });
+      return {
+        ...summary,
+        candidates: guarded,
+        roots: local,
+        skipped: prepared.roots.filter((r) => r.kind === 'network').map((r) => r.root),
+        merged: prepared.merged,
+      };
     } finally {
       if (tokens.dupes === token) tokens.dupes = null;
     }
@@ -2260,6 +2347,7 @@ module.exports = {
   setHandoffDepsForHarness,
   setCloudDepsForHarness,
   setAppCacheHarness,
+  setScanHarness,
   setQuarantineHarness,
   quarantineStatus,
   confirmQuarantineText,

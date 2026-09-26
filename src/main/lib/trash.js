@@ -7,11 +7,14 @@ const {
   isProtectedPath,
   isProgramInstallPath,
   isRootOrHome,
+  isNetworkPath,
   pathKey,
   CancelToken,
   throttle,
   pool,
 } = require('./util');
+const volumes = require('./volumes');
+const i18n = require('../../i18n');
 
 /**
  * Measured on Windows 11 with Electron 33: shell.trashItem moves roughly 28
@@ -20,6 +23,19 @@ const {
  * the work starts; once it is running the real rate takes over.
  */
 const ESTIMATED_FILES_PER_SEC = 28;
+
+/** Why nothing is deleted from a drive the app only reads (A4), in the reader's language. */
+const REFUSE_ON_DRIVE = {
+  network: () => ({
+    error: i18n.t('trash.refuse.network', 'On a network drive: Windows keeps no Recycle Bin there, so nothing is deleted from it'),
+    code: 'ENETWORK',
+  }),
+  removable: () => ({
+    error: i18n.t('trash.refuse.removable', 'On a removable drive: what the Recycle Bin does there has not been measured, so nothing is deleted from it'),
+    code: 'EREADONLY',
+  }),
+  cdrom: () => ({ error: i18n.t('trash.refuse.cdrom', 'On a disc: nothing on it can be deleted'), code: 'EREADONLY' }),
+};
 
 /**
  * Reasons a path is refused before any deletion is attempted. Each check runs
@@ -46,6 +62,12 @@ async function vet(target, opts) {
   if (isProgramInstallPath(target)) {
     return { error: 'Refusing to delete from an installed application' };
   }
+  // A4: the Recycle Bin refused a network path when it was measured, and has
+  // not been measured on a removable drive. The window offers nothing there;
+  // this is the same rule for anything that asks anyway.
+  if (isNetworkPath(target)) return REFUSE_ON_DRIVE.network();
+  const drive = await (opts.describePath || volumes.describePath)(target);
+  if (drive.readOnly && REFUSE_ON_DRIVE[drive.readOnly]) return REFUSE_ON_DRIVE[drive.readOnly]();
 
   let stats;
   try {
@@ -180,9 +202,9 @@ async function planTrash(targets, options = {}, handlers = {}) {
   const vetted = await pool(candidates, opts.checkConcurrency, async (target) => {
     if (token.cancelled) return null;
 
-    const { error, stats } = await vet(target, opts);
+    const { error, code, stats } = await vet(target, opts);
     checked++;
-    if (error) return { path: target, error };
+    if (error) return { path: target, error, ...(code ? { code } : {}) };
 
     if (opts.checkPermissions !== false) {
       const denied = await probePermission(target, stats);

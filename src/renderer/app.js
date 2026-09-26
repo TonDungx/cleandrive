@@ -5,6 +5,8 @@ const $ = (id) => document.getElementById(id);
 
 const state = {
   folder: null,
+  // Every folder chosen (A4); `folder` is the first.
+  roots: [],
   scan: null,
   dupes: null,
   cleanup: null,
@@ -195,15 +197,42 @@ function replaceChildrenIfChanged(host, nodes) {
 
 /* ------------------------------------------------------------------ folder */
 
-async function setFolder(folder) {
-  if (!folder) return;
-  state.folder = folder;
-  $('target-path').textContent = elide(folder, 70);
-  $('target-path').title = folder;
+/**
+ * The folders every screen works on (A4). "Choose folder" picks one; more are
+ * added beside it (roots.js), and a whole drive is one folder, its root.
+ * `state.folder` stays the first of them, for everything that only ever took
+ * one.
+ */
+function setRoots(list) {
+  const roots = [];
+  for (const folder of list) {
+    if (folder && !roots.some((r) => r.toLowerCase() === folder.toLowerCase())) roots.push(folder);
+  }
+  if (roots.length === 0) return;
+  state.roots = roots;
+  state.folder = roots[0];
+  showRoots();
   $('run-scan').disabled = false;
   $('run-dupes').disabled = false;
   $('scan-status').textContent = t('usage.ready', 'Ready to scan.');
   $('dupes-status').textContent = t('dupes.ready', 'Ready to search.');
+  if (window.Roots) window.Roots.render();
+}
+
+function showRoots() {
+  const roots = state.roots || [];
+  $('target-path').textContent = roots.length > 1
+    ? t('app.target.many', '{n} folders', { n: formatCount(roots.length) })
+    : elide(roots[0], 70);
+  $('target-path').title = roots.join('\n');
+  $('run-scan').textContent = roots.length > 1
+    ? t('usage.scanMany', 'Scan {n} folders', { n: formatCount(roots.length) })
+    : t('usage.scan', 'Scan folder');
+}
+
+async function setFolder(folder) {
+  if (!folder) return;
+  setRoots([folder]);
 }
 
 $('pick-folder').addEventListener('click', async () => {
@@ -331,11 +360,20 @@ function setScanRunning(running) {
 api.onScanProgress((p) => {
   // As for duplicates: a late frame must not overwrite the finished scan's line.
   if ($('cancel-scan').hidden) return;
-  $('scan-status').textContent = t('usage.scanning', 'Scanning… {files} files, {size} ({elapsed})', {
+  const counts = {
     files: formatCount(p.files),
     size: formatBytes(p.bytes),
     elapsed: formatSeconds(p.elapsedMs),
-  });
+  };
+  // Several folders are scanned one after another; the line says which.
+  $('scan-status').textContent = p.roots > 1
+    ? t('usage.scanningMany', 'Scanning folder {i} of {n}, {root}… {files} files, {size} ({elapsed})', {
+      ...counts,
+      i: p.rootIndex + 1,
+      n: p.roots,
+      root: elide(p.root, 40),
+    })
+    : t('usage.scanning', 'Scanning… {files} files, {size} ({elapsed})', counts);
 });
 
 $('run-scan').addEventListener('click', async () => {
@@ -343,7 +381,7 @@ $('run-scan').addEventListener('click', async () => {
   setScanRunning(true);
   $('scan-empty').hidden = true;
 
-  const result = unwrap(await api.scan(state.folder), t('app.label.scan', 'Scan'));
+  const result = unwrap(await api.scan(state.roots), t('app.label.scan', 'Scan'));
   setScanRunning(false);
   if (!result) {
     $('scan-status').textContent = t('usage.failed', 'Scan failed.');
@@ -353,6 +391,7 @@ $('run-scan').addEventListener('click', async () => {
   state.scan = hydrateScan(result);
   state.selectedLarge.clear();
   renderScan(state.scan);
+  if (window.Roots) window.Roots.describe(result);
   announce($('scan-status').textContent);
   // The OneDrive card reads the reply before it is flattened: its rows are
   // candidates of their own, named in `cloud.ids`.
@@ -392,8 +431,14 @@ function renderScan(result) {
   state.accessTimes = result.accessTimes;
   renderCleanup(result.cleanup, result.accessTimes);
 
-  const parts = [t('usage.scanned', 'Scanned {n} files.', { n: formatCount(result.totalFiles) })];
+  const roots = result.roots || [];
+  const parts = [
+    roots.length > 1
+      ? t('usage.scannedMany', 'Scanned {n} files in {roots} folders.', { n: formatCount(result.totalFiles), roots: roots.length })
+      : t('usage.scanned', 'Scanned {n} files.', { n: formatCount(result.totalFiles) }),
+  ];
   if (result.cancelled) parts.push(t('app.cancelledPartial', 'Cancelled — results are partial.'));
+  parts.push(...rootNotes(result));
   if (result.errorCount) {
     parts.push(t('usage.unreadable', '{n} unreadable items skipped.', { n: formatCount(result.errorCount) }));
   }
@@ -431,6 +476,43 @@ function renderScan(result) {
   );
 
   renderLargest(result.largestFiles);
+}
+
+/**
+ * What the scan did with the folders it was given (A4): the ones folded into
+ * another, the ones that were not there, the ones it only reads, and a whole
+ * drive's space that it did not count.
+ */
+function rootNotes(result) {
+  const notes = [];
+  for (const { root, into } of result.merged || []) {
+    notes.push(t('usage.merged', '{root} is inside {into}, so it was scanned with it.', { root: elide(root, 40), into: elide(into, 40) }));
+  }
+  for (const { root, reason } of result.refused || []) {
+    notes.push(reason === 'notFolder'
+      ? t('usage.refused.notFolder', '{root} was not scanned: it is not a folder.', { root: elide(root, 40) })
+      : t('usage.refused.missing', '{root} was not scanned: it is not there any more.', { root: elide(root, 40) }));
+  }
+  if ((result.notScanned || []).length) {
+    notes.push(t('usage.notReached', '{n} not reached before the scan was stopped.', { n: formatCount(result.notScanned.length) }));
+  }
+  const roots = result.roots || [];
+  const count = (kind) => roots.filter((r) => r.readOnly === kind).length;
+  if (count('network')) {
+    notes.push(t('usage.readOnly.network', 'On a network drive: read, and nothing offered — Windows keeps no Recycle Bin there.'));
+  }
+  if (count('removable')) {
+    notes.push(t('usage.readOnly.removable', 'On a removable drive: read, and nothing offered until the Recycle Bin has been measured there.'));
+  }
+  for (const r of roots) {
+    if (r.unscanned) {
+      notes.push(t('usage.unscanned', '{size} in use on {volume} is not in this scan — Windows, programs, other people’s folders; System says what it is.', {
+        size: formatBytes(r.unscanned.bytes),
+        volume: r.unscanned.volume,
+      }));
+    }
+  }
+  return notes;
 }
 
 function renderBars(list, items, max, labelFn) {
@@ -884,7 +966,7 @@ $('run-dupes').addEventListener('click', async () => {
 
   const minSize = Number($('min-size').value);
   const result = unwrap(
-    await api.findDuplicates([state.folder], { minSize }),
+    await api.findDuplicates(state.roots, { minSize }),
     t('app.label.dupes', 'Duplicate search')
   );
   setDupesRunning(false);
@@ -993,6 +1075,11 @@ function renderDupes(result) {
     );
   }
   notes.push(t('dupes.checked', 'Checked {n} files.', { n: formatCount(result.indexedFiles) }));
+  if ((result.skipped || []).length) {
+    notes.push(t('dupes.skippedNetwork', 'Not searched, on a network drive: {roots}.', {
+      roots: result.skipped.map((r) => elide(r, 40)).join(', '),
+    }));
+  }
   if (result.withheldFiles) {
     notes.push(
       t(
@@ -1529,8 +1616,7 @@ async function quarantineSelected(paths, onDone, options = {}) {
  */
 onLanguageChange(() => {
   if (state.folder) {
-    $('target-path').textContent = elide(state.folder, 70);
-    $('target-path').title = state.folder;
+    showRoots();
   } else {
     $('target-path').textContent = t('app.noFolder', 'No folder selected');
     $('scan-status').textContent = t('app.pickToBegin', 'Pick a folder to begin.');

@@ -67,10 +67,59 @@ function throttle(fn, ms) {
 
 const IS_WIN = process.platform === 'win32';
 
+/** Names this machine answers to in a network path. */
+function isThisMachine(host) {
+  const name = String(host).toLowerCase();
+  if (name === 'localhost' || /^127(\.\d{1,3}){3}$/.test(name)) return true;
+  const self = os.hostname().toLowerCase();
+  return name === self || name === self.split('.')[0];
+}
+
+/**
+ * The one spelling of a path that the guards compare.
+ *
+ * Windows has several for the same folder, and the guards knew only one:
+ * measured on 2026-09-26, `isProtectedPath` said no to `\\?\C:\Windows\System32`,
+ * `\\.\C:\Windows\System32`, `\\?\UNC\localhost\C$\Windows` and to
+ * `\\localhost\C$\Windows\System32` -- the administrative share of this very
+ * machine, which an ordinary user can read. So the device-namespace prefixes
+ * come off, and a share of this machine's own drive becomes that drive.
+ * A share on another machine stays a network path; `adminShare` says which of
+ * its drives it is.
+ */
+function canonicalPath(p) {
+  let s = String(p);
+  if (!IS_WIN) return path.resolve(s);
+  s = s.replace(/\//g, '\\');
+  let found = /^\\\\[?.]\\UNC\\(.+)$/i.exec(s);
+  if (found) s = `\\\\${found[1]}`;
+  else if ((found = /^\\\\[?.]\\([A-Za-z]:(?:\\.*)?)$/.exec(s))) s = found[1];
+  found = /^\\\\([^\\]+)\\([A-Za-z])\$(\\.*)?$/.exec(s);
+  if (found && isThisMachine(found[1])) s = `${found[2].toUpperCase()}:${found[3] || '\\'}`;
+  return path.resolve(s);
+}
+
 /** Normalised comparison key for a path (case-insensitive on Windows). */
 function pathKey(p) {
-  const resolved = path.resolve(p);
+  const resolved = canonicalPath(p);
   return IS_WIN ? resolved.toLowerCase() : resolved;
+}
+
+/** A path that leaves this machine: a share, even once canonical. */
+function isNetworkPath(p) {
+  return IS_WIN && /^\\\\/.test(canonicalPath(p));
+}
+
+/**
+ * `\\host\C$\...` on another machine: which drive, and the path inside it.
+ * Its Windows folder is as much Windows as this one's.
+ *
+ * @returns {{host: string, drive: string, rest: string} | null}
+ */
+function adminShare(p) {
+  if (!IS_WIN) return null;
+  const found = /^\\\\([^\\]+)\\([A-Za-z])\$(?:\\(.*))?$/.exec(canonicalPath(p));
+  return found ? { host: found[1], drive: found[2].toUpperCase(), rest: (found[3] || '').toLowerCase() } : null;
 }
 
 /** Directory names that belong to the OS -- never scanned, never deletable. */
@@ -153,9 +202,20 @@ function isUnder(p, roots) {
   return roots.some((root) => key === root || key.startsWith(root + path.sep));
 }
 
+/**
+ * The protected roots as they sit on any drive -- `windows`, `program files`
+ * -- for the drive of another machine, reached through its admin share, whose
+ * environment this process cannot read.
+ */
+const PROTECTED_ON_A_DRIVE = IS_WIN
+  ? PROTECTED_ROOTS.map((root) => root.replace(/^[a-z]:\\/, '')).filter((rel) => rel && !/^[a-z]:/.test(rel))
+  : [];
+
 /** True if `p` is inside (or equal to) a protected system root. */
 function isProtectedPath(p) {
-  return isUnder(p, PROTECTED_ROOTS);
+  if (isUnder(p, PROTECTED_ROOTS)) return true;
+  const share = adminShare(p);
+  return Boolean(share) && PROTECTED_ON_A_DRIVE.some((rel) => share.rest === rel || share.rest.startsWith(rel + path.sep));
 }
 
 /** True if `p` sits inside a per-user application installation directory. */
@@ -352,6 +412,10 @@ module.exports = {
   pool,
   throttle,
   pathKey,
+  canonicalPath,
+  isNetworkPath,
+  adminShare,
+  isThisMachine,
   isProtectedPath,
   isProgramInstallPath,
   isUndeletablePath,

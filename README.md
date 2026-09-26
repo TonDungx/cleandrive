@@ -312,8 +312,9 @@ happened, how much, how long, and what was skipped. They are the app's receipts.
   Shift+F10). Each is offered for one item at a time — a menu entry on a
   selection of forty would start forty searches.
 
-The Disk usage and Duplicates screens work on one folder at a time. Photos &
-video works on its own curated list instead, described below.
+The Disk usage and Duplicates screens work on the folders chosen here — one,
+several (**+ Folder**), or a whole drive (**Whole drive…**). Photos & video
+works on its own curated list instead, described below.
 
 ### The right-click menu, and what it writes
 
@@ -340,6 +341,36 @@ it, which this app does not have; the classic entries are what it can offer.
 ## Screen 1 — Disk usage
 
 One pass over the chosen folder produces everything on this screen.
+
+### Several folders, or a whole drive
+
+**+ Folder** beside the folder adds another, and **Whole drive…** lists the
+drives with their free space and scans one from its root. Each folder is still
+scanned on its own — its own point in Trends, its own snapshot for "What
+changed" — and the screen joins them: one set of figures, one largest list,
+one set of groups in What to delete, and a map whose first level is a tile per
+folder. A folder chosen inside another is scanned with it, not twice, and the
+status line says so. Duplicates looks across all of them.
+
+What the app may do depends on the drive, and each rule is a measurement:
+
+| Drive | What happens |
+| --- | --- |
+| This computer's own disks | As always |
+| An external disk (USB) | As always; the row says it is external |
+| A network drive or share | Read, and **nothing offered**. The Recycle Bin refused a network path when it was tried (`\\localhost\D$\…`: "Failed to perform delete operation", file untouched), so there is no delete there that could be undone. Duplicates leaves it out |
+| A removable drive (card, stick) | Read, and nothing offered — what the Recycle Bin does there has not been measured yet |
+
+The same rule is checked again when anything asks for a delete, whatever the
+window sends. A whole drive's map has one more tile, **(not in this scan)**:
+the drive's space in use minus what the scan counted — Windows, programs,
+other people's folders, what could not be read. It is an estimate (the drive
+counts allocation, the scan counts file sizes) and it opens the
+[System](#screen-2--system) screen, which says what it is.
+
+Scanning more than one folder at once, or a whole drive, is a Pro feature
+(`pro.scan.multiroot`); until licences exist it is open to everyone.
+Choosing `C:\` in the folder dialog stays what it always was.
 
 ### The four figures at the top
 
@@ -432,9 +463,13 @@ Disk usage, What to delete and Duplicates are built from one shared list:
 | Unreadable entries | Recorded and reported as a count; the scan continues |
 
 Because system locations are excluded by design, **scanning `C:\` under-reports
-the drive's real usage**. The status line says how many locations were left out,
-so the gap is visible rather than mysterious, and the [System](#screen-2--system)
-screen measures all of it.
+the drive's real usage**. The status line says how many locations were left out
+and how much space in use the scan did not count, the map draws that as its own
+tile, so the gap is visible rather than mysterious, and the
+[System](#screen-2--system) screen measures all of it. A system folder is one
+however its path is spelt: `\\?\C:\Windows`, `\\localhost\C$\Windows` and
+another machine's `\\pc\C$\Windows` were all not recognised as one until they
+were tried (2026-09-26).
 
 Two things used to be left out that never should have been, and were found by
 measuring a real drive. **OneDrive's folder** is a special kind of folder that
@@ -761,6 +796,9 @@ Byte-identical files inside the chosen folder.
 ### Controls
 
 **Ignore files under** — 1 KB, 100 KB (default), 1 MB or 10 MB.
+
+With several folders chosen it looks across all of them, on this computer's
+drives: a folder on a network drive is left out, and the status line names it.
 
 ### Copies of one file
 
@@ -1347,7 +1385,9 @@ was put back is no longer the app's to remove.
   Scheduling and the selective Recycle Bin purge are Windows-only by
   construction. [Unverified] The app has not been run on macOS or Linux.
 - **The installer is unsigned**, so Windows SmartScreen warns on first run.
-- **One folder at a time** for Disk usage and Duplicates.
+- **At most twelve folders at once**, scanned one after another, not in
+  parallel. A network folder is read only, and a removable drive is too until
+  the Recycle Bin has been measured on one.
 - **Display caps**: 300 duplicate groups, 50 largest files, 50 protected-location
   rows, 100 files per cleanup category. The last is flagged on screen. The map
   of the folder gives its own tile only to files of 10 MB or more, ten per

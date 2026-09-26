@@ -143,12 +143,22 @@
           n: formatCount(entry.count),
           folders: word(entry.count, 'map.folder', 'folder', 'folders'),
         });
+      case 'unscanned':
+        return t('map.unscanned', '(not in this scan)');
       default:
         return t('map.small', '({n} small items)', { n: formatCount(entry.count) });
     }
   }
 
-  const isGroup = (entry) => entry.kind === 'rest' || entry.kind === 'others' || entry.kind === 'small';
+  /** A folder's name; the top of a scan of several folders has none of its own (A4). */
+  function nameOf(folder) {
+    return folder.roots ? t('map.allRoots', '{n} folders', { n: formatCount(folder.roots) }) : folder.name;
+  }
+
+  /** The System screen says what a whole drive's unscanned space is. */
+  const openSystem = () => document.querySelector('.tab[data-tab="system"]').click();
+
+  const isGroup = (entry) => entry.kind === 'rest' || entry.kind === 'others' || entry.kind === 'small' || entry.kind === 'unscanned';
   const viewOf = (entry) => (entry.kind === 'file' ? state.mapViews.get(entry.candidate.path) || candidateView(entry.candidate) : null);
   const pathOfEntry = (entry) => (entry.kind === 'file' ? entry.candidate.path : entry.path || null);
 
@@ -163,6 +173,7 @@
       case 'file': return `f:${entry.candidate.id}`;
       case 'rest': return `r:${folder.rel}`;
       case 'others': return `o:${folder.rel}`;
+      case 'unscanned': return `u:${folder.rel}`;
       default: return `s:${folder.rel}`;
     }
   }
@@ -422,7 +433,7 @@
       name: labelOf(entry),
       size: formatBytes(entry.bytes),
       share: percent(entry.bytes, container.bytes),
-      parent: container.name,
+      parent: nameOf(container),
     };
     if (entry.kind === 'folder') {
       return t('map.aria.folder', '{name}: {size}, {share} of {parent}, {n} {files}', {
@@ -473,7 +484,7 @@
     treeEl.replaceChildren(frag);
     treeEl.setAttribute(
       'aria-label',
-      t('map.tree', 'Where the space went in {folder}', { folder: map.level ? map.level.name : '' })
+      t('map.tree', 'Where the space went in {folder}', { folder: map.level ? nameOf(map.level) : '' })
     );
 
     // One tile in the tab order, as a tree has: the one last focused, or the first.
@@ -564,10 +575,10 @@
     const facts = document.createElement('div');
     facts.className = 'spacemap-tip-line';
     const parts = [formatBytes(entry.bytes)];
-    if (entry.kind !== 'file') {
+    if (entry.kind !== 'file' && entry.kind !== 'unscanned') {
       parts.push(`${formatCount(entry.files)} ${word(entry.files, 'app.file', 'file', 'files')}`);
     }
-    parts.push(t('map.share', '{share} of {parent}', { share: percent(entry.bytes, container.bytes), parent: container.name }));
+    parts.push(t('map.share', '{share} of {parent}', { share: percent(entry.bytes, container.bytes), parent: nameOf(container) }));
     facts.textContent = parts.join(' · ');
     tip.appendChild(facts);
 
@@ -590,6 +601,11 @@
       const note = document.createElement('div');
       note.className = 'spacemap-tip-line is-quiet';
       note.textContent = t('map.restHint', 'Files under 10 MB, and any past the ten largest, are counted here rather than drawn one by one.');
+      tip.appendChild(note);
+    } else if (entry.kind === 'unscanned') {
+      const note = document.createElement('div');
+      note.className = 'spacemap-tip-line is-quiet';
+      note.textContent = t('map.unscannedHint', 'In use on {volume} but not counted by this scan: Windows, installed programs, other people’s folders, and what could not be read. An estimate. Click to see what it is on the System screen.', { volume: entry.volume });
       tip.appendChild(note);
     }
 
@@ -752,6 +768,7 @@
     if (!tile) return;
     if (tile.entry.kind === 'folder') go(tile.entry.rel, { focus: 'first' });
     else if (tile.entry.kind === 'file') openMenu(tile.entry, { x: event.clientX, y: event.clientY }, tile.el);
+    else if (tile.entry.kind === 'unscanned') openSystem();
   });
 
   treeEl.addEventListener('contextmenu', (event) => {
@@ -835,6 +852,7 @@
       case 'Enter':
         if (entry.kind === 'folder') go(entry.rel, { focus: 'first' });
         else if (entry.kind === 'file') openViewer(entry.candidate.path);
+        else if (entry.kind === 'unscanned') openSystem();
         break;
       case ' ':
         if (entry.kind === 'file' && (entry.candidate.actions || []).length > 0) toggleSelected(entry.candidate.path);
@@ -877,12 +895,19 @@
         name.type = 'button';
         name.className = 'bar-name spacemap-open';
         name.addEventListener('click', () => go(entry.rel, { focus: 'first' }));
+      } else if (entry.kind === 'unscanned') {
+        name = document.createElement('button');
+        name.type = 'button';
+        name.className = 'bar-name spacemap-open';
+        name.addEventListener('click', openSystem);
       } else {
         name = document.createElement('span');
         name.className = 'bar-name';
       }
       name.textContent = labelOf(entry);
-      name.title = pathOfEntry(entry) || labelOf(entry);
+      name.title = entry.kind === 'unscanned'
+        ? t('map.unscannedHint', 'In use on {volume} but not counted by this scan: Windows, installed programs, other people’s folders, and what could not be read. An estimate. Click to see what it is on the System screen.', { volume: entry.volume })
+        : pathOfEntry(entry) || labelOf(entry);
       head.appendChild(name);
 
       const end = document.createElement('span');
@@ -954,7 +979,7 @@
       const li = document.createElement('li');
       const last = i === map.level.crumbs.length - 1;
       const el = document.createElement(last ? 'span' : 'button');
-      el.textContent = crumb.name;
+      el.textContent = nameOf(crumb);
       if (last) {
         el.setAttribute('aria-current', 'location');
         el.className = 'spacemap-crumb-here';

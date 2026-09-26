@@ -11,7 +11,8 @@ const api = {
   pickFolder: () => ipcRenderer.invoke('dialog:pickFolder'),
   knownPaths: () => ipcRenderer.invoke('app:paths'),
 
-  scan: (folder) => ipcRenderer.invoke('scan:run', folder),
+  scan: (folders) => ipcRenderer.invoke('scan:run', folders),
+  scanDrives: () => ipcRenderer.invoke('scan:drives'),
   cancelScan: () => ipcRenderer.invoke('scan:cancel'),
   /* one folder of the last scan's tree, a few levels deep -- never all of it */
   scanChildren: (treeId, rel) => ipcRenderer.invoke('scan:children', treeId, rel),

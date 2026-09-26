@@ -158,13 +158,15 @@ Thứ tự làm (chốt 2026-09-24): I1 → A1 → A3 → A5 → B3 → D4 → B
 
 ### Giai đoạn 2 — Quy mô & chuyên sâu
 
-| Mã | Tính năng | Ưu tiên |
-| --- | --- | --- |
-| A2 | Quét nhanh qua MFT / USN | P1 |
-| A4 | Quét nhiều gốc, nhiều ổ, ổ ngoài, ổ mạng | P1 |
-| C1–C5 | Developer Pack | P1 |
-| D1 | App đã cài: dung lượng & lần dùng cuối | P1 |
-| D2 | Thư viện game | P1 |
+Thứ tự làm (người dùng chốt 2026-09-26): A4 → D1 → D2 → C1–C5 → A2. Pro·Dev mở trên bản stable như Pro cho tới Giai đoạn 6, và vẫn giữ key `pro.dev` riêng.
+
+| Mã | Tính năng | Ưu tiên | Trạng thái |
+| --- | --- | --- | --- |
+| A2 | Quét nhanh qua MFT / USN | P1 | |
+| A4 | Quét nhiều gốc, nhiều ổ, ổ ngoài, ổ mạng | P1 | ✅ Đã code xong (2026-09-26) — ổ mạng chỉ đọc (đã đo), ổ rời chỉ đọc cho tới khi đo; chưa đo trên ổ cứng gắn ngoài |
+| C1–C5 | Developer Pack | P1 | |
+| D1 | App đã cài: dung lượng & lần dùng cuối | P1 | |
+| D2 | Thư viện game | P1 | |
 
 ### Giai đoạn 3 — Lập kế hoạch & trùng lặp nâng cao
 
@@ -721,6 +723,33 @@ helper.request
 - Các gốc chồng lên nhau (ví dụ `C:\Users` và `C:\Users\a\Downloads`) được tự gộp lại để không đếm hai lần. UI báo rõ việc gộp này.
 
 **Guard xoá:** giữ nguyên toàn bộ. Riêng ổ mạng thì thêm câu vào hộp thoại xác nhận: *"Ổ mạng thường không có Thùng rác. File sẽ bị xoá vĩnh viễn."* [Unverified] Hành vi recycle trên UNC phải được đo thật. Nếu không có bin, action `recycle` bị vô hiệu cho ổ mạng và chỉ còn `quarantine`.
+
+> **✅ Đã code xong (2026-09-26).** Code nằm ở:
+> - `src/main/lib/volumes.js`: loại ổ và bus, lấy qua CIM (`Win32_LogicalDisk` và `MSFT_Partition`/`MSFT_Disk`, 1,45 s kể cả lúc khởi động PowerShell; `Get-Partition | Get-Disk` mất 6,2 s), có cache 60 s.
+> - `src/main/analyzers/scan-roots.js`: chuẩn hoá và gộp các gốc, ghép kết quả nhiều lần quét, tính ô "không quét ở đây", và `readOnlyCandidate`.
+> - `MultiScanTree` và các tuỳ chọn `unscanned`/`readOnly` trong `scan-tree.js`.
+> - `canonicalPath`/`isNetworkPath`/`adminShare` trong `lib/util.js`.
+> - Trong `ipc.js`: `scan:run` nhận một mảng gốc, kênh mới `scan:drives` (manifest có 63 kênh), và `dupes:run` chuẩn hoá gốc giống lúc quét.
+> - `renderer/roots.js`: nút "+ Thư mục", hộp "Toàn bộ ổ…", danh sách gốc có nhãn.
+> - Ô `unscanned` trong `treemap.js`.
+>
+> Harness:
+> - `scripts/test-roots.js` (58 kiểm tra, nằm trong npm test). Dùng fixture `scripts/fixtures/volumes/cim-nvme-and-card-reader.txt`, là output thật của máy này; ba dòng USB, ổ map và DVD là dữ liệu dựng và được ghi rõ trong test.
+> - `scripts/test-multiroot.js` (30 kiểm tra, cửa sổ thật). "Toàn bộ ổ" thử trên một ổ `subst` thật. Ổ mạng thử bằng `\\<IP LAN của máy>\D$\…`, vì app không phân biệt được đó với share của một máy khác.
+> - Ảnh chụp: `npm run shoot:multiroot`.
+>
+> Khác với đặc tả ở trên:
+> - **Ổ mạng: chỉ đọc, không có quarantine** (người dùng chọn). **Đo được:** `shell.trashItem` trên `\\localhost\D$\…` bị từ chối ("Failed to perform delete operation", 187 ms) và tệp còn nguyên, trong khi cùng tệp đó qua đường dẫn cục bộ thì vào Thùng rác. Vì vậy dòng trên ổ mạng giữ verdict nhưng không có hành động nào, kèm một dòng bằng chứng. `trash.vet` cũng từ chối với mã `ENETWORK`, nên autoclean và quarantine đều bị chặn theo. Câu cảnh báo trong hộp xác nhận của spec không cần nữa. Duplicates bỏ qua gốc trên ổ mạng và nói rõ.
+> - **Ổ rời (Removable) cũng chỉ đọc, cho tới khi đo được.** Máy này không có USB. Trước A4, app không kiểm loại ổ trước khi xoá, nên hành vi ở đó chưa ai biết. Ổ cứng gắn ngoài (Windows coi là `fixed`, bus USB) vẫn xoá như ổ nội bộ và chỉ được gắn nhãn "gắn ngoài". **Còn mở, người dùng tạm hoãn (2026-09-26):** đo Thùng rác trên ổ gắn ngoài bằng `npm run verify:external -- --drive X:`.
+>   - Harness này đã chạy thử trên D: làm đối chứng: kết quả "recycled", bản ghi `$I` và `$R` đúng từng byte, dọn sạch.
+>   - Thiết bị người dùng cắm vào là USB flash "PNY NAND Flash" (bus 7). Windows báo 0,0 GB, RAW, offline, không có phân vùng, nên không đo được. App không khởi tạo hay format nó.
+> - **"Toàn bộ ổ" = quét như thường, cộng một ô "không quét ở đây"** (người dùng chọn), thay cho việc ghép phép đo của A1. Ô này bằng dung lượng đang dùng (statfs) trừ phần đã quét. Đây là số ước tính: ổ tính theo allocation, còn scan tính theo kích thước tệp. Bấm vào ô thì mở màn Hệ thống.
+> - **Mỗi gốc vẫn được quét riêng**, nên history, snapshot và diff A5 theo từng gốc không đổi; chỉ phần hiển thị được ghép lại. Gốc nằm trong một gốc khác được quét cùng gốc đó, và dòng trạng thái lẫn nhãn của gốc đều báo việc gộp. Tối đa 12 gốc, quét lần lượt.
+> - **Duplicates tìm trên mọi gốc cục bộ đã chọn** (người dùng chọn). Như vậy phần lõi "xuyên thư mục / xuyên ổ" của F1 đã có trước. Phần còn lại của F1 (tiêu chí chọn bản giữ theo ổ, hash qua mạng) vẫn ở Giai đoạn 3.
+> - `pro.scan.multiroot` khoá gốc thứ hai và nút "Toàn bộ ổ…", cả ở cửa sổ (UpgradeHint) lẫn ở main (`ELOCKED`). Chọn `C:\` bằng hộp chọn thư mục vẫn là tính năng Free như trước.
+> - **Sửa kèm, lỗ có từ trước:** `isProtectedPath` không nhận ra `\\?\C:\Windows`, `\\.\C:\…`, `\\?\UNC\…`, cũng như share quản trị của chính máy này (`\\localhost\C$\Windows`, `\\127.0.0.1\C$\Program Files`, `\\<tên máy>\C$\…`). Hệ quả là quét `\\máy\C$` sẽ đi vào thư mục Windows, và quarantine khi đã bật "Xoá bản gốc" có thể `unlink` qua UNC. Giờ `pathKey` chuẩn hoá các cách viết này. Share quản trị của máy khác (`\\pc\C$\Windows`) được bảo vệ theo đường dẫn tương đối.
+>   - `SCANNER_REVISION` **không tăng**: thay đổi chỉ ảnh hưởng tới gốc là share quản trị của máy khác, còn tăng revision sẽ làm mọi snapshot cũ không so sánh được nữa. [Inference] Một diff A5 giữa hai lần quét share quản trị, một trước và một sau lần sửa này, sẽ báo "giảm" đúng bằng phần thư mục hệ thống. Tôi cho trường hợp đó là rất hiếm.
+> - Tên ô gốc trên bản đồ là tên thư mục. Chỉ khi hai gốc trùng tên thì mới dùng đường dẫn đầy đủ.
 
 ---
 

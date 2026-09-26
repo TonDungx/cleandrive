@@ -38,6 +38,7 @@ const path = require('node:path');
 
 const { validateCandidate } = require('./contract');
 const { fileCandidate, analyzer: scanAnalyzer } = require('./scan');
+const { readOnlyCandidate } = require('./scan-roots');
 const { pathKey } = require('../lib/util');
 
 const LIMITS = Object.freeze({ depth: 3, maxNodes: 1500, maxChildren: 300 });
@@ -53,9 +54,14 @@ class ScanTree {
    * @param {boolean} [scan.complete]
    * @param {number} [scan.scannedAt]
    * @param {object} [scan.accessTimes]
+   * @param {{volume: string, bytes: number}} [scan.unscanned]  a whole drive's
+   *   space in use that the scan did not count, drawn as one tile (A4)
+   * @param {string} [scan.readOnly]  why nothing is offered here (A4)
    */
-  constructor({ root, rows, files = new Map(), complete = true, scannedAt = Date.now(), accessTimes = null, openApps = [] }) {
+  constructor({ root, rows, files = new Map(), complete = true, scannedAt = Date.now(), accessTimes = null, openApps = [], unscanned = null, readOnly = null }) {
     this.root = path.resolve(root);
+    this.unscanned = unscanned && unscanned.bytes > 0 ? { volume: unscanned.volume, bytes: unscanned.bytes } : null;
+    this.readOnly = readOnly;
     this.complete = complete;
     this.scannedAt = scannedAt;
     this.accessTimes = accessTimes;
@@ -175,7 +181,9 @@ class ScanTree {
   }
 
   _folderItem(node) {
-    return { kind: 'folder', rel: node.rel, name: node.name, path: this.pathOf(node.rel), bytes: node.bytes, files: node.files };
+    // A whole drive's tile is the drive in use, the part not scanned included.
+    const bytes = node.rel === '' && this.unscanned ? node.bytes + this.unscanned.bytes : node.bytes;
+    return { kind: 'folder', rel: node.rel, name: node.name, path: this.pathOf(node.rel), bytes, files: node.files };
   }
 
   /** A folder's own contents, largest first. */
@@ -206,6 +214,7 @@ class ScanTree {
     if (restFiles > 0) {
       items.push({ kind: 'rest', files: restFiles, bytes: Math.max(0, node.ownBytes - namedBytes) });
     }
+    if (node.rel === '' && this.unscanned) items.push({ kind: 'unscanned', ...this.unscanned });
 
     return items.sort((a, b) => b.bytes - a.bytes);
   }
@@ -220,7 +229,7 @@ class ScanTree {
   _candidate(node, file) {
     const full = path.join(this.pathOf(node.rel), file.name);
     const detail = this._files.get(full) || {};
-    const candidate = fileCandidate(
+    const made = fileCandidate(
       {
         path: full,
         size: file.size,
@@ -234,6 +243,7 @@ class ScanTree {
       this.accessTimes,
       this.openApps
     );
+    const candidate = this.readOnly ? readOnlyCandidate(made, this.readOnly) : made;
     try {
       validateCandidate(candidate);
       if (!DECLARED.has(candidate.category)) throw new TypeError(`scan did not declare ${candidate.category}`);
@@ -298,4 +308,92 @@ class ScanTree {
   }
 }
 
-module.exports = { ScanTree, LIMITS };
+/**
+ * Several folders' trees as one map (A4): a tile per folder at the top, and
+ * each folder's own tree below it.
+ *
+ * The window still names a folder only by the `rel` this process gave it. A
+ * folder's `rel` here is its tree's number, a colon, and the `rel` inside
+ * that tree -- a colon being the one character no Windows name can hold -- so
+ * a name the window makes up is not found, the same as before.
+ */
+class MultiScanTree {
+  /** @param {ScanTree[]} trees  in the order the folders were chosen */
+  constructor(trees) {
+    this.trees = trees;
+    // A folder's own name, as a tile can hold it; its whole path only when
+    // two of the folders share a name. The path is always in the tooltip.
+    const names = trees.map((tree) => path.basename(tree.root) || tree.root);
+    this.names = names.map((name, i) => (names.filter((n) => n.toLowerCase() === name.toLowerCase()).length > 1 ? trees[i].root : name));
+  }
+
+  get complete() {
+    return this.trees.every((tree) => tree.complete);
+  }
+
+  get removed() {
+    const total = { files: 0, bytes: 0, deletedFiles: 0, deletedBytes: 0 };
+    for (const tree of this.trees) for (const key of Object.keys(total)) total[key] += tree.removed[key];
+    return total;
+  }
+
+  level(rel, limits = {}) {
+    if (typeof rel !== 'string') return null;
+    const { depth, maxNodes, maxChildren } = { ...LIMITS, ...limits };
+    const top = { rel: '', name: '', roots: this.trees.length };
+
+    if (rel === '') {
+      const share = Math.max(1, Math.floor(maxNodes / this.trees.length));
+      const children = this.trees.map((tree, i) => {
+        const inner = tree.level('', { depth: Math.max(1, depth - 1), maxNodes: share, maxChildren });
+        const item = prefixed(inner, i);
+        if (depth < 2) delete item.children;
+        delete item.crumbs;
+        delete item.limits;
+        item.name = this.names[i];
+        return item;
+      });
+      return {
+        kind: 'folder',
+        rel: '',
+        name: '',
+        roots: this.trees.length,
+        path: null,
+        bytes: children.reduce((n, c) => n + c.bytes, 0),
+        files: children.reduce((n, c) => n + c.files, 0),
+        children: children.sort((a, b) => b.bytes - a.bytes),
+        crumbs: [top],
+        complete: this.complete,
+        scannedAt: Math.min(...this.trees.map((t) => t.scannedAt)),
+        removed: this.removed,
+        limits: { depth, maxNodes, maxChildren },
+      };
+    }
+
+    const found = /^(\d+):([\s\S]*)$/.exec(rel);
+    const index = found ? Number(found[1]) : -1;
+    const tree = this.trees[index];
+    if (!tree) return null;
+    const level = tree.level(found[2], limits);
+    if (!level) return null;
+    const out = prefixed(level, index);
+    out.crumbs = [top, ...level.crumbs.map((crumb) => ({ ...crumb, rel: `${index}:${crumb.rel}`, name: crumb.rel === '' ? this.names[index] : crumb.name }))];
+    if (out.rel === `${index}:`) out.name = this.names[index];
+    out.removed = this.removed;
+    return out;
+  }
+
+  remove(moved) {
+    return this.trees.reduce((n, tree) => n + tree.remove(moved), 0);
+  }
+}
+
+/** A tree's level with every folder `rel` in it moved under `index:`. */
+function prefixed(item, index) {
+  const copy = { ...item };
+  if (typeof copy.rel === 'string' && (copy.kind === 'folder' || copy.kind === undefined)) copy.rel = `${index}:${copy.rel}`;
+  if (Array.isArray(item.children)) copy.children = item.children.map((child) => (child.kind === 'folder' ? prefixed(child, index) : child));
+  return copy;
+}
+
+module.exports = { ScanTree, MultiScanTree, LIMITS };
