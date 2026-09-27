@@ -55,8 +55,17 @@ const AXE_VERSION = require('axe-core/package.json').version;
 const T = require('../src/shared/theme-palette');
 
 let failures = 0;
+// Kept so the ending can say them again. This run is long and prints a great
+// deal; a failure a hundred lines up is a failure nobody reading the tail will
+// see. One run of this harness reported 22 failures, and the detail -- which
+// was printed, in the middle -- was lost to a `tail`, leaving nothing to
+// diagnose and nothing to reproduce.
+const failed = [];
 const check = (label, cond, detail = '') => {
-  if (!cond) failures++;
+  if (!cond) {
+    failures++;
+    failed.push(`${label}${detail ? `  -- ${detail}` : ''}`);
+  }
   console.log(`  ${cond ? 'PASS' : 'FAIL'}  ${label}${detail ? `  -- ${detail}` : ''}`);
 };
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -952,6 +961,11 @@ app.whenReady().then(async () => {
       fs.rmSync(SANDBOX, { recursive: true, force: true });
     } catch {
       console.log(`    (left behind, still in use: ${SANDBOX})`);
+    }
+    if (failures > 0) {
+      // Again, at the end, where a tail will find them.
+      console.log(`\nWhat failed, all ${failures} of them:\n`);
+      for (const line of failed) console.log(`  FAIL  ${line}`);
     }
     console.log(failures === 0 ? '\nALL PASS\n' : `\n${failures} FAILURE(S)\n`);
     app.exit(failures === 0 ? 0 : 1);

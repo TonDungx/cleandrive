@@ -26,6 +26,7 @@
 - [8. Ký số & tích hợp thanh toán thật (giai đoạn cuối)](#8-ký-số--tích-hợp-thanh-toán-thật-giai-đoạn-cuối)
 - [9. Thay đổi cần cập nhật vào README](#9-thay-đổi-cần-cập-nhật-vào-readme)
 - [10. Rủi ro & câu hỏi mở](#10-rủi-ro--câu-hỏi-mở)
+- [11. Việc còn mở — ai làm được](#11-việc-còn-mở--ai-làm-được)
 
 ---
 
@@ -2082,3 +2083,52 @@ export async function getProvider() {
 4. Có làm bản đồ offline (E4) không, hay chỉ gom nhóm theo toạ độ?
 5. Có cần kênh `beta` công khai trước Giai đoạn 7 không (xem 7.8)?
 6. Số máy mặc định cho mỗi license Pro.
+
+---
+
+## 11. Việc còn mở — ai làm được
+
+Danh sách này là **việc còn nợ, không phải ý tưởng**: mỗi dòng là một thứ đã
+code xong nhưng chưa được chứng minh trên máy thật, hoặc một quyết định còn
+treo. Cập nhật ngày 2026-09-27, ngay sau khi phát hành v0.2.0.
+
+Cột **Ai** chỉ có hai giá trị, và nó là thật chứ không phải quy ước:
+**Người dùng** nghĩa là trợ lý *không thể* làm — cần quyền quản trị, cần phần
+cứng, cần tai người nghe, hoặc cần một quyết định. **Trợ lý** nghĩa là làm
+được ngay khi được bảo.
+
+| # | Việc | Ai | Chạy cái gì / cần gì | Vì sao chưa xong |
+| --- | --- | --- | --- | --- |
+| 1 | Thùng rác trên ổ gắn ngoài (A4) | **Người dùng** | Cắm một ổ USB **dùng được**, rồi `npm run verify:external -- --drive X:` | Ổ PNY đang cắm báo 0 GB, RAW, offline — **không khởi tạo, không format nó**. Đã chạy đối chứng trên `D:` (kết quả "recycled", bản ghi `$I`/`$R` đúng từng byte). Tới khi đo được, ổ rời vẫn **chỉ đọc**. |
+| 2 | Lần chạy cuối của app, từ Prefetch (D1) | **Người dùng** | Mở Windows Terminal **as administrator**, rồi `cd D:\personal_projects\cleandrive` và `npm run verify:prefetch -- --elevated` | Trợ lý không tự nâng quyền được — `C:\Windows\Prefetch` trả EPERM cho tiến trình thường (đã đo). Giả định "mtime của `.pf` = lần chạy cuối" hiện vẫn là **[Inference]**, chưa lần nào chạy xong. |
+| 3 | Gỡ game thật qua `steam://uninstall/...` (D2) | **Người dùng** | Bấm nút Gỡ trên một game **chấp nhận gỡ thật**, xem Steam có mở đúng hộp thoại không | Cần một game thật để hi sinh. App chỉ giao URI cho Steam, không tự xoá gì, nhưng chưa ai xác nhận Steam nhận đúng. |
+| 4 | Ổ FAT / exFAT / ReFS thật (A2) | **Người dùng** | Cắm thẻ nhớ FAT32/exFAT bất kỳ, chọn "Toàn bộ ổ…", bật **Quét nhanh** — dòng trạng thái phải nói "ổ này không phải NTFS" và quét kiểu cũ | Máy này không có ổ nào như vậy. Đường `notNtfs` có **14 kiểm tra** trong `test-roots.js`, nhưng các dòng ổ lạ là **dữ liệu dựng**, ghi rõ trong test. |
+| 5 | Narrator trên bản đã sửa lỗi "để yên" (I2) | **Người dùng** | Bật Narrator, đi hết một lượt quét | `test:idle` chứng minh màn hình không bị dựng lại, nhưng **chưa ai nghe bằng tai**. Narrator đã được xác nhận chạy ổn trên 0.1.16, xác nhận chung chứ không theo từng bước. |
+| 6 | Theme tương phản cao thật của Windows (I2) | **Người dùng** | Bật High Contrast trong Windows rồi mở app | Mới kiểm trên bản giả lập `forced-colors`. Canvas của treemap **chưa theo** `forced-colors` — đã biết, để I2 làm nốt. |
+| 7 | Gỡ cài đặt thật để xác nhận menu Explorer bị xoá (I3) | **Người dùng** | Cài `CleanDrive-Setup-0.2.0.exe` rồi gỡ, kiểm khoá registry của menu chuột phải | Mới kiểm được là NSIS biên dịch được script gỡ. |
+| 8 | Quét tăng dần qua USN journal (mục 3 của đặc tả A2) | — | **Quyết định: không làm** | Đo được: USN record **không mang kích thước tệp**, nên chỉ thay được 9% công việc, còn `stat` chiếm 91%. Ghi ở đây để đừng ai mở lại mà không biết lý do. |
+| 9 | Một lượt `test:a11y` cho 22 lỗi | **Trợ lý** | Chạy lại và **giữ toàn bộ output** | Không tái hiện được trong 4 lượt sau, kể cả một lượt trên cây sạch `2e9a4eb`. Nguyên nhân mất dấu là output bị cắt bằng `tail`. Harness nay **in lại toàn bộ danh sách lỗi ở cuối**, nên lần sau `tail` cũng thấy. Chưa có chẩn đoán. |
+| 10 | Ảnh chụp màn hình nằm trong thư mục tên `logs\` | **Người dùng quyết**, trợ lý sửa | Chọn một trong ba phương án bên dưới | Quét `D:\work\tow_tool` cho ra **227 tệp `.png`, 101,6 MB**, xếp loại `log` / `safe`. Lượt chạy tự động sẽ lấy hết. |
+| 11 | Chỉ có **một** máy test | **Người dùng** | Máy thứ hai, hoặc chấp nhận giới hạn | A1 ghi là ba máy. Mọi phép đo trong tài liệu này đều từ một máy Windows 11 duy nhất. |
+
+### 11.1. Vì sao mục 10 là một lỗi, không phải sở thích
+
+Một thư mục tên `logs` (hoặc `log`) được gắn `dirTag: 'log'`, và **mọi tệp bên
+trong nó thừa hưởng nhãn đó bất kể đuôi của chính nó** (`lib/advisor.js`,
+nhánh `dirTag === 'log'` trong `adviseFile`). Đuôi `png` không có trong
+`EXT_CATEGORY`, nên không có gì phản đối. Đủ cũ thì thành `safe`.
+
+Ba phương án:
+
+- **A — thu hẹp luật (đề xuất).** Trong thư mục `log`, chỉ coi là log những tệp
+  mà **đuôi của chính nó** cũng nói vậy (`log`, `txt`, `etl`, `out`, `err`, đuôi
+  số kiểu `.log.1`, hoặc không có đuôi). Tệp mang đuôi đã biết là ảnh, video hay
+  tài liệu thì rơi xuống các luật sau như mọi nơi khác. Ảnh chụp trong `logs\`
+  hết bị gọi là rác, mà log thật vẫn bị bắt.
+- **B — giữ luật, chặn tự động.** Vẫn hiện là `safe` trong danh sách, nhưng
+  `unattendedEligible = false` khi đuôi tệp không phải đuôi log. Người dùng vẫn
+  xoá tay được, lượt chạy tự động thì không.
+- **C — không đổi gì.** Ghi vào README như một giới hạn đã biết.
+
+Chưa làm gì cả cho tới khi có quyết định. **Ảnh hưởng tới luật xoá là việc của
+người dùng, không phải của trợ lý.**
