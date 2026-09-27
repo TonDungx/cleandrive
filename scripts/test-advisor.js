@@ -48,6 +48,17 @@ async function buildFixture() {
   await make(path.join(dir, 'CrashDumps', 'app.dmp'), { bytes: 3 * MB });
   await make(path.join(dir, 'logs', 'old.log'), { bytes: 2 * MB, ageDays: 40 });
   await make(path.join(dir, 'logs', 'today.log'), { bytes: 1 * MB, ageDays: 0 });
+  // A folder named `logs` that also holds what the run was looking at. Taken
+  // from a real one on this machine -- `D:\work\tow_tool\logs`, 108 `.log`
+  // beside 82 `.png` totalling 78.9 MB, every screenshot of them marked safe
+  // before the rule below existed.
+  await make(path.join(dir, 'logs', 'c1-xong.png'), { bytes: 2 * MB, ageDays: 40 });
+  await make(path.join(dir, 'logs', 'client1-vao-game.png'), { bytes: 2 * MB, ageDays: 300 });
+  await make(path.join(dir, 'logs', 'ket-qua.xlsx'), { bytes: 1 * MB, ageDays: 300 });
+  await make(path.join(dir, 'logs', 'run.txt'), { bytes: 1 * MB, ageDays: 40 });
+  await make(path.join(dir, 'logs', 'app.log.1'), { bytes: 1 * MB, ageDays: 40 });
+  await make(path.join(dir, 'logs', 'stderr'), { bytes: 1 * MB, ageDays: 40 });
+  await make(path.join(dir, 'logs', '2026', 'nested-shot.png'), { bytes: 2 * MB, ageDays: 300 });
   // A real project. What makes obj/ disposable build output is the project's
   // own .gitignore naming it -- a marker file beside it is not enough, and
   // the vendored library below is why.
@@ -145,6 +156,22 @@ async function buildFixture() {
   );
   check('old log flagged', names('log').includes('old.log'));
   check("today's log NOT flagged", !names('log').includes('today.log'));
+
+  // The folder's name decides for files whose own name does not contradict
+  // it. A screenshot beside a log is the evidence, not the noise, and the
+  // unattended run takes everything called safe.
+  check('a rotated log is still a log', names('log').includes('app.log.1'));
+  check('a file with no extension in a log folder is still a log', names('log').includes('stderr'));
+  check('a .txt in a log folder is still a log', names('log').includes('run.txt'));
+  const safeNames = cleanup.groups
+    .filter((g) => g.verdict === 'safe')
+    .flatMap((g) => g.files.map((f) => path.basename(f.path)));
+  check('a screenshot in a folder named logs is not safe to delete',
+    !safeNames.includes('c1-xong.png'), safeNames.filter((n) => n.endsWith('.png')).join(', '));
+  check('nor one a floor further down', !safeNames.includes('nested-shot.png'));
+  check('nor a spreadsheet, however old', !safeNames.includes('ket-qua.xlsx'));
+  check('and none of them is called a log', !names('log').some((n) => /\.(png|xlsx)$/.test(n)),
+    names('log').join(', '));
   check('stale installer flagged', names('installer').includes('setup.exe'));
   check('fresh installer NOT flagged', !names('installer').includes('just-grabbed.exe'));
   check('large old archive flagged', names('archive').includes('backup.iso'));
@@ -156,12 +183,17 @@ async function buildFixture() {
   check('document never suggested', !everything.includes('important.docx'));
   check('small old text file never suggested', !everything.includes('notes.txt'));
 
-  // temp(5MB leftover + 1KB lock) + cache 7 + dump 3 + log 2 + the two build
-  // folders a .gitignore declares: project/obj 4, pyproject/dist 9. Bootstrap's
-  // vendored dist/ is 6 MB and is deliberately not among them.
+  // temp(5MB leftover + 1KB lock) + cache 7 + dump 3 + the two build folders a
+  // .gitignore declares: project/obj 4, pyproject/dist 9. Bootstrap's vendored
+  // dist/ is 6 MB and is deliberately not among them.
+  //
+  // log is 5: old.log 2, and run.txt, app.log.1 and stderr at 1 each. The four
+  // other files in that folder -- two screenshots, a spreadsheet, and today's
+  // log -- are not here, and the two screenshots are the reason the folder's
+  // name no longer decides on its own.
   check(
     'safe bytes exclude review categories',
-    cleanup.safeBytes === (5 + 7 + 3 + 2 + 4 + 9) * MB + 1024,
+    cleanup.safeBytes === (5 + 7 + 3 + 5 + 4 + 9) * MB + 1024,
     `${cleanup.safeBytes} bytes`
   );
   check('verdicts ordered safe before review', cleanup.groups[0].verdict === 'safe');

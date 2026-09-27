@@ -646,6 +646,15 @@ worth reviewing.
 All ages in one scan are measured against a single instant, so two files written
 a millisecond apart cannot land on opposite sides of a threshold.
 
+**A folder named `logs` does not decide on its own.** It used to: everything
+inside one was an old log file, whatever the file was. A real folder on the
+machine this was written on — 108 `.log` beside 82 screenshots — was therefore
+79 MB of pictures marked safe to delete. Now the folder's name settles only
+files whose own name does not contradict it (`.log`, `.txt`, `.etl`, `.out`,
+`.err`, `.trace`, `.dbg`, a rotated `.log.1`, or no extension at all).
+Everything else in there is judged exactly as it would be anywhere else, which
+for a screenshot means nothing is said about it.
+
 ### Selection tools
 
 *Select everything marked safe* (which skips every `review` group), *select all*
@@ -1124,6 +1133,18 @@ will not act on — so you can see they were found and left alone.
 The same test now decides what the disk scan calls build output, and what an
 automatic cleanup is allowed near. Before it, a run with build output switched
 on would have taken 400 files of vendored library off this machine.
+
+**The declaration is taken at its word, all the way down.** A `dist/` line
+covers everything under `dist/`, including anything the program *writes there
+while running* rather than anything the build put there. On the machine this
+was written on that is 91 screenshots, 21.8 MB, under
+`dist\ToWTool\logs\` — a tool packaged into `dist/` that then saved pictures
+of its own runs beside its logs. Rebuilding the project would not bring those
+back. They are treated as build output because the project's `.gitignore` says
+`dist/`, and that file is the only statement of intent the app has: the same
+`.gitignore` also knows how to make exceptions — it carries `!img/*.png` — and
+does not make one here. If you keep something under a folder you have declared
+regenerated, say so in the `.gitignore` the way you already can.
 
 ### What it will not do
 

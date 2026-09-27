@@ -2108,27 +2108,38 @@ cứng, cần tai người nghe, hoặc cần một quyết định. **Trợ lý
 | 7 | Gỡ cài đặt thật để xác nhận menu Explorer bị xoá (I3) | **Người dùng** | Cài `CleanDrive-Setup-0.2.0.exe` rồi gỡ, kiểm khoá registry của menu chuột phải | Mới kiểm được là NSIS biên dịch được script gỡ. |
 | 8 | Quét tăng dần qua USN journal (mục 3 của đặc tả A2) | — | **Quyết định: không làm** | Đo được: USN record **không mang kích thước tệp**, nên chỉ thay được 9% công việc, còn `stat` chiếm 91%. Ghi ở đây để đừng ai mở lại mà không biết lý do. |
 | 9 | Một lượt `test:a11y` cho 22 lỗi | **Trợ lý** | Chạy lại và **giữ toàn bộ output** | Không tái hiện được trong 4 lượt sau, kể cả một lượt trên cây sạch `2e9a4eb`. Nguyên nhân mất dấu là output bị cắt bằng `tail`. Harness nay **in lại toàn bộ danh sách lỗi ở cuối**, nên lần sau `tail` cũng thấy. Chưa có chẩn đoán. |
-| 10 | Ảnh chụp màn hình nằm trong thư mục tên `logs\` | **Người dùng quyết**, trợ lý sửa | Chọn một trong ba phương án bên dưới | Quét `D:\work\tow_tool` cho ra **227 tệp `.png`, 101,6 MB**, xếp loại `log` / `safe`. Lượt chạy tự động sẽ lấy hết. |
+| 10 | ~~Ảnh chụp màn hình nằm trong thư mục tên `logs\`~~ **Đã quyết và làm xong 2026-09-27** | — | — | Người dùng chọn **phương án A**: trong thư mục mang nhãn `log`, chỉ tính là log khi **đuôi của chính tệp** cũng nói vậy (`log`, `txt`, `etl`, `out`, `err`, `trace`, `dbg`, đuôi số kiểu `.log.1`, hoặc không có đuôi). Mọi thứ khác rơi xuống các luật sau và được xử như ở bất kỳ đâu. Đo lại trên `D:\work\tow_tool\logs`: **82 ảnh / 78,9 MB trước đây là `safe`, nay còn 0**; 108 tệp `.log` vẫn dọn được như cũ. 8 kiểm tra trong `test-advisor.js`. |
 | 11 | Chỉ có **một** máy test | **Người dùng** | Máy thứ hai, hoặc chấp nhận giới hạn | A1 ghi là ba máy. Mọi phép đo trong tài liệu này đều từ một máy Windows 11 duy nhất. |
 
-### 11.1. Vì sao mục 10 là một lỗi, không phải sở thích
+### 11.1. Mục 10 đã quyết: phương án A
 
 Một thư mục tên `logs` (hoặc `log`) được gắn `dirTag: 'log'`, và **mọi tệp bên
-trong nó thừa hưởng nhãn đó bất kể đuôi của chính nó** (`lib/advisor.js`,
-nhánh `dirTag === 'log'` trong `adviseFile`). Đuôi `png` không có trong
-`EXT_CATEGORY`, nên không có gì phản đối. Đủ cũ thì thành `safe`.
+trong nó từng thừa hưởng nhãn đó bất kể đuôi của chính nó**. Đuôi `png` không có
+trong `EXT_CATEGORY` nên không có gì phản đối; đủ cũ thì thành `safe`.
 
-Ba phương án:
+Người dùng chốt **phương án A** ngày 2026-09-27: trong thư mục mang nhãn `log`,
+chỉ tính là log khi đuôi của chính tệp cũng nói vậy. `isLogLike` trong
+`lib/advisor.js` giữ danh sách đó, cố ý ngắn — mở rộng thì rẻ, mở rộng sai thì
+mất tệp của người ta.
 
-- **A — thu hẹp luật (đề xuất).** Trong thư mục `log`, chỉ coi là log những tệp
-  mà **đuôi của chính nó** cũng nói vậy (`log`, `txt`, `etl`, `out`, `err`, đuôi
-  số kiểu `.log.1`, hoặc không có đuôi). Tệp mang đuôi đã biết là ảnh, video hay
-  tài liệu thì rơi xuống các luật sau như mọi nơi khác. Ảnh chụp trong `logs\`
-  hết bị gọi là rác, mà log thật vẫn bị bắt.
-- **B — giữ luật, chặn tự động.** Vẫn hiện là `safe` trong danh sách, nhưng
-  `unattendedEligible = false` khi đuôi tệp không phải đuôi log. Người dùng vẫn
-  xoá tay được, lượt chạy tự động thì không.
-- **C — không đổi gì.** Ghi vào README như một giới hạn đã biết.
+**Đo sau khi sửa:** `D:\work\tow_tool\logs` từ 82 ảnh `safe` (78,9 MB) xuống
+**0**; 108 tệp `.log` vẫn dọn được. 8 kiểm tra trong `test-advisor.js`, dựng theo
+đúng tên tệp thật (`c1-xong.png`, `client1-vao-game.png`).
 
-Chưa làm gì cả cho tới khi có quyết định. **Ảnh hưởng tới luật xoá là việc của
-người dùng, không phải của trợ lý.**
+### 11.2. Chỗ còn lại, và quyết định giữ nguyên
+
+Quét lại cả cây sau khi sửa thì **vẫn còn 91 ảnh / 21,8 MB được gọi là `safe`**,
+nằm ở `D:\work\tow_tool\dist\ToWTool\logs\`. Luật bắt chúng **không phải** luật
+log mà là `buildoutput`: `.gitignore` của dự án khai `dist/`, và C5 được thiết kế
+đúng theo nguyên tắc "chỉ khi `.gitignore` của dự án khai".
+
+**Người dùng chọn giữ nguyên** (2026-09-27). Lý do: `.gitignore` là lời khai duy
+nhất app có về ý định của chủ dự án, và chính tệp đó biết cách chừa ngoại lệ — nó
+mang dòng `!img/*.png` — mà không chừa cho `logs/`. Ghi vào README như một giới
+hạn đã biết, ở mục Developer Pack.
+
+[Inference] Hệ quả là hai tệp cùng loại có thể nhận hai câu trả lời khác nhau:
+`tow_tool\logs\c1-xong.png` được giữ, còn `tow_tool\dist\ToWTool\logs\client1-vao-game.png`
+thì `safe`. Khác biệt nằm ở chỗ đường dẫn thứ hai đi qua một thư mục mà chủ dự án
+đã tự tay khai là tái tạo được.
+

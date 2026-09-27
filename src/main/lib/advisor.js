@@ -346,6 +346,22 @@ const EXT_CATEGORY = new Map(
   })
 );
 
+/**
+ * Extensions a file in a folder named `logs` may have and still be a log.
+ *
+ * Deliberately short. Everything outside it keeps whatever the rest of the
+ * rules would have said about it anywhere else, which for an ordinary
+ * document or picture is nothing at all. Widening this is cheap; widening it
+ * wrongly costs somebody a file, so it holds only what a program actually
+ * writes a log into.
+ */
+const LOG_EXT = new Set(['log', 'txt', 'etl', 'out', 'err', 'trace', 'dbg']);
+
+/** `app.log`, `app.log.1`, `stderr`, `trace.etl` -- but not `crash.png`. */
+function isLogLike(ext) {
+  return ext === '' || LOG_EXT.has(ext) || /^\d+$/.test(ext);
+}
+
 const INSTALLER_EXT = new Set(['exe', 'msi', 'msix', 'appx', 'dmg', 'pkg', 'deb', 'rpm']);
 const ARCHIVE_EXT = new Set([
   'zip', 'rar', '7z', 'tar', 'gz', 'bz2', 'xz', 'iso', 'img',
@@ -420,8 +436,23 @@ function classifyRaw(file, dirTag, now) {
 
   /* -- inherited directory context --------------------------------------- */
   if (dirTag && dirTag !== 'downloads') {
-    if (dirTag === 'log') return logAdvice(modifiedDays, 'dir');
-    return advice(dirTag, DIR_REASON[dirTag], 'dir');
+    // A folder named `logs` says what it holds, and mostly it is right. It is
+    // not right about everything in it: a program that writes its log beside
+    // a screenshot of what went wrong puts both in the same folder, and the
+    // screenshot is the evidence, not the noise.
+    //
+    // Measured on this machine, `D:\work\tow_tool\logs`: 190 files, 108 of
+    // them `.log` and 82 of them `.png` -- 78.9 MB of screenshots named
+    // `c1-xong.png`, `client1-vao-game.png`. Every one of them was `safe`,
+    // and the unattended run takes what is safe.
+    //
+    // So the folder's name decides only for files whose own name does not
+    // contradict it. Everything else falls through to the rules below and is
+    // judged as it would be anywhere else -- which for a screenshot means
+    // nothing is said about it at all.
+    if (dirTag !== 'log') return advice(dirTag, DIR_REASON[dirTag], 'dir');
+    if (isLogLike(ext)) return logAdvice(modifiedDays, 'dir');
+    // Not a log by its own name: fall through to the rules below.
   }
 
   /* -- extension-driven --------------------------------------------------- */
