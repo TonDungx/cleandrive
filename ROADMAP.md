@@ -156,7 +156,7 @@ Thứ tự làm (chốt 2026-09-24): I1 → A1 → A3 → A5 → B3 → D4 → B
 > - **Harness lúc đóng giai đoạn:** `npm test` 38 suite, 1.586 kiểm tra, 0 lỗi; `test:e2e` 336/0; `test:a11y` 143/0; `test:onboarding` 40/0; `test:explorer` 21/0. Các harness chạy trên thứ thật: `verify-system --elevated` (ổ C: thật, UAC), `verify-quarantine --elevated` (VHDX thật, 13/13), `verify-dehydrate --write` (OneDrive thật), `verify-restore` (Thùng rác thật), `verify-contextmenu` (registry thật, 22/22), `verify-launch-target` (app thật, 12/12).
 > - **Còn mở, cần người hoặc cần máy khác:** (1) ~~checklist Narrator của I2~~ người dùng xác nhận Narrator chạy ổn trên bản cài 0.1.16 (2026-09-26, xác nhận chung, không theo từng bước); bản có sửa lỗi "để yên" mới kiểm bằng `test:idle`, chưa ai nghe bằng Narrator; (2) theme tương phản thật của Windows, mới kiểm trên bản giả lập; (3) cài rồi gỡ installer thật để xác nhận bộ gỡ cài đặt xoá khoá menu (I3), mới kiểm được là NSIS biên dịch được; (4) các trường hợp A1 chưa có trên máy này (nhiều bản Windows, BitLocker đang mã hoá dở, Storage Spaces, ReFS); (5) chỉ có một máy test, không phải ba như A1 ghi. Đã dời có chủ đích: lịch chụp snapshot hằng tuần (A5) sang G3; tô màu Pro cho treemap (A3); tuỳ chọn màu accent (I2). Pro·Dev và Business: hỏi trước Giai đoạn 2 và 5; Pro vẫn mở trên bản stable tới Giai đoạn 6.
 
-### Giai đoạn 2 — Quy mô & chuyên sâu
+### Giai đoạn 2 — Quy mô & chuyên sâu — ✅ Đã code xong (2026-09-27)
 
 Thứ tự làm (người dùng chốt 2026-09-26): A4 → D1 → D2 → C1–C5 → A2. Pro·Dev mở trên bản stable như Pro cho tới Giai đoạn 6, và vẫn giữ key `pro.dev` riêng.
 
@@ -167,6 +167,30 @@ Thứ tự làm (người dùng chốt 2026-09-26): A4 → D1 → D2 → C1–C5
 | C1–C5 | Developer Pack | P1 | ✅ Đã code xong (2026-09-26) — chỉ ship công cụ có thật; cache gói chỉ hiện lệnh, cache IDE xoá được khi IDE đóng; WSL và Docker chỉ giải thích; C1 chỉ giải thích, C5 xoá được nhưng **chỉ khi `.gitignore` của dự án khai**, và luật đó sửa luôn một lỗi có thật trong advisor |
 | D1 | App đã cài: dung lượng & lần dùng cuối | P1 | ✅ Đã code xong (2026-09-26) — bỏ nguồn last-access (đã đo là không đáng tin), dung lượng tách hai cột đo được / bên cài khai; Prefetch cần quyền quản trị, chưa ai bấm |
 | D2 | Thư viện game | P1 | ✅ Đã code xong (2026-09-26) — chỉ Steam (đã đo: không có launcher nào khác); dung lượng Steam ghi là chính xác nên một cột; thư mục mồ côi chỉ phát hiện, không xoá |
+
+> **✅ Giai đoạn 2 đã code xong (2026-09-27).** Đối chiếu với tiêu chí hoàn thành:
+>
+> - **Năm mục đều xong, theo đúng thứ tự đã chốt** (A4 → D1 → D2 → C1–C5 → A2), mỗi mục một commit, chưa push (push là phát hành): A4 `3f13ff9`, D1 `762589f`, D2 `0abec91`, C1–C4 `c0c1600` và `77915f6`, C5 `2aad5dd`, A2 `2e9a4eb` + `543b1a9`. A2 là mục **duy nhất** đi hai commit — trình đọc `$MFT` tách khỏi phần nối, người dùng đồng ý lệch quy ước ở đây vì trình đọc đứng một mình đã kiểm chứng được. Mỗi mục có ghi chú "✅" nói rõ khác đặc tả ở đâu; đọc các ghi chú đó thay vì suy lại từ code.
+> - **Harness lúc đóng giai đoạn** (chạy ngày 2026-09-27, máy này): `npm test` **46 bộ, 2.079 kiểm tra, 0 lỗi**; `test:e2e` **409/0**; `test:a11y` **173/0**; `test:onboarding` **40/0**; `test:explorer` **21/0**; `test:idle` **45/0**. Đầu giai đoạn là 38 bộ / 1.586 — giai đoạn này thêm **8 bộ và 493 kiểm tra**.
+> - **Chạy trên thứ thật, trong giai đoạn này:** `verify:mft` trên `C:` và `D:` thật qua terminal quyền quản trị (người dùng chạy, 2026-09-27 — 0 bản ghi hỏng, parity +1 tệp trên D: và +42 tệp / 0,09 GB trên 209 GB ở C:, số thư mục trùng khít); `verify:external -- --drive D` làm đối chứng cho ổ rời; Steam thật cho D2; registry và tiến trình thật cho C1–C5.
+> - **Ảnh chụp thật, hai theme + tiếng Việt + cửa sổ hẹp,** cho mọi giao diện mới: `shoot:multiroot` (A4), `shoot:apps` (D1), `shoot:games` (D2), `shoot:dev` và `shoot:devprojects` (C), `shoot:fastscan` (A2).
+>
+> **Ba thứ giai đoạn này sửa mà không nằm trong đặc tả mục nào:**
+> - `isProtectedPath` không nhận ra dạng `\\?\C:\Windows`, `\\.\C:\…`, `\\?\UNC\…` và share quản trị của chính máy này (A4). Hệ quả: quét share quản trị sẽ đi thẳng vào thư mục Windows.
+> - Advisor gọi thư mục `build` của một dự án là rác kể cả khi `.gitignore` của dự án đó không khai (C5).
+> - Mọi reparse point bị coi là link trong bản nháp của A2 — cùng lớp lỗi mà `lib/real-fs.js` đã phải sửa cho walk thường, và trên `C:` thật là **312 thư mục cloud trên tổng 611** sẽ bị bỏ qua.
+>
+> **Còn mở, cần người hoặc cần máy khác:**
+> 1. **Ổ gắn ngoài chưa đo được Thùng rác** (A4, người dùng tạm hoãn 2026-09-26). `npm run verify:external -- --drive X:` đã sẵn sàng. USB PNY đang cắm báo 0 GB, RAW, offline — **không khởi tạo, không format**.
+> 2. **`verify:prefetch -- --elevated` chưa lần nào chạy xong** (D1). Giả định "mtime của `.pf` = lần chạy cuối" vẫn là [Inference].
+> 3. **Chưa bấm thật một URI `steam://uninstall/...`** (D2).
+> 4. **Chưa có ổ FAT/exFAT/ReFS thật** (A2). Đường quay về `notNtfs` nay có 14 kiểm tra trong `test-roots.js`, nhưng các dòng ổ lạ là **dữ liệu dựng**, ghi rõ trong test; chưa lần nào chạy trên một ổ thật.
+> 5. **Quét tăng dần qua USN journal không làm** (mục 3 của đặc tả A2). Lý do đo được: USN record không mang kích thước tệp.
+> 6. **Một lượt `test:a11y` cho 22 lỗi, không tái hiện được** trong bốn lượt sau, kể cả một lượt trên cây sạch `2e9a4eb`. Output của lượt đó không giữ lại. **Chưa có chẩn đoán** — nếu gặp lại, giữ output trước khi làm gì khác.
+> 7. Mang sang từ Giai đoạn 1, chưa đổi: chưa ai nghe Narrator trên bản đã sửa lỗi "để yên"; chưa thử theme tương phản thật của Windows; chưa gỡ cài đặt thật để xác nhận menu Explorer bị xoá; chỉ có một máy test.
+> 8. **Đã ghi nhận, chưa quyết:** quét `D:\work\tow_tool` cho ra **227 tệp `.png` trong thư mục `logs\`, 101,6 MB, xếp loại `log` / `safe`** — ảnh chụp màn hình nằm trong thư mục tên `logs`, và lượt chạy tự động sẽ lấy hết. Cần một quyết định riêng trước khi bật tự động trên máy có kiểu thư mục này.
+>
+> **Chưa push kể từ v0.1.16: 9 commit** (`ff14036` trở đi). Pro và Pro·Dev vẫn mở trên bản stable tới Giai đoạn 6. Business hỏi trước Giai đoạn 5.
 
 ### Giai đoạn 3 — Lập kế hoạch & trùng lặp nâng cao
 

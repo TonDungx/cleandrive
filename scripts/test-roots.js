@@ -107,6 +107,58 @@ async function make(file, bytes, ageDays = 0) {
   check('(constructed) a disc is read only', volumes.describe('G:\\', constructed).readOnly === 'cdrom');
   check('(constructed) neither a share nor a disc is offered whole', volumes.scannable(constructed).map((d) => d.letter).join('') === 'F');
 
+  /* ---- which drives the fast scan will read (A2) ---- */
+
+  console.log('\nWhich drives can be read from their own catalogue:');
+
+  // Every answer the switch can get, against `volumes.describe` output rather
+  // than a hand-built object: it is the shape `prepareRoots` really hands over.
+  // FAT, exFAT and ReFS are the rows this machine cannot supply -- there is no
+  // such drive here -- so they are constructed, and said to be constructed.
+  const odd = volumes.parse([
+    'drive\tP\t3\tFAT32\t\t7\t31000000000\t12000000000\tFIXEDFAT',
+    'drive\tR\t3\texFAT\t\t7\t500000000000\t400000000000\tPortable',
+    'drive\tS\t3\tReFS\t\t8\t2000000000000\t900000000000\tPool',
+    'drive\tT\t3\t\t\t8\t1000000000000\t900000000000\tRaw',
+    'drive\tU\t2\tFAT32\t\t7\t31000000000\t12000000000\tSTICK',
+  ].join('\r\n'));
+
+  check('a whole NTFS drive on this machine: yes',
+    scanRoots.whyNotFast(volumes.describe('C:\\', drives)) === null);
+  check('a folder on it: no, a catalogue costs the whole drive',
+    scanRoots.whyNotFast(volumes.describe('C:\\Users', drives)) === 'notWholeDrive',
+    'D: holds 515,940 records where a walk of it lists 191,975');
+  check('a share: no',
+    scanRoots.whyNotFast(volumes.describe('\\\\otherpc\\share\\x', [])) === 'network');
+  check('a mapped share: no',
+    scanRoots.whyNotFast(volumes.describe('Z:\\', constructed)) === 'network');
+  check('the card reader: no',
+    scanRoots.whyNotFast(volumes.describe('E:\\', drives)) === 'readOnly');
+  check('a disc: no',
+    scanRoots.whyNotFast(volumes.describe('G:\\', constructed)) === 'readOnly');
+  check('(constructed) FAT32: no catalogue to read',
+    scanRoots.whyNotFast(volumes.describe('P:\\', odd)) === 'notNtfs');
+  check('(constructed) exFAT: no catalogue to read',
+    scanRoots.whyNotFast(volumes.describe('R:\\', odd)) === 'notNtfs');
+  check('(constructed) ReFS: no catalogue to read',
+    scanRoots.whyNotFast(volumes.describe('S:\\', odd)) === 'notNtfs',
+    'ReFS has no $MFT -- it keeps a B+ tree, and nothing here can read it');
+  check('(constructed) a drive whose filesystem Windows would not name: no',
+    scanRoots.whyNotFast(volumes.describe('T:\\', odd)) === 'notNtfs');
+  check('a letter Windows never listed: no, rather than assumed NTFS',
+    scanRoots.whyNotFast(volumes.describe('Q:\\', drives)) === 'notNtfs',
+    'an unknown drive is walked, not guessed at');
+  check('a whole external NTFS disk: yes -- the bus is not the question',
+    scanRoots.whyNotFast(volumes.describe('F:\\', constructed)) === null);
+  check('nothing at all: refused rather than thrown',
+    scanRoots.whyNotFast(null) === 'notWholeDrive' && scanRoots.whyNotFast({}) === 'notWholeDrive');
+  // A removable FAT32 stick is refused twice over. The reason the user is
+  // shown is the one that would still be true if the other were fixed, which
+  // is the drive being read-only here -- there is nothing to offer on it
+  // whatever its filesystem.
+  check('(constructed) a removable FAT32 stick says read-only, not "no catalogue"',
+    scanRoots.whyNotFast(volumes.describe('U:\\', odd)) === 'readOnly');
+
   /* ---- the folders asked for ---- */
 
   const base = await fsp.mkdtemp(path.join(os.tmpdir(), 'cleandrive-roots-'));

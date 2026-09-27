@@ -400,27 +400,6 @@ function register() {
   /* ---- scan ------------------------------------------------------------ */
 
   /**
-   * Why a folder cannot be scanned from the volume's catalogue, or null.
-   *
-   * The switch is offered for a whole drive and nothing smaller, and the
-   * reason is measured rather than tidy: reading `$MFT` costs what the volume
-   * costs, not what the folder costs. D: holds 516,000 records; a walk of the
-   * same drive lists 192,000, because the walk skips `node_modules`, `.git`
-   * and hidden folders and the catalogue cannot skip anything. For one folder
-   * on a big drive the fast scan is slower, and it needs a UAC prompt to be
-   * slower.
-   */
-  function whyNotFast(info) {
-    if (info.readOnly === 'network') return 'network';
-    if (info.readOnly) return 'readOnly';
-    if (pathKey(info.root) !== pathKey(info.volume)) return 'notWholeDrive';
-    // FAT, exFAT and ReFS have no `$MFT`. The spec asks that these fall back
-    // to the ordinary walk and say why, rather than failing.
-    if (String(info.fileSystem || '').toUpperCase() !== 'NTFS') return 'notNtfs';
-    return null;
-  }
-
-  /**
    * One UAC prompt, then one catalogue read per eligible drive.
    *
    * Returns a map from drive root to the source a walk can be run against,
@@ -434,7 +413,7 @@ function register() {
     const eligible = [];
     const reasons = new Map();
     for (const info of roots) {
-      const why = whyNotFast(info);
+      const why = scanRoots.whyNotFast(info);
       if (why) reasons.set(pathKey(info.root), why);
       else if (!eligible.some((e) => pathKey(e.root) === pathKey(info.root))) eligible.push(info);
     }

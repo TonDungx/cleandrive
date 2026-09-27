@@ -226,4 +226,34 @@ function mergeScans(parts) {
   };
 }
 
-module.exports = { prepareRoots, mergeScans, readOnlyCandidate, unscannedOnDrive, READ_ONLY, MAX_ROOTS, inside };
+/**
+ * Why a folder cannot be scanned from the volume’s own catalogue (A2),
+ * or null when it can.
+ *
+ * The fast scan is offered for a whole drive and nothing smaller, and the
+ * reason is measured rather than tidy: reading `$MFT` costs what the volume
+ * costs, not what the folder costs. D: holds 515,940 records; a walk of the
+ * same drive lists 191,975, because the walk skips `node_modules`, `.git`
+ * and hidden folders and a catalogue cannot skip anything. For one folder on
+ * a big drive the fast scan is the slower one, and it would have to raise a
+ * UAC prompt to be slower.
+ *
+ * Every answer but null means the ordinary walk runs and the status line
+ * says which of these it was. None of them is an error: a fast scan that
+ * cannot happen is a scan, not a failure.
+ *
+ * @param {object} info  a prepared root, from `prepareRoots`
+ * @returns {'network'|'readOnly'|'notWholeDrive'|'notNtfs'|null}
+ */
+function whyNotFast(info) {
+  if (!info || typeof info.root !== 'string') return 'notWholeDrive';
+  if (info.readOnly === 'network') return 'network';
+  if (info.readOnly) return 'readOnly';
+  if (pathKey(info.root) !== pathKey(info.volume)) return 'notWholeDrive';
+  // FAT, exFAT and ReFS keep no `$MFT`. The spec asks that these fall back
+  // to the ordinary walk and say why, rather than failing.
+  if (String(info.fileSystem || '').toUpperCase() !== 'NTFS') return 'notNtfs';
+  return null;
+}
+
+module.exports = { prepareRoots, mergeScans, readOnlyCandidate, unscannedOnDrive, whyNotFast, READ_ONLY, MAX_ROOTS, inside };
