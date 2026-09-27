@@ -420,6 +420,67 @@ async function rest(records) {
       JSON.stringify(again.candidates.map((c) => c.id)) === JSON.stringify(out.candidates.map((c) => c.id)));
   }
 
+  console.log('\napps: two sources, and the newest one wins\n');
+
+  {
+    // Why this matters, measured on this machine (`verify:prefetch
+    // --elevated`, 2026-09-27): of 68 programs both sources knew, 57 had a
+    // newer prefetch time, 10 agreed to the day, and one -- CheckPoint's
+    // TrGUI.exe -- had a prefetch time 32 days OLDER than a launch UserAssist
+    // had counted. UserAssist records a click; a click that starts nothing,
+    // because the program is already running or because it exits before the
+    // prefetcher writes its trace, leaves the prefetch file where it was.
+    //
+    // So prefetch can be stale, and the one thing that keeps a stale prefetch
+    // from dragging a date backwards is that the newest source wins. That is
+    // what is checked here. Without it, an app used two days ago could be
+    // shown as untouched for months and reach the 90-day `review` verdict.
+    const now = Date.now();
+    const { lastUsedFor } = require('../src/main/apps/measure');
+    // `displayIcon` is how a prefetch record is matched to an app at all: the
+    // strong identifiers come from the install folder and from the
+    // executables the registry entry names, never from the display name. A
+    // real entry points its icon at its own exe, which is what makes
+    // `trgui.exe` in the prefetch listing belong to this app.
+    const installLocation = 'C:\\Program Files (x86)\\CheckPoint\\Endpoint Connect';
+    const exe = `${installLocation}\\TrGUI.exe`;
+    const app = { id: 'x', name: 'Endpoint Connect', installLocation, displayIcon: exe };
+    const clicked = now - 2 * DAY;
+    const traced = now - 34 * DAY;
+
+    const both = lastUsedFor(app, {
+      userAssist: { entries: [{ name: exe, fullPath: exe, lastRunMs: clicked, runs: 1, kind: 'exe' }] },
+      prefetch: { available: true, byExe: new Map([['trgui.exe', { exe: 'trgui.exe', lastRunMs: traced, files: 1 }]]) },
+    });
+    check('a stale prefetch does not drag the date back past a newer click',
+      both.at === clicked,
+      `${Math.round((now - both.at) / DAY)} days ago, from ${both.source} -- prefetch said ${Math.round((now - traced) / DAY)}`);
+    check('and both sources are named, so the row can say what it knows',
+      both.sources.includes('userAssist') && both.sources.includes('prefetch'),
+      both.sources.join(', '));
+    check('a launch inside the install folder is strong, not a guess',
+      both.confidence === 'strong', both.confidence);
+
+    // And the other way round, which is the common case: 57 of the 68.
+    const newer = lastUsedFor(app, {
+      userAssist: { entries: [{ name: exe, fullPath: exe, lastRunMs: traced, runs: 1, kind: 'exe' }] },
+      prefetch: { available: true, byExe: new Map([['trgui.exe', { exe: 'trgui.exe', lastRunMs: clicked, files: 1 }]]) },
+    });
+    check('a start nobody clicked still counts, when prefetch is the newer one',
+      newer.at === clicked && newer.source === 'prefetch',
+      `${newer.source}, ${Math.round((now - newer.at) / DAY)} days ago`);
+
+    const alone = lastUsedFor(app, {
+      userAssist: { entries: [] },
+      prefetch: { available: true, byExe: new Map([['trgui.exe', { exe: 'trgui.exe', lastRunMs: traced, files: 1 }]]) },
+    });
+    check('prefetch alone is used, and marked a guess rather than strong',
+      alone && alone.at === traced && alone.confidence === 'likely', alone && alone.confidence);
+
+    check('and nothing at all is null, not a date',
+      lastUsedFor(app, { userAssist: { entries: [] }, prefetch: { available: false, byExe: new Map() } }) === null);
+  }
+
   console.log('\napps: last-access time is not one of the sources\n');
 
   {
