@@ -98,8 +98,17 @@ function runHelper(argv) {
           protocol.send(socket, { id: message.id, ok: false, error: `unknown op ${String(message.op).slice(0, 60)}` });
           return;
         }
+        // An operation with more to say than fits in one line sends pieces
+        // through this and its reply at the end (`protocol.js`). Sending is
+        // backpressured, so the answer is built at the speed the pipe drains
+        // rather than accumulating here; and every piece resets the app's
+        // timeout, so a long read never has to be given a made-up deadline.
+        const emit = (chunk) => {
+          resetIdle();
+          return protocol.sendBackpressured(socket, { id: message.id, chunk });
+        };
         try {
-          const data = await ops.OPS[message.op](message.args || {});
+          const data = await ops.OPS[message.op](message.args || {}, emit);
           protocol.send(socket, { id: message.id, ok: true, data });
         } catch (err) {
           protocol.send(socket, { id: message.id, ok: false, error: err && err.message ? err.message : String(err) });

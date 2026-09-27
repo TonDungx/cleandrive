@@ -378,9 +378,53 @@ Scanning more than one folder at once, or a whole drive, is a Pro feature
 (`pro.scan.multiroot`); until licences exist it is open to everyone.
 Choosing `C:\` in the folder dialog stays what it always was.
 
+### Fast scan
+
+With a whole drive chosen, a switch appears beside **Scan**: **Fast scan
+(needs administrator)**. Instead of opening every folder in turn, the app
+reads the drive's own catalogue — NTFS keeps one, `$MFT`, which lists every
+file on the volume with its size and its dates. Reading it needs
+administrator, so ticking the switch raises one Windows prompt; declining it
+is an answer, and the scan runs the ordinary way.
+
+What comes back is a list of names and sizes, nothing more, and it goes
+through **exactly the same scan** as always — the same folders skipped, the
+same hidden and system files left out, the same `.gitignore` rules, the same
+verdicts. There is one scanner; the catalogue only changes where it gets its
+answers. The status line afterwards names the one that answered, with what it
+read: *"Read from C:'s own catalogue: 1,894,144 records, 1.81 GB, in 23.5s."*
+
+It is offered for a whole drive and nothing smaller, because the cost is the
+drive's and not the folder's: `D:` has 516,000 records in its catalogue where
+a walk of the same drive lists 192,000, since the walk skips `node_modules`,
+`.git` and hidden folders and a catalogue cannot skip anything. For one
+folder the fast scan is the slower one.
+
+How much faster it is depends on how warm Windows' cache is, so the honest
+version is: the catalogue read is **steady** where the walk is not. Measured
+on this machine, whole drives, both scanners producing the same answer:
+
+| | Read the catalogue | Then scan it | Total | The ordinary walk |
+| --- | --- | --- | --- | --- |
+| `C:` — 1,198,835 files | 23.5 s | 45.8 s | **69.4 s** | 86.5 s (44.2–144.8 s across runs) |
+| `D:` — 515,940 files | 4.6 s | 3.0 s | **7.5 s** | 10.7 s (4.6–28.1 s across runs) |
+
+So: faster, but not by the margin the phrase "read the table instead of
+walking it" suggests — most of a fast scan is still the scan. What the
+catalogue really buys is that the first number does not move, while the last
+column swings by a factor of three on the same drive depending on what
+Windows happens to have cached.
+
+It falls back to the ordinary walk, and says why on the status line, when the
+drive is not NTFS (FAT, exFAT and ReFS have no catalogue), when it is a
+network or read-only drive, when the prompt is declined, and when the
+catalogue cannot be read. Fast scan is a Pro feature (`pro.scan.mft`); until
+licences exist it is open to everyone.
+
 ### The four figures at the top
 
-Total size · file count · folder count · how long the scan took.
+Total size · file count · folder count · how long the scan took — including
+the catalogue read, when there was one.
 
 ### Where the space went
 
@@ -1653,6 +1697,13 @@ was put back is no longer the app's to remove.
 - **Scanning `C:\` under-reports it**, because protected system locations are
   excluded by design. The status line says how many were left out; the System
   screen measures the whole drive.
+- **Fast scan is NTFS only, whole drives only, and costs a prompt.** FAT,
+  exFAT and ReFS keep no `$MFT`; network and read-only drives are refused.
+  A hard link in two folders is counted once by the catalogue and twice by the
+  walk, so the two can differ by a handful of files outside `C:\Windows`,
+  which is excluded from both anyway. The catalogue is a list of names and
+  sizes, and everything else a scan decides is decided afterwards from that
+  list, exactly as it would be from the folders themselves.
 - **The System screen measures the system drive only**, and reading every
   folder on it takes minutes rather than seconds. It has been checked on one
   machine; several Windows installations, a drive BitLocker is still encrypting,

@@ -255,6 +255,11 @@ class FileColumns {
     this.accessed = new Float64Array(capacity);
     this.created = new Float64Array(capacity);
     this.attributes = new Int32Array(capacity);
+    // Which kind of reparse point, and 0 for the overwhelming majority that
+    // are not one. It is kept apart from `attributes` because the attribute
+    // bit says only *that* a record is a reparse point, and the walk needs to
+    // know *which*: a junction must not be entered, OneDrive's folder must.
+    this.reparse = new Uint32Array(capacity);
     this.links = new Uint16Array(capacity);
     // 1 sparse, 2 compressed, 4 resident.
     this.flags = new Uint8Array(capacity);
@@ -269,7 +274,7 @@ class FileColumns {
 
   grow() {
     const capacity = this.capacity * 2;
-    for (const field of ['record', 'parent', 'size', 'allocated', 'modified', 'accessed', 'created', 'attributes', 'links', 'flags']) {
+    for (const field of ['record', 'parent', 'size', 'allocated', 'modified', 'accessed', 'created', 'attributes', 'reparse', 'links', 'flags']) {
       const bigger = new this[field].constructor(capacity);
       bigger.set(this[field]);
       this[field] = bigger;
@@ -289,6 +294,7 @@ class FileColumns {
     this.accessed[i] = described.accessedMs === null ? 0 : described.accessedMs;
     this.created[i] = described.createdMs === null ? 0 : described.createdMs;
     this.attributes[i] = described.attributes;
+    this.reparse[i] = described.reparseTag || 0;
     this.links[i] = described.hardLinkCount;
     this.flags[i] = (described.sparse ? 1 : 0) | (described.compressed ? 2 : 0) | (described.resident ? 4 : 0);
     this.name[i] = described.name;
@@ -316,6 +322,7 @@ class FileColumns {
       compressed: (flags & 2) !== 0,
       resident: (flags & 4) !== 0,
       attributes: this.attributes[i],
+      reparseTag: this.reparse[i],
       modifiedMs: this.modified[i] || null,
       accessedMs: this.accessed[i] || null,
       createdMs: this.created[i] || null,
@@ -354,12 +361,16 @@ async function collect(records, { token = null } = {}) {
       // base named here, which may come before or after it in the table.
       const names = ntfs.namesOf(record.attributes);
       const facts = ntfs.dataFacts(ntfs.unnamedData(record.attributes));
-      const into = spill.get(record.baseRecord) || { names: [], facts: null };
+      const into = spill.get(record.baseRecord) || { names: [], facts: null, reparseTag: 0 };
       if (names.length) into.names.push(...names);
       // Only the piece starting at VCN 0 carries real sizes; `dataFacts`
       // returns null for the rest, so the first real one wins and a later
       // piece cannot overwrite it with zeroes.
       if (!into.facts && facts) into.facts = facts;
+      // `$REPARSE_POINT` is small and normally sits in the base record, but a
+      // record whose attributes spilled can carry it out here. Missing it
+      // would call a junction an ordinary folder and walk into it twice.
+      if (!into.reparseTag) into.reparseTag = ntfs.reparseTagOf(record.attributes);
       spill.set(record.baseRecord, into);
       continue;
     }
@@ -375,8 +386,16 @@ async function collect(records, { token = null } = {}) {
       // this machine is exactly that, and taking the base record's answer put
       // 9 GB of virtual disks under `VIRTUA~1\...` -- a path that resolves,
       // and that nobody would recognise or be able to search for.
-      if (spilled) pendingFolders.set(number, names);
-      else if (names.length) folders.set(number, { parent: names[0].parent, name: names[0].name });
+      const info = record.attributes.find((a) => a.type === ntfs.ATTR.STANDARD_INFORMATION);
+      const standard = info && info.value ? ntfs.parseStandardInformation(info.value) : null;
+      // The attributes come along because the walk filters on hidden and
+      // system; the reparse tag comes along because a junction must not be
+      // entered while OneDrive's folder -- a reparse point of another kind
+      // entirely -- must be. See `ntfs.REPARSE_TAG`.
+      const attributes = standard ? standard.attributes : 0;
+      const reparseTag = ntfs.reparseTagOf(record.attributes);
+      if (spilled) pendingFolders.set(number, { names, attributes, reparseTag });
+      else if (names.length) folders.set(number, { parent: names[0].parent, name: names[0].name, attributes, reparseTag });
       continue;
     }
 
@@ -401,20 +420,29 @@ async function collect(records, { token = null } = {}) {
   // an extension, and a reader that stops at the base gives it a size of zero
   // -- measured here before it was fixed, 124 GB of C: went missing that way,
   // with the file *count* correct to within 37, which is how it hid.
-  for (const [number, names] of pendingFolders) {
+  for (const [number, held] of pendingFolders) {
     const extra = spill.get(number);
-    const all = extra && extra.names.length ? ntfs.sortNames([...names, ...extra.names]) : names;
-    if (all.length) folders.set(number, { parent: all[0].parent, name: all[0].name });
+    const all = extra && extra.names.length ? ntfs.sortNames([...held.names, ...extra.names]) : held.names;
+    if (all.length) {
+      folders.set(number, {
+        parent: all[0].parent,
+        name: all[0].name,
+        attributes: held.attributes,
+        reparseTag: held.reparseTag || (extra ? extra.reparseTag : 0) || 0,
+      });
+    }
   }
   for (const held of pendingFiles) {
     const extra = spill.get(held.number);
     let names = held.names;
     let facts = held.facts;
+    let reparseTag = 0;
     if (extra) {
       if (extra.names.length) names = ntfs.sortNames([...names, ...extra.names]);
       if (!facts && extra.facts) facts = extra.facts;
+      reparseTag = extra.reparseTag || 0;
     }
-    const described = ntfs.describeFrom(held.record, names, facts);
+    const described = ntfs.describeFrom(held.record, names, facts, { reparseTag });
     if (described) files.push(held.number, described);
     else stats.skipped += 1;
   }

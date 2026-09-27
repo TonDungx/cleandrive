@@ -202,6 +202,12 @@
         <div class="panel-actions">
           <button class="btn btn-primary" id="run-scan" disabled data-i18n="usage.scan">Scan folder</button>
           <button class="btn" id="cancel-scan" hidden data-i18n="app.cancel">Cancel</button>
+          <!-- A2. Shown only for a whole drive: reading the volume's catalogue
+               costs what the volume costs, not what the folder costs. -->
+          <label class="fast-scan" id="fast-scan-box" hidden>
+            <input type="checkbox" id="fast-scan" />
+            <span data-i18n="usage.fast">Fast scan (needs administrator)</span>
+          </label>
           <span class="status" id="scan-status" data-i18n="app.pickToBegin">Pick a folder to begin.</span>
         </div>
 

@@ -157,8 +157,36 @@ const ATTR = Object.freeze({
   FILE_NAME: 0x30,
   DATA: 0x80,
   INDEX_ROOT: 0x90,
+  REPARSE_POINT: 0xc0,
   END: 0xffffffff,
 });
+
+/**
+ * The reparse tags that make a folder or a file a *link*.
+ *
+ * The attribute bit alone does not: a reparse point is an extension point,
+ * and Windows hangs several unrelated things off it. OneDrive's sync root is
+ * one, every OneDrive placeholder file is another, Phone Link's `CrossDevice`
+ * folders are a third. Only a symbolic link and a junction redirect a path
+ * somewhere else, and only those two must not be walked into.
+ *
+ * This is the same rule libuv applies (`uv_fs_lstat` reports a symlink for
+ * exactly these two tags and a plain file or folder for every other), which
+ * is why the ordinary walk and this agree: `lib/real-fs.js` gets the answer by
+ * asking `lstat` a second time, and this gets it by reading the tag `$MFT`
+ * already holds. Measured consequence of getting it wrong, written down in
+ * `real-fs.js`: a scan that trusted the bit lost the whole of OneDrive, and
+ * on this machine that is Documents, Pictures and the Desktop.
+ */
+const REPARSE_TAG = Object.freeze({
+  MOUNT_POINT: 0xa0000003,
+  SYMLINK: 0xa000000c,
+});
+
+/** True for a tag a walk must refuse to follow. */
+function isLinkTag(tag) {
+  return tag === REPARSE_TAG.MOUNT_POINT || tag === REPARSE_TAG.SYMLINK;
+}
 
 /** The namespace a `$FILE_NAME` is written in. */
 const NAMESPACE = Object.freeze({ POSIX: 0, WIN32: 1, DOS: 2, WIN32_AND_DOS: 3 });
@@ -406,6 +434,20 @@ function hasAttributeList(attributes) {
 }
 
 /**
+ * Which kind of reparse point this is, or 0 when it is not one.
+ *
+ * The tag is the first four bytes of `$REPARSE_POINT`'s value. The attribute
+ * is small and always resident, so it is in the base record whenever the
+ * record has one at all -- but a record whose attributes spilled can carry it
+ * in an extension, and `system/mft.js` puts those back together before asking.
+ */
+function reparseTagOf(attributes) {
+  if (!Array.isArray(attributes)) return 0;
+  const found = attributes.find((a) => a.type === ATTR.REPARSE_POINT && a.value && a.value.length >= 4);
+  return found ? found.value.readUInt32LE(0) : 0;
+}
+
+/**
  * The size facts of one `$DATA` attribute, or null when it has none to give.
  *
  * **A non-resident attribute only carries its sizes in the piece that starts
@@ -542,8 +584,11 @@ function describeRecord(record) {
  * @param {object} record  the base record
  * @param {Array}  names   every `$FILE_NAME`, best first
  * @param {object|null} facts  from `dataFacts`
+ * @param {object} [extra]
+ * @param {number} [extra.reparseTag]  when `$REPARSE_POINT` was in an
+ *   extension record rather than in the base
  */
-function describeFrom(record, names, facts) {
+function describeFrom(record, names, facts, extra = {}) {
   if (!names || names.length === 0) return null;
   const best = names[0];
 
@@ -568,6 +613,9 @@ function describeFrom(record, names, facts) {
     compressed: Boolean(facts && facts.compressed),
     resident: Boolean(facts && facts.resident),
     attributes: standard ? standard.attributes : 0,
+    // 0 for almost everything. Non-zero says which kind of reparse point this
+    // is, and only two kinds are links (`isLinkTag`).
+    reparseTag: extra.reparseTag || reparseTagOf(record.attributes),
     modifiedMs: standard ? standard.modifiedMs : null,
     accessedMs: standard ? standard.accessedMs : null,
     createdMs: standard ? standard.createdMs : null,
@@ -607,6 +655,8 @@ module.exports = {
   dataFacts,
   parseAttributeList,
   hasAttributeList,
+  reparseTagOf,
+  isLinkTag,
   sortNames,
   applyFixups,
   parseRecord,
@@ -626,6 +676,7 @@ module.exports = {
   RECORD_FLAGS,
   BOOT,
   FILE_ATTRIBUTE,
+  REPARSE_TAG,
   ROOT_RECORD,
   FIRST_USER_RECORD,
 };

@@ -17,7 +17,7 @@
  * drive letter from `SystemDrive` rather than from the request. Their output
  * comes back as text; it is parsed in the unelevated process
  * (`system/parse.js`), so the code that runs as administrator stays as small
- * as it can be. `mft.enumerate` and `usn.query` (A2) come later.
+ * as it can be.
  *
  * D1 brings `prefetch.list`, which lists one folder and reads no file in it.
  * A prefetch file's contents would say exactly when a program last started;
@@ -25,6 +25,33 @@
  * doing that here would put a parser for untrusted input inside the
  * administrator process to save a few seconds' accuracy. The listing gives
  * the name and the modified time, and that is all that leaves.
+ *
+ * ## `mft.scan`, and the rule it breaks
+ *
+ * A2 brings `mft.scan`, which does the thing the paragraph above refuses to
+ * do: it runs a byte parser (`system/ntfs.js`, `system/mft.js`) inside the
+ * administrator process. That is deliberate and it was weighed, so the
+ * reasoning is written down here rather than left to be rediscovered.
+ *
+ * There is no version of this that keeps the parser out. `$MFT` is reachable
+ * only by opening the raw volume, `\\.\C:`, and a normal process is refused
+ * that outright -- measured on this machine, Win32 error 5, from Node and
+ * through a P/Invoke shim alike. Handing the unparsed table out instead is
+ * not an option either: C:'s is 1.81 GB, where the parsed form is 112 MB.
+ *
+ * What makes it acceptable is the input. A prefetch file is written by
+ * Windows on behalf of whatever program ran, and a program can arrange for
+ * one to exist. `$MFT` is the volume's own catalogue: to put a chosen byte in
+ * it you need write access to the raw volume, which is already administrator.
+ * There is no attacker who can reach this parser and cannot already do
+ * everything it could be tricked into doing.
+ *
+ * The parser is held to that anyway. Every field is read at a bounds-checked
+ * offset and a record that does not add up is counted as torn rather than
+ * trusted (`system/ntfs.js`, 55 checks in `scripts/test-ntfs.js`, several of
+ * them malformed records); `MAX_RECORDS` caps what a claimed `$MFT` size may
+ * make it allocate; and `scripts/test-helper.js` reads these files and fails
+ * if anything in them writes, deletes, opens for writing or runs a command.
  *
  * DISM writes its own log under `C:\Windows\Logs\DISM` while it analyses; that
  * is DISM's doing and the only thing on disk any of these touch.
@@ -35,6 +62,9 @@ const { execFile } = require('node:child_process');
 const { promises: fsp } = require('node:fs');
 
 const { measureTree } = require('../system/walk');
+const mft = require('../system/mft');
+const wire = require('../system/mft-wire');
+const { MAX_CHUNK_BYTES } = require('./protocol');
 
 /**
  * A Windows tool by absolute path, never by name.
@@ -122,6 +152,15 @@ const MAX_DIRS = 5000;
 const MAX_PREFETCH = 4096;
 
 /**
+ * How much of an `$MFT` read goes in one piece.
+ *
+ * The byte budget is what actually decides it; the record cap is a backstop
+ * for a volume of tiny names, where 512 KB would be tens of thousands of
+ * records in one `JSON.parse`.
+ */
+const MAX_CHUNK_RECORDS = 8192;
+
+/**
  * The folders a request may ask to have measured: absolute, already in their
  * normal form, on the system drive, and nothing that could be a pattern.
  */
@@ -205,6 +244,83 @@ const OPS = Object.freeze({
 
   'storagereserve.query'() {
     return runTool('storagereserve');
+  },
+
+  /**
+   * Read one NTFS volume's own catalogue and send it back (A2).
+   *
+   * The request is a single drive letter and nothing else, so there is no
+   * path in it to point anywhere: `\\.\X:` is built here from one character
+   * that has been checked to be a letter.
+   *
+   * What comes back is the table, not an answer about it. Every filter the
+   * scan applies -- hidden, system, dependency folders, installed
+   * applications, `.gitignore` -- stays in the unelevated process, because
+   * that is the only way the fast scan and the ordinary one can be made to
+   * give the same answer (`system/mft-walk.js`). So this sends every record,
+   * in pieces, as columns rather than as objects: measured, 80.5 bytes per
+   * file against 162.5 for a list of objects, on 1.2 million of them.
+   *
+   * Nine columns leave, and they are the nine the walk reads. Sizes it does
+   * not use (`sparse`, `compressed`, `resident`), the record number and the
+   * hard-link lists stay here; sending them would be 10 MB of wire nothing
+   * would look at.
+   */
+  async 'mft.scan'(args, emit) {
+    const letter = String((args && args.drive) || '').replace(/[:\\]/g, '');
+    if (!/^[A-Za-z]$/.test(letter)) throw new Error('not a drive letter');
+    if (typeof emit !== 'function') throw new Error('mft.scan has to be able to send pieces');
+
+    const started = Date.now();
+    const reader = await mft.openVolume(letter);
+    try {
+      const located = await mft.locateMft(reader);
+
+      let lastProgress = 0;
+      const { folders, files, spill, stats } = await mft.collect(
+        mft.readRecords(reader, located, {
+          onProgress: (p) => {
+            // Rate-limited here rather than in the app: the point of sending
+            // it is that somebody is watching a bar move, and a message per
+            // megabyte of table would be 1,800 of them.
+            if (Date.now() - lastProgress < 400) return;
+            lastProgress = Date.now();
+            emit({ kind: 'progress', pass: p.pass, records: p.records, of: p.of });
+          },
+        }),
+        {}
+      );
+
+      // The format is `system/mft-wire.js`, which also holds the code that
+      // puts the pieces back together. One place, so that the two ends cannot
+      // drift; and a whole table is round-tripped through it in
+      // `scripts/test-mftwalk.js` without needing a volume or a prompt.
+      for (const chunk of wire.chunksOf(folders, files, { maxBytes: MAX_CHUNK_BYTES, maxRecords: MAX_CHUNK_RECORDS })) {
+        await emit(chunk);
+      }
+
+      return {
+        drive: `${letter.toUpperCase()}:`,
+        boot: {
+          bytesPerSector: located.boot.bytesPerSector,
+          clusterBytes: located.boot.clusterBytes,
+          recordBytes: located.boot.recordBytes,
+        },
+        mftBytes: Number(located.sizeBytes),
+        extents: located.extents.length,
+        recordsRead: located.records,
+        fileCount: files.length,
+        folderCount: folders.size,
+        torn: stats.torn,
+        unused: stats.unused,
+        skipped: stats.skipped,
+        withList: stats.withList,
+        spilled: spill.size,
+        ms: Date.now() - started,
+      };
+    } finally {
+      await reader.close();
+    }
   },
 });
 

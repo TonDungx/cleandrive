@@ -11,7 +11,11 @@ const api = {
   pickFolder: () => ipcRenderer.invoke('dialog:pickFolder'),
   knownPaths: () => ipcRenderer.invoke('app:paths'),
 
-  scan: (folders) => ipcRenderer.invoke('scan:run', folders),
+  /* `fast` is the one thing the window may say about *how* to scan: read the
+     volume's own catalogue instead of walking it (A2). A boolean, not an
+     options bag -- the window used to be able to pass the scanner's whole
+     configuration through and never did. */
+  scan: (folders, fast) => ipcRenderer.invoke('scan:run', folders, fast === true),
   scanDrives: () => ipcRenderer.invoke('scan:drives'),
   cancelScan: () => ipcRenderer.invoke('scan:cancel'),
   /* one folder of the last scan's tree, a few levels deep -- never all of it */

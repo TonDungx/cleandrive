@@ -162,7 +162,7 @@ Thứ tự làm (người dùng chốt 2026-09-26): A4 → D1 → D2 → C1–C5
 
 | Mã | Tính năng | Ưu tiên | Trạng thái |
 | --- | --- | --- | --- |
-| A2 | Quét nhanh qua MFT / USN | P1 | |
+| A2 | Quét nhanh qua MFT / USN | P1 | ✅ Đã code xong (2026-09-27) — chỉ `$MFT`, không làm nhánh USN (USN không mang kích thước); công tắc chỉ cho quét cả một ổ NTFS; bộ phân tích byte chạy trong tiến trình quyền quản trị, có ghi threat model |
 | A4 | Quét nhiều gốc, nhiều ổ, ổ ngoài, ổ mạng | P1 | ✅ Đã code xong (2026-09-26) — ổ mạng chỉ đọc (đã đo), ổ rời chỉ đọc cho tới khi đo; chưa đo trên ổ cứng gắn ngoài |
 | C1–C5 | Developer Pack | P1 | ✅ Đã code xong (2026-09-26) — chỉ ship công cụ có thật; cache gói chỉ hiện lệnh, cache IDE xoá được khi IDE đóng; WSL và Docker chỉ giải thích; C1 chỉ giải thích, C5 xoá được nhưng **chỉ khi `.gitignore` của dự án khai**, và luật đó sửa luôn một lỗi có thật trong advisor |
 | D1 | App đã cài: dung lượng & lần dùng cuối | P1 | ✅ Đã code xong (2026-09-26) — bỏ nguồn last-access (đã đo là không đáng tin), dung lượng tách hai cột đo được / bên cài khai; Prefetch cần quyền quản trị, chưa ai bấm |
@@ -492,7 +492,7 @@ export const canRead = (lic, feature) => can(lic, feature) || lic.state === 'exp
 > - **Không có `cleandrive-helper.exe` riêng.** Helper chính là `CleanDrive.exe --helper --pipe <tên> --nonce <hex>`: không thêm binary, không cần toolchain build exe, và dùng chung chữ ký số với app (mục 8.1 cũng đơn giản đi).
 > - **App là pipe server, helper là client.** Node không đặt được ACL cho named pipe. Thêm nữa, pipe do tiến trình elevated tạo sẽ mang nhãn High integrity, và tiến trình thường không ghi lên được.
 > - Nonce 32 byte chỉ đi qua command line. Trên pipe, hai bên trao đổi `HMAC(nonce, vai trò + challenge)`, không bên nào gửi nonce. Client lạ chiếm pipe trước sẽ bị đá ra. Nếu server giả chiếm tên pipe, helper bỏ đi mà không trả lời gì (có test). Sau khi helper vào, pipe ngừng nhận kết nối.
-> - Danh sách thao tác trong Giai đoạn 0 chỉ có `ping` (pid + integrity level của chính helper). `system.breakdown`, `shadowstorage.query`, `dism.analyze` đi cùng A1; `mft.enumerate`, `usn.query` đi cùng A2; `prefetch.list` đi cùng D1. Harness đọc `ops.js` và fail nếu xuất hiện API ghi/xoá/chạy lệnh.
+> - Danh sách thao tác trong Giai đoạn 0 chỉ có `ping` (pid + integrity level của chính helper). `system.breakdown`, `shadowstorage.query`, `dism.analyze` đi cùng A1; `mft.scan` đi cùng A2 (`usn.query` đã bỏ); `prefetch.list` đi cùng D1. Harness đọc `ops.js`, `system/walk.js`, `lib/real-fs.js`, `system/mft.js`, `system/ntfs.js` và `system/mft-wire.js`, fail nếu xuất hiện API ghi/xoá/chạy lệnh, và đòi mọi `open(` phải kèm cờ `'r'`.
 > - Sửa trong lúc test: mọi exe mà helper (elevated) hoặc bước bật UAC gọi tới đều dùng **đường dẫn tuyệt đối trong System32**. Trên máy này PATH có `whoami.exe` của Git đứng trước bản Windows. Với một tiến trình admin, đó là lỗ hổng chiếm quyền qua PATH.
 > - Helper tự thoát khi app đóng pipe, khi 5 phút không có yêu cầu, hoặc khi nhận được thứ không phải yêu cầu hợp lệ.
 > - Chưa có IPC `helper:request` cho renderer: nó đi cùng nút "Đo với quyền quản trị" của A1, để UAC chỉ bật khi có cú click.
@@ -677,6 +677,63 @@ helper.request
 **Trường hợp biên:** ổ FAT/exFAT/ReFS thì tự quay về duyệt thường và nói rõ lý do; file có nhiều hardlink được đếm một lần; file sparse và file nén dùng `bytesOnDisk`.
 
 **Kiểm thử:** `scripts/scanner-parity.mjs` quét cùng một fixture bằng hai scanner, và kết quả phải khớp nhau về tổng byte, số file, top-50. [Unverified] Hiệu năng phải được đo và ghi lại, không được hứa hẹn con số cụ thể trong marketing trước khi đo.
+> **✅ Đã code xong (2026-09-27).** Code nằm ở:
+> - `src/main/system/ntfs.js` — hiểu byte: boot sector, fixup, FILE record, attribute, data run, `$ATTRIBUTE_LIST`, và `$REPARSE_POINT`.
+> - `src/main/system/mft.js` — hiểu volume: `openVolume`, `locateMft`, `readRecords`, `collect`, `resolveFolderPaths`, `scanVolume`, `readVolume`.
+> - `src/main/system/mft-walk.js` — bảng `$MFT` trở thành **nguồn** trả lời ba câu hỏi của `walk()`: `list(dir)`, `kind(entry)`, `stat(full, entry)`.
+> - `src/main/system/mft-wire.js` — định dạng đi giữa hai tiến trình, **cả hai chiều trong một file**.
+> - `src/main/system/mft-read.js` — nửa không cần quyền: `readElevated`, `sourceFor`.
+> - `src/main/helper/ops.js` — op `mft.scan`; `protocol.js` + `client.js` + `helper-process.js` — giao thức nhiều mảnh.
+> - `src/main/lib/scanner.js` — `walk()` nhận `source`, mặc định là hệ tệp thật; `ipc.js` — `prepareFastScan`, `whyNotFast`; `renderer/app.js` + `index.html` + `styles.css` — công tắc và dòng trạng thái.
+>
+> Harness: `test-ntfs.js` (55), `test-mft.js` (35), `test-mftwalk.js` (22, dựng cây thật trên `D:` rồi mô tả chính cây đó bằng một `$MFT` đọc ngược từ đĩa), `test-helper.js` (+16). `npm test` **2.065 kiểm tra, 46 bộ, 0 lỗi**. Ảnh chụp: `npm run shoot:fastscan`. Nửa cần admin: `npm run verify:mft -- --drive C --twice`.
+>
+> Khác với đặc tả ở trên:
+> - **Không làm nhánh USN** (đã chốt). Đo được: `FSCTL_ENUM_USN_DATA` cũng bị từ chối khi không elevated, và **USN record không mang kích thước tệp**, nên nó chỉ thay được 9% công việc; 91% là `stat`. Mục 3 của đặc tả — quét lần sau chỉ cập nhật phần thay đổi qua USN journal — **chưa làm**, vì lý do đó.
+> - **Công tắc chỉ hiện khi gốc là cả một ổ.** Lý do đo được: chi phí tỉ lệ với **ổ**, không phải với thư mục quét. `D:` có 516 k bản ghi trong bảng, còn walk cùng ổ đó chỉ liệt kê 192 k — walk bỏ qua `node_modules`, `.git`, thư mục ẩn, còn bảng mục lục thì không bỏ qua được gì. Quét một thư mục bằng `$MFT` là chậm hơn, và còn phải xin UAC để chậm hơn.
+> - **Công tắc nằm cạnh nút Quét, không nằm trên thanh chọn thư mục** như đặc tả. Thanh đó hiện trên mọi màn, nơi công tắc này vô nghĩa; còn dòng trạng thái phải đọc kèm thì nằm ngay đây.
+> - **Không có ratio trong bất cứ chỗ nào.** `$MFT` ổn định (C: 23,3 s, D: 5,4 s) còn walk dao động theo nhiệt độ cache (C: 44,2–144,8 s; D: 4,6–28,1 s) — tám lượt `verify:mft` có quyền quản trị. Câu duy nhất được nói là: **worst case của `$MFT` xấp xỉ best case của walk**.
+> - **Bộ phân tích byte chạy trong tiến trình quyền quản trị** — trái với nguyên tắc `ops.js` tự viết cho `prefetch.list`. Người dùng chốt ngày 2026-09-27 sau khi cân nhắc. Không có đường vòng: `$MFT` chỉ đọc được qua `\\.\C:` (không admin = Win32 error 5, đo cả qua Node lẫn P/Invoke), và đẩy bảng thô ra ngoài để parse là 1,81 GB so với 112 MB dạng đã parse. Cái làm nó chấp nhận được là **nguồn dữ liệu**: `$MFT` là mục lục của chính volume, muốn đặt được một byte chọn sẵn vào đó thì đã phải ghi được raw volume, tức là đã là admin. Threat model viết trong header của `ops.js`. `test-helper.js` nay đọc cả `mft.js` và `ntfs.js`, và **siết chặt hơn chứ không nới**: `open(` không còn bị cấm thẳng mà bị đòi phải có cờ `'r'`.
+> - **Giao thức helper nay gửi được nhiều mảnh** (`{ id, chunk }`), vì mọi bản ghi đều phải sang: bộ lọc nằm ở `walk()`, trong tiến trình không đặc quyền, nên helper không được phép lọc trước. Chọn dạng **cột**, đo trên 1,2 triệu tên/size/thời gian thật: cột 92,2 MB / 80,5 byte/tệp / 1.009 ms ghi + 581 ms đọc, còn mảng object 186,0 MB / 162,5 byte/tệp / 1.587 + 1.384 ms. **Trên bảng thật (2026-09-27, terminal quyền quản trị): C: 134,6 MB trong 298 mảnh, mảnh rộng nhất 542 KB, 117,7 byte/tệp, 3,7 s cả ghi lẫn đọc lại; D: 43,8 MB trong 97 mảnh, rộng nhất 518 KB, 89,0 byte/tệp, 0,9–1,1 s.** (Byte/tệp cao hơn ước lượng vì tên trên C: dài hơn mẫu dùng để đo.) Mảnh cắt theo **byte** (512 KB) chứ không theo số bản ghi, nên một ổ toàn tên 255 ký tự vẫn không dựng nổi một dòng quá `MAX_LINE_BYTES` (4.000 bản ghi tên dài nhất = 438 KB). Mảnh nào cũng reset timeout, nên deadline là *im lặng* chứ không phải tổng thời gian. `sendBackpressured` chờ `drain`, nên helper không chứa sẵn cả câu trả lời trong bộ nhớ.
+> - **Sửa kèm, lỗi thật, mất 15 GB:** bản nháp của `mft-walk.js` gọi **mọi** reparse point là link (đọc bit `FILE_ATTRIBUTE_REPARSE_POINT`). Đó đúng là lỗi mà `lib/real-fs.js` được viết ra để chữa cho walk thường: `readdir` đánh dấu mọi reparse point là symlink, nhưng chỉ symlink và junction mới là link — thư mục OneDrive, từng tệp placeholder của nó, `CrossDevice` của Phone Link, `INetCache\Content.IE5` đều là reparse point *không phải* link. Comment trong `real-fs.js` ghi lần đo cũ: một lượt quét thư mục Home mắc lỗi này mất **cả OneDrive, khoảng 15 GB**, vì Windows đặt Documents, Pictures và Desktop ở đó. Sửa: `ntfs.js` đọc `$REPARSE_POINT` (0xC0) lấy tag, tag đi theo tới tận `MftEntry`, và chỉ `0xA000000C`/`0xA0000003` là link — đúng hai tag mà libuv coi là link. Kiểm: `test-mftwalk.js` dựng một junction **thật** trên `D:` (`fs.symlink(..., 'junction')` không cần admin) cộng hai mục mang tag cloud (tag là dữ liệu dựng — không script nào tạo được placeholder thật, và test ghi rõ điều đó). **Bỏ fix thì 8 kiểm tra fail và 15,7 MB trên 98,6 MB của fixture biến mất.**
+> - **Bỏ một cái bẫy khác:** `mftSource.stat` từng có đường lui "tra theo thư mục vừa liệt kê gần nhất" cho lời gọi chỉ có đường dẫn. `walk()` chạy 16 thư mục cùng lúc, nên "gần nhất" là worker nào về sau — một tệp sẽ nhận kích thước của tệp khác. Đã xoá; không ai gọi kiểu đó.
+> - **Hardlink đếm một lần** (theo đặc tả), còn walk thấy cả hai tên nên đếm hai. Lệch đúng theo đặc tả, ngược với parity. Ngoài `WinSxS` (walk đã loại) thì gần như không gặp; `verify-mft.js` để trong ngưỡng dung sai và README ghi rõ.
+> - **`verify-mft.js` nay so qua `scan()`, không so danh sách thô.** Bản cũ phải tự biết walk sẽ bỏ qua những gì, nên mang theo một bản sao thứ ba của luật loại trừ — đúng thứ mà A2 sinh ra để chỉ có một bản. Đã xoá `walkWouldSkip`. Giờ hai bên cùng đi qua `scan()`: cùng walk, cùng bộ lọc, cùng advisor, khác mỗi nguồn. Harness còn so thêm `byType`, các nhóm verdict `safe`, số thư mục bị bảo vệ, và cho cả bảng đi qua đúng định dạng dây của helper rồi quét lần thứ ba.
+> - **`pagefile.sys` / `hiberfil.sys` / `swapfile.sys`:** walk không `stat` nổi (EPERM) còn `$MFT` đọc được, nên `verify-mft.js` tách chúng ra **theo danh sách lỗi của walk**, không theo tên viết cứng. Đây không phải điểm cộng của A2: `analyzers/system.js` đã báo cáo chúng riêng từ A1.
+> - **"Thời gian quét" ở ô thống kê nay cộng cả lượt đọc bảng mục lục.** `durationMs` trong snapshot thì không — nó là chuỗi số so giữa các lần quét, trộn hai scanner vào đó sẽ làm A5 so hai thứ khác nhau.
+> - Ô "Quét nhanh" của Free bị khoá bằng `pro.scan.mft` ở main (`prepareFastScan` trả `locked` rồi quét thường), không phải bằng UpgradeHint ở cửa sổ: từ chối thì vẫn có kết quả, chỉ là kết quả của scanner kia.
+>
+> **Đo trên đĩa thật (2026-09-27, `verify:mft` trong terminal quyền quản trị):**
+>
+> | | C: | D: |
+> | --- | --- | --- |
+> | `$MFT` | 1,81 GB, 14 mảnh, 1.894.144 ô | 0,56 GB, 4 mảnh, 590.848 ô |
+> | Đọc cả bảng | **23,5 s** · 1.198.835 tệp, 568.757 thư mục | **4,6–5,2 s** · 515.940 tệp, 74.118 thư mục |
+> | Torn | **0** | **0** |
+> | Bản ghi tràn sang record khác | 54.360, nối lại đủ 54.358 | 248, nối lại đủ 248 |
+> | Quét xong (đọc + duyệt bảng) | 69,4 s (23,5 + 45,8) | 7,5–8,3 s (4,6–5,2 + 3,0) |
+> | Walk cùng gốc | 86,5 s | 10,7–11,6 s |
+> | Heap sau cả hai lượt quét | 508 MB | 114–140 MB |
+> | Heap khi giữ cả hai bản sao của bảng | 683 MB | 152–176 MB |
+>
+> - **Parity:** C: +42 tệp / 0,09 GB trên 209 GB; D: **+1 tệp / +0,00 GB**. Số folder trùng khít cả hai ổ (C: 219.638 = 219.638; D: 32.884 = 32.884). Kích thước của mọi tệp lớn hai bên cùng thấy: trùng.
+> - **Fix reparse point là có tải trên đĩa thật:** C: có **611 thư mục reparse point — 299 là link (junction/symlink), 312 là thứ khác**, mang tag `0x9000301a`, `0x9000601a`, `0x9000701a`, `0x9000e01a` (cloud placeholder). Bản đọc theo bit thuộc tính sẽ bỏ qua cả 312 thư mục đó. D: có 9, cả 9 đều là link thật.
+> - **Lượt đọc thứ hai (cache nóng):** 28,4 s, lệch **2 tệp** sau 239 s — churn, không phải trình đọc trả lời khác.
+> - `pagefile.sys` (D:, 29,00 GB), `hiberfil.sys` (C:, 6,29 GB), `swapfile.sys` (C:, 0,25 GB): walk không mở được, `$MFT` đọc được. Harness tách riêng **theo danh sách lỗi của walk**, không theo tên viết cứng.
+>
+> **Ba lần FAIL đầu tiên — harness sai, không phải trình đọc.** Cả ba cùng một nguyên nhân: harness đem so hai danh sách **đã bị cắt ngọn** giữa hai lượt quét nhìn thấy số tệp khác nhau. `scan()` chỉ trả về 100 tệp lớn nhất, 25 loại tệp lớn nhất, và `keepPerCategory` mặc định 100. Bên `$MFT` có thêm `pagefile`/`hiberfil`/`swapfile`, nên đúng bấy nhiêu mục rơi khỏi đáy mỗi danh sách:
+> - `clang.exe`, `NoSQLBooster…exe` (C:), `PEAK_Data\level20` (D:) "chỉ walk thấy" — chúng rơi khỏi top-100 của bên `$MFT`. Đã kiểm: `clang.exe` có đúng **một** hardlink và không có tên 8.3, nên không phải lỗi hardlink cũng không phải lỗi 8.3.
+> - `mov: 0,00 vs 0,93 GB` (C:), `resource: 0,00 vs 0,80 GB` (D:) — 6,5 GB `hiberfil`+`swapfile` dồn vào nhóm `sys` làm đổi hạng thứ 25.
+> - Verdict `safe` lệch 3+3 ở một lượt D: — `keepPerCategory: 100` chạm trần.
+>
+> Sửa: hai scan chạy với `keepPerCategory: 1e6` (không còn trần), còn `largestFiles` và `byType` chỉ so **xuống tới mức mà cả hai danh sách đều còn nguyên** (lấy max của hai phần tử nhỏ nhất). Trên ngưỡng đó không danh sách nào bị cắt, nên lệch là lệch thật.
+> **Sửa kèm, cũng là lỗi của tôi:** kiểm tra `--twice` đem `bytes` của cả volume so với `totalSize` của lượt quét đã lọc — 303 GB so với 215 GB, nên in ra "230.483.060.432 bytes different". Giờ so với tổng byte của chính bảng.
+>> **Chưa làm / còn mở:**
+> - **`verify:mft` đã chạy trên đĩa thật (2026-09-27, người dùng chạy trong terminal quyền quản trị).** Trình đọc không sai chỗ nào; **ba kiểm tra trong harness thì sai**, và đã sửa — xem mục "Ba lần FAIL đầu tiên" bên dưới.
+> - Mục 3 của đặc tả (cập nhật tăng dần qua USN journal) chưa làm.
+> - Chưa đo trên FAT/exFAT/ReFS thật — máy này không có. Đường quay về đã có code và có kiểm tra, nhưng `notNtfs` chưa lần nào chạy trên một ổ thật.
+> - `$MFT` của C: tốn 710 MB heap ở phía helper cộng khoảng chừng đó ở phía app khi bảng đã sang. [Unverified] Chưa đo đỉnh bộ nhớ của cả hai tiến trình trong một lượt quét thật.
+
 
 ---
 
@@ -1984,7 +2041,7 @@ export async function getProvider() {
 | # | Rủi ro / câu hỏi | Ảnh hưởng | Hướng xử lý |
 | --- | --- | --- | --- |
 | R1 | Định dạng dữ liệu Zalo / Telegram không công khai và có thể đổi | D3 Mức 3, E5 | Thiết kế ba mức; chỉ phát hành mức nào có harness pass trên nhiều phiên bản |
-| R2 | Đọc MFT cần addon native, mâu thuẫn quy tắc dependency | A2 | Addon tự viết trong repo; harness parity với scanner thường |
+| R2 | ~~Đọc MFT cần addon native, mâu thuẫn quy tắc dependency~~ **Không xảy ra (2026-09-27).** Node đọc được volume khi đã elevated, nên toàn bộ là CommonJS thuần, không addon, không build step. Rủi ro còn lại là khác: bộ phân tích byte chạy trong tiến trình quyền quản trị | A2 | Threat model trong header `ops.js`; `test-helper.js` đọc cả `mft.js`/`ntfs.js`; parity chạy qua `scan()` trong `verify-mft.js` |
 | R3 | Encode video cần bộ mã hoá bên ngoài | E3 | Chốt một trong ba phương án ở E3 trước khi bắt đầu Giai đoạn 4 |
 | R4 | Hardlink làm người dùng hiểu sai | F4 | Chỉ Dev Pack, sau cờ ẩn, cảnh báo bắt buộc |
 | R5 | Nhiều hành động mới = nhiều bề mặt tấn công hơn (junction swap, TOCTOU) | B1, B2, B5, F4 | Mở rộng harness "phía kẻ tấn công"; kiểm tra lại đường dẫn ngay trước mỗi `apply` bằng handle đã mở |

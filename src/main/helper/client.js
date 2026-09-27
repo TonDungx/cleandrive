@@ -175,19 +175,30 @@ class HelperClient {
   /**
    * Ask for one operation from the fixed list.
    *
+   * `onChunk` is for the operations with more to say than fits in one line.
+   * Each piece is handed over as it arrives and the timeout starts again, so
+   * `timeoutMs` bounds how long the helper may go on saying *nothing* rather
+   * than how long the whole answer may take. Reading a million `$MFT` records
+   * takes as long as it takes; twenty seconds of silence means it is stuck.
+   *
    * @returns {Promise<object>} the operation's data
    */
-  request(op, args = {}, { timeoutMs = 60000 } = {}) {
+  request(op, args = {}, { timeoutMs = 60000, onChunk = null } = {}) {
     if (!this.connected) {
       return Promise.reject(Object.assign(new Error('The helper is not running'), { code: 'ENOHELPER' }));
     }
     const id = this.nextId++;
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => {
-        this.pending.delete(id);
-        reject(Object.assign(new Error(`The helper did not answer ${op}`), { code: 'ETIMEDOUT' }));
-      }, timeoutMs);
-      this.pending.set(id, { resolve, reject, timer });
+      const waiting = { resolve, reject, onChunk, timeoutMs, timer: null };
+      waiting.restart = () => {
+        clearTimeout(waiting.timer);
+        waiting.timer = setTimeout(() => {
+          this.pending.delete(id);
+          reject(Object.assign(new Error(`The helper did not answer ${op}`), { code: 'ETIMEDOUT' }));
+        }, timeoutMs);
+      };
+      waiting.restart();
+      this.pending.set(id, waiting);
       protocol.send(this.socket, { id, op, args });
     });
   }
@@ -202,6 +213,25 @@ class HelperClient {
   _onMessage(message) {
     const waiting = message && this.pending.get(message.id);
     if (!waiting) return;
+
+    // A piece of a long answer: the operation is still running.
+    if (Object.prototype.hasOwnProperty.call(message, 'chunk')) {
+      waiting.restart();
+      if (waiting.onChunk) {
+        try {
+          waiting.onChunk(message.chunk);
+        } catch (err) {
+          // The caller could not use what it was given. Stop asking for more
+          // rather than letting the rest of a million records arrive into a
+          // handler that is already failing.
+          this.pending.delete(message.id);
+          clearTimeout(waiting.timer);
+          waiting.reject(err);
+        }
+      }
+      return;
+    }
+
     this.pending.delete(message.id);
     clearTimeout(waiting.timer);
     if (message.ok) waiting.resolve(message.data);

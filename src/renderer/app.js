@@ -231,6 +231,27 @@ function showRoots() {
   $('run-scan').textContent = roots.length > 1
     ? t('usage.scanMany', 'Scan {n} folders', { n: formatCount(roots.length) })
     : t('usage.scan', 'Scan folder');
+  showFastScan();
+}
+
+/**
+ * "Fast scan (needs administrator)" (A2), offered for a whole drive only.
+ *
+ * Reading the volume's own catalogue costs what the *volume* costs. Measured:
+ * D: holds 516,000 records where a walk of the same drive lists 192,000,
+ * because the walk skips `node_modules`, `.git` and hidden folders and a
+ * catalogue cannot skip anything. For one folder the fast scan is the slower
+ * one, and it asks for a UAC prompt to be slower.
+ *
+ * Whether the drive is NTFS is not known here, and asking would be a second
+ * round trip before anybody has pressed anything. The main process checks it
+ * for real and falls back to the ordinary walk, saying so on the status line.
+ */
+function showFastScan() {
+  const roots = state.roots || [];
+  const wholeDrive = roots.length === 1 && /^[A-Za-z]:\\$/.test(roots[0]);
+  $('fast-scan-box').hidden = !wholeDrive;
+  if (!wholeDrive) $('fast-scan').checked = false;
 }
 
 async function setFolder(folder) {
@@ -363,6 +384,20 @@ function setScanRunning(running) {
 api.onScanProgress((p) => {
   // As for duplicates: a late frame must not overwrite the finished scan's line.
   if ($('cancel-scan').hidden) return;
+  // The fast scan reads the volume's catalogue before any folder is walked,
+  // and that is most of its time. Saying "scanning… 0 files" for twenty-three
+  // seconds would look like a scan that had stopped.
+  if (p.phase === 'prompt') {
+    setText($('scan-status'), t('usage.fast.prompt', 'Waiting for the administrator prompt…'));
+    return;
+  }
+  if (p.phase === 'mft') {
+    setText($('scan-status'), t('usage.fast.reading', 'Reading the drive’s own catalogue… {n} of {of} records', {
+      n: formatCount(p.records || 0),
+      of: formatCount(p.of || 0),
+    }));
+    return;
+  }
   const counts = {
     files: formatCount(p.files),
     size: formatBytes(p.bytes),
@@ -384,7 +419,10 @@ $('run-scan').addEventListener('click', async () => {
   setScanRunning(true);
   $('scan-empty').hidden = true;
 
-  const result = unwrap(await api.scan(state.roots), t('app.label.scan', 'Scan'));
+  const result = unwrap(
+    await api.scan(state.roots, !$('fast-scan-box').hidden && $('fast-scan').checked),
+    t('app.label.scan', 'Scan')
+  );
   setScanRunning(false);
   if (!result) {
     $('scan-status').textContent = t('usage.failed', 'Scan failed.');
@@ -427,7 +465,13 @@ function renderScan(result) {
   $('stat-size').textContent = formatBytes(result.totalSize);
   $('stat-files').textContent = formatCount(result.totalFiles);
   $('stat-dirs').textContent = formatCount(result.totalDirs);
-  $('stat-time').textContent = formatSeconds(result.durationMs);
+  // What it took, all of it. A fast scan spends most of its time reading the
+  // volume's catalogue before a single folder is walked, and `durationMs` is
+  // only the walking -- it is the number a snapshot keeps, so it has to stay
+  // comparable between the two scanners. The tile is what somebody reads
+  // against a clock, so the tile adds the reading back in.
+  const readMs = (result.roots || []).reduce((t, r) => t + (r.mft ? r.mft.ms : 0), 0);
+  $('stat-time').textContent = formatSeconds(result.durationMs + readMs);
   $('scan-stats').hidden = false;
 
   // Access-time support has to be known before any row renders its age.
@@ -515,6 +559,62 @@ function rootNotes(result) {
       }));
     }
   }
+  notes.push(...scannerNotes(roots));
+  return notes;
+}
+
+/**
+ * Which scanner answered (A2), and why it was not the one that was asked for.
+ *
+ * The spec asks for this in as many words: "the status line says which
+ * scanner was used". A number whose method nobody can name is a number
+ * nobody can check.
+ */
+// Spelled out one call at a time rather than looked up from a table of key
+// and string: `test:i18n` reads this source for calls to t with a literal
+// key, and a key it is handed as a variable is a key it cannot check. That is
+// exactly how "(no extension)" stayed English through A3.
+function fastRefusal(reason) {
+  switch (reason) {
+    case 'declined':
+      return t('usage.fast.declined', 'The administrator prompt was declined, so the folders were walked instead.');
+    case 'notNtfs':
+      return t('usage.fast.notNtfs', 'This drive is not NTFS, so there is no catalogue to read — the folders were walked instead.');
+    case 'notWholeDrive':
+      return t('usage.fast.notWholeDrive', 'A fast scan reads a whole drive, so this folder was walked instead.');
+    case 'network':
+      return t('usage.fast.network', 'A network drive has no catalogue this app can read, so the folders were walked instead.');
+    case 'readOnly':
+      return t('usage.fast.readOnly', 'This drive is read only, so the folders were walked instead.');
+    case 'locked':
+      return t('usage.fast.locked', 'Fast scan is part of CleanDrive Pro, so the folders were walked instead.');
+    case 'notElevated':
+      return t('usage.fast.notElevated', 'The helper started without administrator rights, so the folders were walked instead.');
+    case 'helper':
+      return t('usage.fast.helper', 'The administrator helper could not be started, so the folders were walked instead.');
+    default:
+      return t('usage.fast.unreadable', 'The drive’s catalogue could not be read, so the folders were walked instead.');
+  }
+}
+
+function scannerNotes(roots) {
+  const notes = [];
+  const fast = roots.filter((r) => r.scanner === 'mft');
+  for (const r of fast) {
+    notes.push(t('usage.fast.used', 'Read from {volume}’s own catalogue: {records} records, {size}, in {seconds}.', {
+      volume: String(r.volume).replace(/\\+$/, ''),
+      records: formatCount(r.mft.records),
+      size: formatBytes(r.mft.bytes),
+      seconds: formatSeconds(r.mft.ms),
+    }));
+    if (r.mft.torn) {
+      notes.push(t('usage.fast.torn', '{n} records in the catalogue did not add up and were left out — run chkdsk.', {
+        n: formatCount(r.mft.torn),
+      }));
+    }
+  }
+  const refused = roots.map((r) => r.fastRefused).find(Boolean);
+  if (refused) notes.push(fastRefusal(refused));
   return notes;
 }
 

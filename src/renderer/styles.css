@@ -1017,6 +1017,30 @@ main {
   margin: 14px 0 0;
 }
 
+/*
+ * "Fast scan (needs administrator)" (A2), beside the Scan button.
+ *
+ * It sits with the buttons rather than on the folder bar in the header: the
+ * header is shown on every screen and this means nothing on most of them, and
+ * the status line it has to be read against is here. Hidden unless the one
+ * folder chosen is a whole drive.
+ */
+.fast-scan {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  color: var(--text-dim);
+  line-height: 1.4;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color var(--fast);
+}
+
+.fast-scan:hover {
+  color: var(--text);
+}
+
 .spacer {
   flex: 1;
 }

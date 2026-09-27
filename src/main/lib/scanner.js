@@ -83,9 +83,26 @@ const HARD_DEPTH_CAP = 100;
  *
  * @returns {Promise<{errors: Array, cancelled: boolean, dirs: number}>}
  */
+/**
+ * Where a walk gets its answers.
+ *
+ * The real filesystem, unless a caller hands over something else. A `$MFT`
+ * read does (system/mft-walk.js): the same three questions, answered out of
+ * memory instead of out of syscalls. Everything this function decides from
+ * the answers -- the tags, the refusals, the installed applications it steps
+ * around, the `.gitignore` files it reads -- stays here, so there is one
+ * implementation of the rules and the two scanners cannot drift apart.
+ */
+const REAL_FILESYSTEM = {
+  list: (dir) => fsp.readdir(dir, { withFileTypes: true }),
+  kind: (entry, full) => entryKind(entry, full),
+  stat: (full) => fsp.lstat(full),
+};
+
 function walk(root, options, handlers) {
   const opts = { ...DEFAULTS, ...options };
   const { onFile, onDir, onSkip, onBlocked, token = new CancelToken() } = handlers;
+  const source = handlers.source || REAL_FILESYSTEM;
   // A known app's cache folder (D4), decided once when a folder is entered
   // and carried down to everything inside it, like the directory tag.
   const knownCache = typeof opts.knownCache === 'function' ? opts.knownCache : null;
@@ -140,7 +157,7 @@ function walk(root, options, handlers) {
 
       let entries;
       try {
-        entries = await fsp.readdir(dir, { withFileTypes: true });
+        entries = await source.list(dir);
       } catch (err) {
         recordError(dir, err);
         return;
@@ -203,7 +220,7 @@ function walk(root, options, handlers) {
 
         // What the entry is, asked of the file when the entry says "link":
         // OneDrive's folder is a reparse point that is not a link.
-        const kind = await entryKind(entry, full);
+        const kind = await source.kind(entry, full);
         if (kind === 'link' && !opts.followSymlinks) continue;
 
         if (kind === 'dir') {
@@ -266,7 +283,7 @@ function walk(root, options, handlers) {
 
         let stats;
         try {
-          stats = await fsp.lstat(full);
+          stats = await source.stat(full, entry);
         } catch (err) {
           recordError(full, err);
           continue;
@@ -476,7 +493,10 @@ async function scan(rootPath, options = {}, handlers = {}) {
   const onBlocked = (full, reason) => advisor.addAppFolder(full, reason);
 
   const [{ errors, cancelled, dirs }, accessTimes] = await Promise.all([
-    walk(root, opts, { onFile, onSkip, onBlocked, token }),
+    // `opts.source` is how a scan is served from a `$MFT` read instead of
+    // from the filesystem (A2). Unset by every other caller, so their walk is
+    // exactly the walk it was.
+    walk(root, opts, { onFile, onSkip, onBlocked, token, source: opts.source }),
     accessTimesAreTracked(),
   ]);
 

@@ -178,22 +178,45 @@ const withTimeout = (promise, ms, label) =>
   console.log('\nhelper: what it is allowed to do\n');
 
   {
-    // Everything that runs elevated: ops.js and the walk it measures folders with.
-    const elevatedFiles = ['src/main/helper/ops.js', 'src/main/system/walk.js', 'src/main/lib/real-fs.js'];
+    // Everything that runs elevated: ops.js, the walk it measures folders
+    // with, and -- since A2 -- the `$MFT` reader. That last one is a byte
+    // parser inside the administrator process, which is the opposite of what
+    // `prefetch.list` refused to do, so the header of ops.js says why it is
+    // there and these checks hold it to the same rules as the rest.
+    const elevatedFiles = [
+      'src/main/helper/ops.js',
+      'src/main/system/walk.js',
+      'src/main/lib/real-fs.js',
+      'src/main/system/mft.js',
+      'src/main/system/ntfs.js',
+    ];
     const sources = Object.fromEntries(elevatedFiles.map((rel) => [rel, fs.readFileSync(path.join(__dirname, '..', rel), 'utf8')]));
     // Comments stripped first: they talk about links and renames, and a check
     // that reads prose as calls cries wolf until somebody stops listening.
     const code = (src) => src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
     const writes = Object.entries(sources).flatMap(([rel, src]) => [
-      ...(code(src).match(/\.(writeFile|appendFile|rm|rmdir|unlink|rename|copyFile|mkdir|truncate|symlink|link|chmod|utimes|open|createWriteStream)\s*\(/g) || []),
+      ...(code(src).match(/\.(writeFile|appendFile|rm|rmdir|unlink|rename|copyFile|mkdir|truncate|symlink|link|chmod|utimes|createWriteStream)\s*\(/g) || []),
       ...(code(src).match(/\b(spawn|exec|execSync|execFileSync)\s*\(/g) || []),
     ].map((w) => `${rel}: ${w}`));
-    check('nothing that runs elevated writes, deletes, opens for writing or runs a command it was given', writes.length === 0,
+    check('nothing that runs elevated writes, deletes or runs a command it was given', writes.length === 0,
       writes.join(', '));
+
+    // `open` used to be on that list outright, and could not stay there: the
+    // `$MFT` reader opens the raw volume, which is the one thing it does.
+    // Banning the call would have meant banning the feature, so what is
+    // checked now is the flag -- every open in elevated code asks for 'r',
+    // and an open without a flag argument at all defaults to 'r+'.
+    const opens = Object.entries(sources).flatMap(([rel, src]) =>
+      [...code(src).matchAll(/\.open\(([^)]*)\)/g)].map((m) => `${rel}: open(${m[1].trim()})`)
+    );
+    check('and every file it opens, it opens read-only',
+      opens.every((o) => /,\s*'r'\s*\)$/.test(o)),
+      opens.length ? opens.join(' | ') : 'it opens no file at all');
 
     const source = sources['src/main/helper/ops.js'];
     const requires = [...source.matchAll(/require\('([^']+)'\)/g)].map((m) => m[1]);
-    check('and it loads nothing else of the app\'s', requires.every((r) => r.startsWith('node:') || r === '../system/walk'),
+    const allowed = new Set(['../system/walk', '../system/mft', '../system/mft-wire', './protocol']);
+    check('and it loads nothing else of the app\'s', requires.every((r) => r.startsWith('node:') || allowed.has(r)),
       requires.join(', '));
 
     const calls = source.match(/execFile\(/g) || [];
@@ -215,8 +238,31 @@ const withTimeout = (promise, ms, label) =>
     check('the drive letter comes from the environment and is a drive letter', /^[A-Z]:$/.test(drive), drive);
 
     check('the list is what this phase ships',
-      JSON.stringify(Object.keys(OPS)) === JSON.stringify(['ping', 'system.breakdown', 'prefetch.list', 'shadowstorage.query', 'dism.analyze', 'ntfs.info', 'storagereserve.query']),
+      JSON.stringify(Object.keys(OPS)) === JSON.stringify(['ping', 'system.breakdown', 'prefetch.list', 'shadowstorage.query', 'dism.analyze', 'ntfs.info', 'storagereserve.query', 'mft.scan']),
       Object.keys(OPS).join(', '));
+
+    // `mft.scan` (A2) takes one drive letter and builds the device path from
+    // it here. There is no path in the request, so there is nothing in one to
+    // point at another volume or at a file.
+    const mftOp = source.slice(source.indexOf("'mft.scan'"));
+    check('the catalogue read takes a drive letter and checks it is one',
+      /\/\^\[A-Za-z\]\$\/\.test\(letter\)/.test(mftOp), mftOp.split('\n').slice(0, 6).join(' ').slice(0, 120));
+    let refused = null;
+    try {
+      await OPS['mft.scan']({ drive: '..\\\\..\\\\Windows' }, () => {});
+    } catch (err) {
+      refused = err.message;
+    }
+    check('and refuses anything that is not one', refused === 'not a drive letter', String(refused));
+    for (const bad of ['', 'CD', '1', '\\\\?\\C:', null]) {
+      let why = null;
+      try {
+        await OPS['mft.scan']({ drive: bad }, () => {});
+      } catch (err) {
+        why = err.message;
+      }
+      check(`  ${JSON.stringify(bad)} is refused`, why === 'not a drive letter', String(why));
+    }
 
     // `prefetch.list` (D1) lists one fixed folder. It takes no arguments at
     // all, which is what keeps it from being pointed anywhere else, and it
@@ -239,6 +285,148 @@ const withTimeout = (promise, ms, label) =>
         reply.files.every((f) => Object.keys(f).join(',') === 'name,mtimeMs,size'),
         JSON.stringify(reply.files[0] || {}));
     }
+  }
+
+  console.log('\nhelper: an answer too big for one line\n');
+
+  {
+    // `$MFT` is 112 MB of records on this machine's C:, against a line limit
+    // of one, so an operation may send pieces as it goes (protocol.js). What
+    // is checked here is the app's side of that, against a peer that speaks
+    // the real protocol over a real pipe: the elevated half needs a volume
+    // handle and so belongs to `npm run verify:mft`.
+    const peer = {
+      chunks: 40,
+      gapMs: 0,
+      seen: [],
+      launch: null,
+    };
+    peer.launch = async (name, nonce) => {
+      const socket = net.connect(protocol.pipePath(name));
+      const challenge = protocol.randomHex(16);
+      socket.on('connect', () => {
+        protocol.send(socket, { hello: 1, challenge, proof: protocol.proof(nonce, 'helper', challenge) });
+      });
+      socket.on('error', () => {});
+      let trusted = false;
+      protocol.readLines(socket, async (message) => {
+        if (!trusted) {
+          trusted = true;
+          return;
+        }
+        for (let i = 0; i < peer.chunks; i++) {
+          await protocol.sendBackpressured(socket, { id: message.id, chunk: { kind: 'files', from: i, count: 1 } });
+          if (peer.gapMs) await new Promise((r) => setTimeout(r, peer.gapMs));
+        }
+        protocol.send(socket, { id: message.id, ok: true, data: { sent: peer.chunks } });
+      }, () => socket.destroy());
+      peer.socket = socket;
+    };
+
+    const client = new HelperClient({ launch: peer.launch, connectTimeoutMs: 8000 });
+    await withTimeout(client.start(), 8000, 'chunked peer');
+
+    const got = [];
+    const data = await withTimeout(
+      client.request('anything', {}, { timeoutMs: 8000, onChunk: (c) => got.push(c) }),
+      12000,
+      'chunked request'
+    );
+    check('every piece arrives, in order, before the reply', got.length === peer.chunks && got.every((c, i) => c.from === i),
+      `${got.length} of ${peer.chunks}`);
+    check('and the reply is what resolves the request', data && data.sent === peer.chunks, JSON.stringify(data));
+
+    // The point of resetting per piece: a read that takes longer than the
+    // timeout is fine as long as it keeps saying something. 12 pieces 120 ms
+    // apart is 1.4 s of work under a 400 ms limit.
+    peer.chunks = 12;
+    peer.gapMs = 120;
+    const slow = [];
+    let slowError = null;
+    try {
+      await withTimeout(client.request('anything', {}, { timeoutMs: 400, onChunk: (c) => slow.push(c) }), 12000, 'slow');
+    } catch (err) {
+      slowError = err.code || err.message;
+    }
+    check('a long answer does not time out while pieces keep coming',
+      slowError === null && slow.length === 12,
+      slowError ? String(slowError) : `${slow.length} pieces over ~1.4 s under a 400 ms limit`);
+
+    // And silence still does.
+    peer.chunks = 0;
+    peer.gapMs = 0;
+    const quiet = new HelperClient({
+      launch: async (name, nonce) => {
+        const socket = net.connect(protocol.pipePath(name));
+        const challenge = protocol.randomHex(16);
+        socket.on('connect', () => protocol.send(socket, { hello: 1, challenge, proof: protocol.proof(nonce, 'helper', challenge) }));
+        socket.on('error', () => {});
+        // Answers the handshake and then says nothing at all.
+        protocol.readLines(socket, () => {}, () => socket.destroy());
+        quiet.socket2 = socket;
+      },
+      connectTimeoutMs: 8000,
+    });
+    await withTimeout(quiet.start(), 8000, 'quiet peer');
+    let quietError = null;
+    try {
+      await withTimeout(quiet.request('anything', {}, { timeoutMs: 300 }), 5000, 'quiet');
+    } catch (err) {
+      quietError = err.code;
+    }
+    check('silence still times out', quietError === 'ETIMEDOUT', String(quietError));
+    quiet.stop();
+    if (quiet.socket2) quiet.socket2.destroy();
+
+    // A handler that cannot use what it was given stops the request rather
+    // than letting the rest of a million records arrive into it.
+    peer.chunks = 200;
+    let thrown = null;
+    try {
+      await withTimeout(client.request('anything', {}, {
+        timeoutMs: 8000,
+        onChunk: (c) => {
+          if (c.from === 3) throw new Error('out of memory, say');
+        },
+      }), 12000, 'throwing handler');
+    } catch (err) {
+      thrown = err.message;
+    }
+    check('a handler that throws ends the request instead of being called again',
+      thrown === 'out of memory, say', String(thrown));
+
+    client.stop();
+    if (peer.socket) peer.socket.destroy();
+  }
+
+  {
+    // The helper's side of the same thing, as far as it can be seen without a
+    // volume handle: the op is handed something to send pieces with, and that
+    // something waits for the pipe rather than filling memory with an answer
+    // the app has not read yet.
+    const source = fs.readFileSync(HELPER, 'utf8');
+    check('the helper hands every operation a way to send pieces',
+      /ops\.OPS\[message\.op\]\(message\.args \|\| \{\}, emit\)/.test(source));
+    check('and each piece resets the app’s timeout and waits for the pipe',
+      /const emit = \(chunk\) => \{[\s\S]*resetIdle\(\);[\s\S]*sendBackpressured\(socket, \{ id: message\.id, chunk \}\)/.test(source));
+
+    // A piece is cut by bytes rather than by record count, so that a volume
+    // full of long names cannot build a line the reader will refuse. Checked
+    // by building one: 4,000 files whose names are the longest NTFS allows.
+    const wire = require('../src/main/system/mft-wire');
+    const long = 'w'.repeat(255);
+    const fat = new wire.Columns(8192);
+    for (let i = 0; i < 4000; i++) {
+      fat.append({ count: 1, name: [long], parent: [5], size: [1], allocated: [4096], modified: [0], accessed: [0], created: [0], attributes: [32], reparse: [0] });
+    }
+    const pieces = [...wire.chunksOf(new Map(), fat, { maxBytes: protocol.MAX_CHUNK_BYTES, maxRecords: 8192 })];
+    const widest = Math.max(...pieces.map((c) => Buffer.byteLength(JSON.stringify({ id: 1, chunk: c }), 'utf8')));
+    check('a piece is cut by bytes, so the longest names Windows allows still fit in a line',
+      pieces.length > 1 && widest < protocol.MAX_LINE_BYTES,
+      `${pieces.length} pieces, widest ${(widest / 1024).toFixed(0)} KB, line limit ${(protocol.MAX_LINE_BYTES / 1024).toFixed(0)} KB`);
+    check('and the budget itself leaves room under that limit',
+      protocol.MAX_CHUNK_BYTES < protocol.MAX_LINE_BYTES,
+      `${(protocol.MAX_CHUNK_BYTES / 1024).toFixed(0)} KB of ${(protocol.MAX_LINE_BYTES / 1024).toFixed(0)} KB`);
   }
 
   console.log('\nhelper: which folders it will measure\n');
