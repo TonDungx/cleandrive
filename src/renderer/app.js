@@ -2210,6 +2210,76 @@ async function quarantineSelected(paths, onDone, options = {}) {
   if (result.failed.length) console.warn('Left where they were:', result.failed);
 }
 
+/**
+ * Move a whole folder to another drive (B2).
+ *
+ * Started from the map, on a folder somebody is looking at and wondering
+ * about -- which is why there is no list of "folders you should move". Nothing
+ * here can honestly rank that; it depends on what you open, not on what the
+ * disk can see.
+ *
+ * The destination is asked for first, before any dialog about copying, so the
+ * question "where to?" is never answered by a person who has already agreed
+ * to something. The confirmation comes from the main process afterwards.
+ */
+async function relocateFolder(folderPath, options = {}) {
+  const where = unwrap(await api.relocateChoose(folderPath), t('relocate.label', 'Move to another drive'));
+  if (!where || !where.chosen) return;
+
+  progressPanel.show(t('relocate.checking', 'Reading the folder'));
+  let result;
+  try {
+    result = unwrap(
+      await api.relocate([folderPath], {
+        // Spread the same way `quarantineSelected` does, so a harness driving
+        // the real window can suppress the dialog the way it already does for
+        // every other action. The main process still decides whether to honour
+        // that; the window cannot switch the confirmation off by itself.
+        ...options,
+        destination: where.destination,
+        leaveShortcut: options.leaveShortcut === true,
+      }),
+      t('relocate.label', 'Move to another drive')
+    );
+  } finally {
+    progressPanel.hide();
+  }
+  if (!result) return;
+
+  // Said out loud, never a quiet downgrade.
+  if (result.refused === 'locked') {
+    toast(t('relocate.locked', 'Moving a folder to another drive is part of CleanDrive Pro.'), true);
+    return;
+  }
+
+  const moved = result.moved.length;
+  if (moved > 0 && window.SpaceMap) window.SpaceMap.refresh();
+
+  if (result.cancelled && moved === 0) {
+    toast(t('relocate.cancelled', 'Cancelled — nothing was moved.'));
+    return;
+  }
+
+  if (moved > 0) {
+    const one = result.moved[0];
+    toast(
+      t('relocate.done', 'Moved {name} to {drive}, all {files} file(s) checked — {originals}', {
+        name: one.path.split('\\').pop(),
+        drive: where.drive || where.destination,
+        files: formatCount(one.files),
+        originals: result.freedBytes > 0
+          ? t('relocate.freed', 'the original is deleted, {size} freed', { size: formatBytes(result.freedBytes) })
+          : t('relocate.inBin', 'the original is in the Recycle Bin, not freed until it is emptied'),
+      })
+    );
+    return;
+  }
+
+  const why = result.failed[0];
+  toast(t('relocate.nothing', 'Nothing was moved. {reason}', { reason: why ? why.error : '' }), true);
+  if (result.failed.length) console.warn('Not moved:', result.failed);
+}
+
 /* ------------------------------------------------------- language changes */
 
 /**

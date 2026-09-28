@@ -434,9 +434,43 @@ and the folders inside those are drawn inside them, three levels deep where
 there is room. **Click a folder to go into it**; the path above the map goes
 back up. Point at a tile for its full path, its size, how many files it holds
 and its share of the folder around it, and — for a file the app has an opinion
-about — the verdict and how sure it is. Right-click for **View**, **Reveal**
-and **Add to selection**, which ticks the file into the same floating bar the
-largest files use.
+about — the verdict and how sure it is. Right-click a file for **View**,
+**Reveal** and **Add to selection**, which ticks it into the same floating bar
+the largest files use; right-click a folder for **Open**, **Reveal** and
+**Move to another drive…**.
+
+### Moving a whole folder to another drive
+
+`Videos\2019` is not two hundred files, it is a year — so this moves the
+arrangement, not just the bytes. Every file is copied, hashed on the way out
+and read back before it counts; empty folders come too; names, timestamps and
+the read-only bit are kept; and the extra data Windows hangs off a file — the
+mark that says it was downloaded from the internet, among others — comes with
+it, because a copy without that mark is treated as more trustworthy than the
+original was.
+
+Nothing happens to the original until the copy has been proved. Then the
+original folder goes to the Recycle Bin, whole, so it can be dragged back out
+in one piece. **That frees nothing yet** — the Recycle Bin is on the drive the
+folder just left, and the space comes back when the bin is emptied. If
+anything at all fails, the half-made copy is removed and the original is left
+exactly where it was; and if the copy is fine but the original cannot be
+moved, the copy is removed too, because two copies and no word about it is the
+worst outcome available.
+
+A link inside the folder is stepped over rather than followed — copying
+through one would drag in somebody else's folder, and recreating it would
+leave a link pointing back at the drive the files just left. You can choose to
+leave a shortcut where the folder was. It is a `.lnk`, never a junction: a
+junction is transparent, so every tool that walks the disk follows one without
+being told, and a folder "moved" behind one is counted on both drives at once.
+
+Three kinds of folder are handed over rather than moved, each to the tool that
+actually knows where it lives: a **game** to Steam's own *Move install folder*,
+a folder **Windows has a registered location for** (Documents, Pictures and
+the rest) to Properties → Location, and a folder **inside OneDrive** to
+nothing at all — its files are on your other devices too, and binning the
+original here would delete them there.
 
 It is drawn in weights of one colour: the top level at full strength, each
 level inside a step paler. Nothing is coloured by file type — green, amber and

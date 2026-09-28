@@ -1155,6 +1155,58 @@
     'task.problem.refused': '{label}: Windows Task Scheduler từ chối tác vụ ({error}).',
     'task.problem.unrunnable':
       'Tác vụ chưa được đăng ký, vì Windows sẽ không chạy được nó: {problem}.',
+    'action.refused.folder': 'Thao tác này không áp dụng cho thư mục',
+
+    'map.menu.relocate': 'Chuyển sang ổ khác…',
+    'relocate.label': 'Chuyển sang ổ khác',
+    'relocate.checking': 'Đang đọc thư mục',
+    'relocate.cancelled': 'Đã huỷ — không có gì được chuyển.',
+    'relocate.locked': 'Chuyển cả thư mục sang ổ khác là tính năng của CleanDrive Pro.',
+    'relocate.done': 'Đã chuyển {name} sang {drive}, đã kiểm đủ {files} tệp — {originals}',
+    'relocate.freed': 'bản gốc đã xoá, giải phóng {size}',
+    'relocate.inBin': 'bản gốc nằm trong Thùng rác, chưa giải phóng cho tới khi dọn Thùng rác',
+    'relocate.nothing': 'Không có gì được chuyển. {reason}',
+
+    'dialog.chooseRelocate': 'Chọn nơi chuyển thư mục này tới — trên một ổ khác',
+    'dialog.relocate.title': 'Chuyển sang ổ khác',
+    'dialog.relocate.go': 'Chuyển thư mục',
+    'dialog.relocate.message': 'Chuyển {n} thư mục sang ổ khác?',
+    'dialog.relocate.messageOne': 'Chuyển “{name}” sang ổ khác?',
+    'dialog.relocate.detail':
+      '{files} tệp, {size}, sẽ được chép sang {destination} và kiểm lại ở đó trước đã.',
+    'dialog.relocate.binned':
+      'Sau đó bản gốc vào Thùng rác — nên chưa giải phóng được gì trên ổ này cho tới khi dọn Thùng rác.',
+    'dialog.relocate.deleting':
+      'Sau đó bản gốc sẽ bị xoá vĩnh viễn. Đó là cách duy nhất việc này giải phóng dung lượng, và không hoàn tác được.',
+    'dialog.relocate.links':
+      '{n} lối tắt bên trong được bước qua chứ không đi theo, và không được chép.',
+    'dialog.relocate.shortcut':
+      'Một lối tắt được để lại ở chỗ cũ. Đó là shortcut, không phải junction, nên không thứ gì khác trên máy đi theo nó một cách vô tình.',
+
+    'relocate.why.notThere': 'Thư mục đó không còn ở đó nữa',
+    'relocate.why.notAFolder': 'Cái này chuyển thư mục, mà đó không phải thư mục',
+    'relocate.why.root': 'Gốc ổ đĩa hay thư mục cá nhân không phải thứ để chuyển đi',
+    'relocate.why.system': 'Đây là vị trí hệ thống của Windows',
+    'relocate.why.network': 'Thư mục trên mạng thì để yên',
+    'relocate.why.sameVolume': 'Vẫn là ổ đó, nên chẳng giải phóng được gì',
+    'relocate.why.nested': 'Đích nằm bên trong chính thư mục đang chuyển',
+    'relocate.why.destInSource': 'Thư mục đang chuyển nằm bên trong đích',
+    'relocate.why.occupied': 'Ở đích đã có sẵn thứ trùng tên',
+    'relocate.why.full': 'Ổ {drive} không đủ chỗ',
+    'relocate.why.noDestination': 'Chưa chọn thư mục đích',
+    'relocate.why.destUnusable': 'Không ghi được vào đích đó',
+    'relocate.why.empty': 'Thư mục đó không có gì để chuyển',
+    'relocate.why.app': '{app} có ghi nhớ chỗ này nằm ở đâu. Hãy chuyển từ trong {app}.',
+    'relocate.why.steam': 'Steam có ghi nhớ game này nằm ở đâu — dùng “Move install folder” của chính Steam',
+    'relocate.why.shell':
+      'Windows có ghi nhớ {name} nằm ở đâu. Bấm chuột phải vào nó, rồi Properties → Location → Move.',
+    'relocate.why.onedrive':
+      'Thư mục này nằm trong OneDrive, nên tệp của nó còn ở các thiết bị khác. Chuyển ở đây sẽ xoá chúng ở đó.',
+    'relocate.why.copyFailed': 'Bản sao chưa xong, nên không có gì được chuyển ({error})',
+    'relocate.why.binFailed':
+      'Bản sao thì ổn, nhưng không chuyển được bản gốc ({error}), nên không có gì thay đổi',
+    'relocate.shortcut.note': 'CleanDrive đã chuyển sang {target}',
+
     'task.problem.noProgram': 'không có chương trình nào để tác vụ chạy',
     'task.problem.notAppDirectory': '{path} không phải thư mục khởi chạy được ứng dụng',
     'task.problem.windowsOnly': 'Hiện chỉ lập lịch được trên Windows',

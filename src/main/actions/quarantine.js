@@ -47,6 +47,13 @@ const cloud = require('../lib/media/cloud');
 const cloudState = require('../lib/cloud-state');
 const { leaveOpenApps } = require('./recycle');
 const { CancelToken, throttle } = require('../lib/util');
+const {
+  identity,
+  sameFile,
+  hashFile,
+  copyHashed,
+  removeQuietly,
+} = require('../lib/verified-copy');
 
 const exists = (p) => fsp.lstat(p).then(() => true, () => false);
 
@@ -82,71 +89,6 @@ const say = {
 /* the file                                                                    */
 /* -------------------------------------------------------------------------- */
 
-/**
- * What makes this path this file: its identity on the disk, its size and
- * modification time, and where its folder really is. Compared, never trusted.
- */
-async function identity(p) {
-  try {
-    const st = await fsp.lstat(p, { bigint: true });
-    return {
-      file: st.isFile() && !st.isSymbolicLink(),
-      dev: String(st.dev),
-      ino: String(st.ino),
-      size: Number(st.size),
-      mtime: String(st.mtimeNs),
-      parent: await fsp.realpath(path.dirname(p)),
-    };
-  } catch {
-    return null;
-  }
-}
-
-const sameFile = (a, b) =>
-  Boolean(a && b) && a.file && b.file && a.dev === b.dev && a.ino === b.ino && a.size === b.size && a.mtime === b.mtime &&
-  a.parent.toLowerCase() === b.parent.toLowerCase();
-
-/** SHA-256 of a file, read through. */
-async function hashFile(p) {
-  const hash = crypto.createHash('sha256');
-  for await (const chunk of fs.createReadStream(p, { highWaterMark: 1 << 20 })) hash.update(chunk);
-  return hash.digest('hex');
-}
-
-/**
- * Copy `from` to `to`, which must not exist yet, hashing what was read.
- *
- * `deps.write` stands in for the write, so the harness can fail it part way
- * through -- a full disk, a drive pulled out -- without a real one.
- */
-async function copyHashed(from, to, { token = null, onBytes = () => {}, write = null } = {}) {
-  const hash = crypto.createHash('sha256');
-  let bytes = 0;
-  const handle = await fsp.open(to, 'wx');
-  try {
-    for await (const chunk of fs.createReadStream(from, { highWaterMark: 1 << 20 })) {
-      if (token && token.cancelled) throw Object.assign(new Error('cancelled'), { code: 'ECANCELLED' });
-      hash.update(chunk);
-      let offset = 0;
-      while (offset < chunk.length) {
-        const part = chunk.subarray(offset);
-        const { bytesWritten } = write ? await write(handle, part, bytes + offset) : await handle.write(part);
-        if (!bytesWritten) throw Object.assign(new Error('nothing written'), { code: 'EIO' });
-        offset += bytesWritten;
-      }
-      bytes += chunk.length;
-      onBytes(chunk.length);
-    }
-    // Before the copy is read back and before the original is touched: a copy
-    // still in a cache is not a copy that survives a power cut.
-    await handle.sync();
-  } finally {
-    await handle.close();
-  }
-  return { sha256: hash.digest('hex'), bytes };
-}
-
-const removeQuietly = (p) => fsp.rm(p, { force: true }).catch(() => {});
 
 /* -------------------------------------------------------------------------- */
 /* the way back                                                                */

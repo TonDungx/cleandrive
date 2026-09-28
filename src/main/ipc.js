@@ -35,7 +35,7 @@ const planner = require('./planner/plan');
 const { HelperClient, appLauncher } = require('./helper/client');
 const licenseState = require('./license/state');
 const entitlements = require('./license/entitlements');
-const { CancelToken, formatBytes, formatDuration, pathKey } = require('./lib/util');
+const { CancelToken, formatBytes, formatDuration, pathKey, displayPath } = require('./lib/util');
 const { services } = require('./services');
 const scheduler = require('./lib/scheduler');
 const { runAutoClean } = require('./lib/autoclean');
@@ -77,6 +77,10 @@ let scanTreeSerial = 0;
  * The kinds of action that take a file out of the folder it was in. After one
  * of these the map stops drawing what moved; a restore puts files back and is
  * not one of them.
+ *
+ * `relocate` (B2) is not here because it does not move a file out of a folder
+ * -- it moves the folder. It is handled beside this, through
+ * `removeFolders`.
  */
 const LEAVES_ITS_FOLDER = new Set(['recycle', 'quarantine']);
 
@@ -166,6 +170,15 @@ function setScanHarness(harness) {
 let quarantineHarness = null;
 function setQuarantineHarness(harness) {
   quarantineHarness = harness || null;
+}
+
+/**
+ * The same, for relocating a folder (B2): the folder "Choose…" returns
+ * (`pick`) and the Recycle Bin (`shell`). The app never sets these either.
+ */
+let relocateHarness = null;
+function setRelocateHarness(harness) {
+  relocateHarness = harness || null;
 }
 
 /**
@@ -784,7 +797,23 @@ function register() {
 
       try {
         const result = await execute(
-          { kind, items: list, options: { dryRun: options.dryRun === true } },
+          {
+            kind,
+            items: list,
+            options: {
+              dryRun: options.dryRun === true,
+              // B2 carries three answers the window collected: where to, and
+              // the two switches on the confirmation. Nothing else from the
+              // window reaches a handler's options.
+              ...(kind === 'relocate'
+                ? {
+                    destination: typeof options.destination === 'string' ? options.destination : null,
+                    leaveShortcut: options.leaveShortcut === true,
+                    deleteOriginal: options.deleteOriginal === true,
+                  }
+                : {}),
+            },
+          },
           {
             token,
             onProgress: send,
@@ -794,7 +823,9 @@ function register() {
             deps:
               kind === 'quarantine'
                 ? await quarantineDeps()
-                : kind === 'dehydrate' && cloudDeps
+                : kind === 'relocate'
+                  ? relocateHarness || undefined
+                  : kind === 'dehydrate' && cloudDeps
                   ? cloudDeps
                   : kind === 'recycle' && appCacheHarness
                     ? { appCacheEnv: appCacheHarness.env, runningProcessNames: appCacheHarness.runningProcessNames }
@@ -809,8 +840,14 @@ function register() {
         );
 
         // What left its folder leaves the map too, whichever screen moved it.
-        if (!result.dryRun && result.moved.length > 0 && scanTree && LEAVES_ITS_FOLDER.has(kind)) {
-          scanTree.tree.remove(result.moved);
+        if (!result.dryRun && result.moved.length > 0 && scanTree) {
+          // A relocated folder is not a file that left a folder, it is the
+          // folder -- node, contents and all the bytes its parents were
+          // counting. Taking it out the file way would decrement one file and
+          // leave the map drawing 103 MB that is now on another drive, which
+          // is what the first screenshots of B2 showed.
+          if (kind === 'relocate') scanTree.tree.removeFolders(result.moved);
+          else if (LEAVES_ITS_FOLDER.has(kind)) scanTree.tree.remove(result.moved);
         }
 
         if (!result.dryRun && result.moved.length > 0) {
@@ -1453,6 +1490,44 @@ function register() {
 
   // The folder is picked in the native dialog, here, and checked and made
   // here: the window never names a path for files to be copied into.
+  /**
+   * Where a folder should go (B2).
+   *
+   * Separate from `quarantine:choose` although both pick a folder, because
+   * they answer different questions and keep different things. The quarantine
+   * zone is a setting: chosen once, remembered, prepared, written to
+   * settings. A relocate destination is chosen per move and remembered
+   * nowhere -- "move this to D:\Archive" is not a policy.
+   *
+   * The drive is described back to the window so the confirmation can say how
+   * much room is on it, and so "the same drive" is answered before the person
+   * has read a dialog about copying.
+   */
+  handle('relocate:choose', (event, forFolder) =>
+    guard(async () => {
+      let picked = null;
+      if (relocateHarness && typeof relocateHarness.pick === 'function') {
+        picked = await relocateHarness.pick(forFolder);
+      } else {
+        const win = BrowserWindow.fromWebContents(event.sender);
+        const result = await dialog.showOpenDialog(win, {
+          title: t('dialog.chooseRelocate', 'Choose where this folder should go — on a different drive'),
+          properties: ['openDirectory', 'createDirectory'],
+        });
+        picked = result.canceled ? null : result.filePaths[0];
+      }
+      if (!picked) return { chosen: false };
+
+      const drive = await volumes.describePath(picked).catch(() => null);
+      return {
+        chosen: true,
+        destination: picked,
+        drive: drive ? displayPath(drive.root || picked) : null,
+        freeBytes: drive && Number.isFinite(drive.freeBytes) ? drive.freeBytes : null,
+      };
+    })
+  );
+
   handle('quarantine:choose', (event) =>
     guard(async () => {
       let picked = null;
@@ -2980,8 +3055,75 @@ async function confirmQuarantine(win, description, planned) {
   return response === 0;
 }
 
+/**
+ * The confirmation in front of moving a folder to another drive (B2).
+ *
+ * It says three things the person cannot see from the treemap, in the order
+ * that matters if they read only the first line:
+ *
+ *   - how much is actually going, in files as well as bytes, because "move
+ *     this folder" hides how long it will take
+ *   - that this frees nothing yet, since the original goes to the Recycle Bin
+ *     on the same drive -- the sentence the rest of this app already insists on
+ *   - what is being left behind: a link stepped over, a stream carried across
+ *
+ * There is no "do not ask again".
+ */
+async function confirmRelocate(win, description) {
+  const one = description.folders && description.folders.length === 1 ? description.folders[0] : null;
+  const lines = [];
+
+  lines.push(
+    t('dialog.relocate.detail', '{files} file(s), {size}, will be copied to {destination} and checked there first.', {
+      files: description.files.toLocaleString(language.current()),
+      size: formatBytes(description.bytes),
+      destination: displayPath(description.destination || ''),
+    })
+  );
+
+  lines.push(
+    description.deleteOriginal
+      ? t(
+          'dialog.relocate.deleting',
+          'The original will then be deleted for good. That is the only way this frees space, and it cannot be undone.'
+        )
+      : t(
+          'dialog.relocate.binned',
+          'The original then goes to the Recycle Bin — so nothing is freed on this drive until the bin is emptied.'
+        )
+  );
+
+  if (description.skippedLinks > 0) {
+    lines.push(
+      t('dialog.relocate.links', '{n} link(s) inside it are stepped over rather than followed, and are not copied.', {
+        n: description.skippedLinks.toLocaleString(language.current()),
+      })
+    );
+  }
+  if (description.leaveShortcut) {
+    lines.push(t('dialog.relocate.shortcut', 'A shortcut is left where the folder was. It is a shortcut, not a junction, so nothing else on the computer will follow it by accident.'));
+  }
+
+  const { response } = await dialog.showMessageBox(win, {
+    type: 'warning',
+    buttons: [t('dialog.relocate.go', 'Move the folder'), t('app.cancel', 'Cancel')],
+    defaultId: 1,
+    cancelId: 1,
+    title: t('dialog.relocate.title', 'Move to another drive'),
+    message: one
+      ? t('dialog.relocate.messageOne', 'Move “{name}” to another drive?', { name: path.basename(one.path) })
+      : t('dialog.relocate.message', 'Move {n} folder(s) to another drive?', {
+          n: description.count.toLocaleString(language.current()),
+        }),
+    detail: lines.join('\n\n'),
+  });
+
+  return response === 0;
+}
+
 async function confirmAction(win, description, planned, options) {
   if (description.kind === 'quarantine') return confirmQuarantine(win, description, planned);
+  if (description.kind === 'relocate') return confirmRelocate(win, description);
   if (description.kind === 'dehydrate') return confirmDehydrate(win, description);
   if (description.kind !== 'recycle') return false;
 
@@ -3277,6 +3419,7 @@ module.exports = {
   setAppCacheHarness,
   setScanHarness,
   setQuarantineHarness,
+  setRelocateHarness,
   quarantineStatus,
   confirmQuarantineText,
   setContextMenuForHarness,

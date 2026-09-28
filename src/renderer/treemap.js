@@ -651,10 +651,23 @@
 
   function menuEntries(entry) {
     if (entry.kind === 'folder') {
-      return [
+      const items = [
         { label: t('map.menu.open', 'Open this folder'), run: () => go(entry.rel, { focus: 'first' }) },
         { label: t('app.reveal', 'Reveal'), run: () => api.reveal(entry.path) },
       ];
+      // B2. Offered on every folder rather than on a chosen few, because
+      // whether a folder is worth moving is a question about what somebody
+      // opens, not about anything the disk can answer. What it must not be
+      // done to -- an app's folder, one Windows has a registered location
+      // for, one inside OneDrive -- is decided in the main process, where the
+      // answer can be checked rather than guessed at from a path.
+      if (entry.path && typeof relocateFolder === 'function') {
+        items.push({
+          label: t('map.menu.relocate', 'Move to another drive…'),
+          run: () => relocateFolder(entry.path),
+        });
+      }
+      return items;
     }
     if (entry.kind === 'file') {
       const file = entry.candidate.path;

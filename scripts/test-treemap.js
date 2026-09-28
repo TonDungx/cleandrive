@@ -285,6 +285,38 @@ async function treeChecks() {
       tree.nodes.get('').ownBytes === 0 && tree.nodes.get('').bytes >= 0);
     check('a folder whose files have all gone takes no tile',
       !tree.level('').children.some((item) => item.kind === 'rest'));
+
+    console.log('\nWhen a whole folder leaves (B2):');
+    // `remove` is about a file leaving its folder. A relocated folder is the
+    // folder, and taking it out the file way left the map drawing a folder
+    // that had moved to another drive -- which the first screenshots of B2
+    // showed, before this existed.
+    {
+      const folderRel = tree.nodes.has('Big') ? 'Big' : [...tree.nodes.keys()].find((k) => k !== '');
+      const node = tree.nodes.get(folderRel);
+      const rootBefore = { bytes: tree.nodes.get('').bytes, files: tree.nodes.get('').files };
+      const its = { bytes: node.bytes, files: node.files };
+      const under = [...tree.nodes.keys()].filter((k) => k.startsWith(`${folderRel}${path.sep}`)).length;
+
+      const gone = tree.removeFolders([{ path: tree.pathOf(folderRel) }]);
+      check('the folder is taken out in one go', gone === 1);
+      check('its node is gone, and so is everything under it',
+        !tree.nodes.has(folderRel) && [...tree.nodes.keys()].filter((k) => k.startsWith(`${folderRel}${path.sep}`)).length === 0,
+        `${under} descendants before`);
+      check('it is no longer a tile on the level above',
+        !tree.level('').children.some((item) => item.kind === 'folder' && item.rel === folderRel));
+      check('every folder above it lost all of its bytes and all of its files, not one file',
+        tree.nodes.get('').bytes === rootBefore.bytes - its.bytes && tree.nodes.get('').files === rootBefore.files - its.files,
+        `${its.files} files, ${its.bytes} bytes`);
+      check('the level counts what left, so the note under the map adds up',
+        tree.level('').removed.files >= its.files);
+      check('the same folder reported twice is taken out once',
+        tree.removeFolders([{ path: tree.pathOf(folderRel) }]) === 0);
+      check('the scanned folder itself cannot be taken out from under the map',
+        tree.removeFolders([{ path: root }]) === 0 && tree.nodes.has(''));
+      check('a folder outside the scan changes nothing',
+        tree.removeFolders([{ path: path.join(base, 'somewhere else') }]) === 0);
+    }
   } finally {
     await fsp.rm(base, { recursive: true, force: true });
   }

@@ -2859,7 +2859,19 @@ app.whenReady().then(async () => {
           (async () => {
             const settle = () => new Promise((r) => setTimeout(r, 250));
             const big = [...document.querySelectorAll('#spacemap-tree .spacemap-item.is-folder')].find((el) => /^Big:/.test(el.getAttribute('aria-label')));
-            big.click();
+            // The folder menu, read here because this is where the map has tiles
+            // to draw. Escape closes it the way the menu's own handler does; a
+            // click on the body redraws the map and detaches this element.
+            const fr = big.getBoundingClientRect();
+            big.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: fr.left + 5, clientY: fr.top + 5 }));
+            const folderMenuEl = document.querySelector('.spacemap-menu');
+            const folderMenu = folderMenuEl && !folderMenuEl.hidden
+              ? [...folderMenuEl.querySelectorAll('[role="menuitem"]')].map((b) => b.textContent)
+              : ['(no menu opened)'];
+            document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+            await settle();
+            const bigAgain = [...document.querySelectorAll('#spacemap-tree .spacemap-item.is-folder')].find((el) => /^Big:/.test(el.getAttribute('aria-label')));
+            bigAgain.click();
             await settle();
             const file = document.querySelector('#spacemap-tree .spacemap-item.is-file');
             const r = file.getBoundingClientRect();
@@ -2873,6 +2885,7 @@ app.whenReady().then(async () => {
             menuEl.querySelectorAll('[role="menuitem"]')[2].click();
             await settle();
             return {
+              folderMenu,
               crumbs: [...document.querySelectorAll('#spacemap-crumbs li')].map((li) => li.textContent),
               tipText,
               items,
@@ -2889,6 +2902,8 @@ app.whenReady().then(async () => {
           menu.tipText.slice(0, 80));
         check('right-clicking a file offers View, Reveal and Add to selection, with focus in the menu',
           menu.items.join('|') === 'View|Reveal|Add to selection' && menu.focusedInMenu, menu.items.join(', '));
+        check('right-clicking a folder offers Open, Reveal and the move to another drive (B2)',
+          menu.folderMenu.join('|') === 'Open this folder|Reveal|Move to another drive…', menu.folderMenu.join(', '));
         check('adding it ticks the tile and brings up the same bar the largest list uses',
           menu.menuClosed && menu.selected === 'true' && menu.bar && /1 selected/.test(menu.readout), menu.readout);
 
@@ -3472,6 +3487,79 @@ app.whenReady().then(async () => {
       }
     }
 
+    /* -- a whole folder to another drive (B2) ------------------------------ */
+
+    console.log('\nMoving a whole folder to another drive (B2):');
+    if (!secondRoot) {
+      check('skipped: this machine has only one drive', true, 'nothing to move between');
+    } else {
+      const js = (expr) => win.webContents.executeJavaScript(expr);
+      // The source is on C: and the destination on the second drive, which is
+      // what the feature is for. The stand-in bin is on the source volume,
+      // because the real Recycle Bin always is.
+      const rBase = fs.mkdtempSync(path.join(os.tmpdir(), 'cleandrive-smoke-relocate-'));
+      const rFar = fs.mkdtempSync(path.join(secondRoot, 'cleandrive-harness-relocate-'));
+      const rBin = path.join(rBase, 'bin');
+      fs.mkdirSync(rBin);
+      const folder = path.join(rBase, 'Videos 2019');
+      fs.mkdirSync(path.join(folder, 'trip'), { recursive: true });
+      fs.mkdirSync(path.join(folder, 'nothing in here'), { recursive: true });
+      const clip = path.join(folder, 'clip.mp4');
+      fs.writeFileSync(clip, crypto.randomBytes(3 * 1024 * 1024));
+      fs.writeFileSync(path.join(folder, 'trip', 'ảnh.jpg'), crypto.randomBytes(20000));
+      fs.writeFileSync(`${clip}:Zone.Identifier`, '[ZoneTransfer]\r\nZoneId=3\r\n');
+      const clipHash = crypto.createHash('sha256').update(fs.readFileSync(clip)).digest('hex');
+
+      ipc.setRelocateHarness({
+        pick: async () => rFar,
+        shell: {
+          async trashItem(target) {
+            fs.renameSync(target, path.join(rBin, path.basename(target)));
+          },
+        },
+      });
+
+      try {
+        const moved = await js(`window.cleandrive.relocate([${JSON.stringify(folder)}], {
+          destination: ${JSON.stringify(rFar)}, confirm: false })`);
+        const landed = path.join(rFar, 'Videos 2019');
+
+        check('the folder moved through the real pipeline, in the real app',
+          moved.ok !== false && moved.data && moved.data.moved.length === 1,
+          JSON.stringify((moved.data && moved.data.failed) || moved));
+        check('it is on the other drive now', fs.existsSync(landed), landed);
+        check('and it is no longer where it was', !fs.existsSync(folder));
+        check('the original went to the bin whole, as a folder',
+          fs.existsSync(path.join(rBin, 'Videos 2019')) &&
+            fs.statSync(path.join(rBin, 'Videos 2019')).isDirectory());
+        check('every byte arrived',
+          crypto.createHash('sha256').update(fs.readFileSync(path.join(landed, 'clip.mp4'))).digest('hex') === clipHash);
+        check('the empty folder came with it', fs.existsSync(path.join(landed, 'nothing in here')));
+        check('the Vietnamese name survived', fs.existsSync(path.join(landed, 'trip', 'ảnh.jpg')));
+        check('the "downloaded from the internet" mark came with it',
+          fs.readFileSync(`${path.join(landed, 'clip.mp4')}:Zone.Identifier`, 'utf8').includes('ZoneId=3'));
+        check('moved is not freed: the original is in the bin, on the same drive',
+          moved.data.movedBytes > 0 && moved.data.freedBytes === 0,
+          `${moved.data.movedBytes} moved / ${moved.data.freedBytes} freed`);
+
+        // (the map's own menu is checked earlier, where it has tiles to draw)
+
+        // What it must refuse. A folder Windows has a registered location for
+        // is the one somebody is most likely to try.
+        const docs = path.join(os.homedir(), 'Documents');
+        const refused = await js(`window.cleandrive.relocate([${JSON.stringify(docs)}], {
+          destination: ${JSON.stringify(rFar)}, confirm: false })`);
+        const why = refused.data && refused.data.failed[0];
+        check('and it refuses a folder Windows keeps track of, pointing at Properties → Location',
+          Boolean(why) && why.code === 'EHANDOFF' && /Location/.test(why.error), why ? why.error : 'not refused');
+        check('nothing of that folder was copied',
+          !fs.existsSync(path.join(rFar, 'Documents')), 'a handoff copies nothing');
+      } finally {
+        ipc.setRelocateHarness(null);
+        fs.rmSync(rBase, { recursive: true, force: true });
+        fs.rmSync(rFar, { recursive: true, force: true });
+      }
+    }
     /* -- installed apps (D1) ----------------------------------------------- */
 
     console.log('\nInstalled apps (the Apps tab, against this machine’s real registry):');

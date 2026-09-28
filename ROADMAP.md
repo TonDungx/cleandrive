@@ -211,18 +211,23 @@ hoạch đều trỏ về một màn đã có. G3 và F3 là P2 nên để cuố
 
 ### Giai đoạn 4 — Ảnh, chat, di chuyển dữ liệu
 
-| Mã | Tính năng | Ưu tiên |
-| --- | --- | --- |
-| D3 | Dữ liệu Zalo / Telegram theo cuộc trò chuyện | P1 |
-| E1 | Màn so sánh cạnh nhau | P1 |
-| E2 | Sao lưu trước khi xoá | P1 |
-| E3 | Tạo bản video nhẹ hơn | P2 |
-| E4 | Timeline & bản đồ | P2 |
-| E5 | Ảnh theo cuộc trò chuyện | P1 (phụ thuộc D3) |
-| B2 | Relocate | P1 |
-| B4 | Nén NTFS có chọn lọc | P1 |
-| B5 | Đóng gói lưu trữ | P1 |
-| F4 | Hardlink bản trùng (Dev Pack, có cảnh báo mạnh) | P2 |
+Thứ tự làm (người dùng chốt 2026-09-28): **B2 → B5 → B4 → E2 → E1 → D3 → E5 →
+F4 → E4 → E3**. B2 đi đầu **không phải vì ưu tiên** mà vì nó mở `allowsFolders`
+và dựng cỗ máy "copy nguyên vẹn một cây thư mục rồi chứng minh là nguyên vẹn"
+mà B5 và E2 dùng lại nguyên. Ba mục P2 rủi ro cao đi cuối.
+
+| Mã | Tính năng | Ưu tiên | Trạng thái |
+| --- | --- | --- | --- |
+| B2 | Relocate | P1 | ✅ Đã code xong (2026-09-28) — **mục mở đường cho cả nhóm B**: `allowsFolders` trước đây được khai báo ở cả 5 handler mà **không dòng nào đọc**, nay `execute()` thực thi nó thật và `relocate` là handler đầu tiên khai `true`. Giữ nguyên ADS (đo: Downloads **10,6%** tệp có stream, ổ D **0,07%**) vì mất `Zone.Identifier` là âm thầm gỡ cảnh báo SmartScreen. Lối tắt là `.lnk` qua PowerShell COM, **không bao giờ** junction. **Không có bước trong G1**: một bước phải khớp với *candidate*, mà không gì trong app xếp hạng được "thư mục nào nên sang ổ khác" — xem `planner/plan.js`. **Sửa kèm:** `WHEN.relocate` trong planner viết sẵn là `now` từ trước khi có handler, thật ra là `bin`; và bản đồ vẫn vẽ thư mục đã chuyển đi cho tới khi có `removeFolders()` — ảnh chụp bắt được |
+| B5 | Đóng gói lưu trữ | P1 | |
+| B4 | Nén NTFS có chọn lọc | P1 | |
+| E2 | Sao lưu trước khi xoá | P1 | |
+| E1 | Màn so sánh cạnh nhau | P1 | |
+| D3 | Dữ liệu Zalo / Telegram theo cuộc trò chuyện | P1 | |
+| E5 | Ảnh theo cuộc trò chuyện | P1 (phụ thuộc D3) | |
+| F4 | Hardlink bản trùng (Dev Pack, có cảnh báo mạnh) | P2 | |
+| E4 | Timeline & bản đồ | P2 | |
+| E3 | Tạo bản video nhẹ hơn | P2 | ffmpeg **đã được duyệt làm dependency** cho riêng mục này (người dùng chốt 2026-09-28), sau khi cả ba phương án của đặc tả đều va vào một nguyên tắc |
 
 ### Giai đoạn 5 — Doanh nghiệp
 
@@ -935,6 +940,19 @@ helper.request
 - Với thư mục Windows đặc biệt (Documents, Pictures…): `handoff` sang *Properties → Location* của Windows. Không tự sửa registry.
 
 **Trường hợp biên:** đường dẫn dài hơn 260 ký tự, ADS (alternate data streams) phải được giữ lại hoặc báo là sẽ mất, thuộc tính và timestamp phải giữ nguyên, file đang mở thì bị bỏ qua và đếm.
+
+> **✅ Đã code xong (2026-09-28).** Handler ở `src/main/actions/relocate.js`; cỗ máy dùng chung ở `src/main/lib/tree-copy.js` (đi cây, copy, xác minh) và `src/main/lib/verified-copy.js` (trích từ B1 ra, không nhân bản), `src/main/lib/ads.js` (liệt kê stream) và `src/main/lib/shortcut.js` (`.lnk`). Giao diện: mục **"Chuyển sang ổ khác…"** trong menu chuột phải của Treemap (`src/renderer/treemap.js`), `relocateFolder()` ở `src/renderer/app.js`, kênh `relocate:choose` và `confirmRelocate` trong `ipc.js`. Harness: `scripts/test-relocate.js` (**58 kiểm tra**, cây thật trên hai ổ thật), 11 kiểm tra mới trong `smoke.js` cộng một kiểm tra menu thư mục ở phần bản đồ, 8 kiểm tra mới trong `test-treemap.js`, ảnh chụp `npm run shoot:relocate`. Khác với đặc tả ở trên:
+>
+> - **ADS được giữ lại, không phải "báo là sẽ mất".** Đặc tả cho hai đường; số đo chọn đường thứ nhất. Mẫu 3.000 tệp mỗi nơi: `Downloads` có **318 tệp (10,6%)** mang stream (`Zone.Identifier`, `SmartScreen`, `OECustomProperty`), ổ `D:` có **2 tệp (0,07%)**. `Zone.Identifier` là dấu "tải từ Internet" — mất nó thì một `.exe` đã tải về **thôi không kích hoạt cảnh báo SmartScreen nữa**, tức là âm thầm hạ một lớp bảo vệ của Windows. Node đọc/ghi được stream qua `tệp:tên`, nhưng **không liệt kê được**; liệt kê đi qua `FindFirstStreamW` trong **một** tiến trình PowerShell cho cả cây, đúng khuôn `cloud-state.js`. Không hỏi được thì báo là *không biết*, không phải *không có*.
+> - **`allowsFolders` từng là code chết.** Cả 5 handler khai báo nó, không ai đọc; thứ thật sự chặn thư mục là `opts.allowDirectories` trong `lib/trash.js`. Giờ `execute()` thực thi lời khai báo — và **bỏ thư mục ra khỏi lô chứ không đánh hỏng cả lô**, đúng quy tắc "một đường dẫn hỏng không chặn phần còn lại" mà `lib/trash.js` đã viết. Điều này gỡ luôn chỗ F2 từng phải từ chối thao tác trên cả thư mục.
+> - **Bản gốc vào Thùng rác nguyên khối** (đã chốt), bằng `allowDirectories: true` mở **chỉ cho đúng thư mục vừa copy và vừa xác minh xong**, không mở rộng cho `recycle` hay `quarantine`.
+> - **Chuyển đi không phải là giải phóng.** `freesOnVolume` chỉ `true` khi xoá thẳng bản gốc — Thùng rác nằm trên chính ổ vừa rời. Đây cũng là chỗ sửa `WHEN.relocate` trong `planner/plan.js`: nó được viết sẵn là `'now'` **trước khi có handler**, và phỏng đoán đó sai đúng kiểu app này viết ra để chống.
+> - **Điểm vào là menu chuột phải trên Treemap** (đã chốt), không phải một card liệt kê "thư mục nên chuyển". Không gì trong app xếp hạng được điều đó một cách trung thực — nó phụ thuộc vào thứ người ta mở, không phải thứ đĩa nhìn thấy. Vì cùng lý do đó, **G1 không có bước relocate**.
+> - **Hỏng ở đâu thì hoàn nguyên tới đó.** Copy lỗi → gỡ bản dở, bản gốc nguyên vẹn. Copy xong mà Thùng rác từ chối bản gốc → **gỡ luôn bản đã copy**, vì hai bản và không một lời nào là kết cục tệ nhất. Cả hai đều có kiểm tra riêng.
+> - **Đo được trên máy này:** đường dẫn **313 ký tự** copy được (`\\?\` chỉ bật khi cần), tên tiếng Việt giữ nguyên, thư mục rỗng được giữ, junction **bị bước qua** — không đi theo, không dựng lại (dựng lại sẽ tạo một lối tắt trỏ về ổ mà tệp vừa rời).
+> - **Bản đồ phải được bảo.** `scan-tree.remove()` viết cho *tệp rời khỏi thư mục*; một thư mục đã chuyển đi cần `removeFolders()` mới, gỡ cả node lẫn nhánh dưới và trừ đủ byte khỏi mọi cấp trên. **Ảnh chụp bắt được lỗi này**: move đã xong, tệp đã sang ổ kia, bản đồ vẫn vẽ 103 MB.
+> - **Hộp thoại xác nhận không chụp được ảnh** vì nó là dialog của Windows — giống giới hạn của G3 với thông báo. `shoot-relocate.js` **in ra** nội dung nó sẽ hiện thay vì giả vờ chụp.
+> - Chưa làm: chuyển **nhiều** thư mục một lượt có chạy nhưng chưa có giao diện cho nó; tuỳ chọn "để lại lối tắt" đã có trong handler và trong hộp thoại nhưng **chưa có công tắc trên giao diện** (menu gọi với mặc định là không để lại).
 
 ---
 

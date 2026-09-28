@@ -45,7 +45,6 @@
  */
 const WHEN = Object.freeze({
   dehydrate: 'now',
-  relocate: 'now',
   compress: 'now',
   archive: 'now',
   // Into the bin, on the same volume. Real when the bin is emptied.
@@ -53,6 +52,13 @@ const WHEN = Object.freeze({
   // Quarantine copies elsewhere; whether the original goes depends on a
   // setting, and when it does go, it goes to the bin.
   quarantine: 'bin',
+  // Relocate was written here as 'now' before B2 existed, on the assumption
+  // that moving a folder off a drive frees it at once. Building the handler
+  // showed the assumption was the one this app is written against: the
+  // original goes to the Recycle Bin, and the bin is on the drive it just
+  // left. Same shape as quarantine, same answer, and only the "delete the
+  // original" setting makes it 'now'.
+  relocate: 'bin',
   // The app hands the user to a Windows tool and counts nothing itself.
   handoff: 'windows',
   hardlink: 'now',
@@ -64,7 +70,16 @@ const APP_CACHE = /^cleanup\.app\./;
 /**
  * The steps, in the order the spec puts them: rising risk.
  *
- * `compress` (B4) and `relocate` (B2) are Phase 4 and have no step here.
+ * `compress` (B4) is Phase 4 and has no step here yet.
+ *
+ * `relocate` (B2) is built and still has no step, which is not an oversight.
+ * A step is matched against *candidates*, and every candidate in this app is
+ * a file an analyzer decided something about. Relocate acts on a folder the
+ * person picked off the treemap, because nothing here can honestly rank
+ * "which of your folders should live on another drive" -- that depends on
+ * what you open, not on what the disk can see. Giving it a step would mean
+ * inventing that judgement, and a plan built on an invented judgement is
+ * worse than a plan with one fewer step.
  * Quarantine is not a step either -- it is an action offered on files the
  * "large and untouched" step already lists, so giving it a step of its own
  * would count the same bytes twice.

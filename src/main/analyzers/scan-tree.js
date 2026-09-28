@@ -306,6 +306,71 @@ class ScanTree {
     }
     return taken;
   }
+
+  /**
+   * A whole folder has gone (B2), so stop drawing it.
+   *
+   * `remove` above is about files: it finds the file's folder and takes one
+   * file and its bytes out of it. A folder that has moved to another drive is
+   * a different shape of the same problem -- the node and everything under it
+   * are gone at once, and every folder above has to lose the lot.
+   *
+   * Without this the map keeps drawing a folder that is not there, which a
+   * screenshot of the finished feature caught: the move had worked, the files
+   * were on the other drive, and the map still showed 103 MB of them.
+   *
+   * Counted as bin or freed on the same terms as a file: an original in the
+   * Recycle Bin is still on this drive.
+   */
+  removeFolders(moved) {
+    let taken = 0;
+    const rootKey = pathKey(this.root);
+
+    for (const item of moved || []) {
+      if (!item || typeof item.path !== 'string') continue;
+      const full = path.resolve(item.path);
+      const key = pathKey(full);
+      if (this._removedKeys.has(key)) continue;
+      if (key === rootKey || !key.startsWith(rootKey.endsWith(path.sep) ? rootKey : rootKey + path.sep)) continue;
+
+      const rel = path.relative(this.root, full);
+      const node = this.nodes.get(rel);
+      if (!node) continue;
+
+      const bytes = node.bytes;
+      const files = node.files;
+
+      // Everything under it goes with it, so a later lookup cannot reach in.
+      const doomed = [rel];
+      for (let at = 0; at < doomed.length; at++) {
+        const here = this.nodes.get(doomed[at]);
+        if (here) doomed.push(...here.kids);
+      }
+      for (const gone of doomed) this.nodes.delete(gone);
+
+      const parent = node.parent === null ? null : this.nodes.get(node.parent);
+      if (parent) {
+        parent.kids = parent.kids.filter((kid) => kid !== rel);
+        for (let at = parent; at; at = at.parent === null ? null : this.nodes.get(at.parent)) {
+          at.bytes = Math.max(0, at.bytes - bytes);
+          at.files = Math.max(0, at.files - files);
+          this._sortKids(at);
+        }
+      }
+
+      this._removedKeys.add(key);
+      if (item.original === 'deleted') {
+        this.removed.deletedFiles += files;
+        this.removed.deletedBytes += bytes;
+      } else {
+        this.removed.files += files;
+        this.removed.bytes += bytes;
+      }
+      taken += 1;
+    }
+
+    return taken;
+  }
 }
 
 /**
@@ -385,6 +450,10 @@ class MultiScanTree {
 
   remove(moved) {
     return this.trees.reduce((n, tree) => n + tree.remove(moved), 0);
+  }
+
+  removeFolders(moved) {
+    return this.trees.reduce((n, tree) => n + tree.removeFolders(moved), 0);
   }
 }
 

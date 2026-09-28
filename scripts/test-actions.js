@@ -68,13 +68,14 @@ function fakeJournal(log, { failAt = -1 } = {}) {
 
   console.log('\nactions: what can run\n');
 
-  check('the kinds with a handler so far: the Recycle Bin, another drive (B1), OneDrive "free up space" (B3), and handing over to Windows (A1)',
-    ACTION_KINDS.filter((k) => handlerFor(k)).join(',') === 'recycle,quarantine,dehydrate,handoff',
+  check('the kinds with a handler so far: the Recycle Bin, another drive (B1), a whole folder to another drive (B2), OneDrive "free up space" (B3), and handing over to Windows (A1)',
+    ACTION_KINDS.filter((k) => handlerFor(k)).join(',') === 'recycle,quarantine,relocate,dehydrate,handoff',
     ACTION_KINDS.filter((k) => handlerFor(k)).join(','));
 
   {
     const shell = fakeShell();
-    const result = await execute({ kind: 'relocate', items: files }, { deps: { shell } });
+    // Was 'relocate' until B2 gave it one. 'compress' is B4 and has none yet.
+    const result = await execute({ kind: 'compress', items: files }, { deps: { shell } });
     check('a kind with no handler is refused, not approximated',
       result.refused === 'unsupported' && shell.calls.length === 0);
   }

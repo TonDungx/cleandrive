@@ -21,7 +21,10 @@
  * mode. Everything else is here, and is the same for every kind.
  */
 
+const fsp = require('node:fs/promises');
+
 const HANDLERS = require('./handlers');
+const { t } = require('../../i18n');
 const { CancelToken } = require('../lib/util');
 
 /**
@@ -89,13 +92,50 @@ async function execute(request, ctx = {}) {
   if (ctx.can && !ctx.can(handler.feature)) return { ...base, refused: 'locked', feature: handler.feature };
   if (list.length === 0 || (list.length === 1 && list[0] === undefined)) return { ...base, requested: 0 };
 
+  // `allowsFolders` was a comment until B2. Every handler declared it, nothing
+  // read it, and the only thing actually keeping folders out was each
+  // handler's own call to `planTrash` with `allowDirectories: false`. That is
+  // two places to get right and one of them invisible, so the declaration is
+  // now the rule: a handler that has not said it takes folders never sees one.
+  //
+  // A folder is dropped from the list, not made to fail the batch. Every guard
+  // in this app works that way -- "one bad path does not stop the rest", as
+  // `lib/trash.js` puts it -- and a mixed selection where one entry happens to
+  // be a folder is an ordinary thing for a window to send.
+  const folderFailures = [];
+  let usable = list;
+  if (handler.allowsFolders !== true) {
+    usable = [];
+    for (const target of list) {
+      const isDir =
+        typeof target === 'string' &&
+        (await fsp
+          .lstat(target)
+          .then((st) => st.isDirectory() && !st.isSymbolicLink())
+          .catch(() => false));
+      if (isDir) {
+        folderFailures.push({
+          path: target,
+          error: t('action.refused.folder', 'This action does not act on folders'),
+          code: 'EISDIR',
+        });
+      } else {
+        usable.push(target);
+      }
+    }
+    if (usable.length === 0) {
+      onProgress({ phase: 'done' });
+      return { ...base, refused: 'folders', failed: folderFailures };
+    }
+  }
+
   /* -- plan: vet everything, touch nothing -------------------------------- */
-  const planned = await handler.plan(list, options, { token, onProgress, deps: ctx.deps });
+  const planned = await handler.plan(usable, options, { token, onProgress, deps: ctx.deps });
   const description = handler.describe(planned, options);
 
   const withPlan = {
     ...base,
-    failed: planned.failed,
+    failed: [...folderFailures, ...planned.failed],
     needsAdmin: description.needsAdmin || 0,
     inUse: description.inUse || 0,
     description,
@@ -170,7 +210,7 @@ async function execute(request, ctx = {}) {
   return {
     ...withPlan,
     moved: result.moved,
-    failed: [...planned.failed, ...result.failed],
+    failed: [...folderFailures, ...planned.failed, ...result.failed],
     // Two figures, never summed and never confused: what left the list, and
     // what actually came back to the disk. For the Recycle Bin the second is
     // zero, because the bin is on the same volume.

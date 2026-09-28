@@ -77,6 +77,11 @@ const api = {
   quarantineStatus: () => ipcRenderer.invoke('quarantine:status'),
   quarantineChoose: () => ipcRenderer.invoke('quarantine:choose'),
 
+  // B2: a folder, to another drive. The destination is picked in the main
+  // process because only it can open a folder chooser.
+  relocate: (folders, options) => ipcRenderer.invoke('action:execute', { kind: 'relocate', items: folders, options }),
+  relocateChoose: (forFolder) => ipcRenderer.invoke('relocate:choose', forFolder),
+
   reveal: (target) => ipcRenderer.invoke('shell:reveal', target),
   open: (target) => ipcRenderer.invoke('shell:open', target),
 
