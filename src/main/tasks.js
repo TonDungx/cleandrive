@@ -3,6 +3,7 @@
 const { app } = require('electron');
 
 const scheduler = require('./lib/scheduler');
+const { profilesOf } = require('./lib/settings');
 const { t } = require('../i18n');
 
 /**
@@ -34,10 +35,14 @@ const { t } = require('../i18n');
  * @param {object} [options]
  * @param {boolean} [options.settingsExisted]  false when the settings file was
  *   absent, so `settings` is only the defaults
- * @returns {Promise<{supported: boolean, cleanup: object|null, sampler: object|null,
- *   changes: string[], problems: string[]}>}
+ * @param {boolean} [options.sweep]  also look for Windows tasks belonging to
+ *   profiles that no longer exist (G4). Off by default because asking Windows
+ *   for the list costs a PowerShell process of about three seconds, and a save
+ *   happens every time somebody touches the Automatic screen. It is passed at
+ *   launch and after a profile is removed, which is every way a task can be
+ *   orphaned; see `sweepOrphans`.
  */
-async function reconcile(settings, { settingsExisted = true } = {}) {
+async function reconcile(settings, { settingsExisted = true, sweep = false } = {}) {
   if (process.platform !== 'win32') {
     return {
       supported: false,
@@ -71,26 +76,101 @@ async function reconcile(settings, { settingsExisted = true } = {}) {
     return {
       supported: true,
       cleanup: { taskPath: cleanupTaskPath, installed: true, wanted: null, ok: false, orphaned: true },
+      profiles: [],
       sampler: await reconcileSampler(settings, changes, problems),
       changes,
       problems,
     };
   }
 
-  const cleanup = await reconcileOne({
-    label: t('task.label.cleanup', 'Automatic cleanup'),
-    taskPath: cleanupTaskPath,
-    wanted: settings.autoClean.enabled,
-    schedule: settings.autoClean.schedule,
-    invocation: scheduler.selfInvocation(app, '--scheduled-run'),
-    create: () => scheduler.install({ schedule: settings.autoClean.schedule, app }),
-    changes,
-    problems,
-  });
+  // One task per profile (G4). Each carries its own id on the command line, so
+  // the process Windows starts knows which policy it is there to run without
+  // having to guess from the clock.
+  const profiles = [];
+  for (const profile of profilesOf(settings)) {
+    profiles.push(await reconcileProfile(profile, changes, problems));
+  }
+
+  // Only now, with every wanted task accounted for, is it safe to ask what
+  // else is registered: a task for a profile that is gone would otherwise run
+  // for ever on a timetable nobody can see any more.
+  if (sweep && settingsExisted) await sweepOrphans(settings, changes, problems);
 
   const sampler = await reconcileSampler(settings, changes, problems);
 
-  return { supported: true, cleanup, sampler, changes, problems };
+  // `cleanup` is the first profile, kept under its old name because the
+  // Automatic screen, the tray and three harnesses read it.
+  const cleanup = profiles[0] || { taskPath: cleanupTaskPath, wanted: false, installed: false, ok: true };
+
+  return { supported: true, cleanup, profiles, sampler, changes, problems };
+}
+
+function reconcileProfile(profile, changes, problems) {
+  const taskPath = scheduler.cleanupTaskPath(profile.id);
+  const flag = `--scheduled-run --profile=${profile.id}`;
+  return reconcileOne({
+    label: profileLabel(profile),
+    taskPath,
+    wanted: profile.enabled,
+    schedule: profile.schedule,
+    invocation: scheduler.selfInvocation(app, flag),
+    create: () => scheduler.install({ schedule: profile.schedule, app, taskPath, invocation: scheduler.selfInvocation(app, flag) }),
+    changes,
+    problems,
+  }).then((result) => ({ ...result, profileId: profile.id, name: profileLabel(profile) }));
+}
+
+function profileLabel(profile) {
+  return profile.name || t('task.label.cleanup', 'Automatic cleanup');
+}
+
+/**
+ * Remove the tasks of profiles that no longer exist.
+ *
+ * `tasks.js` has one standing rule about destroying things: when the settings
+ * file is *missing*, intent is unknown and nothing is touched. This is the
+ * other case. The file is there, it lists the profiles, and a registered task
+ * for a profile it does not list is not ambiguous -- that profile was deleted,
+ * and the task is what is left of it.
+ *
+ * `profileOfTaskName` refuses to attribute a name it cannot be sure of, so a
+ * task belonging to a harness suffix, or one somebody made by hand, is never
+ * even a candidate. Nothing is removed silently: each one is reported.
+ */
+async function sweepOrphans(settings, changes, problems) {
+  const listed = await scheduler.listCleanupTasks();
+  if (!listed.ok) {
+    // Not being able to ask is worth saying, but it is not a reason to guess.
+    problems.push(
+      t('task.problem.listFailed', 'The registered CleanDrive tasks could not be listed ({error}), so any left by a deleted profile are still there.', {
+        error: listed.error,
+      })
+    );
+    return;
+  }
+
+  const known = new Set(profilesOf(settings).map((p) => p.id));
+  for (const name of listed.names) {
+    const id = scheduler.profileOfTaskName(name);
+    if (!id || known.has(id)) continue;
+
+    const taskPath = scheduler.cleanupTaskPath(id);
+    const removed = await scheduler.uninstall(taskPath);
+    if (removed.ok) {
+      changes.push(
+        t('task.change.orphanRemoved', 'A Windows task was left over from a profile that no longer exists ({task}); it has been removed.', {
+          task: taskPath,
+        })
+      );
+    } else {
+      problems.push(
+        t('task.problem.orphanRemoveFailed', 'A Windows task from a deleted profile ({task}) could not be removed ({error}); it will keep running.', {
+          task: taskPath,
+          error: removed.error,
+        })
+      );
+    }
+  }
 }
 
 function reconcileSampler(settings, changes, problems) {
@@ -214,56 +294,83 @@ async function osInfoFor(taskPaths, { fresh = false } = {}) {
  */
 async function status(settings, { withOsInfo = false, fresh = false, settingsExisted = true } = {}) {
   const supported = process.platform === 'win32';
-  const cleanupTaskPath = scheduler.cleanupTaskPath();
+  const profiles = profilesOf(settings);
+  const first = profiles[0] || null;
+  const cleanupTaskPath = scheduler.cleanupTaskPath(first ? first.id : null);
   const samplerTaskPath = scheduler.sampleTaskPath();
 
   if (!supported) {
     return {
       supported: false,
       settingsExisted,
-      cleanup: { taskPath: cleanupTaskPath, installed: false, wanted: settings.autoClean.enabled },
+      cleanup: { taskPath: cleanupTaskPath, installed: false, wanted: Boolean(first && first.enabled) },
+      profiles: profiles.map((p) => ({
+        profileId: p.id,
+        taskPath: scheduler.cleanupTaskPath(p.id),
+        installed: false,
+        wanted: p.enabled,
+      })),
       sampler: { taskPath: samplerTaskPath, installed: false, wanted: settings.trends.dailySample },
     };
   }
 
-  const cleanupSchedule = settings.autoClean.schedule;
   const samplerSchedule = { kind: 'daily', time: settings.trends.sampleTime, catchUpAtLogon: true };
 
-  const [cleanupCheck, samplerCheck] = await Promise.all([
-    scheduler.verify({
-      schedule: cleanupSchedule,
-      invocation: scheduler.selfInvocation(app, '--scheduled-run'),
-      taskPath: cleanupTaskPath,
-    }),
+  // Every profile's task is verified, and the whole set is asked about in one
+  // PowerShell process rather than one each -- that call is the expensive part
+  // (about a second), and eight of them would make the tab unopenable.
+  const checks = await Promise.all([
+    ...profiles.map((p) =>
+      scheduler.verify({
+        schedule: p.schedule,
+        invocation: scheduler.selfInvocation(app, `--scheduled-run --profile=${p.id}`),
+        taskPath: scheduler.cleanupTaskPath(p.id),
+      })
+    ),
     scheduler.verify({
       schedule: samplerSchedule,
       invocation: scheduler.selfInvocation(app, '--sample-only'),
       taskPath: samplerTaskPath,
     }),
   ]);
+  const samplerCheck = checks[checks.length - 1];
 
-  // One PowerShell process for both tasks, not one each.
-  const osInfo = withOsInfo ? await osInfoFor([cleanupTaskPath, samplerTaskPath], { fresh }) : null;
-  const cleanupInfo = osInfo ? osInfo.get(cleanupTaskPath) || null : null;
+  const taskPaths = [...profiles.map((p) => scheduler.cleanupTaskPath(p.id)), samplerTaskPath];
+  const osInfo = withOsInfo ? await osInfoFor(taskPaths, { fresh }) : null;
   const samplerInfo = osInfo ? osInfo.get(samplerTaskPath) || null : null;
+
+  const describeProfile = (profile, check) => {
+    const taskPath = scheduler.cleanupTaskPath(profile.id);
+    const info = osInfo ? osInfo.get(taskPath) || null : null;
+    return {
+      profileId: profile.id,
+      name: profile.name,
+      action: profile.action,
+      dryRun: profile.dryRun,
+      taskPath,
+      wanted: profile.enabled,
+      installed: check.installed,
+      verified: check.ok,
+      problems: check.problems,
+      registered: check.registered || null,
+      description: scheduler.describeSchedule(profile.schedule),
+      // The app's own reckoning, kept because it is available before any task
+      // exists; where the OS disagrees, the OS wins on screen.
+      expectedNextRunAt: profile.enabled ? scheduler.nextRunAt(profile.schedule).getTime() : null,
+      os: info,
+      osResult: info ? scheduler.describeTaskResult(info.lastResult) : null,
+    };
+  };
+
+  const profileStates = profiles.map((p, i) => describeProfile(p, checks[i]));
 
   return {
     supported: true,
     settingsExisted,
-    cleanup: {
-      taskPath: cleanupTaskPath,
-      wanted: settings.autoClean.enabled,
-      installed: cleanupCheck.installed,
-      verified: cleanupCheck.ok,
-      problems: cleanupCheck.problems,
-      registered: cleanupCheck.registered || null,
-      description: scheduler.describeSchedule(cleanupSchedule),
-      // The app's own reckoning, kept because it is available before any task
-      // exists; where the OS disagrees, the OS wins on screen.
-      expectedNextRunAt: settings.autoClean.enabled ? scheduler.nextRunAt(cleanupSchedule).getTime() : null,
-      os: cleanupInfo,
-      osResult: cleanupInfo ? scheduler.describeTaskResult(cleanupInfo.lastResult) : null,
-    },
+    profiles: profileStates,
+    // The first profile, under the name the screen, the tray and three
+    // harnesses have always read.
+    cleanup: profileStates[0] || { taskPath: cleanupTaskPath, wanted: false, installed: false, verified: true, problems: [] },
     sampler: {
       taskPath: samplerTaskPath,
       wanted: settings.trends.dailySample,

@@ -96,6 +96,10 @@ const api = {
   saveSettings: (next) => ipcRenderer.invoke('settings:save', next),
   runAutoClean: (options) => ipcRenderer.invoke('autoclean:run', options),
   cancelAutoClean: () => ipcRenderer.invoke('autoclean:cancel'),
+  /* automatic profiles (G4) */
+  saveAutoProfile: (profile) => ipcRenderer.invoke('autoclean:saveProfile', profile),
+  addAutoProfile: (template) => ipcRenderer.invoke('autoclean:addProfile', template),
+  removeAutoProfile: (id) => ipcRenderer.invoke('autoclean:removeProfile', id),
 
   diskUsage: (target) => ipcRenderer.invoke('disk:usage', target),
 

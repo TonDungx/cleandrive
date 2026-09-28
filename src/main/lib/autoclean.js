@@ -14,6 +14,8 @@ const { findUserBins, purgeRecorded } = require('./recyclebin');
 const { CancelToken, pathKey, isUndeletablePath } = require('./util');
 const { isAllowedUnattended } = require('../automatic/allowed-categories');
 const { execute } = require('../actions/execute');
+const quarantineZone = require('./quarantine-zone');
+const { profilesOf } = require('./settings');
 const { message: m } = require('../../i18n');
 
 /**
@@ -171,8 +173,42 @@ function selectFiles(cleanup, settings, now = Date.now(), openApps = null) {
 /* -------------------------------------------------------------------------- */
 
 /**
+ * A run that has not done anything yet, in the shape every run has.
+ *
+ * One shape, so the log, the tab and the history never need a special case for
+ * a run that stopped before it started -- and `scheduled-run.js` builds its
+ * failure records from the same function rather than a second copy of the
+ * field list that drifts away from this one.
+ */
+function emptyRun(startedAt) {
+  return {
+    runId: `run-${startedAt.toString(36)}`,
+    startedAt,
+    finishedAt: null,
+    profileId: null,
+    profileName: null,
+    action: 'recycle',
+    dryRun: false,
+    roots: [],
+    outcome: 'ok',
+    reason: null,
+    scanned: { files: 0, bytes: 0, errors: 0 },
+    selected: { files: 0, bytes: 0, truncated: false },
+    trashed: { files: 0, bytes: 0, failed: 0, freedBytes: 0 },
+    purged: { files: 0, bytes: 0 },
+    diskBefore: null,
+    diskAfter: null,
+    skipped: { category: 0, tooRecent: 0, whitelisted: 0, guarded: 0, appOpen: 0 },
+    notes: [],
+  };
+}
+
+/**
  * @param {object}  options
  * @param {object}  options.settings   validated settings (see settings.js)
+ * @param {object}  [options.profile]  which unattended policy to run (G4).
+ *   Required in practice; when it is left out the first profile is used, which
+ *   is what "the automatic cleanup" meant before there were several.
  * @param {object}  [options.ledger]   TrashLedger, so a purge can find these later
  * @param {object}  [options.deps]     injectable { scan, planTrash, executeTrash, shell }
  * @param {CancelToken} [options.token]
@@ -180,29 +216,44 @@ function selectFiles(cleanup, settings, now = Date.now(), openApps = null) {
  */
 async function runAutoClean(options) {
   const settings = options.settings;
-  const auto = settings.autoClean;
-  const deps = { scan, planTrash, executeTrash, runningProcessNames, ...(options.deps || {}) };
+  const auto = options.profile || profilesOf(settings)[0] || null;
+  if (!auto) {
+    // A task exists for a profile the settings no longer list. The run is over
+    // before it starts, and it says which profile, because the task's name is
+    // the only place that id still appears.
+    const startedAt = Number.isFinite(options.now) ? options.now : Date.now();
+    const empty = emptyRun(startedAt);
+    empty.outcome = 'skipped';
+    empty.reason = m('run.noSuchProfile', 'This schedule belongs to a profile that no longer exists');
+    empty.finishedAt = Date.now();
+    if (options.onStage) options.onStage({ stage: 'done', run: empty });
+    return empty;
+  }
+  const deps = {
+    scan,
+    planTrash,
+    executeTrash,
+    runningProcessNames,
+    // Is the drive files would be copied to actually there? Asked at the last
+    // moment rather than trusted from the settings: the folder was chosen
+    // weeks ago and the drive may be in a drawer.
+    zoneReady: async (zone) => (await quarantineZone.check(zone)).ok,
+    ...(options.deps || {}),
+  };
   const token = options.token || new CancelToken();
   const onStage = options.onStage || (() => {});
   const now = Number.isFinite(options.now) ? options.now : Date.now();
   const startedAt = now;
 
   const run = {
-    runId: `run-${startedAt.toString(36)}`,
-    startedAt,
-    finishedAt: null,
+    ...emptyRun(startedAt),
+    // Which policy this was, so the run log can say so months later -- by then
+    // the profile may have been renamed, or deleted.
+    profileId: auto.id || null,
+    profileName: auto.name || null,
+    action: auto.action === 'quarantine' ? 'quarantine' : 'recycle',
     dryRun: auto.dryRun === true,
     roots: auto.roots,
-    outcome: 'ok',
-    reason: null,
-    scanned: { files: 0, bytes: 0, errors: 0 },
-    selected: { files: 0, bytes: 0, truncated: false },
-    trashed: { files: 0, bytes: 0, failed: 0 },
-    purged: { files: 0, bytes: 0 },
-    diskBefore: null,
-    diskAfter: null,
-    skipped: { category: 0, tooRecent: 0, whitelisted: 0, guarded: 0, appOpen: 0 },
-    notes: [],
   };
 
   const finish = (outcome, reason) => {
@@ -220,6 +271,33 @@ async function runAutoClean(options) {
   if (auto.roots.length === 0) return finish('skipped', m('run.noFolders', 'No folders are configured'));
   if (auto.categories.length === 0) {
     return finish('skipped', m('run.noCategories', 'No cleanup categories are enabled'));
+  }
+
+  /* -- gate 0: can this profile's action actually happen (G4) -------------- */
+  //
+  // Only for `quarantine`, which needs somewhere on another drive to copy to.
+  // Both refusals are skips rather than errors: a drive that is not plugged in
+  // at 02:00 is a reason to try again next time, not a fault.
+  if (run.action === 'quarantine') {
+    const zone = options.quarantine && options.quarantine.zone;
+    if (!zone) {
+      return finish('skipped', m('run.noZone', 'This profile moves files to another drive, but no folder has been chosen for them'));
+    }
+    if (!(await deps.zoneReady(zone))) {
+      return finish('skipped', m('run.zoneAway', 'The drive files are moved to is not available: {zone}', { zone }));
+    }
+    // Copying without removing the original frees nothing on the drive being
+    // cleaned -- it uses *more* space overall. The run says so rather than
+    // reporting a number that is not space anybody got back. `freesOnVolume`
+    // in actions/quarantine.js is the same rule, read from the same flag.
+    if (!auto.deleteOriginal) {
+      run.notes.push(
+        m(
+          'run.note.keepsOriginal',
+          'Originals are kept, so this run frees nothing on the drive it cleaned — it copies to the other drive as well'
+        )
+      );
+    }
   }
 
   /* -- gate 1: is the disk even under pressure ---------------------------- */
@@ -314,9 +392,11 @@ async function runAutoClean(options) {
 
   if (run.dryRun) {
     run.sample = unique.slice(0, 50).map((f) => ({ path: f.path, size: f.size, category: f.category }));
-    return finish('dry-run', m('run.wouldMove', 'Would move {n} file(s) to the Recycle Bin', {
-      n: unique.length,
-    }));
+    const wording =
+      run.action === 'quarantine'
+        ? m('run.wouldQuarantine', 'Would move {n} file(s) to the other drive', { n: unique.length })
+        : m('run.wouldMove', 'Would move {n} file(s) to the Recycle Bin', { n: unique.length });
+    return finish('dry-run', wording);
   }
 
   /* -- delete --------------------------------------------------------------- */
@@ -340,7 +420,7 @@ async function runAutoClean(options) {
   // the dialog, because at 02:00 there is nobody to show it to -- which is why
   // a schedule starts in report-only mode.
   const executed = await execute(
-    { kind: 'recycle', items: unique.map((f) => f.path) },
+    { kind: run.action, items: unique.map((f) => f.path) },
     {
       token,
       journal: options.journal,
@@ -351,6 +431,17 @@ async function runAutoClean(options) {
         executeTrash: deps.executeTrash,
         runningProcessNames: deps.runningProcessNames,
         shell: options.deps && options.deps.shell,
+        // What the quarantine handler needs, and only it: the zone comes from
+        // the settings and the deletion of the original from *this profile*,
+        // never the global flag the button on the screen uses.
+        ...(run.action === 'quarantine'
+          ? {
+              zone: options.quarantine.zone,
+              deleteOriginal: auto.deleteOriginal === true,
+              maxGB: options.quarantine.maxGB,
+              retentionDays: options.quarantine.retentionDays,
+            }
+          : {}),
       },
     }
   );
@@ -364,6 +455,12 @@ async function runAutoClean(options) {
   run.trashed.files = executed.moved.length;
   run.trashed.bytes = executed.movedBytes;
   run.trashed.failed = executed.failed.length;
+  // What the drive being cleaned actually got back, which for `recycle` is
+  // nothing (the bin is on the same volume) and for `quarantine` is the bytes
+  // only if the originals went. Read from the handler rather than assumed --
+  // `actions/*.js` owns that answer and the planner reads the same one.
+  run.trashed.freedBytes =
+    executed.description && executed.description.freesOnVolume ? executed.movedBytes : 0;
   if (executed.recordError) {
     run.notes.push(
       m('run.note.recordFailed', 'Stopped early: the record of what was moved could not be written ({error})', {
@@ -476,6 +573,7 @@ class RunLog {
 
 module.exports = {
   runAutoClean,
+  emptyRun,
   selectFiles,
   lastTouched,
   blockingApps,

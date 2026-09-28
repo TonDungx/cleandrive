@@ -7,6 +7,9 @@ const { execFile } = require('node:child_process');
 
 const { IS_WIN } = require('./util');
 const { t } = require('../../i18n');
+// The profile vocabulary, from the file that owns it: a task's name is built
+// from a profile id, so the two must agree about what one looks like.
+const { FIRST_PROFILE_ID, PROFILE_ID_PATTERN } = require('./settings');
 
 /**
  * Windows Task Scheduler registration.
@@ -89,9 +92,57 @@ function taskSuffix() {
   return safe ? `_${safe}` : '';
 }
 
-/** The cleanup task's path, as Task Scheduler names it. */
-function cleanupTaskPath() {
-  return `${TASK_FOLDER}\\${TASK_NAME}${taskSuffix()}`;
+/**
+ * The cleanup task's path, as Task Scheduler names it.
+ *
+ * With no profile, the name it has always had -- which is the name already
+ * registered on machines that configured a cleanup before there were profiles,
+ * and the reason the first profile's id is fixed rather than generated (see
+ * the 6 -> 7 migration in settings.js). Every other profile adds its id, so
+ * each has a task of its own that Windows runs on its own timetable.
+ *
+ * The harness suffix stays last, so a test's task can never collide with a
+ * real one whatever profile it names.
+ */
+function cleanupTaskPath(profileId = null) {
+  const part = profileId && profileId !== FIRST_PROFILE_ID ? `_${String(profileId).replace(/[^A-Za-z0-9]/g, '')}` : '';
+  return `${TASK_FOLDER}\\${TASK_NAME}${part}${taskSuffix()}`;
+}
+
+/**
+ * The profile a cleanup task's name refers to, or null when the name cannot be
+ * attributed with certainty.
+ *
+ * Two rules, and both exist to stop a deletion.
+ *
+ * The suffix must be this process's own. A harness runs with
+ * `CLEANDRIVE_TASK_SUFFIX=dev` and must not be able to see -- let alone remove
+ * -- the task a person configured, which is the accident the suffix was
+ * introduced to prevent.
+ *
+ * And a profile part must look like an id the app generates. `AutomaticCleanup_dev`
+ * read with no suffix set is genuinely ambiguous: profile "dev", or the harness
+ * suffix "dev"? There is no answer in the name, so there is no answer here
+ * either. Returning null leaves such a task alone, which is the safe direction
+ * for the one caller that acts on this -- the sweep in `tasks.js`, whose only
+ * verb is delete. This machine has three such leftovers right now
+ * (`DiskSample_dev` and friends) and none of them is any of our business.
+ */
+function profileOfTaskName(name) {
+  const suffix = taskSuffix();
+  const text = String(name || '');
+  if (!text.startsWith(TASK_NAME)) return null;
+
+  let rest = text.slice(TASK_NAME.length);
+  if (suffix) {
+    if (!rest.endsWith(suffix)) return null;
+    rest = rest.slice(0, rest.length - suffix.length);
+  }
+  if (rest === '') return FIRST_PROFILE_ID;
+  if (!rest.startsWith('_')) return null;
+
+  const id = rest.slice(1);
+  return PROFILE_ID_PATTERN.test(id) ? id : null;
 }
 
 /**
@@ -787,6 +838,67 @@ const EMPTY_INFO = { lastRunAt: null, nextRunAt: null, lastResult: null, missedR
  * @returns {Promise<object|null|Map<string, object>>} one info object for a
  *   single path; a Map keyed by task path when given an array
  */
+/**
+ * Every cleanup task Windows actually holds, whatever the settings say (G4).
+ *
+ * Needed because `reconcile` only ever knew about the tasks it was told about,
+ * and a profile that is deleted takes its entry out of the settings while
+ * leaving its task registered -- running for ever, on a timetable, for a
+ * profile that no longer exists. Nothing in the app could have noticed.
+ *
+ * The same COM object `taskInfo` uses, for the same reason: the folder listing
+ * from `schtasks` is a localised table. A missing folder is not an error --
+ * nothing has ever been registered -- so it answers with an empty list.
+ *
+ * @returns {Promise<{ok: boolean, names: string[], error: string|null}>}
+ */
+async function listCleanupTasks() {
+  if (!IS_WIN) return { ok: true, names: [], error: null };
+
+  const script = [
+    "$ErrorActionPreference = 'Stop'",
+    '$svc = New-Object -ComObject Schedule.Service',
+    '$svc.Connect()',
+    'try {',
+    `  $folder = $svc.GetFolder('\\${TASK_FOLDER}')`,
+    '} catch {',
+    // Nothing registered yet. An empty list is the answer, not a failure.
+    "  '[]'",
+    '  exit 0',
+    '}',
+    // 1 = include hidden tasks; the app does not make any, but a task edited
+    // by hand in Task Scheduler can become one, and it would still run.
+    '$names = @($folder.GetTasks(1) | ForEach-Object { $_.Name })',
+    'ConvertTo-Json -Compress -InputObject $names',
+  ].join('\r\n');
+
+  const scriptPath = path.join(os.tmpdir(), `cleandrive-tasklist-${process.pid}-${Date.now()}.ps1`);
+  let result;
+  try {
+    await fsp.writeFile(scriptPath, script, 'utf8');
+    result = await run(
+      'powershell.exe',
+      ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', scriptPath],
+      { timeout: 60000 }
+    );
+  } catch (err) {
+    result = { ok: false, stdout: '', stderr: '', error: err.message };
+  } finally {
+    await fsp.rm(scriptPath, { force: true }).catch(() => {});
+  }
+
+  if (!result.ok) return { ok: false, names: [], error: result.error || result.stderr || 'listing failed' };
+
+  try {
+    const parsed = JSON.parse(String(result.stdout).trim() || '[]');
+    // One task in the folder comes back as a bare string, not a list.
+    const names = Array.isArray(parsed) ? parsed : [parsed];
+    return { ok: true, names: names.filter((n) => typeof n === 'string'), error: null };
+  } catch (err) {
+    return { ok: false, names: [], error: `could not read the task list: ${err.message}` };
+  }
+}
+
 async function taskInfo(taskPaths = cleanupTaskPath()) {
   const many = Array.isArray(taskPaths);
   const list = many ? taskPaths : [taskPaths];
@@ -1078,6 +1190,8 @@ module.exports = {
   startBoundary,
   isoDuration,
   cleanupTaskPath,
+  profileOfTaskName,
+  listCleanupTasks,
   sampleTaskPath,
   taskSuffix,
   TASK_NAME,

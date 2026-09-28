@@ -106,7 +106,7 @@ while skimming.
 | **Developer** | What have my development tools filled the disk with? | Package caches, SDKs, editor caches, WSL and Docker, and your own projects |
 | **Trends** | Is this getting worse, and how fast? | Every volume the app knows about |
 | **Restore** | What did the app do, and can I have it back? | Everything in the Action Journal |
-| **Automatic** | Can this happen without me? | A policy you write |
+| **Automatic** | Can this happen without me? | Policies you write, one Windows task each |
 | **Settings** | Appearance and your own colours, language, keys, version | The app itself |
 
 Plus three things outside the window: an optional **tray watcher** that warns
@@ -1465,12 +1465,37 @@ Cleanup on a timetable, with no window open. Off by default, and designed so tha
 every ambiguity resolves towards doing nothing — there is no dialog in front of
 this to catch a mistake.
 
+### Profiles
+
+There can be more than one, each a complete policy with its own timetable and
+its own Windows task: a weekly sweep of caches, a monthly one for build output,
+and so on. The row of names at the top picks which one the form below is
+editing; **Add a profile** makes another and **Remove this one** takes it away
+along with its Windows task.
+
+One profile is free. The rest are Pro (`pro.automatic.profiles`), and asking
+for another without it is refused in words rather than by a button that does
+nothing. There is a ceiling of eight, because each is a process that wakes up
+and reads the disk.
+
+**Every new profile starts switched off and in report-only**, whatever the one
+beside it is doing.
+
+Two profiles can come due in the same minute, and Windows will start both. They
+take a lock so that only one runs at a time; the second waits up to ninety
+seconds and then skips, saying so in the run log. Its work comes round again on
+its own timetable. The lock is not only about disk contention — the run log is
+rewritten whole on each entry, so two runs at once would lose one of them.
+
 ### Writing the policy
 
 | Control | Meaning |
 | --- | --- |
-| **Run cleanup automatically** | The master switch |
+| **Name** | What this profile is called, in the row above |
+| **Run cleanup automatically** | The master switch, for this profile |
 | **Report only** | Lists what would be taken and deletes nothing |
+| **What it does** | Move to the Recycle Bin, or [move to another drive](#moving-to-another-drive-instead) |
+| **Delete the original after copying** | Only for "another drive", and the only setting here that frees space on the drive being cleaned. Separate from the same-named option on the What to delete screen, which stays off |
 | **How often** | Every few minutes (for testing), daily, weekly, or monthly — with the day and time |
 | **Catch up after you log in** | For a schedule that came due while the machine was off |
 | **What it may delete** | Which categories, ticked individually |
@@ -1499,6 +1524,18 @@ would have taken; you decide whether to let it.
 | Known apps | A [known app's cache](#known-apps-caches) is taken only while that app is closed, checked after the scan and again just before anything moves; if what is running cannot be read, no app's cache is taken. On by default, one tick per app |
 | Disk pressure | Optionally, only when the volume is over *N*% full |
 | Cap | At most *N* files per run |
+| Somewhere to put them | A profile that moves files to another drive skips the run when no folder has been chosen, or when the drive it is on is not connected. A drive in a drawer at 02:00 is a reason to try again next time, not a fault |
+| One at a time | Another profile already running means this one waits, then skips |
+
+A profile that moves files to another drive **and keeps the originals** frees
+nothing on the drive it cleaned — it uses more space overall. That is allowed,
+and the screen and the run both say so in those words rather than reporting a
+figure that is not space anybody got back.
+
+Note that `installer` is not among the categories an unattended run may touch,
+so a "clear out old installers every month" profile cannot be built: an
+installer is something you might want to keep, and that list is a hard rule
+rather than a default.
 
 ### The one permanent-deletion path in the app
 
@@ -1522,7 +1559,8 @@ metadata is the evidence.
 
 A configured schedule that has quietly stopped is worse than no schedule, because
 the screen goes on showing a next run time for weeks. So this tab reports
-**what Windows itself holds**, not what the settings file says:
+**what Windows itself holds** for the profile you are looking at, not what the
+settings file says:
 
 - the registered task name, and whether it matches your settings
 - Windows' own last-run and next-run times
@@ -1540,6 +1578,14 @@ A resident process is one the user eventually kills, after which the cleanup
 silently stops. Windows already owns a scheduler that survives reboots, so the
 app registers a task there and exits. **Nothing of this app stays running** for
 the cleanup.
+
+Each profile gets a task of its own, named after it, so Windows runs them on
+their own timetables and the process it starts knows which policy it is there
+for. Removing a profile removes its task with it; a task left behind by one
+that is already gone — by a crash, or a settings file edited by hand — is found
+and removed when the app starts, when a profile is removed, and when you press
+**Check with Windows**. Nothing else is touched: a task whose name the app
+cannot attribute with certainty is left exactly where it is.
 
 ---
 

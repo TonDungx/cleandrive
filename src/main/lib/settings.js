@@ -44,8 +44,11 @@ const themePalette = require('../../shared/theme-palette');
  *   4 -> 5   `appearance.custom`: the user's own colours, or null (I2)
  *   5 -> 6   `explorer.contextMenu`: CleanDrive in Explorer's right-click
  *            menu, off (I3)
+ *   6 -> 7   `autoClean.profiles`: the one policy becomes a list of them, and
+ *            each one gains an action (G4). What was configured becomes the
+ *            first profile, unchanged and still enabled.
  */
-const SCHEMA_VERSION = 6;
+const SCHEMA_VERSION = 7;
 
 const MIGRATIONS = Object.freeze([
   {
@@ -107,6 +110,40 @@ const MIGRATIONS = Object.freeze([
       return { ...raw, version: 6, explorer: { contextMenu: false, ...(isObject(raw.explorer) ? raw.explorer : {}) } };
     },
   },
+  {
+    from: 6,
+    to: 7,
+    migrate(raw) {
+      // The one policy becomes the first profile, field for field, still
+      // enabled if it was enabled and still in report-only if it was.
+      //
+      // Its id is fixed rather than generated, because the Windows task the
+      // user already has is named from it: `AutomaticCleanup` with no profile
+      // part. Generating an id here would leave the configured task orphaned
+      // and register a second one beside it.
+      const { profiles, ...auto } = isObject(raw.autoClean) ? raw.autoClean : {};
+
+      // Already a list of profiles: nothing to move. This matters more than it
+      // looks -- a settings object with no `version` at all is treated as
+      // version 1 and walks every migration, so anything handed straight to
+      // `coerceSettings` (the harnesses, and `defaults()` round-tripped)
+      // arrives here in the new shape and must come out of it unchanged. The
+      // first version of this step wrapped it a second time and produced two
+      // profiles, one of them empty.
+      if (Array.isArray(profiles)) {
+        return { ...raw, version: 7, autoClean: { profiles: profiles.filter(isObject) } };
+      }
+
+      const first = {
+        id: FIRST_PROFILE_ID,
+        name: null, // named on screen, in the reader's own language
+        action: 'recycle',
+        deleteOriginal: false,
+        ...auto,
+      };
+      return { ...raw, version: 7, autoClean: { profiles: [first] } };
+    },
+  },
 ]);
 
 /**
@@ -165,6 +202,49 @@ const DEFAULT_SKIP_PROCESSES = ['Code.exe', 'Docker Desktop.exe', 'idea64.exe', 
  * coffee: close the app, wait, reopen it, read the run log.
  */
 const SCHEDULE_KINDS = ['minutes', 'daily', 'weekly', 'monthly'];
+
+/**
+ * What an unattended profile may do with a file (G4).
+ *
+ * Two, and the shortness of the list is the point. `recycle` is what the
+ * feature has always done. `quarantine` copies to another drive, and is the
+ * only other action in the app whose outcome can be checked afterwards without
+ * a person present -- the copy is either there or it is not. Everything else
+ * an ActionKind can name either needs a decision (`handoff` opens a Windows
+ * tool) or has no handler yet.
+ */
+const AUTO_ACTIONS = ['recycle', 'quarantine'];
+
+/**
+ * The profile the settings file had before it had a list of them.
+ *
+ * Fixed, and short, because the Windows task registered for it carries no
+ * profile part in its name -- it is the name the user's existing task already
+ * has. See the 6 -> 7 migration.
+ */
+const FIRST_PROFILE_ID = 'main';
+
+/**
+ * What a generated profile id looks like: `p` and then base36.
+ *
+ * It is a pattern rather than a convention because `scheduler.js` reads it.
+ * A Windows task called `AutomaticCleanup_dev` is ambiguous -- profile "dev",
+ * or the harness suffix "dev" on the first profile? -- and the sweep that
+ * removes tasks for profiles that no longer exist must never guess. Ids the
+ * app generates match this; harness suffixes are words and do not.
+ */
+const PROFILE_ID_PATTERN = /^p[a-z0-9]{4,11}$/;
+
+/**
+ * How many profiles there may be.
+ *
+ * Each one is a separate Windows task and a separate process that wakes up,
+ * reads the disk and exits, and they are serialised against each other by a
+ * lock, so eight of them on a timetable is already more than a person can
+ * reason about. Free gets one; the rest is Pro, and `ipc.js` enforces that --
+ * this is the ceiling above the licence, not instead of it.
+ */
+const MAX_PROFILES = 8;
 
 /**
  * 'system' follows the OS and is the default. It is not merely the polite
@@ -228,35 +308,61 @@ const LIMITS = {
  */
 const MIN_MINUTES_PACKAGED = 5;
 
+/**
+ * One unattended policy, with nothing filled in (G4).
+ *
+ * Every profile carries a complete policy. There is no "the settings, plus
+ * what this profile overrides": a half-specified profile would mean the run at
+ * 02:00 depends on a value somebody changed for a different profile, and the
+ * whole point of a profile is that you can read what it will do by reading it.
+ */
+function defaultProfile(id) {
+  return {
+    id,
+    name: null,
+    enabled: false,
+    // Starts in dry-run on purpose, and a *new* profile starts there too, no
+    // matter what the one it was added beside is doing. The first scheduled
+    // run should tell you what it would have deleted.
+    dryRun: true,
+    // What it does with what it picks. `quarantine` needs a zone, and needs
+    // `deleteOriginal` before it frees anything -- `autoclean.js` refuses the
+    // run rather than pretending otherwise.
+    action: 'recycle',
+    // Per profile, not the global `quarantine.deleteOriginal` (decided
+    // 2026-09-28). The global one is what the button on the screen does, and
+    // Phase 1 deliberately left that off; a profile needing it on must not
+    // reach across and change what the button does.
+    deleteOriginal: false,
+    schedule: {
+      kind: 'weekly',
+      time: '02:00',
+      weekday: 0,
+      day: 1,
+      everyMinutes: LIMITS.everyMinutes.fallback,
+      // Windows' own catch-up for a missed appointment can take ten minutes
+      // after logon and applies only to occurrences it considers missed, so
+      // "does it survive a restart" is not answerable by watching. An
+      // explicit logon trigger makes the answer arrive in two minutes.
+      catchUpAtLogon: false,
+    },
+    roots: [],
+    whitelist: [],
+    categories: [...DEFAULT_CATEGORIES],
+    minAgeDays: LIMITS.minAgeDays.fallback,
+    // 0 = run regardless of how full the disk is.
+    minDiskUsedPercent: 0,
+    skipIfRunning: [...DEFAULT_SKIP_PROCESSES],
+    maxItemsPerRun: LIMITS.maxItemsPerRun.fallback,
+    notify: true,
+  };
+}
+
 function defaults() {
   return {
     version: SCHEMA_VERSION,
     autoClean: {
-      enabled: false,
-      // Starts in dry-run on purpose. The first scheduled run should tell you
-      // what it would have deleted, not tell you what it did.
-      dryRun: true,
-      schedule: {
-        kind: 'weekly',
-        time: '02:00',
-        weekday: 0,
-        day: 1,
-        everyMinutes: LIMITS.everyMinutes.fallback,
-        // Windows' own catch-up for a missed appointment can take ten minutes
-        // after logon and applies only to occurrences it considers missed, so
-        // "does it survive a restart" is not answerable by watching. An
-        // explicit logon trigger makes the answer arrive in two minutes.
-        catchUpAtLogon: false,
-      },
-      roots: [],
-      whitelist: [],
-      categories: [...DEFAULT_CATEGORIES],
-      minAgeDays: LIMITS.minAgeDays.fallback,
-      // 0 = run regardless of how full the disk is.
-      minDiskUsedPercent: 0,
-      skipIfRunning: [...DEFAULT_SKIP_PROCESSES],
-      maxItemsPerRun: LIMITS.maxItemsPerRun.fallback,
-      notify: true,
+      profiles: [defaultProfile(FIRST_PROFILE_ID)],
     },
     purge: {
       // Emptying part of the Recycle Bin is the only thing this app does that
@@ -442,9 +548,9 @@ function coerceStrings(value, key, warnings, cap) {
 }
 
 /** Only categories the advisor actually marks 'safe' may be auto-deleted. */
-function coerceCategories(value, warnings) {
+function coerceCategories(value, warnings, where = 'autoClean') {
   if (!Array.isArray(value)) {
-    if (value !== undefined) warnings.push('autoClean.categories: not a list, using defaults');
+    if (value !== undefined) warnings.push(`${where}.categories: not a list, using defaults`);
     return [...DEFAULT_CATEGORIES];
   }
   const out = [];
@@ -452,19 +558,151 @@ function coerceCategories(value, warnings) {
     if (typeof entry !== 'string') continue;
     const key = entry.trim().toLowerCase();
     if (!SAFE_CATEGORIES.includes(key)) {
-      warnings.push(`autoClean.categories: "${entry}" is not an auto-cleanable category, ignored`);
+      warnings.push(`${where}.categories: "${entry}" is not an auto-cleanable category, ignored`);
       continue;
     }
     if (!out.includes(key)) out.push(key);
   }
   // An empty list would mean "delete nothing", which is a confusing way to
   // express "disabled" -- say so rather than scheduling a no-op forever.
-  if (out.length === 0) warnings.push('autoClean.categories: empty, no files will match');
+  if (out.length === 0) warnings.push(`${where}.categories: empty, no files will match`);
   return out;
 }
 
+/**
+ * A profile id: short, the app's own, and safe in a Windows task name.
+ *
+ * It ends up inside `CleanDrive\AutomaticCleanup_<id>`, so anything that is
+ * not a letter or a digit is dropped rather than escaped -- a task name is not
+ * a place to be clever. Ids are never reused: a new profile gets a new one, so
+ * it cannot inherit the Windows task, the run log or the history of a profile
+ * somebody deleted.
+ */
+function coerceProfileId(value) {
+  const safe = String(value === undefined || value === null ? '' : value)
+    .replace(/[^A-Za-z0-9]/g, '')
+    .slice(0, 12);
+  // It has to survive the round trip through a Windows task name and back, or
+  // the sweep in `tasks.js` can never recognise the task as this profile's and
+  // would leave it running for ever. `scheduler.profileOfTaskName` accepts
+  // exactly these two shapes, so exactly these two are ids.
+  if (safe === FIRST_PROFILE_ID) return safe;
+  return PROFILE_ID_PATTERN.test(safe) ? safe : null;
+}
+
+function newProfileId(taken = new Set()) {
+  for (let i = 0; i < 1000; i++) {
+    const id = `p${Math.random().toString(36).slice(2, 8).padEnd(6, '0')}`;
+    if (PROFILE_ID_PATTERN.test(id) && !taken.has(id)) return id;
+  }
+  return `p${Date.now().toString(36).slice(-8)}`;
+}
+
+/**
+ * The list of unattended policies, from whatever the file holds (G4).
+ *
+ * The usual rule applies twice over here: this is read by a headless process
+ * that deletes files, so a profile that cannot be understood is dropped and
+ * said out loud rather than run with half its fields defaulted. A file with no
+ * profiles at all yields one that is off, so the screen has something to show
+ * and the run has something to refuse.
+ */
+function coerceProfiles(value, warnings, minMinutes = 1) {
+  const list = Array.isArray(value) ? value : [];
+  if (value !== undefined && !Array.isArray(value)) {
+    warnings.push('autoClean.profiles: not a list, using defaults');
+  }
+  if (list.length > MAX_PROFILES) {
+    warnings.push(`autoClean.profiles: ${list.length} profiles, only the first ${MAX_PROFILES} were read`);
+  }
+
+  const out = [];
+  const seen = new Set();
+  for (const raw of list.slice(0, MAX_PROFILES)) {
+    if (!isObject(raw)) {
+      warnings.push('autoClean.profiles: an entry is not an object, ignored');
+      continue;
+    }
+    let id = coerceProfileId(raw.id);
+    if (!id) {
+      id = newProfileId(seen);
+      warnings.push(`autoClean.profiles: an entry had no usable id, it was given "${id}"`);
+    }
+    if (seen.has(id)) {
+      const replacement = newProfileId(seen);
+      warnings.push(`autoClean.profiles: "${id}" appears twice; the second was renamed "${replacement}"`);
+      id = replacement;
+    }
+    seen.add(id);
+    out.push(coerceProfile(raw, id, warnings, minMinutes));
+  }
+
+  if (out.length === 0) out.push(defaultProfile(FIRST_PROFILE_ID));
+  return out;
+}
+
+function coerceProfile(raw, id, warnings, minMinutes) {
+  const base = defaultProfile(id);
+  const where = `autoClean.profiles.${id}`;
+
+  let action = base.action;
+  if (raw.action !== undefined) {
+    if (AUTO_ACTIONS.includes(raw.action)) action = raw.action;
+    else warnings.push(`${where}.action: "${raw.action}" is not one of ${AUTO_ACTIONS.join(', ')}`);
+  }
+
+  let name = null;
+  if (typeof raw.name === 'string' && raw.name.trim() !== '') name = raw.name.trim().slice(0, 60);
+
+  const profile = {
+    id,
+    name,
+    enabled: bool(raw.enabled, base.enabled),
+    dryRun: bool(raw.dryRun, base.dryRun),
+    action,
+    deleteOriginal: bool(raw.deleteOriginal, base.deleteOriginal),
+    schedule: coerceSchedule(raw.schedule, warnings, minMinutes),
+    roots: coercePaths(raw.roots, `${where}.roots`, warnings, LIMITS.roots),
+    whitelist: coercePaths(raw.whitelist, `${where}.whitelist`, warnings, LIMITS.whitelist),
+    categories: coerceCategories(raw.categories, warnings, where),
+    minAgeDays: clampInt(
+      raw.minAgeDays === undefined ? base.minAgeDays : raw.minAgeDays,
+      LIMITS.minAgeDays,
+      `${where}.minAgeDays`,
+      warnings
+    ),
+    minDiskUsedPercent: clampInt(
+      raw.minDiskUsedPercent === undefined ? base.minDiskUsedPercent : raw.minDiskUsedPercent,
+      LIMITS.minDiskUsedPercent,
+      `${where}.minDiskUsedPercent`,
+      warnings
+    ),
+    skipIfRunning:
+      raw.skipIfRunning === undefined
+        ? [...base.skipIfRunning]
+        : coerceStrings(raw.skipIfRunning, `${where}.skipIfRunning`, warnings, LIMITS.skipIfRunning),
+    maxItemsPerRun: clampInt(
+      raw.maxItemsPerRun === undefined ? base.maxItemsPerRun : raw.maxItemsPerRun,
+      LIMITS.maxItemsPerRun,
+      `${where}.maxItemsPerRun`,
+      warnings
+    ),
+    notify: bool(raw.notify, base.notify),
+  };
+
+  // Enabling a cleanup with nothing to clean is a misconfiguration, not a
+  // preference. Refuse to call it enabled rather than run an empty task nightly.
+  if (profile.enabled && profile.roots.length === 0) {
+    warnings.push(`${where}: enabled but no folders are listed, so it was left off`);
+    profile.enabled = false;
+  }
+  return profile;
+}
+
 function coerceSchedule(value, warnings, minMinutes = 1) {
-  const base = defaults().autoClean.schedule;
+  // A schedule belongs to a profile now (G4), so the fallback comes from an
+  // empty profile rather than from a policy at the top of the file.
+  const base = defaultProfile(FIRST_PROFILE_ID).schedule;
   if (!isObject(value)) {
     if (value !== undefined) warnings.push('autoClean.schedule: not an object, using defaults');
     return base;
@@ -576,44 +814,7 @@ function coerceSettings(input, { minMinutes = 1 } = {}) {
   const rawPurge = isObject(raw.purge) ? raw.purge : {};
   const rawMonitor = isObject(raw.monitor) ? raw.monitor : {};
 
-  const autoClean = {
-    enabled: bool(rawAuto.enabled, base.autoClean.enabled),
-    dryRun: bool(rawAuto.dryRun, base.autoClean.dryRun),
-    schedule: coerceSchedule(rawAuto.schedule, warnings, minMinutes),
-    roots: coercePaths(rawAuto.roots, 'autoClean.roots', warnings, LIMITS.roots),
-    whitelist: coercePaths(rawAuto.whitelist, 'autoClean.whitelist', warnings, LIMITS.whitelist),
-    categories: coerceCategories(rawAuto.categories, warnings),
-    minAgeDays: clampInt(
-      rawAuto.minAgeDays === undefined ? base.autoClean.minAgeDays : rawAuto.minAgeDays,
-      LIMITS.minAgeDays,
-      'autoClean.minAgeDays',
-      warnings
-    ),
-    minDiskUsedPercent: clampInt(
-      rawAuto.minDiskUsedPercent === undefined ? base.autoClean.minDiskUsedPercent : rawAuto.minDiskUsedPercent,
-      LIMITS.minDiskUsedPercent,
-      'autoClean.minDiskUsedPercent',
-      warnings
-    ),
-    skipIfRunning:
-      rawAuto.skipIfRunning === undefined
-        ? [...base.autoClean.skipIfRunning]
-        : coerceStrings(rawAuto.skipIfRunning, 'autoClean.skipIfRunning', warnings, LIMITS.skipIfRunning),
-    maxItemsPerRun: clampInt(
-      rawAuto.maxItemsPerRun === undefined ? base.autoClean.maxItemsPerRun : rawAuto.maxItemsPerRun,
-      LIMITS.maxItemsPerRun,
-      'autoClean.maxItemsPerRun',
-      warnings
-    ),
-    notify: bool(rawAuto.notify, base.autoClean.notify),
-  };
-
-  // Enabling a cleanup with nothing to clean is a misconfiguration, not a
-  // preference. Refuse to call it enabled rather than run an empty task nightly.
-  if (autoClean.enabled && autoClean.roots.length === 0) {
-    warnings.push('autoClean: enabled but no folders are listed, so it was left off');
-    autoClean.enabled = false;
-  }
+  const autoClean = { profiles: coerceProfiles(rawAuto.profiles, warnings, minMinutes) };
 
   const purge = {
     enabled: bool(rawPurge.enabled, base.purge.enabled),
@@ -936,12 +1137,39 @@ class SettingsStore {
   }
 }
 
+/**
+ * The profiles of a settings object, always a list, never undefined.
+ *
+ * Everything that used to say `settings.autoClean` says this instead, so a
+ * reader written before G4 fails loudly at the call site rather than quietly
+ * reading `undefined.enabled` at 02:00.
+ */
+function profilesOf(settings) {
+  const auto = settings && isObject(settings.autoClean) ? settings.autoClean : null;
+  return auto && Array.isArray(auto.profiles) ? auto.profiles : [];
+}
+
+/** One profile by id, or null. */
+function profileById(settings, id) {
+  const key = coerceProfileId(id);
+  return profilesOf(settings).find((p) => p.id === key) || null;
+}
+
 module.exports = {
   SettingsStore,
   coerceSettings,
   migrate,
   MIGRATIONS,
   defaults,
+  defaultProfile,
+  profilesOf,
+  profileById,
+  coerceProfileId,
+  newProfileId,
+  AUTO_ACTIONS,
+  MAX_PROFILES,
+  FIRST_PROFILE_ID,
+  PROFILE_ID_PATTERN,
   MIN_MINUTES_PACKAGED,
   SCHEMA_VERSION,
   SAFE_CATEGORIES,

@@ -1,6 +1,7 @@
 'use strict';
 
 const os = require('node:os');
+const { profilesOf } = require('./settings');
 
 const { usageByVolume } = require('./disk');
 
@@ -50,7 +51,9 @@ function volumeTargets({ settings, history, extraTargets = [] } = {}) {
 
   if (settings) {
     if (settings.monitor && Array.isArray(settings.monitor.volumes)) targets.push(...settings.monitor.volumes);
-    if (settings.autoClean && Array.isArray(settings.autoClean.roots)) targets.push(...settings.autoClean.roots);
+    // Every profile's folders, not one profile's (G4): a drive that only the
+    // monthly installer profile touches is still a drive worth charting.
+    for (const profile of profilesOf(settings)) targets.push(...profile.roots);
   }
 
   // Keeps a drive in the series after it has been removed from the settings.

@@ -36,11 +36,13 @@ const { CancelToken, formatBytes, formatDuration, pathKey } = require('./lib/uti
 const { services } = require('./services');
 const scheduler = require('./lib/scheduler');
 const { runAutoClean } = require('./lib/autoclean');
+const runlock = require('./lib/runlock');
 const { diskUsage, usageByVolume, volumeRoot } = require('./lib/disk');
 const { findUserBins, purgeRecorded } = require('./lib/recyclebin');
 const historyLib = require('./lib/history');
 const { sample, volumeTargets } = require('./lib/sampler');
 const tasks = require('./tasks');
+const settingsLib = require('./lib/settings');
 const language = require('./language');
 const { t } = language;
 const tray = require('./tray');
@@ -1506,6 +1508,94 @@ function register() {
     })
   );
 
+  /* ---- profiles (G4) ---------------------------------------------------- */
+
+  /**
+   * Save one profile, by id.
+   *
+   * The window sends a whole profile; `coerceSettings` clamps every field of
+   * it on the way in, exactly as it does for a file somebody edited by hand.
+   * A profile the settings do not list is refused rather than created, so a
+   * stale screen cannot resurrect one that was just deleted.
+   */
+  async function writeProfiles(next, { sweep = false } = {}) {
+    const { settings } = await services().settings.patch({ autoClean: { profiles: next } });
+    const reconciled = await tasks.reconcile(settings, { settingsExisted: true, sweep });
+    tray.apply(settings);
+    return { ...(await readState()), reconciled };
+  }
+
+  handle('autoclean:saveProfile', (event, profile) =>
+    guard(async () => {
+      if (!profile || typeof profile !== 'object' || typeof profile.id !== 'string') {
+        throw Object.assign(new Error('No profile was sent'), { code: 'EINVAL', quiet: true });
+      }
+      const settings = await services().settings.load();
+      const profiles = settingsLib.profilesOf(settings);
+      const at = profiles.findIndex((p) => p.id === profile.id);
+      if (at === -1) {
+        throw Object.assign(new Error('That profile no longer exists'), { code: 'ENOENT', quiet: true });
+      }
+      const next = profiles.map((p, i) => (i === at ? { ...p, ...profile, id: p.id } : p));
+      return writeProfiles(next);
+    })
+  );
+
+  handle('autoclean:addProfile', (event, template = {}) =>
+    guard(async () => {
+      const settings = await services().settings.load();
+      const profiles = settingsLib.profilesOf(settings);
+      const can = licenseState.canNow();
+
+      // Refused out loud, never a silently ignored button -- the same shape as
+      // the fast scan (A2), the keeper rule (F1) and whole folders (F2).
+      if (profiles.length >= 1 && !can('pro.automatic.profiles')) {
+        throw Object.assign(
+          new Error('More than one automatic profile is part of CleanDrive Pro'),
+          { code: 'ELOCKED', quiet: true }
+        );
+      }
+      if (profiles.length >= settingsLib.MAX_PROFILES) {
+        throw Object.assign(
+          new Error(`At most ${settingsLib.MAX_PROFILES} profiles`),
+          { code: 'EINVAL', quiet: true }
+        );
+      }
+
+      const id = settingsLib.newProfileId(new Set(profiles.map((p) => p.id)));
+      // Every new profile starts switched off and in report-only, whatever it
+      // was copied from. The spec asks for it and it is the only safe default:
+      // a profile that starts deleting on a timetable nobody has read yet is
+      // how an unattended feature loses somebody's trust in one night.
+      const made = {
+        ...settingsLib.defaultProfile(id),
+        ...(typeof template.name === 'string' ? { name: template.name } : {}),
+        enabled: false,
+        dryRun: true,
+      };
+      const state = await writeProfiles([...profiles, made]);
+      return { ...state, addedId: id };
+    })
+  );
+
+  handle('autoclean:removeProfile', (event, id) =>
+    guard(async () => {
+      const settings = await services().settings.load();
+      const profiles = settingsLib.profilesOf(settings);
+      if (profiles.length <= 1) {
+        throw Object.assign(new Error('The last profile cannot be removed'), { code: 'EINVAL', quiet: true });
+      }
+      const next = profiles.filter((p) => p.id !== id);
+      if (next.length === profiles.length) {
+        throw Object.assign(new Error('That profile no longer exists'), { code: 'ENOENT', quiet: true });
+      }
+      // Sweep here and nowhere else on this path: removing a profile is the one
+      // action that leaves a task behind, and without the sweep it would keep
+      // running on its own timetable for ever.
+      return writeProfiles(next, { sweep: true });
+    })
+  );
+
   /**
    * The OS's own account of the tasks: last run, next run, and the exit code
    * of the last run.
@@ -1535,7 +1625,9 @@ function register() {
     guard(async () => {
       const store = services().settings;
       const settings = await store.load();
-      const reconciled = await tasks.reconcile(settings, { settingsExisted: store.exists });
+      // Pressing "Check" is a deliberate ask, so it is worth the PowerShell
+      // call that looks for tasks left by profiles that are gone.
+      const reconciled = await tasks.reconcile(settings, { settingsExisted: store.exists, sweep: true });
       return { reconciled, state: await readState() };
     })
   );
@@ -1549,9 +1641,12 @@ function register() {
    * the same way. Running the job in-process would prove nothing about the
    * registration.
    */
-  handle('tasks:runNow', (event, which = 'cleanup') =>
+  handle('tasks:runNow', (event, which = 'cleanup', profileId = null) =>
     guard(async () => {
-      const taskPath = which === 'sampler' ? scheduler.sampleTaskPath() : scheduler.cleanupTaskPath();
+      // `which` still names the sampler or the cleanup; for a cleanup, which
+      // profile's task it is now has to be said, because there is one each.
+      const taskPath =
+        which === 'sampler' ? scheduler.sampleTaskPath() : scheduler.cleanupTaskPath(profileId);
       if (!(await scheduler.isInstalled(taskPath))) {
         throw new Error(t('task.error.notRegistered', 'No task is registered with Windows yet — save the settings first.'));
       }
@@ -1579,25 +1674,51 @@ function register() {
         await ledger.load();
         await runLog.load();
 
+        // Which profile the button belongs to (G4). The window says; a profile
+        // it names that is not there is an error rather than a run of whatever
+        // happens to be first.
+        const asked = typeof options.profileId === 'string' ? options.profileId : null;
+        const profiles = settingsLib.profilesOf(base);
+        const chosen = asked ? settingsLib.profileById(base, asked) : profiles[0];
+        if (!chosen) {
+          throw Object.assign(new Error('That profile no longer exists'), { code: 'ENOENT', quiet: true });
+        }
+
         // Pressing the button is the consent to run, so a configuration that is
         // saved but not switched on can still be tested. Nothing else about the
         // policy is relaxed.
         const dryRun = options.dryRun !== false;
-        const settings = {
-          ...base,
-          autoClean: { ...base.autoClean, enabled: true, dryRun },
-        };
+        const profile = { ...chosen, enabled: true, dryRun };
+        const settings = base;
+
+        // The button is a run like any other, so it takes the same lock -- a
+        // scheduled profile firing mid-click would otherwise rewrite the run
+        // log from under this one.
+        const lock = await runlock.acquire(services().runLockPath, { holder: `manual:${profile.id}`, waitMs: 5000 });
+        if (!lock.ok) {
+          throw Object.assign(
+            new Error(t('autoclean.busy', 'An automatic cleanup is running right now. Try again in a moment.')),
+            { code: 'EBUSY', quiet: true }
+          );
+        }
 
         const win = BrowserWindow.fromWebContents(event.sender);
-        const run = await runAutoClean({
-          settings,
-          ledger,
-          journal: services().journal,
-          source: 'manual',
-          token,
-          onStage: send,
-          onConfirm: dryRun ? undefined : (selection) => confirmAutoDelete(win, selection, settings),
-        });
+        let run;
+        try {
+          run = await runAutoClean({
+            settings,
+            profile,
+            ledger,
+            journal: services().journal,
+            source: 'manual',
+            quarantine: settings.quarantine,
+            token,
+            onStage: send,
+            onConfirm: dryRun ? undefined : (selection) => confirmAutoDelete(win, selection, profile, settings),
+          });
+        } finally {
+          await lock.release();
+        }
 
         run.manual = true;
         await runLog.append(run);
@@ -2460,7 +2581,37 @@ async function readState() {
     reconciliation,
     lastRun: runLog.latest(),
     history: runLog.runs.slice(0, 20),
+    // What the window may do with profiles (G4), decided here rather than
+    // guessed from the licence in the renderer.
+    profileLimits: {
+      max: settingsLib.MAX_PROFILES,
+      // Free keeps the one profile it has always had. The refusal is said out
+      // loud when an extra one is asked for -- see `autoclean:addProfile`.
+      allowed: licenseState.canNow()('pro.automatic.profiles') ? settingsLib.MAX_PROFILES : 1,
+      actions: settingsLib.AUTO_ACTIONS,
+    },
+    // The last run of each profile, so a card can show its own result rather
+    // than whichever profile happened to run most recently.
+    lastRunByProfile: lastRunPerProfile(runLog.runs, settingsLib.profilesOf(settings)),
   };
+}
+
+/**
+ * The most recent run of each profile, keyed by id.
+ *
+ * The log is one list in time order, shared by every profile, because that is
+ * what it has always been and because a run that could not identify itself
+ * still belongs in it. A profile with no run yet gets null rather than being
+ * left out, so the screen shows "not run yet" instead of nothing at all.
+ */
+function lastRunPerProfile(runs, profiles) {
+  const out = {};
+  for (const profile of profiles) out[profile.id] = null;
+  for (const run of runs || []) {
+    const id = run.profileId || settingsLib.FIRST_PROFILE_ID;
+    if (id in out && out[id] === null) out[id] = run;
+  }
+  return out;
 }
 
 /** The volumes a set of ledger entries came from, so only those bins are opened. */
@@ -2731,7 +2882,7 @@ function allowUnconfirmedForHarness() {
  * has no equivalent -- its consent was given when the schedule was saved, which
  * is why the schedule starts in report-only mode.
  */
-async function confirmAutoDelete(win, selection, settings) {
+async function confirmAutoDelete(win, selection, profile, settings) {
   const names = selection.sample
     .slice(0, 5)
     .map((f) => `  ${f.path}`)
@@ -2750,7 +2901,7 @@ async function confirmAutoDelete(win, selection, settings) {
       t(
         'dialog.confirmAuto.detail',
         'These are files in the enabled categories, untouched for at least {days} days. Total {size}.',
-        { days: settings.autoClean.minAgeDays, size: formatBytes(selection.bytes) }
+        { days: profile.minAgeDays, size: formatBytes(selection.bytes) }
       ) +
       `\n\n${t('dialog.forExample', 'For example:')}\n${names}${selection.files > 5 ? '\n  …' : ''}\n\n` +
       (settings.purge.enabled

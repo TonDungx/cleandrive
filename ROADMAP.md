@@ -204,7 +204,7 @@ hoạch đều trỏ về một màn đã có. G3 và F3 là P2 nên để cuố
 | G1 | Space Planner | P1 | ✅ Đã code xong (2026-09-28) — không có nút "thực hiện kế hoạch"; mỗi bước mang **ba** con số thay vì một, và có thêm bước dọn Thùng rác vì nếu không thì 5/8 bước của đặc tả giải phóng đúng 0 byte |
 | G2 | Báo cáo HTML | P1 | |
 | G3 | Tóm tắt định kỳ | P2 | |
-| G4 | Nhiều hồ sơ tự động | P1 | |
+| G4 | Nhiều hồ sơ tự động | P1 | ✅ Đã code xong (2026-09-28) — settings lên **v7**, chính sách đơn trở thành `autoClean.profiles`. "Mutex có tên" thay bằng **tệp khoá** (Node không có named mutex). Mẫu *Installer hàng tháng* của đặc tả **không dựng được**: `installer` không nằm trong danh sách trắng chạy ngầm |
 | F1 | Trùng lặp xuyên thư mục / xuyên ổ | P1 | ✅ Đã code xong (2026-09-28) — phần "nhiều gốc nhiều ổ" **A4 đã giao từ trước**; mục này thêm tiêu chí chọn bản giữ theo loại ổ. **Không làm** nhánh hash qua ổ mạng: không đo được tốc độ thật trên máy này |
 | F2 | Thư mục trùng toàn bộ | P1 | ✅ Đã code xong (2026-09-28) — **không có** `archive`/`quarantine` cả thư mục: `archive` chưa có handler nào (là B5), `quarantine` cũng `allowsFolders: false`. Hành động duy nhất là `recycle`/`quarantine` **từng tệp**, đúng quy tắc bất biến. Pha thư mục **đi cây riêng, nhìn cả `node_modules`, `.git`, tên chấm** — nếu không thì "trùng khớp" là lời nói dối |
 | F3 | Phiên bản tài liệu | P2 | |
@@ -1538,6 +1538,35 @@ Thêm trục **"Cuộc trò chuyện"** vào màn Photos & video, dùng thanh t�
 - *Cache hàng tuần*: temp, cache trình duyệt, cache app, ≥ 7 ngày.
 - *Installer hàng tháng*: installer ≥ 30 ngày trong Downloads.
 - *Dev hàng tháng* (Pro·Dev): build output ≥ 60 ngày.
+
+> **✅ Đã code xong (2026-09-28).**
+>
+> Code:
+> - `src/main/lib/settings.js` — **schema v7**. `autoClean` giờ chỉ còn `profiles: [...]`; mỗi hồ sơ mang **trọn** một chính sách, không có kiểu "cài đặt chung cộng phần hồ sơ ghi đè". Migration 6→7 biến chính sách cũ thành hồ sơ đầu tiên, **id cố định `main`** để task Windows người dùng đã có không bị mồ côi.
+> - `src/main/lib/runlock.js` — **mới**. Khoá liên tiến trình bằng `open(..., 'wx')`, có pid + thời điểm, tự nhận ra khoá của tiến trình đã chết và khoá quá hạn.
+> - `src/main/lib/scheduler.js` — `cleanupTaskPath(profileId)`, `profileOfTaskName()`, `listCleanupTasks()` (liệt kê qua COM `Schedule.Service`).
+> - `src/main/tasks.js` — `reconcile` lặp qua từng hồ sơ; `sweepOrphans` gỡ task của hồ sơ đã xoá.
+> - `src/main/lib/autoclean.js` — nhận `profile`, hiểu `action`, và **từ chối** quarantine khi chưa có zone hoặc ổ không cắm.
+> - `src/main/scheduled-run.js` — đọc `--profile=<id>`, lấy khoá, trả khoá trong `finally`.
+> - `src/main/ipc.js` (+ manifest, preload), `src/renderer/automatic.js` + `index.html` + `styles.css`, `src/i18n/vi.js`.
+>
+> Harness: `scripts/test-profiles.js` **mới, 40 kiểm tra** (`npm run test:profiles`, đã vào `npm test`) — tầng settings, quy tắc đặt tên task, và khoá **với một tiến trình thật thứ hai** (`fork`); 12 kiểm tra trong `smoke.js`. `scripts/shoot-profiles.js` chụp 8 ảnh. `npm test` **2.227/0** (49 bộ), `test:e2e` **435/0**, a11y/onboarding/explorer/idle/i18n đều pass.
+>
+> **Khác đặc tả — bốn chỗ:**
+>
+> 1. **"Mutex có tên" không tồn tại.** Node và Electron không có. Thay bằng tệp khoá trong `userData`, làm đúng việc đó trên Windows vì `open(..., 'wx')` để **hệ điều hành** quyết ai thắng. Không dùng `requestSingleInstanceLock` được: `main.js:239-249` cố ý không lấy khoá đó cho lượt chạy theo lịch, vì nếu lấy thì dọn dẹp sẽ bị huỷ mọi đêm người dùng mở app. **Lý do cụ thể hơn đặc tả đưa ra:** `RunLog.append` đọc cả tệp rồi ghi đè nguyên tệp — hai lượt song song làm **mất hẳn** bản ghi của một lượt.
+> 2. **"chờ hoặc bỏ lượt" → chờ có giới hạn 90 giây rồi bỏ lượt**, ghi lý do vào nhật ký. Chờ vô hạn trong một tiến trình của Task Scheduler là một tiến trình treo đến sáng.
+> 3. **Mẫu *Installer hàng tháng* không dựng được.** `installer` **không** nằm trong `automatic/allowed-categories.js`, nên một hồ sơ khai nó sẽ còn **0 danh mục** và không khớp gì. Danh sách trắng ấy là luật cứng, được kiểm hai lần (`contract.js`), và nó đúng: một bộ cài là thứ người ta có thể muốn giữ. Hai mẫu còn lại dựng được.
+> 4. **`deleteOriginal` là cờ **riêng của từng hồ sơ**** (người dùng chốt 2026-09-28), không dùng chung `quarantine.deleteOriginal` — vì cờ toàn cục ấy là thứ **nút bấm trên màn hình** dùng, và Giai đoạn 1 mục 5 đã cố ý để nó tắt. Một hồ sơ cần bật nó không được với tay sang đổi hành vi của cái nút kia.
+>
+> **Ba lỗi thật do harness bắt được, không phải lỗi test:**
+> - Migration 6→7 **bọc lại dữ liệu đã ở dạng mới**: một object settings không có `version` bị coi là v1 và đi qua mọi bước, nên `coerceSettings` trả về **hai** hồ sơ, một cái rỗng. Nay bước này idempotent.
+> - `coerceProfileId('p!!!@@@')` trả về `'p'` — một id **không** khớp `PROFILE_ID_PATTERN`, nên task của nó sẽ không bao giờ được `profileOfTaskName` nhận ra và **sweep sẽ không bao giờ gỡ nó**. Nay id phải đi trọn vòng qua tên task rồi quay lại, nếu không thì sinh id mới.
+> - Tệp khoá **đọc không được bị coi là không có ai giữ** — đúng chiều nguy hiểm, vì một khoá đang được ghi dở cũng đọc không được. Nay tuổi lấy từ `mtime` của tệp khi nội dung không nói được.
+>
+> **Quét task mồ côi chỉ chạy khi cần.** Liệt kê thư mục `\CleanDrive` tốn một tiến trình PowerShell (~3 giây), và lúc đầu tôi đặt nó vào **mọi** lần lưu — khiến màn Automatic chậm hẳn. Nay chỉ chạy khi **khởi động**, khi **xoá hồ sơ**, và khi bấm **Kiểm tra** — đó là mọi đường một task có thể thành mồ côi.
+>
+> **Quét chỉ chạm task cùng hậu tố.** Đo được trên máy này: thư mục `\CleanDrive` đang có `DiskSample`, `DiskSample_dev`, `DiskSample_explorer`, `DiskSample_shootq` — ba cái sau là harness bỏ lại. `profileOfTaskName` **từ chối đoán** một tên nhập nhằng (`AutomaticCleanup_dev` là hồ sơ "dev" hay hậu tố "dev"?), nên không cái nào trong ba cái đó bị đụng tới.
 
 ---
 

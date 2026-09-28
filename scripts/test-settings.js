@@ -13,6 +13,22 @@ const path = require('node:path');
 
 const { SettingsStore, coerceSettings, defaults, LIMITS } = require('../src/main/lib/settings');
 
+/**
+ * The harness still describes one policy at a time, because almost every
+ * rule here is about one policy. These two put it where the file now keeps
+ * it (G4) and take it back out, so the assertions below stay about the rule
+ * they are testing rather than about the shape around it.
+ */
+const one = (partial = {}) => {
+  const { autoClean, ...rest } = partial || {};
+  // A partial that says nothing about the cleanup keeps saying nothing: a
+  // patch of `{ purge }` must not replace the profile list with an empty one.
+  if (!autoClean) return { ...rest };
+  return { ...rest, autoClean: { profiles: [{ id: 'main', ...autoClean }] } };
+};
+const coerceOne = (partial, opts) => coerceSettings(one(partial), opts);
+const first = (settings) => settings.autoClean.profiles[0];
+
 let failures = 0;
 function check(label, cond, detail = '') {
   if (!cond) failures++;
@@ -26,139 +42,139 @@ const ABS = (...parts) => path.resolve(`C:${SEP}${parts.join(SEP)}`);
   console.log('\nsettings: defaults\n');
 
   const base = defaults();
-  check('automatic cleanup is off out of the box', base.autoClean.enabled === false);
-  check('the first run would be a dry run', base.autoClean.dryRun === true);
+  check('automatic cleanup is off out of the box', first(base).enabled === false);
+  check('the first run would be a dry run', first(base).dryRun === true);
   check('purge is off out of the box', base.purge.enabled === false);
-  check('no folders are targeted by default', base.autoClean.roots.length === 0);
+  check('no folders are targeted by default', first(base).roots.length === 0);
   check('build output is not auto-deleted by default',
-    !base.autoClean.categories.includes('buildoutput'));
+    !first(base).categories.includes('buildoutput'));
 
   console.log('\nsettings: coercion of hostile input\n');
 
   {
-    const { settings, warnings } = coerceSettings({
+    const { settings, warnings } = coerceOne({
       autoClean: { categories: ['cache', 'stale', 'appcache', 'archive', 'installer'] },
     });
     check('a review-only category cannot be scheduled for deletion',
-      !settings.autoClean.categories.includes('stale') &&
-      !settings.autoClean.categories.includes('appcache') &&
-      !settings.autoClean.categories.includes('archive') &&
-      !settings.autoClean.categories.includes('installer'),
-      settings.autoClean.categories.join(','));
-    check('only the safe category survives', settings.autoClean.categories.join(',') === 'cache');
+      !first(settings).categories.includes('stale') &&
+      !first(settings).categories.includes('appcache') &&
+      !first(settings).categories.includes('archive') &&
+      !first(settings).categories.includes('installer'),
+      first(settings).categories.join(','));
+    check('only the safe category survives', first(settings).categories.join(',') === 'cache');
     check('each rejection is reported', warnings.filter((w) => w.includes('not an auto-cleanable')).length === 4);
   }
 
   {
-    const { settings, warnings } = coerceSettings({ autoClean: { minAgeDays: 0 } });
-    check('a zero-day age threshold is clamped up', settings.autoClean.minAgeDays === LIMITS.minAgeDays.min,
-      String(settings.autoClean.minAgeDays));
+    const { settings, warnings } = coerceOne({ autoClean: { minAgeDays: 0 } });
+    check('a zero-day age threshold is clamped up', first(settings).minAgeDays === LIMITS.minAgeDays.min,
+      String(first(settings).minAgeDays));
     check('the clamp is reported', warnings.some((w) => w.includes('minAgeDays')));
   }
 
   {
-    const { settings } = coerceSettings({ autoClean: { minAgeDays: -99999, maxItemsPerRun: 9e9 } });
-    check('a negative age is clamped, not negated', settings.autoClean.minAgeDays === LIMITS.minAgeDays.min);
-    check('an absurd per-run cap is clamped', settings.autoClean.maxItemsPerRun === LIMITS.maxItemsPerRun.max);
+    const { settings } = coerceOne({ autoClean: { minAgeDays: -99999, maxItemsPerRun: 9e9 } });
+    check('a negative age is clamped, not negated', first(settings).minAgeDays === LIMITS.minAgeDays.min);
+    check('an absurd per-run cap is clamped', first(settings).maxItemsPerRun === LIMITS.maxItemsPerRun.max);
   }
 
   {
-    const { settings, warnings } = coerceSettings({
+    const { settings, warnings } = coerceOne({
       autoClean: { roots: ['relative/path', '', 42, ABS('Users', 'me', 'Downloads')] },
     });
-    check('relative and non-string roots are dropped', settings.autoClean.roots.length === 1,
-      JSON.stringify(settings.autoClean.roots));
-    check('the absolute root survives', settings.autoClean.roots[0] === ABS('Users', 'me', 'Downloads'));
+    check('relative and non-string roots are dropped', first(settings).roots.length === 1,
+      JSON.stringify(first(settings).roots));
+    check('the absolute root survives', first(settings).roots[0] === ABS('Users', 'me', 'Downloads'));
     check('the dropped relative path is reported', warnings.some((w) => w.includes('not absolute')));
   }
 
   {
-    const { settings, warnings } = coerceSettings({ autoClean: { enabled: true, roots: [] } });
-    check('enabling with no folders does not stay enabled', settings.autoClean.enabled === false);
+    const { settings, warnings } = coerceOne({ autoClean: { enabled: true, roots: [] } });
+    check('enabling with no folders does not stay enabled', first(settings).enabled === false);
     check('and says why', warnings.some((w) => w.includes('no folders')));
   }
 
   {
-    const { settings } = coerceSettings({ autoClean: { enabled: true, roots: [ABS('Users', 'me', 'Downloads')] } });
-    check('enabling with a folder does stay enabled', settings.autoClean.enabled === true);
+    const { settings } = coerceOne({ autoClean: { enabled: true, roots: [ABS('Users', 'me', 'Downloads')] } });
+    check('enabling with a folder does stay enabled', first(settings).enabled === true);
   }
 
   {
-    const { settings, warnings } = coerceSettings({ autoClean: { schedule: { kind: 'hourly', time: '25:61', day: 31 } } });
-    check('an unknown schedule kind falls back', settings.autoClean.schedule.kind === 'weekly',
-      settings.autoClean.schedule.kind);
-    check('an impossible time falls back', settings.autoClean.schedule.time === '02:00',
-      settings.autoClean.schedule.time);
+    const { settings, warnings } = coerceOne({ autoClean: { schedule: { kind: 'hourly', time: '25:61', day: 31 } } });
+    check('an unknown schedule kind falls back', first(settings).schedule.kind === 'weekly',
+      first(settings).schedule.kind);
+    check('an impossible time falls back', first(settings).schedule.time === '02:00',
+      first(settings).schedule.time);
     check('a monthly day past 28 falls back so every month fires',
-      settings.autoClean.schedule.day === 1, String(settings.autoClean.schedule.day));
+      first(settings).schedule.day === 1, String(first(settings).schedule.day));
     check('all three are reported', warnings.length >= 3, warnings.join(' | '));
   }
 
   {
-    const { settings } = coerceSettings({ autoClean: { schedule: { time: '7:05' } } });
-    check('a single-digit hour is zero-padded', settings.autoClean.schedule.time === '07:05',
-      settings.autoClean.schedule.time);
+    const { settings } = coerceOne({ autoClean: { schedule: { time: '7:05' } } });
+    check('a single-digit hour is zero-padded', first(settings).schedule.time === '07:05',
+      first(settings).schedule.time);
   }
 
   {
     // "7:5" could mean 07:05 or 07:50. A cleanup time is not a thing to guess
     // at, so an ambiguous minute field is refused rather than interpreted.
-    const { settings } = coerceSettings({ autoClean: { schedule: { time: '7:5' } } });
+    const { settings } = coerceOne({ autoClean: { schedule: { time: '7:5' } } });
     check('an ambiguous minute field is refused, not guessed',
-      settings.autoClean.schedule.time === '02:00', settings.autoClean.schedule.time);
+      first(settings).schedule.time === '02:00', first(settings).schedule.time);
   }
 
   {
-    const { settings } = coerceSettings('not an object');
-    check('a non-object file yields defaults', settings.autoClean.enabled === false);
+    const { settings } = coerceOne('not an object');
+    check('a non-object file yields defaults', first(settings).enabled === false);
   }
 
   console.log('\nsettings: an interval schedule\n');
 
   {
-    const { settings } = coerceSettings({ autoClean: { schedule: { kind: 'minutes', everyMinutes: 5 } } });
-    check('an interval kind is accepted', settings.autoClean.schedule.kind === 'minutes');
-    check('and its interval is kept', settings.autoClean.schedule.everyMinutes === 5);
+    const { settings } = coerceOne({ autoClean: { schedule: { kind: 'minutes', everyMinutes: 5 } } });
+    check('an interval kind is accepted', first(settings).schedule.kind === 'minutes');
+    check('and its interval is kept', first(settings).schedule.everyMinutes === 5);
     // The interval kind exists to be watched working, so the run that proves a
     // restart did not break it is on by default for that kind only.
     check('the logon catch-up defaults on for an interval',
-      settings.autoClean.schedule.catchUpAtLogon === true);
+      first(settings).schedule.catchUpAtLogon === true);
 
-    const weekly = coerceSettings({ autoClean: { schedule: { kind: 'weekly' } } });
+    const weekly = coerceOne({ autoClean: { schedule: { kind: 'weekly' } } });
     check('and off for an appointment, which is not what "every Sunday" means',
-      weekly.settings.autoClean.schedule.catchUpAtLogon === false);
+      first(weekly.settings).schedule.catchUpAtLogon === false);
 
-    const asked = coerceSettings({ autoClean: { schedule: { kind: 'weekly', catchUpAtLogon: true } } });
-    check('but an appointment can opt in', asked.settings.autoClean.schedule.catchUpAtLogon === true);
+    const asked = coerceOne({ autoClean: { schedule: { kind: 'weekly', catchUpAtLogon: true } } });
+    check('but an appointment can opt in', first(asked.settings).schedule.catchUpAtLogon === true);
   }
 
   {
     // The floor is a property of the build: a checkout may loop every minute to
     // watch it work, an installed copy may not turn a stranger's machine into a
     // scanner that never stops.
-    const dev = coerceSettings({ autoClean: { schedule: { kind: 'minutes', everyMinutes: 1 } } });
-    check('a one-minute interval is allowed from source', dev.settings.autoClean.schedule.everyMinutes === 1);
+    const dev = coerceOne({ autoClean: { schedule: { kind: 'minutes', everyMinutes: 1 } } });
+    check('a one-minute interval is allowed from source', first(dev.settings).schedule.everyMinutes === 1);
 
-    const packaged = coerceSettings(
+    const packaged = coerceOne(
       { autoClean: { schedule: { kind: 'minutes', everyMinutes: 1 } } },
       { minMinutes: 5 }
     );
     check('an installed build raises it to the floor',
-      packaged.settings.autoClean.schedule.everyMinutes === 5,
-      String(packaged.settings.autoClean.schedule.everyMinutes));
+      first(packaged.settings).schedule.everyMinutes === 5,
+      String(first(packaged.settings).schedule.everyMinutes));
     check('and says it did',
       packaged.warnings.some((w) => w.includes('everyMinutes')), packaged.warnings.join(' | '));
 
-    const silent = coerceSettings(
+    const silent = coerceOne(
       { autoClean: { schedule: { kind: 'weekly', everyMinutes: 1 } } },
       { minMinutes: 5 }
     );
     check('a clamp nobody asked about is not reported',
       !silent.warnings.some((w) => w.includes('everyMinutes')), silent.warnings.join(' | '));
 
-    const absurd = coerceSettings({ autoClean: { schedule: { kind: 'minutes', everyMinutes: 99999 } } });
+    const absurd = coerceOne({ autoClean: { schedule: { kind: 'minutes', everyMinutes: 99999 } } });
     check('an interval longer than a day is clamped to a day',
-      absurd.settings.autoClean.schedule.everyMinutes === LIMITS.everyMinutes.max);
+      first(absurd.settings).schedule.everyMinutes === LIMITS.everyMinutes.max);
   }
 
   console.log('\nsettings: the daily disk measurement\n');
@@ -166,30 +182,30 @@ const ABS = (...parts) => path.resolve(`C:${SEP}${parts.join(SEP)}`);
   {
     check('measuring is on out of the box', defaults().trends.dailySample === true);
 
-    const { settings } = coerceSettings({ trends: { dailySample: false, sampleTime: '6:30' } });
+    const { settings } = coerceOne({ trends: { dailySample: false, sampleTime: '6:30' } });
     check('it can be switched off', settings.trends.dailySample === false);
     check('and its time is normalised', settings.trends.sampleTime === '06:30');
 
-    const bad = coerceSettings({ trends: { sampleTime: 'lunchtime' } });
+    const bad = coerceOne({ trends: { sampleTime: 'lunchtime' } });
     check('an unreadable time falls back rather than scheduling at a guess',
       bad.settings.trends.sampleTime === '12:00', bad.settings.trends.sampleTime);
     check('and says so', bad.warnings.some((w) => w.includes('trends.sampleTime')), bad.warnings.join(' | '));
 
-    const notAnObject = coerceSettings({ trends: 'yes please' });
+    const notAnObject = coerceOne({ trends: 'yes please' });
     check('trends given as a string does not throw', notAnObject.settings.trends.dailySample === true);
   }
 
   {
-    const { settings } = coerceSettings({ purge: { afterDays: 0 } });
+    const { settings } = coerceOne({ purge: { afterDays: 0 } });
     check('a zero-day grace period is clamped up', settings.purge.afterDays === LIMITS.purgeAfterDays.min);
   }
 
   {
     const dupe = ABS('Users', 'me', 'Downloads');
-    const { settings } = coerceSettings({ autoClean: { roots: [dupe, dupe.toUpperCase()] } });
+    const { settings } = coerceOne({ autoClean: { roots: [dupe, dupe.toUpperCase()] } });
     check('roots are de-duplicated case-insensitively on Windows',
-      process.platform !== 'win32' || settings.autoClean.roots.length === 1,
-      JSON.stringify(settings.autoClean.roots));
+      process.platform !== 'win32' || first(settings).roots.length === 1,
+      JSON.stringify(first(settings).roots));
   }
 
   console.log('\nsettings: the file on disk\n');
@@ -200,7 +216,7 @@ const ABS = (...parts) => path.resolve(`C:${SEP}${parts.join(SEP)}`);
   {
     const store = new SettingsStore(file);
     const loaded = await store.load();
-    check('a missing file loads as defaults without throwing', loaded.autoClean.enabled === false);
+    check('a missing file loads as defaults without throwing', first(loaded).enabled === false);
     check('and is not treated as an error', store.warnings.length === 0);
   }
 
@@ -208,25 +224,25 @@ const ABS = (...parts) => path.resolve(`C:${SEP}${parts.join(SEP)}`);
     await fsp.writeFile(file, '{ this is not json', 'utf8');
     const store = new SettingsStore(file);
     const loaded = await store.load();
-    check('a corrupt file loads as defaults', loaded.autoClean.enabled === false);
+    check('a corrupt file loads as defaults', first(loaded).enabled === false);
     check('and says so', store.warnings.some((w) => w.includes('not valid JSON')));
   }
 
   {
     const store = new SettingsStore(file);
-    await store.save({ autoClean: { enabled: true, roots: [ABS('Users', 'me', 'Downloads')], minAgeDays: 90 } });
+    await store.save(one({ autoClean: { enabled: true, roots: [ABS('Users', 'me', 'Downloads')], minAgeDays: 90 } }));
     const reread = await new SettingsStore(file).load();
-    check('a save round-trips', reread.autoClean.minAgeDays === 90 && reread.autoClean.enabled === true,
-      JSON.stringify(reread.autoClean.minAgeDays));
+    check('a save round-trips', first(reread).minAgeDays === 90 && first(reread).enabled === true,
+      JSON.stringify(first(reread).minAgeDays));
     check('saved JSON is readable by hand', (await fsp.readFile(file, 'utf8')).includes('\n  "autoClean"'));
   }
 
   {
     const store = new SettingsStore(file);
     await store.load();
-    await store.patch({ purge: { enabled: true } });
+    await store.patch(one({ purge: { enabled: true } }));
     const reread = await new SettingsStore(file).load();
-    check('patch keeps untouched fields', reread.autoClean.minAgeDays === 90);
+    check('patch keeps untouched fields', first(reread).minAgeDays === 90);
     check('patch applies the change', reread.purge.enabled === true);
   }
 
@@ -236,22 +252,22 @@ const ABS = (...parts) => path.resolve(`C:${SEP}${parts.join(SEP)}`);
     // to defaults -- silently, because nothing on screen showed the loss.
     const store = new SettingsStore(file);
     await store.load();
-    await store.patch({
+    await store.patch(one({
       monitor: { enabled: true, volumes: [ABS('Users', 'me')], warnPercent: 70 },
       appearance: { theme: 'light' },
-    });
+    }));
 
-    await store.patch({ autoClean: { minAgeDays: 45 } });
+    await store.patch(one({ autoClean: { minAgeDays: 45 } }));
 
     const reread = await new SettingsStore(file).load();
     check('patching one section leaves another alone',
       reread.monitor.warnPercent === 70 && reread.monitor.volumes.length === 1,
       `${reread.monitor.warnPercent}% / ${reread.monitor.volumes.length} volume(s)`);
     check('and leaves the theme alone', reread.appearance.theme === 'light', reread.appearance.theme);
-    check('while applying what it did send', reread.autoClean.minAgeDays === 45);
+    check('while applying what it did send', first(reread).minAgeDays === 45);
 
     // A key that *is* sent still replaces, so a list can genuinely be emptied.
-    await store.patch({ monitor: { volumes: [] } });
+    await store.patch(one({ monitor: { volumes: [] } }));
     const emptied = await new SettingsStore(file).load();
     check('an explicitly sent empty list does empty it', emptied.monitor.volumes.length === 0);
     check('without disturbing its neighbours', emptied.monitor.warnPercent === 70);
@@ -263,15 +279,15 @@ const ABS = (...parts) => path.resolve(`C:${SEP}${parts.join(SEP)}`);
     check('the theme follows the system out of the box', defaults().appearance.theme === 'system');
 
     for (const theme of ['system', 'light', 'dark']) {
-      const { settings } = coerceSettings({ appearance: { theme } });
+      const { settings } = coerceOne({ appearance: { theme } });
       check(`"${theme}" is accepted`, settings.appearance.theme === theme);
     }
 
-    const { settings, warnings } = coerceSettings({ appearance: { theme: 'solarized' } });
+    const { settings, warnings } = coerceOne({ appearance: { theme: 'solarized' } });
     check('an unknown theme falls back to system', settings.appearance.theme === 'system');
     check('and says so', warnings.some((w) => w.includes('appearance.theme')), warnings.join(' | '));
 
-    const notAnObject = coerceSettings({ appearance: 'dark' });
+    const notAnObject = coerceOne({ appearance: 'dark' });
     check('appearance given as a string does not throw',
       notAnObject.settings.appearance.theme === 'system');
   }
@@ -317,9 +333,9 @@ const ABS = (...parts) => path.resolve(`C:${SEP}${parts.join(SEP)}`);
     const store = new SettingsStore(file);
     await store.load();
     await Promise.all([
-      store.patch({ autoClean: { minAgeDays: 100 } }),
-      store.patch({ autoClean: { minAgeDays: 200 } }),
-      store.patch({ autoClean: { minAgeDays: 300 } }),
+      store.patch(one({ autoClean: { minAgeDays: 100 } })),
+      store.patch(one({ autoClean: { minAgeDays: 200 } })),
+      store.patch(one({ autoClean: { minAgeDays: 300 } })),
     ]);
     const text = await fsp.readFile(file, 'utf8');
     let parsed = null;

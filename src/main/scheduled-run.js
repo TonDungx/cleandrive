@@ -6,9 +6,24 @@ const { services } = require('./services');
 const toasts = require('./lib/notify');
 const language = require('./language');
 const { t } = language;
-const { runAutoClean } = require('./lib/autoclean');
+const { runAutoClean, emptyRun } = require('./lib/autoclean');
+const { profileById, profilesOf } = require('./lib/settings');
+const runlock = require('./lib/runlock');
 const { sample } = require('./lib/sampler');
 const { formatBytes } = require('./lib/util');
+
+/**
+ * Which profile this process was started for (G4).
+ *
+ * Task Scheduler passes it on the command line, because the task's name is the
+ * only thing that knows: two profiles can be due in the same minute, and the
+ * clock cannot tell them apart. No flag means the first profile, which is what
+ * the task registered before there were profiles passes.
+ */
+function profileFlag(argv = process.argv) {
+  const found = argv.find((a) => typeof a === 'string' && a.startsWith('--profile='));
+  return found ? found.slice('--profile='.length) : null;
+}
 
 /**
  * The app when nobody opened it.
@@ -64,8 +79,47 @@ async function runScheduled() {
       );
       run.notes.push(t('run.expectedAt', 'Expected at {path}', { path: services().settingsPath }));
     } else {
-      run = await runAutoClean({ settings, ledger, journal: services().journal, source: 'scheduled' });
-      run.warnings = store.warnings;
+      const wanted = profileFlag();
+      const profile = wanted ? profileById(settings, wanted) : profilesOf(settings)[0];
+
+      // One unattended run at a time, across processes. Two profiles due in
+      // the same minute would otherwise walk the disk together and, worse,
+      // both rewrite the run log -- which loses one of them entirely.
+      const lock = await runlock.acquire(services().runLockPath, {
+        holder: wanted || (profile && profile.id) || 'main',
+      });
+      if (!lock.ok) {
+        run = failedRun(
+          startedAt,
+          t(
+            'run.anotherRunning',
+            'Another automatic cleanup was already running, so this one was skipped. It will come round again on its own schedule.'
+          ),
+          'skipped'
+        );
+        run.profileId = wanted || null;
+      } else {
+        try {
+          run = await runAutoClean({
+            settings,
+            profile: profile || null,
+            ledger,
+            journal: services().journal,
+            source: 'scheduled',
+            quarantine: settings.quarantine,
+          });
+          run.warnings = store.warnings;
+          if (lock.waitedMs > 1000) {
+            run.notes.push(
+              t('run.waitedForLock', 'Waited {s}s for another profile to finish before starting.', {
+                s: Math.round(lock.waitedMs / 1000),
+              })
+            );
+          }
+        } finally {
+          await lock.release();
+        }
+      }
     }
   } catch (err) {
     console.error('[scheduled] run failed:', err);
@@ -89,7 +143,10 @@ async function runScheduled() {
 
   console.log(`[scheduled] ${run.outcome}${run.reason ? `: ${language.render(run.reason)}` : ''}`);
 
-  if (!settings || settings.autoClean.notify) notify(run);
+  // Whether to say anything is the profile's own choice, so a noisy weekly
+  // cache sweep and a silent monthly one can sit side by side.
+  const ran = settings && run.profileId ? profileById(settings, run.profileId) : null;
+  if (!settings || !ran || ran.notify) notify(run);
 
   // Give the OS a moment to actually present the toast before the process that
   // owns it disappears; a notification from a dead process is dropped.
@@ -102,23 +159,9 @@ async function runScheduled() {
  * case for it.
  */
 function failedRun(startedAt, reason, outcome) {
-  return {
-    runId: `run-${startedAt.toString(36)}`,
-    startedAt,
-    finishedAt: Date.now(),
-    dryRun: false,
-    roots: [],
-    outcome,
-    reason,
-    scanned: { files: 0, bytes: 0, errors: 0 },
-    selected: { files: 0, bytes: 0, truncated: false },
-    trashed: { files: 0, bytes: 0, failed: 0 },
-    purged: { files: 0, bytes: 0 },
-    diskBefore: null,
-    diskAfter: null,
-    skipped: { category: 0, tooRecent: 0, whitelisted: 0, guarded: 0 },
-    notes: [],
-  };
+  // From `emptyRun`, so this and a real run cannot drift apart: a field added
+  // to one used to have to be remembered in the other, and the tab reads both.
+  return { ...emptyRun(startedAt), finishedAt: Date.now(), outcome, reason };
 }
 
 async function recordHistory(history, settings, run) {
@@ -176,6 +219,22 @@ function notify(run) {
   } else if (run.trashed.files === 0) {
     title = t('notify.nothing.title', 'CleanDrive: nothing to clean');
     body = language.render(run.reason) || t('notify.nothing.body', 'No files matched the cleanup rules.');
+  } else if (run.action === 'quarantine') {
+    // A different action, so a different sentence -- and the second half of it
+    // is the one that matters, because copying without removing the original
+    // gives the drive nothing back.
+    title = t('notify.done.title', 'CleanDrive: cleanup finished');
+    body =
+      t('notify.quarantined.moved', 'Copied {n} file(s) ({size}) to the other drive.', {
+        n: run.trashed.files.toLocaleString(language.current()),
+        size: formatBytes(run.trashed.bytes),
+      }) +
+      ' ' +
+      (run.trashed.freedBytes > 0
+        ? t('notify.quarantined.freed', 'The originals were removed, so {size} is free on the drive it cleaned.', {
+            size: formatBytes(run.trashed.freedBytes),
+          })
+        : t('notify.quarantined.kept', 'The originals were kept, so nothing is free on the drive it cleaned.'));
   } else {
     title = t('notify.done.title', 'CleanDrive: cleanup finished');
     const moved = t('notify.done.moved', 'Moved {n} file(s) ({size}) to the Recycle Bin.', {

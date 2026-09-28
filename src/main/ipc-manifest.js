@@ -85,6 +85,12 @@ const INVOKE = Object.freeze([
   'settings:save',
   'autoclean:run',
   'autoclean:cancel',
+  // The unattended profiles (G4). Saving one goes through its own channel
+  // rather than `settings:save`, because adding one has a licence to check and
+  // removing one has a Windows task to take away.
+  'autoclean:saveProfile',
+  'autoclean:addProfile',
+  'autoclean:removeProfile',
   'disk:usage',
   'recyclebin:preview',
   'recyclebin:purge',

@@ -183,11 +183,172 @@ function checkedCategories() {
   return [...boxes].filter((box) => box.checked).map((box) => box.dataset.category);
 }
 
+/* ---- profiles (G4) ------------------------------------------------------ */
+
+/**
+ * Which profile the form is editing.
+ *
+ * The screen shows one policy at a time, because a policy is twenty controls
+ * and eight of them side by side is the wall of filters the Photos screen was
+ * rejected for. The list above picks which one; everything below is that one.
+ */
+let selectedProfileId = null;
+
+function profilesIn(data) {
+  const auto = data && data.settings ? data.settings.autoClean : null;
+  return auto && Array.isArray(auto.profiles) ? auto.profiles : [];
+}
+
+/**
+ * The profile on screen, from the reply.
+ *
+ * Falls back to the first rather than to nothing: a profile can be removed
+ * from another window, or by a hand-edited file, and a screen that answers
+ * `undefined` for "what am I editing" draws nothing at all.
+ */
+function currentProfile(data) {
+  const list = profilesIn(data);
+  if (list.length === 0) return null;
+  const found = list.find((p) => p.id === selectedProfileId);
+  if (found) return found;
+  selectedProfileId = list[0].id;
+  return list[0];
+}
+
+/**
+ * The profile on screen, never null.
+ *
+ * The settings layer always yields at least one profile, so this is only ever
+ * reached before the first reply has arrived -- but the form reads
+ * `auto.schedule.kind` without asking, and a screen that throws while drawing
+ * shows nothing at all.
+ */
+const NO_PROFILE = Object.freeze({
+  id: null,
+  name: null,
+  enabled: false,
+  dryRun: true,
+  action: 'recycle',
+  deleteOriginal: false,
+  schedule: { kind: 'weekly', time: '02:00', weekday: 0, day: 1, everyMinutes: 15, catchUpAtLogon: false },
+  roots: [],
+  whitelist: [],
+  skipIfRunning: [],
+  categories: [],
+  minAgeDays: 180,
+  minDiskUsedPercent: 0,
+  maxItemsPerRun: 20000,
+  notify: true,
+});
+
+const profileOnScreen = (data) => currentProfile(data) || NO_PROFILE;
+
+/** The OS's view of the profile on screen, from the per-profile task list. */
+function taskOf(data, profile) {
+  const list = data && data.tasks && Array.isArray(data.tasks.profiles) ? data.tasks.profiles : [];
+  return list.find((p) => p.profileId === profile.id) || (data && data.tasks ? data.tasks.cleanup : null) || null;
+}
+
+/**
+ * This profile's own last run.
+ *
+ * The run log is one list in time order, shared by every profile, so "the last
+ * run" and "the last run of what is on screen" are different questions. The
+ * main process answers the second one; `lastRun` is kept for the first.
+ */
+function lastRunOf(data, profile) {
+  const byProfile = data && data.lastRunByProfile ? data.lastRunByProfile : null;
+  if (byProfile && profile.id && profile.id in byProfile) return byProfile[profile.id];
+  return data ? data.lastRun : null;
+}
+
+/** What to call a profile that has not been named. */
+function profileTitle(profile, index) {
+  if (profile.name) return profile.name;
+  return index === 0
+    ? t('auto.profile.first', 'Automatic cleanup')
+    : t('auto.profile.nth', 'Profile {n}', { n: index + 1 });
+}
+
+/** A word for what a profile is doing, for its row in the list. */
+function profileStateWord(profile) {
+  if (!profile.enabled) return t('app.off', 'Off');
+  return profile.dryRun ? t('auto.state.reportOnly', 'Report only') : t('app.on', 'On');
+}
+
+function renderProfileList(data) {
+  const list = profilesIn(data);
+  const holder = $('auto-profiles');
+  const current = currentProfile(data);
+  const limits = data.profileLimits || { allowed: 1, max: 1 };
+
+  const rows = list.map((profile, index) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = `profile-chip${current && profile.id === current.id ? ' is-current' : ''}`;
+    button.dataset.profileId = profile.id;
+    button.setAttribute('aria-pressed', String(Boolean(current && profile.id === current.id)));
+
+    const name = document.createElement('span');
+    name.className = 'profile-chip-name';
+    name.textContent = profileTitle(profile, index);
+
+    const state = document.createElement('span');
+    state.className = `profile-chip-state${profile.enabled && !profile.dryRun ? ' is-on' : ''}${
+      profile.enabled && profile.dryRun ? ' is-dry' : ''
+    }`;
+    state.textContent = profileStateWord(profile);
+
+    button.append(name, state);
+    button.addEventListener('click', () => selectProfile(profile.id));
+    return button;
+  });
+
+  replaceChildrenIfChanged(holder, rows, list.map((p, i) => `${p.id}:${profileTitle(p, i)}:${profileStateWord(p)}:${current && p.id === current.id}`).join('|'));
+
+  // Adding is refused out loud rather than by a button that does nothing.
+  const atLimit = list.length >= Math.min(limits.allowed, limits.max);
+  $('auto-profile-add').disabled = atLimit;
+  $('auto-profile-add').title = atLimit
+    ? limits.allowed <= 1
+      ? t('auto.profile.locked', 'More than one profile is part of CleanDrive Pro.')
+      : t('auto.profile.full', 'At most {n} profiles.', { n: limits.max })
+    : '';
+  $('auto-profile-remove').disabled = list.length <= 1;
+  $('auto-profile-name').value = current && current.name ? current.name : '';
+  $('auto-profile-name').placeholder = current ? profileTitle(current, list.indexOf(current)) : '';
+}
+
+/**
+ * Swap which profile the form edits.
+ *
+ * Unsaved edits are the user's, so switching away is refused while they are on
+ * screen rather than throwing them away silently.
+ */
+async function selectProfile(id) {
+  if (id === selectedProfileId) return;
+  if (autoDirty) {
+    toast(t('auto.profile.unsaved', 'Save or undo the changes on screen before switching profile.'), true);
+    return;
+  }
+  selectedProfileId = id;
+  if (state.auto) applyAutoState(state.auto);
+  await refreshTaskStatus({ quiet: true });
+}
+
 function readAutoForm() {
   const categories = checkedCategories();
+  const current = state.auto ? currentProfile(state.auto) : null;
 
   return {
-    autoClean: {
+    // The profile the form is editing, in the shape `autoclean:saveProfile`
+    // takes. `purge` and `monitor` are not a profile's business -- they are
+    // the app's, and they go through `settings:save` as they always did.
+    profile: {
+      id: current ? current.id : null,
+      name: $('auto-profile-name').value.trim() || null,
+      action: $('auto-action').value,
+      deleteOriginal: $('auto-delete-original').checked,
       enabled: $('auto-enabled').checked,
       dryRun: $('auto-dryrun').checked,
       schedule: {
@@ -234,8 +395,9 @@ function readAutoForm() {
  */
 function applyAutoState(data, { form = true } = {}) {
   state.auto = data;
-  const auto = data.settings.autoClean;
+  const auto = profileOnScreen(data);
 
+  renderProfileList(data);
   if (form) fillAutoForm(data);
   buildCategoryChecks(form ? auto.categories : checkedCategories());
   renderAutoLists();
@@ -255,27 +417,36 @@ function applyAutoState(data, { form = true } = {}) {
   setText(chip, stateWord);
   chip.classList.toggle('is-on', auto.enabled && !auto.dryRun);
   chip.classList.toggle('is-dry', auto.enabled && auto.dryRun);
-  setText($('astat-next'), auto.enabled ? formatWhenShort(data.scheduler.nextRunAt) : '–');
-  $('astat-next').title = auto.enabled ? formatWhen(data.scheduler.nextRunAt) : '';
-  setText($('astat-last'), data.lastRun ? formatWhenShort(data.lastRun.startedAt) : t('app.never', 'Never'));
-  $('astat-last').title = data.lastRun
-    ? `${formatWhen(data.lastRun.startedAt)} — ${tm(data.lastRun.reason) || data.lastRun.outcome}`
+  // The figures are about the profile on screen, not about whichever profile
+  // happens to be first or ran most recently (G4).
+  const task = taskOf(data, auto);
+  const nextAt = task ? task.expectedNextRunAt : null;
+  setText($('astat-next'), auto.enabled ? formatWhenShort(nextAt) : '–');
+  $('astat-next').title = auto.enabled ? formatWhen(nextAt) : '';
+
+  const lastRun = lastRunOf(data, auto);
+  setText($('astat-last'), lastRun ? formatWhenShort(lastRun.startedAt) : t('app.never', 'Never'));
+  $('astat-last').title = lastRun
+    ? `${formatWhen(lastRun.startedAt)} — ${tm(lastRun.reason) || lastRun.outcome}`
     : '';
 
   applyAutoNotices(data);
   renderTaskFacts(data.tasks, null);
 
-  renderRunResult(data.lastRun);
+  renderRunResult(lastRun);
   renderRunHistory(data.history || []);
   setText($('auto-status'), autoDirty ? t('auto.unsaved', 'Unsaved changes.') : describeSchedule(auto));
 }
 
 /** The saved settings into the fields. Only when nothing on screen is unsaved. */
 function fillAutoForm(data) {
-  const auto = data.settings.autoClean;
+  const auto = profileOnScreen(data);
 
   $('auto-enabled').checked = auto.enabled;
   $('auto-dryrun').checked = auto.dryRun;
+  $('auto-action').value = auto.action || 'recycle';
+  $('auto-delete-original').checked = auto.deleteOriginal === true;
+  syncActionRows(data);
   $('auto-kind').value = auto.schedule.kind;
   $('auto-weekday').value = String(auto.schedule.weekday);
   $('auto-day').value = String(auto.schedule.day);
@@ -310,7 +481,7 @@ function fillAutoForm(data) {
 }
 
 function applyAutoNotices(data) {
-  const auto = data.settings.autoClean;
+  const auto = profileOnScreen(data);
 
   // A schedule that is switched on but has no task behind it would silently
   // never run, which is the failure this whole feature exists to avoid. Each
@@ -417,6 +588,52 @@ function syncScheduleRows() {
   }
 }
 
+/**
+ * What the action control shows, and what it warns about (G4).
+ *
+ * `quarantine` needs a folder on another drive, and until one has been chosen
+ * there is nothing for the run to do but skip. Its second control is the one
+ * that decides whether any space actually comes back: copying and keeping the
+ * original uses *more* room overall, and the note says so in those words
+ * rather than leaving the user to work it out from a figure that never moves.
+ */
+function syncActionRows(data) {
+  const action = $('auto-action').value;
+  const quarantine = action === 'quarantine';
+  $('auto-delete-original-row').hidden = !quarantine;
+
+  if (!quarantine) {
+    setText($('auto-action-note'), t(
+      'auto.note.recycle',
+      'Files go to the Recycle Bin, which is on the same drive — no space comes back until the bin is emptied.'
+    ));
+    return;
+  }
+
+  const zone = data && data.settings && data.settings.quarantine ? data.settings.quarantine.zone : null;
+  if (!zone) {
+    setText($('auto-action-note'), t(
+      'auto.note.noZone',
+      'No folder has been chosen for files moved to another drive, so this profile would skip every run. ' +
+        'Choose one under “Move to another drive” on the What to delete screen.'
+    ));
+  } else if ($('auto-delete-original').checked) {
+    setText($('auto-action-note'), t(
+      'auto.note.quarantineFrees',
+      'Each file is copied to {zone} and the original is then deleted outright — not sent to the Recycle Bin. ' +
+        'This is the only setting here that frees space on the drive being cleaned.',
+      { zone }
+    ));
+  } else {
+    setText($('auto-action-note'), t(
+      'auto.note.quarantineKeeps',
+      'Each file is copied to {zone} and the original is kept, so this frees nothing on the drive being ' +
+        'cleaned — it uses more space overall.',
+      { zone }
+    ));
+  }
+}
+
 /* ---- the Windows task --------------------------------------------------- */
 
 function factRow(label, value, title, { name = false } = {}) {
@@ -451,8 +668,9 @@ function renderTaskFacts(status, osInfo) {
   replaceChildrenIfChanged($('task-facts'), taskFactRows(status, osInfo));
 
   if (!status || !status.supported) return;
+  const shown = (state.auto && taskOf(state.auto, profileOnScreen(state.auto))) || status.cleanup;
   const problems = [
-    ...(status.cleanup.problems || []),
+    ...(shown.problems || []),
     ...(status.sampler.problems || []),
   ];
   if (problems.length > 0) showNotice('task-problems', problems.join(' '));
@@ -472,7 +690,11 @@ function taskFactRows(status, osInfo) {
     return list;
   }
 
-  const cleanup = status.cleanup;
+  // The task of the profile being edited, not of whichever profile is first
+  // (G4). Without this the card described one profile's Windows entry under
+  // another profile's schedule -- "these settings ask for weekly on Sunday"
+  // beside a form showing monthly on the 1st.
+  const cleanup = (state.auto && taskOf(state.auto, profileOnScreen(state.auto))) || status.cleanup;
   const os = osInfo || cleanup.os;
 
   list.push(factRow(
@@ -574,10 +796,11 @@ async function refreshTaskStatus({ quiet = false, fresh = false } = {}) {
     return null;
   }
 
-  renderTaskFacts(status, status.cleanup.os);
+  const mine = (state.auto && taskOf(state.auto, profileOnScreen(state.auto))) || status.cleanup;
+  renderTaskFacts(status, mine.os);
   setText($('task-status'), status.supported
-    ? status.cleanup.installed
-      ? status.cleanup.verified
+    ? mine.installed
+      ? mine.verified
         ? t('task.statusExact', 'Windows holds exactly what these settings describe.')
         : t('task.statusOther', 'Windows holds something other than these settings.')
       : t('task.statusNone', 'Windows has no CleanDrive cleanup task registered.')
@@ -857,19 +1080,63 @@ async function refreshPurgeStatus() {
 
 for (const id of [
   'auto-enabled', 'auto-dryrun', 'auto-kind', 'auto-weekday', 'auto-day', 'auto-time',
-  'auto-minutes', 'auto-catchup',
+  'auto-minutes', 'auto-catchup', 'auto-profile-name', 'auto-action', 'auto-delete-original',
   'auto-age', 'auto-threshold', 'auto-max', 'purge-enabled', 'purge-days',
   'monitor-enabled', 'monitor-close-to-tray', 'monitor-warn', 'monitor-critical',
   'monitor-interval', 'monitor-snooze',
 ]) {
   $(id).addEventListener('change', () => {
     if (id === 'auto-kind') syncScheduleRows();
+    if (id === 'auto-action' || id === 'auto-delete-original') syncActionRows(state.auto);
     markAutoDirty();
   });
   // A number being typed is an edit before it is a change: `change` waits for
   // the field to lose focus, and a background refresh can land before that.
   $(id).addEventListener('input', markAutoDirty);
 }
+
+/* ---- adding and removing a profile (G4) --------------------------------- */
+
+$('auto-profile-add').addEventListener('click', async () => {
+  if (autoDirty) {
+    toast(t('auto.profile.unsaved', 'Save or undo the changes on screen before switching profile.'), true);
+    return;
+  }
+  const data = unwrap(await api.addAutoProfile({}), t('auto.profile.addLabel', 'Add profile'));
+  if (!data) return;
+  // The new one is what the form now edits, and it arrives switched off and in
+  // report-only whatever the profile beside it was doing.
+  selectedProfileId = data.addedId || selectedProfileId;
+  applyAutoState(data);
+  toast(t('auto.profile.added', 'A profile was added. It is off and in report-only until you say otherwise.'));
+  await refreshTaskStatus({ quiet: true });
+});
+
+$('auto-profile-remove').addEventListener('click', async () => {
+  const data = state.auto;
+  const profile = data ? currentProfile(data) : null;
+  if (!profile) return;
+
+  const list = profilesIn(data);
+  const name = profileTitle(profile, list.indexOf(profile));
+  // Removing one takes its Windows task away with it, which is the whole point
+  // -- so say that, rather than only naming the profile.
+  if (!window.confirm(t(
+    'auto.profile.confirmRemove',
+    'Remove “{name}”? Its Windows task is removed with it, so it stops running. Nothing already deleted is affected.',
+    { name }
+  ))) {
+    return;
+  }
+
+  const next = unwrap(await api.removeAutoProfile(profile.id), t('auto.profile.removeLabel', 'Remove profile'));
+  if (!next) return;
+  selectedProfileId = null;
+  autoDirty = false;
+  applyAutoState(next);
+  toast(t('auto.profile.removed', '“{name}” was removed, and so was its Windows task.', { name }));
+  await refreshTaskStatus({ quiet: true });
+});
 
 async function addFolderTo(key) {
   const folder = unwrap(await api.pickFolder(), t('app.label.chooseFolder', 'Choose folder'));
@@ -897,6 +1164,29 @@ $('auto-skip-input').addEventListener('keydown', (event) => {
   if (event.key === 'Enter') addSkipEntry();
 });
 
+/**
+ * Save the profile on screen, and the settings that are not a profile's.
+ *
+ * Two calls because they are two decisions: adding a profile has a licence to
+ * check and removing one has a Windows task to take away, so profiles have
+ * their own channel. The profile goes first -- it is what the button is
+ * mostly about, and the second call returns the state both are then drawn
+ * from.
+ */
+async function saveAll(requested) {
+  if (requested.profile.id) {
+    const afterProfile = unwrap(
+      await api.saveAutoProfile(requested.profile),
+      t('app.label.saveSettings', 'Save settings')
+    );
+    if (!afterProfile) return null;
+  }
+  return unwrap(
+    await api.saveSettings({ purge: requested.purge, monitor: requested.monitor }),
+    t('app.label.saveSettings', 'Save settings')
+  );
+}
+
 $('auto-save').addEventListener('click', async () => {
   $('auto-status').textContent = t('app.saving', 'Saving…');
 
@@ -905,7 +1195,7 @@ $('auto-save').addEventListener('click', async () => {
   // on with no folders listed is the common one -- and a save that quietly
   // returns "off" after the user ticked "on" must not be reported as "Saved".
   const requested = readAutoForm();
-  const data = unwrap(await api.saveSettings(requested), t('app.label.saveSettings', 'Save settings'));
+  const data = await saveAll(requested);
   if (!data) {
     $('auto-status').textContent = t('app.notSaved', 'Nothing was saved.');
     return;
@@ -916,10 +1206,10 @@ $('auto-save').addEventListener('click', async () => {
   await refreshPurgeStatus();
   await refreshMonitorStatus();
 
-  const saved = data.settings.autoClean;
+  const saved = currentProfile(data) || {};
   const problems = data.reconciled ? data.reconciled.problems : [];
 
-  if (requested.autoClean.enabled && !saved.enabled) {
+  if (requested.profile.enabled && !saved.enabled) {
     toast(
       t('auto.saved.leftOff', 'Saved, but automatic cleanup was left off: {reason}', {
         reason:
@@ -981,7 +1271,7 @@ async function performAutoRun(dryRun) {
   // folder and clicking Preview silently tests the previous configuration and
   // reports a result for something the user is no longer looking at.
   $('auto-status').textContent = t('auto.savingSettings', 'Saving settings…');
-  const saved = unwrap(await api.saveSettings(readAutoForm()), t('app.label.saveSettings', 'Save settings'));
+  const saved = await saveAll(readAutoForm());
   if (!saved) {
     setAutoRunning(false);
     return;
@@ -993,7 +1283,12 @@ async function performAutoRun(dryRun) {
     ? t('auto.workingOut', 'Working out what would go…')
     : t('auto.running', 'Running cleanup…');
 
-  const data = unwrap(await api.runAutoClean({ dryRun }), t('auto.label', 'Cleanup'));
+  // Which profile the button belongs to: the one on screen (G4).
+  const running = currentProfile(saved);
+  const data = unwrap(
+    await api.runAutoClean({ dryRun, profileId: running ? running.id : null }),
+    t('auto.label', 'Cleanup')
+  );
   setAutoRunning(false);
 
   if (!data) {

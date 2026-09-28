@@ -2540,6 +2540,84 @@ main {
 }
 
 /* --------------------------------------------------------------------------
+   automatic cleanup profiles (G4)
+   -------------------------------------------------------------------------- */
+
+.profile-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0 0 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.profile-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* A name and a word for what it is doing. The word matters as much as the
+   name: "Off" and "Report only" are the difference between a profile that
+   deletes tonight and one that does not. */
+.profile-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 6px 12px;
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  color: var(--text-2);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: background var(--fast), border-color var(--fast), color var(--fast);
+}
+
+.profile-chip:hover {
+  background: var(--surface-3);
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+.profile-chip.is-current {
+  border-color: var(--accent-ring);
+  background: var(--accent-soft);
+  color: var(--text);
+  font-weight: 600;
+}
+
+.profile-chip-state {
+  font-size: 11px;
+  color: var(--text-3, var(--text-2));
+}
+
+.profile-chip-state.is-on {
+  color: var(--good);
+  font-weight: 600;
+}
+
+.profile-chip-state.is-dry {
+  color: var(--warn);
+  font-weight: 600;
+}
+
+.profile-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.profile-tools .field input[type="text"] {
+  min-width: 180px;
+}
+
+/* --------------------------------------------------------------------------
    whole folders that hold the same thing (F2)
    -------------------------------------------------------------------------- */
 

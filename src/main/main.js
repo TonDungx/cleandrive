@@ -137,7 +137,10 @@ function createWindow() {
  */
 async function reconcileTasks(settings, { settingsExisted }) {
   try {
-    const result = await require('./tasks').reconcile(settings, { settingsExisted });
+    // Launch is the one moment worth asking Windows for the whole list: a task
+    // can be orphaned by a crash, a hand-edited settings file or an older
+    // build, and none of those goes through the app's own remove button (G4).
+    const result = await require('./tasks').reconcile(settings, { settingsExisted, sweep: true });
     for (const change of result.changes) console.log(`[tasks] ${change}`);
     for (const problem of result.problems) console.warn(`[tasks] ${problem}`);
     return result;

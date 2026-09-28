@@ -312,7 +312,7 @@ function ramp(days, perDay, startUsed, jitter = 0) {
     check('and says so', second.coalesced === true);
 
     const targets = volumeTargets({
-      settings: { monitor: { volumes: [`E:${SEP}data`] }, autoClean: { roots: [`F:${SEP}temp`] } },
+      settings: { monitor: { volumes: [`E:${SEP}data`] }, autoClean: { profiles: [{ id: 'main', roots: [`F:${SEP}temp`] }] } },
       history: h,
       extraTargets: [dir],
     });

@@ -987,10 +987,33 @@
         <p class="notice" id="auto-unsupported" hidden></p>
         <p class="notice" id="auto-warnings" hidden></p>
 
+        <!--
+          The profiles (G4). A list of names, one of which is being edited, and
+          everything below this belongs to that one.
+
+          A list rather than eight forms side by side: a policy is twenty
+          controls, and showing them all at once is the wall of filters the
+          Photos screen was rejected for. It scrolls with the page, because
+          only actions are pinned.
+        -->
+        <div class="profile-bar">
+          <h3 class="section-heading" data-i18n="auto.profile.heading">Profiles</h3>
+          <div class="profile-chips" id="auto-profiles" role="group" data-i18n-aria="auto.profile.groupLabel"
+            aria-label="Automatic cleanup profiles"></div>
+          <div class="profile-tools">
+            <label class="field">
+              <span data-i18n="auto.profile.name">Name</span>
+              <input type="text" id="auto-profile-name" maxlength="60" />
+            </label>
+            <button class="btn btn-sm" id="auto-profile-add" data-i18n="auto.profile.add">Add a profile</button>
+            <button class="btn btn-sm" id="auto-profile-remove" data-i18n="auto.profile.remove">Remove this one</button>
+          </div>
+        </div>
+
         <div class="stats">
           <div class="stat">
             <span class="stat-value" id="astat-state" data-i18n="app.off">Off</span>
-            <span class="stat-label" data-i18n="auto.statState">Automatic cleanup</span>
+            <span class="stat-label" data-i18n="auto.statState">This profile</span>
           </div>
           <div class="stat">
             <span class="stat-value" id="astat-next">–</span>
@@ -1027,6 +1050,21 @@
               A new schedule starts in report-only mode on purpose. Let one run tell you what it
               would have taken before you let it take anything.
             </p>
+
+            <!-- What this profile does with what it picks (G4). -->
+            <label class="field field-row">
+              <span data-i18n="auto.action">What it does</span>
+              <select id="auto-action">
+                <option value="recycle" data-i18n="auto.action.recycle">Move to the Recycle Bin</option>
+                <option value="quarantine" data-i18n="auto.action.quarantine">Move to another drive</option>
+              </select>
+            </label>
+            <label class="check" id="auto-delete-original-row" hidden>
+              <input type="checkbox" id="auto-delete-original" />
+              <span data-i18n="auto.deleteOriginal">Delete the original after copying — the only way this frees space</span>
+            </label>
+            <p class="card-note" id="auto-action-note"></p>
+
             <label class="field field-row">
               <span data-i18n="auto.howOften">How often</span>
               <select id="auto-kind">

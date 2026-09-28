@@ -75,6 +75,10 @@ function services() {
     journalDir: path.join(dir, 'journal'),
     runLogPath: path.join(dir, 'autoclean-log.json'),
     historyPath: path.join(dir, 'history.json'),
+    // Held by whichever unattended run is in progress (G4). In userData, so a
+    // harness with its own userData gets its own lock and cannot be blocked by
+    // -- or block -- a real run.
+    runLockPath: path.join(dir, 'autoclean.lock'),
 
     /**
      * Everything the app did to a file, appended and never rewritten.

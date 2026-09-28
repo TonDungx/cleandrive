@@ -381,13 +381,37 @@
     if (view.loading) return;
     view.loading = true;
     try {
-      const sessions = unwrap(await api.journalSessions(), t('app.tab.restore', 'Restore'));
+      /*
+       * The sessions and the open sessions' items, asked for together.
+       *
+       * Each of these asks the disk where every item is *now* -- the Recycle
+       * Bin's own metadata, the quarantine folder, the original's location --
+       * and measured on this machine that is around seven seconds each. Asking
+       * for the list, waiting, and only then asking for the items of the one
+       * section that happens to be open made reopening the tab a fifteen-second
+       * wait during which it showed the previous list with nothing saying why.
+       * Nothing in the second call depends on the first: the ids are already
+       * known, and the session's kind is only needed to shape the rows once
+       * both have arrived.
+       */
+      const openIds = [...view.open];
+      const [sessionsEnvelope, ...itemEnvelopes] = await Promise.all([
+        api.journalSessions(),
+        ...openIds.map((id) => api.journalItems(id)),
+      ]);
+
+      const sessions = unwrap(sessionsEnvelope, t('app.tab.restore', 'Restore'));
       if (!sessions) return;
       view.sessions = sessions;
       // Everything is read again: a file somebody restored in Explorer since
       // the last look must not still be offered.
       view.items.clear();
-      for (const id of view.open) await itemsOf(id);
+      openIds.forEach((id, i) => {
+        const items = unwrap(itemEnvelopes[i], t('app.tab.restore', 'Restore'));
+        if (!items) return;
+        const session = sessions.find((s) => s.id === id);
+        view.items.set(id, rowsOf(items, session ? session.kind : null));
+      });
       for (const [id, paths] of view.selection) {
         const rows = view.items.get(id) || [];
         const still = new Set(rows.filter(canPutBack).map((r) => r.path));

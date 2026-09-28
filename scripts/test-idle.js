@@ -102,7 +102,7 @@ app.whenReady().then(async () => {
   // A folder in the cleanup's list, so that list has a row and a Remove button.
   // The daily measurement off, so that pressing Save below registers no task
   // with the real Task Scheduler, suffixed or not.
-  await store.patch({ autoClean: { roots: [work] }, trends: { dailySample: false } });
+  await store.patch({ autoClean: { profiles: [{ id: 'main', roots: [work] }] }, trends: { dailySample: false } });
   const first = await sample({ history, settings: await store.get(), source: 'monitor', extraTargets: [SANDBOX] });
   await history.addSnapshot({ at: Date.now() - 6 * 60 * 60 * 1000, volumes: first.volumes, source: 'monitor', scan: null });
 
@@ -273,7 +273,7 @@ app.whenReady().then(async () => {
   // does not put the saved values over an unsaved edit.
   const elsewhere = new SettingsStore(path.join(SANDBOX, 'settings.json'));
   const told = await js(`return window.__idle.changes`);
-  await elsewhere.patch({ autoClean: { minAgeDays: 45 } });
+  await elsewhere.patch({ autoClean: { profiles: [{ id: 'main', minAgeDays: 45, roots: [work] }] } });
   check('the window is told the settings changed', await until(`window.__idle.changes > ${told}`, 6000));
   await quiet();
   field = await js(`return document.getElementById('auto-age').value;`);
@@ -282,13 +282,13 @@ app.whenReady().then(async () => {
   await click('#auto-save');
   await until(`document.getElementById('auto-status').textContent !== 'Saving…' && document.getElementById('auto-status').textContent !== 'Unsaved changes.'`);
   await quiet();
-  const saved = (await new SettingsStore(path.join(SANDBOX, 'settings.json')).load()).autoClean.minAgeDays;
+  const saved = (await new SettingsStore(path.join(SANDBOX, 'settings.json')).load()).autoClean.profiles[0].minAgeDays;
   check('Save stores what was on screen', saved === 77, String(saved));
   check('and the status stops saying unsaved', (await js(`return document.getElementById('auto-status').textContent;`)) !== 'Unsaved changes.',
     await js(`return document.getElementById('auto-status').textContent;`));
 
   await elsewhere.load();
-  await elsewhere.patch({ autoClean: { minAgeDays: 45 } });
+  await elsewhere.patch({ autoClean: { profiles: [{ id: 'main', minAgeDays: 45, roots: [work] }] } });
   const heard = await until(`document.getElementById('auto-age').value === '45'`, 6000);
   check('with nothing unsaved, a change made by another process still shows up', heard, await js(`return document.getElementById('auto-age').value;`));
 

@@ -59,6 +59,7 @@
     'app.theme.failed': 'Không lưu được cài đặt giao diện.',
 
     'app.cancel': 'Huỷ',
+    'autoclean.busy': 'Đang có một lượt dọn dẹp tự động chạy. Thử lại sau một lát.',
     'app.stop': 'Dừng',
     'app.stopping': 'Đang dừng…',
     'app.add': 'Thêm',
@@ -378,6 +379,16 @@
     'run.nothingMatched': 'Không có tệp nào khớp với quy tắc dọn dẹp',
     'run.belowThreshold': 'Đĩa mới dùng {used}%, dưới ngưỡng {threshold}%',
     'run.wouldMove': 'Sẽ chuyển {n} tệp vào Thùng rác',
+    // G4 — nhiều hồ sơ tự động.
+    'run.wouldQuarantine': 'Sẽ chuyển {n} tệp sang ổ khác',
+    'run.noSuchProfile': 'Lịch này thuộc về một hồ sơ không còn tồn tại nữa',
+    'run.anotherRunning':
+      'Một lượt dọn dẹp tự động khác đang chạy, nên lượt này bị bỏ qua. Nó sẽ tới lượt lại theo lịch của chính nó.',
+    'run.waitedForLock': 'Đã đợi {s}s cho hồ sơ khác chạy xong rồi mới bắt đầu.',
+    'run.noZone': 'Hồ sơ này chuyển tệp sang ổ khác, nhưng chưa chọn thư mục nào để chứa',
+    'run.zoneAway': 'Ổ đĩa để chuyển tệp sang hiện không có: {zone}',
+    'run.note.keepsOriginal':
+      'Bản gốc được giữ lại, nên lượt này không giải phóng byte nào trên ổ vừa dọn — nó còn chép thêm sang ổ kia',
     'run.cancelledBefore': 'Đã huỷ trước khi có gì bị xoá',
     'run.allRefused': 'Mọi ứng viên đều bị các lớp bảo vệ từ chối',
     'run.note.noDiskUsage': 'Không đọc được dung lượng đĩa; ngưỡng phần trăm không được áp dụng',
@@ -743,7 +754,39 @@
     'trends.savings.none': 'Chưa xoá gì qua CleanDrive.',
 
     /* ---- automatic cleanup -------------------------------------------- */
-    'auto.statState': 'Dọn dẹp tự động',
+    // G4 — nhiều hồ sơ tự động.
+    'auto.profile.heading': 'Hồ sơ',
+    'auto.profile.groupLabel': 'Các hồ sơ dọn dẹp tự động',
+    'auto.profile.name': 'Tên',
+    'auto.profile.add': 'Thêm hồ sơ',
+    'auto.profile.remove': 'Xoá hồ sơ này',
+    'auto.profile.addLabel': 'Thêm hồ sơ',
+    'auto.profile.removeLabel': 'Xoá hồ sơ',
+    'auto.profile.first': 'Dọn dẹp tự động',
+    'auto.profile.nth': 'Hồ sơ {n}',
+    'auto.profile.locked': 'Nhiều hơn một hồ sơ thuộc CleanDrive Pro.',
+    'auto.profile.full': 'Tối đa {n} hồ sơ.',
+    'auto.profile.unsaved': 'Hãy lưu hoặc bỏ các thay đổi trên màn hình trước khi chuyển hồ sơ.',
+    'auto.profile.added': 'Đã thêm một hồ sơ. Nó đang tắt và ở chế độ chỉ báo cáo cho tới khi bạn đổi ý.',
+    'auto.profile.removed': 'Đã xoá “{name}”, và tác vụ Windows của nó cũng đã bị gỡ.',
+    'auto.profile.confirmRemove':
+      'Xoá “{name}”? Tác vụ Windows của nó sẽ bị gỡ theo, nên nó ngừng chạy. Những gì đã xoá không bị ảnh hưởng.',
+    'auto.action': 'Nó làm gì',
+    'auto.action.recycle': 'Chuyển vào Thùng rác',
+    'auto.action.quarantine': 'Chuyển sang ổ khác',
+    'auto.deleteOriginal': 'Xoá bản gốc sau khi chép — đây là cách duy nhất giải phóng được dung lượng',
+    'auto.note.recycle':
+      'Tệp đi vào Thùng rác, mà thùng rác nằm trên chính ổ đó — chưa có dung lượng nào quay lại cho tới khi dọn thùng rác.',
+    'auto.note.noZone':
+      'Chưa chọn thư mục nào để chứa tệp chuyển sang ổ khác, nên hồ sơ này sẽ bỏ qua mọi lượt chạy. ' +
+      'Hãy chọn một thư mục ở mục “Chuyển sang ổ khác” trong màn Nên xoá gì.',
+    'auto.note.quarantineFrees':
+      'Mỗi tệp được chép sang {zone} rồi bản gốc bị xoá hẳn — không qua Thùng rác. ' +
+      'Đây là lựa chọn duy nhất ở đây thật sự giải phóng dung lượng trên ổ vừa dọn.',
+    'auto.note.quarantineKeeps':
+      'Mỗi tệp được chép sang {zone} và bản gốc được giữ lại, nên việc này không giải phóng gì trên ổ vừa ' +
+      'dọn — tính chung còn tốn thêm chỗ.',
+    'auto.statState': 'Hồ sơ này',
     'auto.statNext': 'Lần chạy kế tiếp',
     'auto.statLast': 'Lần chạy gần nhất',
     'auto.statDisk': 'Đĩa đang dùng',
@@ -931,6 +974,13 @@
     'task.label.cleanup': 'Dọn dẹp tự động',
     'task.label.sampler': 'Phép đo đĩa hằng ngày',
     'task.change.removed': '{label} đang tắt, nên tác vụ Windows của nó đã được gỡ.',
+    // G4 — dọn tác vụ Windows còn sót của hồ sơ đã xoá.
+    'task.change.orphanRemoved':
+      'Một tác vụ Windows còn sót lại từ một hồ sơ không còn tồn tại ({task}); nó đã được gỡ.',
+    'task.problem.orphanRemoveFailed':
+      'Tác vụ Windows của một hồ sơ đã xoá ({task}) không gỡ được ({error}); nó sẽ vẫn tiếp tục chạy.',
+    'task.problem.listFailed':
+      'Không liệt kê được các tác vụ CleanDrive đã đăng ký ({error}), nên tác vụ do hồ sơ đã xoá để lại vẫn còn đó.',
     'task.problem.removeFailed': '{label}: không gỡ được tác vụ Windows ({error}).',
     'task.problem.refused': '{label}: Windows Task Scheduler từ chối tác vụ ({error}).',
     'task.problem.windowsOnly': 'Hiện chỉ lập lịch được trên Windows',
@@ -1133,6 +1183,10 @@
     'notify.done.moved': 'Đã chuyển {n} tệp ({size}) vào Thùng rác.',
     'notify.done.freed': 'Đã xoá vĩnh viễn {size} các mục cũ hơn, nên chỗ đó giờ đã trống thật.',
     'notify.done.notFreed': 'Vẫn chưa có dung lượng nào được giải phóng — Thùng rác nằm trên cùng ổ đĩa.',
+    // G4 — hồ sơ chuyển tệp sang ổ khác.
+    'notify.quarantined.moved': 'Đã chép {n} tệp ({size}) sang ổ khác.',
+    'notify.quarantined.freed': 'Bản gốc đã bị xoá, nên ổ vừa dọn có thêm {size} trống.',
+    'notify.quarantined.kept': 'Bản gốc được giữ lại, nên ổ vừa dọn không có thêm chỗ trống nào.',
     'notify.disk.lowTitle': 'CleanDrive: sắp hết dung lượng đĩa',
     'notify.disk.criticalTitle': 'CleanDrive: đĩa gần đầy',
     'notify.disk.body': '{root} đã dùng {percent}% — còn {free} trên tổng {total}.',

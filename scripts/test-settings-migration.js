@@ -29,6 +29,14 @@ function check(label, cond, detail = '') {
   console.log(`  ${cond ? 'PASS' : 'FAIL'}  ${label}${detail ? `  -- ${detail}` : ''}`);
 }
 
+/**
+ * The policy, wherever it lives now.
+ *
+ * Works on a migrated raw file and on a coerced settings object alike,
+ * because both keep the profiles in the same place (G4).
+ */
+const first = (obj) => obj.autoClean.profiles[0];
+
 const V1 = {
   version: 1,
   autoClean: { enabled: true, dryRun: false, roots: ['C:\\Users\\a\\Downloads'], categories: ['temp', 'log'], minAgeDays: 30 },
@@ -40,17 +48,25 @@ const V1 = {
 (async () => {
   const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'cleandrive-settings-v2-'));
 
-  console.log('\nsettings: version 1 to 6\n');
+  console.log('\nsettings: version 1 to 7\n');
 
-  check('this build writes version 6', SCHEMA_VERSION === 6);
+  check('this build writes version 7', SCHEMA_VERSION === 7);
   {
     const { raw, from, steps } = migrate(V1);
-    check('a version 1 file is migrated a step at a time, to 6', from === 1 && steps === 5 && raw.version === 6);
+    check('a version 1 file is migrated a step at a time, to 7', from === 1 && steps === 6 && raw.version === 7);
     check('it gains the snapshot section, at the defaults', raw.snapshots.keepRecent === 12 && raw.snapshots.keepMonthly === 12);
-    check('and loses nothing it had', JSON.stringify(raw.autoClean) === JSON.stringify(V1.autoClean) &&
-      raw.purge.afterDays === 14 && raw.appearance.theme === 'dark');
+    // The one policy is now the first profile, field for field, and it keeps
+    // the id `main` so the Windows task the user already had still belongs to
+    // it rather than being orphaned beside a second one.
+    const moved = raw.autoClean.profiles[0];
+    check('and loses nothing it had',
+      raw.autoClean.profiles.length === 1 &&
+        Object.entries(V1.autoClean).every(([k, v]) => JSON.stringify(moved[k]) === JSON.stringify(v)) &&
+        raw.purge.afterDays === 14 && raw.appearance.theme === 'dark',
+      JSON.stringify(moved));
+    check('and the profile keeps the id the registered task is named from', moved.id === 'main', moved.id);
     const unversioned = migrate({ appearance: { theme: 'light' } });
-    check('a file with no version is read as version 1', unversioned.from === 1 && unversioned.raw.version === 6);
+    check('a file with no version is read as version 1', unversioned.from === 1 && unversioned.raw.version === 7);
     check('migration does not change the object it was given', V1.version === 1 && V1.snapshots === undefined);
   }
 
@@ -61,15 +77,15 @@ const V1 = {
     // Somebody who had it on keeps having those cleaned, now under each app's
     // own category; somebody who did not gains nothing.
     const on = { version: 2, autoClean: { enabled: true, categories: ['temp', 'gpucache'] } };
-    const withGpu = migrate(on).raw.autoClean.categories;
+    const withGpu = first(migrate(on).raw).categories;
     check('with the GPU category on, every known app’s cache is added',
       ['app.chrome', 'app.edge', 'app.teams', 'app.discord', 'app.zoom', 'app.figma'].every((c) => withGpu.includes(c)) &&
         withGpu[0] === 'temp' && withGpu[1] === 'gpucache', withGpu.join(', '));
-    const off = migrate({ version: 2, autoClean: { enabled: true, categories: ['temp', 'log'] } }).raw.autoClean.categories;
+    const off = first(migrate({ version: 2, autoClean: { enabled: true, categories: ['temp', 'log'] } }).raw).categories;
     check('with it off, nothing is added', JSON.stringify(off) === '["temp","log"]', off.join(', '));
-    const unticked = migrate({ version: 3, autoClean: { categories: ['gpucache'] } }).raw.autoClean.categories;
+    const unticked = first(migrate({ version: 3, autoClean: { categories: ['gpucache'] } }).raw).categories;
     check('a version 3 file keeps its categories -- an app somebody unticked stays unticked', JSON.stringify(unticked) === '["gpucache"]');
-    const read = coerceSettings(on).settings.autoClean.categories;
+    const read = first(coerceSettings(on).settings).categories;
     check('and the added names are ones the settings accept', read.includes('app.edge') && read.length === 8, read.join(', '));
   }
 
@@ -77,14 +93,16 @@ const V1 = {
     const { settings, warnings } = coerceSettings(V1);
     check('an old file reads without a version warning', !warnings.some((w) => /version/.test(w)), warnings.join('; '));
     check('and every setting in it survives',
-      settings.autoClean.enabled && settings.autoClean.minAgeDays === 30 && settings.purge.afterDays === 14 &&
+      first(settings).enabled && first(settings).minAgeDays === 30 && settings.purge.afterDays === 14 &&
         settings.appearance.language === 'vi' && settings.trends.sampleTime === '09:30' && settings.snapshots.keepRecent === 12);
   }
 
   {
-    const { settings, warnings } = coerceSettings({ ...V1, version: 7, futureThing: { x: 1 } });
+    // In the shape this build writes, with a version from the future.
+    const ahead = { ...V1, version: 8, autoClean: { profiles: [{ id: 'main', ...V1.autoClean }] }, futureThing: { x: 1 } };
+    const { settings, warnings } = coerceSettings(ahead);
     check('a file from a newer build is read as far as this one understands it',
-      settings.autoClean.minAgeDays === 30 && warnings.some((w) => /newer CleanDrive/.test(w)), warnings.join('; '));
+      first(settings).minAgeDays === 30 && warnings.some((w) => /newer CleanDrive/.test(w)), warnings.join('; '));
   }
 
   console.log('\nsettings: version 3 to 4 -- moving files to another drive (B1)\n');
@@ -92,7 +110,7 @@ const V1 = {
   {
     const { raw } = migrate({ version: 3, autoClean: { categories: ['temp'] } });
     check('a version 3 file gains the quarantine section, with no folder and originals kept',
-      raw.version === 6 && raw.quarantine.zone === null && raw.quarantine.deleteOriginal === false &&
+      raw.version === 7 && raw.quarantine.zone === null && raw.quarantine.deleteOriginal === false &&
         raw.quarantine.retentionDays === 30 && raw.quarantine.maxGB === 0);
     const read = coerceSettings({ version: 4, quarantine: { zone: 'relative\\place', retentionDays: 9000, maxGB: -4, deleteOriginal: 'yes' } });
     check('a zone that is not absolute is dropped, and the numbers are clamped',
@@ -108,7 +126,7 @@ const V1 = {
   {
     const { raw } = migrate({ version: 4, appearance: { theme: 'dark', language: 'vi' } });
     check('a version 4 file gains no colours of its own, and keeps its theme',
-      raw.version === 6 && raw.appearance.custom === null && raw.appearance.theme === 'dark' && raw.appearance.language === 'vi');
+      raw.version === 7 && raw.appearance.custom === null && raw.appearance.theme === 'dark' && raw.appearance.language === 'vi');
     const palette = require('../src/shared/theme-palette');
     const good = { enabled: true, name: 'Mine', base: 'dark', colors: { ...palette.BASES.dark, accent: '#b48cff' } };
     const kept = coerceSettings({ version: 5, appearance: { theme: 'light', custom: good } });
@@ -131,7 +149,7 @@ const V1 = {
 
   {
     const { raw } = migrate({ version: 5, appearance: { theme: 'dark' } });
-    check('a version 5 file gains the menu setting, off', raw.version === 6 && raw.explorer && raw.explorer.contextMenu === false);
+    check('a version 5 file gains the menu setting, off', raw.version === 7 && raw.explorer && raw.explorer.contextMenu === false);
     const on = coerceSettings({ version: 6, explorer: { contextMenu: true } }).settings.explorer;
     check('on stays on', on.contextMenu === true);
     const odd = coerceSettings({ version: 6, explorer: { contextMenu: 'yes' } }).settings.explorer;
@@ -161,11 +179,11 @@ const V1 = {
     const loaded = await store.load();
     check('loading an old file does not write anything', (await fsp.readFile(file, 'utf8')) === original &&
       !fs.existsSync(path.join(dir, 'settings.v1.json')));
-    check('but hands back version 6 settings', loaded.version === 6 && loaded.snapshots.keepMonthly === 12);
+    check('but hands back version 7 settings', loaded.version === 7 && loaded.snapshots.keepMonthly === 12);
 
     await store.patch({ snapshots: { keepRecent: 3 } });
     const written = JSON.parse(await fsp.readFile(file, 'utf8'));
-    check('the first save writes version 6', written.version === 6 && written.snapshots.keepRecent === 3);
+    check('the first save writes version 7', written.version === 7 && written.snapshots.keepRecent === 3);
     check('patching one snapshot field keeps the other', written.snapshots.keepMonthly === 12);
     check('and keeps the old file, byte for byte, as settings.v1.json',
       (await fsp.readFile(path.join(dir, 'settings.v1.json'), 'utf8')) === original);
@@ -178,6 +196,46 @@ const V1 = {
     await fresh.load();
     await fresh.save(await fresh.get());
     check('a new install keeps no copy -- there was nothing older', !fs.existsSync(path.join(dir, 'new', 'settings.v1.json')));
+  }
+
+  console.log('\nsettings: the way back from version 7 (G4)\n');
+
+  {
+    /*
+     * Version 7 moved the cleanup rather than adding to it, so an older build
+     * cannot read the policy out of a version 7 file -- the test further down
+     * asserts exactly that, and asserts that it fails safe. What makes that
+     * acceptable rather than a one-way door is this: the file the older build
+     * does understand is still on disk, written before the first version 7
+     * save, and it still holds the policy as it was configured.
+     */
+    const back = path.join(dir, 'back');
+    await fsp.mkdir(back, { recursive: true });
+    const file = path.join(back, 'settings.json');
+    const configured = {
+      version: 6,
+      autoClean: { enabled: true, dryRun: false, roots: [path.resolve(dir)], minAgeDays: 30 },
+    };
+    await fsp.writeFile(file, `${JSON.stringify(configured, null, 2)}\n`);
+
+    const store = new SettingsStore(file);
+    await store.load();
+    await store.patch({ purge: { enabled: true } });
+
+    const copy = path.join(back, 'settings.v6.json');
+    check('the version 6 file is kept before the first version 7 save', fs.existsSync(copy));
+    const kept = JSON.parse(await fsp.readFile(copy, 'utf8'));
+    check('and it still holds the policy in the shape an older build reads',
+      kept.autoClean.enabled === true && kept.autoClean.minAgeDays === 30 &&
+        kept.autoClean.roots.length === 1 && kept.autoClean.profiles === undefined,
+      JSON.stringify(kept.autoClean));
+
+    const now = JSON.parse(await fsp.readFile(file, 'utf8'));
+    check('while the file in use is version 7, with the same policy as its first profile',
+      now.version === 7 && now.autoClean.profiles.length === 1 &&
+        now.autoClean.profiles[0].enabled === true && now.autoClean.profiles[0].minAgeDays === 30 &&
+        now.autoClean.profiles[0].id === 'main',
+      JSON.stringify(now.autoClean.profiles[0]));
   }
 
   console.log('\nsettings: an older build reading this build’s file\n');
@@ -249,14 +307,34 @@ const V1 = {
       const at = `the build at ${ref} (schema ${released.SCHEMA_VERSION})`;
       const ours = coerceSettings(V1).settings;
       const { settings, warnings } = released.coerceSettings(JSON.parse(JSON.stringify(ours)));
-      check(`${at} reads every setting it knows from a version ${SCHEMA_VERSION} file`,
-        settings.autoClean.minAgeDays === 30 && settings.purge.afterDays === 14 &&
-          settings.appearance.theme === 'dark' && settings.trends.sampleTime === '09:30',
+
+      /*
+       * Version 7 is the first migration that *moves* something rather than
+       * adding it: the one policy became `autoClean.profiles` (G4). So the old
+       * promise -- "an older build reads every setting it knows" -- cannot hold
+       * for the cleanup any more, and pretending otherwise by writing the old
+       * fields beside the new ones would put the same fact in the file twice,
+       * with nothing to keep the two in step.
+       *
+       * What is asserted instead is what an older build actually does, and it
+       * is the safe half of the old promise: everything that did not move still
+       * reads; it says out loud that the file is from a newer version; and the
+       * cleanup it comes away with is *off*, not a stale or half-read policy.
+       * An older build that quietly ran yesterday's rules would be worse than
+       * one that runs nothing.
+       *
+       * The way back is already in place: `_keepOlderVersion` writes
+       * `settings.v6.json` before the first version 7 save, so the file the old
+       * build understands is still on disk.
+       */
+      check(`${at} still reads every setting that did not move`,
+        settings.purge.afterDays === 14 && settings.appearance.theme === 'dark' &&
+          settings.trends.sampleTime === '09:30',
         warnings.join('; '));
       check(`${at} says it found a version it did not expect, rather than failing`, warnings.some((w) => /version/.test(w)));
-      check(`${at} keeps the cleanup exactly as configured -- nothing switched on or off`,
-        settings.autoClean.enabled === true && settings.autoClean.dryRun === false &&
-          JSON.stringify(settings.autoClean.categories) === '["temp","log"]');
+      check(`${at} does not come away with a cleanup it cannot read -- it comes away with none`,
+        settings.autoClean.enabled === false && settings.autoClean.roots.length === 0,
+        JSON.stringify({ enabled: settings.autoClean.enabled, roots: settings.autoClean.roots }));
       // A file with the user's own colours switched on: an older build does
       // not know them, and shows the theme they were built on.
       const palette = require('../src/shared/theme-palette');

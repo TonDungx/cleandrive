@@ -14,7 +14,7 @@ const { runAutoClean, selectFiles, lastTouched, blockingApps, RunLog } = require
 // A run's reason is a message now -- { i18n, en, params } -- so the log it is
 // written to can be read later in whatever language is set then.
 const { render } = require('../src/i18n');
-const { coerceSettings } = require('../src/main/lib/settings');
+const { coerceSettings, profilesOf } = require('../src/main/lib/settings');
 const { TrashLedger } = require('../src/main/lib/ledger');
 
 let failures = 0;
@@ -45,8 +45,12 @@ function file(p, size, mtimeMs = OLD, atimeMs = 0) {
   const keepDir = path.join(root, 'keep');
   await fsp.mkdir(keepDir, { recursive: true });
 
+  // One profile, since almost every rule here is about one policy (G4).
+  // `S` is the whole settings object, as `runAutoClean` takes it; `P` is
+  // the policy inside it, as `selectFiles` takes it.
   const S = (over = {}) =>
-    coerceSettings({ autoClean: { enabled: true, roots: [root], dryRun: false, ...over } }).settings;
+    coerceSettings({ autoClean: { profiles: [{ id: 'main', enabled: true, roots: [root], dryRun: false, ...over }] } }).settings;
+  const P = (over = {}) => profilesOf(S(over))[0];
 
   console.log('\nautoclean: what may be selected\n');
 
@@ -57,7 +61,7 @@ function file(p, size, mtimeMs = OLD, atimeMs = 0) {
       group('installer', 'review', [file(path.join(root, 'setup.exe'), 5e8)]),
       group('archive', 'review', [file(path.join(root, 'backup.zip'), 5e8)]),
     ]);
-    const picked = selectFiles(cleanup, S().autoClean, NOW);
+    const picked = selectFiles(cleanup, P(), NOW);
     check('only the safe category is selected', picked.files.length === 1, String(picked.files.length));
     check('a "worth reviewing" file is never picked unattended',
       !picked.files.some((f) => f.path.endsWith('.iso')));
@@ -68,13 +72,13 @@ function file(p, size, mtimeMs = OLD, atimeMs = 0) {
   {
     // A verdict of 'safe' on a category the user did not enable is still a no.
     const cleanup = cleanupOf([group('buildoutput', 'safe', [file(path.join(root, 'out.o'), 100)])]);
-    const picked = selectFiles(cleanup, S().autoClean, NOW);
+    const picked = selectFiles(cleanup, P(), NOW);
     check('a safe category the user did not enable is skipped', picked.files.length === 0);
   }
 
   {
     // A forged settings file naming a review category must not get through.
-    const forged = { ...S().autoClean, categories: ['cache', 'stale'] };
+    const forged = { ...P(), categories: ['cache', 'stale'] };
     const cleanup = cleanupOf([group('stale', 'review', [file(path.join(root, 'big.iso'), 9e9)])]);
     const picked = selectFiles(cleanup, forged, NOW);
     check('a hand-edited category list cannot smuggle in a review verdict',
@@ -98,19 +102,19 @@ function file(p, size, mtimeMs = OLD, atimeMs = 0) {
 
     // And if one were somehow named in a settings file, `coerceSettings`
     // refuses it before it reaches the run.
-    const smuggled = coerceSettings({ autoClean: { categories: ['cache', 'photos', 'video'] } });
+    const smuggled = coerceSettings({ autoClean: { profiles: [{ id: 'main', categories: ['cache', 'photos', 'video'] }] } });
     check('a settings file naming a photo category has it stripped out',
-      !smuggled.settings.autoClean.categories.includes('photos') &&
-        !smuggled.settings.autoClean.categories.includes('video'),
-      smuggled.settings.autoClean.categories.join(', '));
+      !profilesOf(smuggled.settings)[0].categories.includes('photos') &&
+        !profilesOf(smuggled.settings)[0].categories.includes('video'),
+      profilesOf(smuggled.settings)[0].categories.join(', '));
     check('and the rest of the list survives',
-      smuggled.settings.autoClean.categories.includes('cache'));
+      profilesOf(smuggled.settings)[0].categories.includes('cache'));
 
     // The last line of defence: even a group that reached `selectFiles` with a
     // media-sounding category and a verdict of 'safe' is refused, because the
     // category is not one the user enabled and cannot become one.
     const cleanup = cleanupOf([group('photos', 'safe', [file(path.join(root, 'wedding.jpg'), 4e6)])]);
-    const forced = { ...S().autoClean, categories: ['cache', 'photos'] };
+    const forced = { ...P(), categories: ['cache', 'photos'] };
     const picked = selectFiles(cleanup, forced, NOW);
     check('a photo group is refused even with its category forced on',
       picked.files.length === 0, `${picked.files.length} picked`);
@@ -125,7 +129,7 @@ function file(p, size, mtimeMs = OLD, atimeMs = 0) {
         file(path.join(root, 'new.bin'), 100, RECENT),
       ]),
     ]);
-    const picked = selectFiles(cleanup, S().autoClean, NOW);
+    const picked = selectFiles(cleanup, P(), NOW);
     check('a recently modified file is left alone', picked.files.length === 1 && picked.files[0].path.endsWith('old.bin'));
     check('the skip is counted', picked.skipped.tooRecent === 1);
   }
@@ -134,7 +138,7 @@ function file(p, size, mtimeMs = OLD, atimeMs = 0) {
     // Written a year ago, opened yesterday. The later timestamp must win.
     const opened = file(path.join(root, 'inuse.bin'), 100, OLD, RECENT);
     check('age uses the most recent of the two timestamps', lastTouched(opened) === RECENT);
-    const picked = selectFiles(cleanupOf([group('cache', 'safe', [opened])]), S().autoClean, NOW);
+    const picked = selectFiles(cleanupOf([group('cache', 'safe', [opened])]), P(), NOW);
     check('a stale file that was opened yesterday is not deleted', picked.files.length === 0);
   }
 
@@ -147,7 +151,7 @@ function file(p, size, mtimeMs = OLD, atimeMs = 0) {
         file(path.join(root, 'free.bin'), 100),
       ]),
     ]);
-    const picked = selectFiles(cleanupOf(cleanup.groups), S({ whitelist: [keepDir] }).autoClean, NOW);
+    const picked = selectFiles(cleanupOf(cleanup.groups), P({ whitelist: [keepDir] }), NOW);
     check('a whitelisted folder is honoured', picked.files.length === 1 && picked.files[0].path.endsWith('free.bin'));
     check('the whitelist skip is counted', picked.skipped.whitelisted === 1);
   }
@@ -157,7 +161,7 @@ function file(p, size, mtimeMs = OLD, atimeMs = 0) {
     const cleanup = cleanupOf([
       group('cache', 'safe', [file(path.join(sysDrive, path.sep, 'Windows', 'System32', 'x.dll'), 100)]),
     ]);
-    const picked = selectFiles(cleanup, S().autoClean, NOW);
+    const picked = selectFiles(cleanup, P(), NOW);
     check('a protected system path is refused even when tagged safe',
       picked.files.length === 0, String(picked.files.length));
     check('the guard skip is counted', picked.skipped.guarded === 1);
@@ -167,7 +171,7 @@ function file(p, size, mtimeMs = OLD, atimeMs = 0) {
 
   {
     const files = Array.from({ length: 10 }, (_, i) => file(path.join(root, `f${i}.bin`), (i + 1) * 100));
-    const picked = selectFiles(cleanupOf([group('cache', 'safe', files)]), S({ maxItemsPerRun: 3 }).autoClean, NOW);
+    const picked = selectFiles(cleanupOf([group('cache', 'safe', files)]), P({ maxItemsPerRun: 3 }), NOW);
     check('the cap is applied', picked.files.length === 3);
     check('the largest files are taken first', picked.files[0].size === 1000 && picked.files[2].size === 800,
       picked.files.map((f) => f.size).join(','));

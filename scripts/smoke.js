@@ -1706,19 +1706,24 @@ app.whenReady().then(async () => {
       check('real disk usage is shown', /%/.test(autoUi.disk), autoUi.disk);
 
       // Configure through the real IPC path, then confirm the form reflects it.
+      // The policy is a profile now (G4), and it is saved on its own channel.
       const saved = await win.webContents.executeJavaScript(`
-        window.cleandrive.saveSettings({
-          autoClean: {
+        (async () => {
+          const before = await window.cleandrive.getSettings();
+          const id = before.data.settings.autoClean.profiles[0].id;
+          await window.cleandrive.saveAutoProfile({
+            id,
             enabled: false, dryRun: true,
             roots: [${JSON.stringify(path.dirname(autoDir))}],
             categories: ['cache'], minAgeDays: 180, skipIfRunning: [], maxItemsPerRun: 500,
             schedule: { kind: 'weekly', time: '02:00', weekday: 0, day: 1 },
-          },
-          purge: { enabled: false, afterDays: 7 },
-        })
+          });
+          return window.cleandrive.saveSettings({ purge: { enabled: false, afterDays: 7 } });
+        })()
       `);
+      const firstProfile = (reply) => reply.data.settings.autoClean.profiles[0];
       check('settings save round-trips through IPC', saved.ok === true, saved.error || '');
-      check('the saved folder comes back', saved.ok && saved.data.settings.autoClean.roots.length === 1);
+      check('the saved folder comes back', saved.ok && firstProfile(saved).roots.length === 1);
       check('no Windows task is created while it is switched off',
         saved.ok && saved.data.scheduler.installed === false);
 
@@ -1733,7 +1738,7 @@ app.whenReady().then(async () => {
           await performAutoRun(true);
           const saved = await window.cleandrive.getSettings();
           return {
-            savedRoots: saved.ok ? saved.data.settings.autoClean.roots.length : -1,
+            savedRoots: saved.ok ? saved.data.settings.autoClean.profiles[0].roots.length : -1,
             resultText: document.getElementById('auto-result-body').textContent,
           };
         })()
@@ -1744,15 +1749,17 @@ app.whenReady().then(async () => {
 
       // Put the single-folder configuration back for the assertions below.
       await win.webContents.executeJavaScript(`
-        window.cleandrive.saveSettings({
-          autoClean: {
+        (async () => {
+          const before = await window.cleandrive.getSettings();
+          await window.cleandrive.saveAutoProfile({
+            id: before.data.settings.autoClean.profiles[0].id,
             enabled: false, dryRun: true,
             roots: [${JSON.stringify(path.dirname(autoDir))}],
             categories: ['cache'], minAgeDays: 180, skipIfRunning: [], maxItemsPerRun: 500,
             schedule: { kind: 'weekly', time: '02:00', weekday: 0, day: 1 },
-          },
-          purge: { enabled: false, afterDays: 7 },
-        })
+          });
+          return window.cleandrive.saveSettings({ purge: { enabled: false, afterDays: 7 } });
+        })()
       `);
 
       const previewRun = await win.webContents.executeJavaScript(
@@ -1779,6 +1786,126 @@ app.whenReady().then(async () => {
       check('the result card renders', rendered.shown && rendered.lines >= 3, `${rendered.lines} lines`);
       check('a report-only result never claims anything was deleted',
         !/Moved to Recycle Bin/.test(rendered.text));
+
+      /* -- several profiles (G4) ---------------------------------------- */
+      //
+      // The whole point is that each one is its own policy with its own
+      // Windows task, so what is checked is that they do not bleed into each
+      // other: adding one leaves the first alone, editing one does not touch
+      // the other, and removing one takes its task away.
+      console.log('\nAutomatic profiles:');
+
+      // Through the button, not through the channel behind it: what is being
+      // checked here is that the screen keeps up, and a test that calls the
+      // IPC itself would pass while the screen showed one profile.
+      const added = await win.webContents.executeJavaScript(`
+        (async () => {
+          document.querySelector('.tab[data-tab="auto"]').click();
+          await new Promise((r) => setTimeout(r, 400));
+          const before = await window.cleandrive.getSettings();
+          document.getElementById('auto-profile-add').click();
+          for (let i = 0; i < 60 && document.querySelectorAll('#auto-profiles .profile-chip').length < 2; i++) {
+            await new Promise((r) => setTimeout(r, 250));
+          }
+          const after = await window.cleandrive.getSettings();
+          return {
+            ok: after.ok,
+            error: after.error,
+            beforeCount: before.data.settings.autoClean.profiles.length,
+            afterCount: after.ok ? after.data.settings.autoClean.profiles.length : -1,
+            made: after.ok ? after.data.settings.autoClean.profiles[1] : null,
+            firstStillThere: after.ok ? after.data.settings.autoClean.profiles[0] : null,
+          };
+        })()
+      `);
+      check('a second profile can be added, from the button', added.ok && added.afterCount === added.beforeCount + 1,
+        added.error || `${added.beforeCount} -> ${added.afterCount}`);
+      check('and it starts off, in report-only, whatever the one beside it is doing',
+        added.made && added.made.enabled === false && added.made.dryRun === true,
+        JSON.stringify(added.made && { enabled: added.made.enabled, dryRun: added.made.dryRun }));
+      check('the first profile is untouched by it',
+        added.firstStillThere && added.firstStillThere.roots.length === 1 &&
+          added.firstStillThere.minAgeDays === 180,
+        JSON.stringify(added.firstStillThere && added.firstStillThere.minAgeDays));
+
+      const chips = await win.webContents.executeJavaScript(`
+        (() => {
+          const list = [...document.querySelectorAll('#auto-profiles .profile-chip')];
+          return {
+            count: list.length,
+            current: list.filter((c) => c.classList.contains('is-current')).length,
+            currentIsSecond: list.length === 2 && list[1].classList.contains('is-current'),
+            text: list.map((c) => c.textContent).join(' | '),
+            removeEnabled: document.getElementById('auto-profile-remove').disabled === false,
+          };
+        })()
+      `);
+      check('both appear on screen, with exactly one being edited',
+        chips.count === 2 && chips.current === 1, `${chips.count} chips, ${chips.current} current`);
+      check('and each says what it is doing, not just its name', /Off/.test(chips.text), chips.text);
+      check('the one just added is the one the form is editing',
+        chips.currentIsSecond === true, chips.text);
+
+      // Editing the second must not reach the first.
+      const edited = await win.webContents.executeJavaScript(`
+        (async () => {
+          const s = await window.cleandrive.getSettings();
+          const second = s.data.settings.autoClean.profiles[1];
+          const reply = await window.cleandrive.saveAutoProfile({
+            ...second, name: 'Monthly installers', minAgeDays: 30, action: 'quarantine',
+          });
+          const after = reply.ok ? reply.data.settings.autoClean.profiles : null;
+          return {
+            ok: reply.ok, error: reply.error,
+            first: after && { age: after[0].minAgeDays, action: after[0].action, name: after[0].name },
+            second: after && { age: after[1].minAgeDays, action: after[1].action, name: after[1].name },
+          };
+        })()
+      `);
+      check('editing one profile leaves the other exactly as it was',
+        edited.ok && edited.first.age === 180 && edited.first.action === 'recycle' && edited.first.name === null,
+        edited.error || JSON.stringify(edited.first));
+      check('and the edit lands on the one that was asked for',
+        edited.ok && edited.second.age === 30 && edited.second.action === 'quarantine' &&
+          edited.second.name === 'Monthly installers',
+        JSON.stringify(edited.second));
+
+      // Each profile has a Windows task path of its own, and the first keeps
+      // the name a machine configured before profiles existed already has.
+      const paths = await win.webContents.executeJavaScript(`
+        window.cleandrive.getSettings().then((s) => JSON.stringify(
+          s.data.tasks.profiles.map((p) => ({ id: p.profileId, task: p.taskPath }))))
+      `);
+      const taskRows = JSON.parse(paths);
+      check('each profile has its own Windows task path',
+        taskRows.length === 2 && taskRows[0].task !== taskRows[1].task, paths);
+      check('and the first keeps the name an already-configured machine has',
+        /AutomaticCleanup(_[a-z]+)?$/.test(taskRows[0].task) && !/AutomaticCleanup_p/.test(taskRows[0].task),
+        taskRows[0].task);
+
+      const removed = await win.webContents.executeJavaScript(`
+        (async () => {
+          const s = await window.cleandrive.getSettings();
+          const id = s.data.settings.autoClean.profiles[1].id;
+          const reply = await window.cleandrive.removeAutoProfile(id);
+          return { ok: reply.ok, error: reply.error,
+            count: reply.ok ? reply.data.settings.autoClean.profiles.length : -1 };
+        })()
+      `);
+      check('and one can be removed again', removed.ok && removed.count === 1,
+        removed.error || String(removed.count));
+
+      const lastOne = await win.webContents.executeJavaScript(`
+        (async () => {
+          const s = await window.cleandrive.getSettings();
+          const reply = await window.cleandrive.removeAutoProfile(s.data.settings.autoClean.profiles[0].id);
+          return { ok: reply.ok, error: reply.error };
+        })()
+      `);
+      // There is always something for the screen to show and for the run to
+      // refuse; "no profiles at all" is not a state the app has.
+      check('but the last one cannot be', lastOne.ok === false && /last profile/.test(lastOne.error || ''),
+        lastOne.error || 'it was removed');
     } finally {
       fs.rmSync(path.dirname(autoDir), { recursive: true, force: true });
     }
@@ -2104,9 +2231,12 @@ app.whenReady().then(async () => {
     // not carry an appearance section at all.
     const afterFormSave = await win.webContents.executeJavaScript(`
       (async () => {
-        await window.cleandrive.saveSettings({ autoClean: { minAgeDays: 120 } });
+        const before = await window.cleandrive.getSettings();
+        const profile = before.data.settings.autoClean.profiles[0];
+        await window.cleandrive.saveAutoProfile({ ...profile, minAgeDays: 120 });
+        await window.cleandrive.saveSettings({ purge: before.data.settings.purge });
         const s = await window.cleandrive.getSettings();
-        return { theme: s.data.settings.appearance.theme, age: s.data.settings.autoClean.minAgeDays };
+        return { theme: s.data.settings.appearance.theme, age: s.data.settings.autoClean.profiles[0].minAgeDays };
       })()
     `);
     check('saving the settings form leaves the theme alone',
@@ -2949,6 +3079,10 @@ app.whenReady().then(async () => {
           session && session.items[0].sha256 === isoHash && session.items[0].original === 'bin' && session.end.freedOnSource === 0);
 
         await js(`document.querySelector('.tab[data-tab="restore"]').click()`);
+        // Reopening the tab asks the disk where every item of every session is
+        // now. Measured here: about seven seconds for the list and another
+        // seven for one open session's items -- which is why `load()` asks for
+        // both at once rather than one after the other.
         await until(win, `document.querySelector('.restore-session[data-kind="quarantine"]') !== null`, 15000);
         const shown = await js(`(() => {
           const s = document.querySelector('.restore-session[data-kind="quarantine"]');
