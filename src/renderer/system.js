@@ -473,5 +473,40 @@
   if (tab) tab.addEventListener('click', load);
   onLanguageChange(render);
 
-  window.systemScreen = { load, run, view };
+  /**
+   * This screen's rows, for the report (G2).
+   *
+   * The breakdown is never written to disk -- it costs a walk of the whole
+   * drive and some rows need administrator rights -- so the only copy is the
+   * one on screen. And the titles are here, as literal `t()` keys, which is
+   * where `test:i18n` can check them; the main process holds the numbers but
+   * not the words. So the report asks the window for both.
+   *
+   * Null when nothing has been measured, which the report then reports.
+   */
+  function reportRows() {
+    const result = view.result;
+    if (!result || !result.summary) return null;
+    const byId = indexCandidates(result.candidates);
+    const rows = viewsOf(result.summary.rows, byId);
+    if (rows.length === 0) return null;
+
+    return {
+      drive: result.summary.drive || (view.facts ? view.facts.drive : ''),
+      at: result.summary.measuredAt || Date.now(),
+      elevated: Boolean(result.summary.elevated),
+      totalBytes: result.summary.volume ? result.summary.volume.usedBytes : 0,
+      rows: rows
+        .slice()
+        .sort((a, b) => b.size - a.size)
+        .map((r) => {
+          const [title] = (ROW_TEXT[r.key] || (() => [r.key]))();
+          return { key: r.key, label: title, bytes: r.size, path: null, note: null };
+        }),
+    };
+  }
+
+  window.systemScreen = { load, run, view, reportRows };
+  // The name `report.js` looks for. `systemScreen` is kept as it was.
+  window.SystemScreen = window.systemScreen;
 })();

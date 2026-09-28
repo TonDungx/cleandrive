@@ -27,6 +27,9 @@ const { ScanTree, MultiScanTree } = require('./analyzers/scan-tree');
 const scanRoots = require('./analyzers/scan-roots');
 const volumes = require('./lib/volumes');
 const snapshotDiff = require('./snapshots/diff');
+const reportCollect = require('./report/collect');
+const reportHtml = require('./report/html');
+const reportRedact = require('./report/redact');
 const mftRead = require('./system/mft-read');
 const planner = require('./planner/plan');
 const { HelperClient, appLauncher } = require('./helper/client');
@@ -1490,6 +1493,14 @@ function register() {
         const { explorer, ...rest } = next;
         next = rest;
       }
+      // The unattended profiles, set only through `autoclean:saveProfile` and
+      // its neighbours (G4), because adding one has a licence to check and
+      // removing one has a Windows task to take away. A screen that loaded
+      // before a profile was added would otherwise save the old list back.
+      if (next && next.autoClean) {
+        const { autoClean, ...rest } = next;
+        next = rest;
+      }
       const { settings } = await services().settings.patch(next);
       // The Task Scheduler entries and the tray are both derived state, never a
       // second source of truth: whatever the settings say, the OS and the
@@ -2163,6 +2174,113 @@ function register() {
     })
   );
 
+  /* ---- the HTML report (G2) ---------------------------------------------- */
+
+  /**
+   * What a report could hold right now, so the window can offer only the
+   * sections there is something behind.
+   *
+   * Cheap on purpose: it counts what is on disk rather than gathering it, so
+   * opening the dialog costs nothing.
+   */
+  handle('report:options', () =>
+    guard(async () => {
+      const { history, snapshots, journal } = services();
+      await history.load();
+      const roots = await snapshots.roots();
+      let pairs = 0;
+      for (const root of roots) {
+        if (snapshotDiff.defaultPair(await snapshots.list(root)).ok) pairs += 1;
+      }
+      const sessions = await journal.sessions();
+      return {
+        allowed: licenseState.canNow()('pro.reports'),
+        sections: reportCollect.SECTIONS,
+        namesFiles: reportCollect.FILE_LISTING_SECTIONS,
+        available: {
+          volumes: true,
+          // In this process's memory and nowhere else; see `collectSystem`.
+          system: systemState !== null,
+          folders: history.scannedRoots().length > 0,
+          trends: history.snapshots.length >= 2,
+          diff: pairs > 0,
+          actions: (sessions || []).length > 0,
+        },
+      };
+    })
+  );
+
+  /**
+   * Write one self-contained HTML file.
+   *
+   * Nothing is measured to fill it in: a section with no data behind it says
+   * so in the report. The only exception is the drive list, which is a
+   * `statfs` per volume.
+   */
+  handle('report:save', (event, request = {}) =>
+    guard(async () => {
+      if (!licenseState.canNow()('pro.reports')) {
+        throw Object.assign(
+          new Error(t('report.locked', 'Saving an HTML report is part of CleanDrive Pro.')),
+          { code: 'ELOCKED', quiet: true }
+        );
+      }
+
+      const asked = Array.isArray(request.sections) ? request.sections : reportCollect.SECTIONS;
+      const sections = reportCollect.SECTIONS.filter((s) => asked.includes(s));
+      if (sections.length === 0) {
+        throw Object.assign(new Error(t('report.nothingChosen', 'Choose at least one section.')), {
+          code: 'EINVAL',
+          quiet: true,
+        });
+      }
+
+      // On unless the window says otherwise, and the window's own default is
+      // the same rule: a report that names files names people.
+      const wantsPrivate =
+        typeof request.private === 'boolean' ? request.private : reportCollect.namesFiles(sections);
+
+      const data = await reportCollect.collect({
+        sections,
+        services: services(),
+        deps: { volumes },
+        // The System screen's rows, as the window is showing them.
+        system: request.system || null,
+        volume: typeof request.volume === 'string' ? request.volume : undefined,
+        app: app.getName(),
+        // The app's own version, not Electron's. In a checkout
+        // app.getVersion() answers 33.4.11, and this figure goes into a
+        // document somebody else reads.
+        version: require('../../package.json').version,
+        machine: request.machine !== false,
+        lang: language.current(),
+      });
+
+      const body = reportHtml.buildReport(
+        wantsPrivate ? reportRedact.redact(data, reportWords().pseudonyms) : data,
+        reportWords()
+      );
+
+      const win = BrowserWindow.fromWebContents(event.sender);
+      const stamp = new Date().toISOString().slice(0, 10);
+      const { canceled, filePath } = await dialog.showSaveDialog(win, {
+        title: t('dialog.saveReport', 'Save report'),
+        defaultPath: `cleandrive-report-${stamp}.html`,
+        filters: [{ name: 'HTML', extensions: ['html'] }],
+      });
+      if (canceled || !filePath) return { written: false };
+
+      await require('node:fs/promises').writeFile(filePath, body, 'utf8');
+      return {
+        written: true,
+        path: filePath,
+        bytes: Buffer.byteLength(body, 'utf8'),
+        private: wantsPrivate,
+        sections,
+      };
+    })
+  );
+
   /* ---- disk monitoring --------------------------------------------------- */
 
   handle('monitor:status', () => guard(async () => tray.status()));
@@ -2614,6 +2732,84 @@ function lastRunPerProfile(runs, profiles) {
   return out;
 }
 
+/**
+ * Every word the report puts on the page (G2).
+ *
+ * Built here rather than in `report/html.js` so that file stays a renderer
+ * with no opinions, and so every key is a literal one `test:i18n` can see.
+ * Read at save time, not at startup, because the language can change while
+ * the app is open.
+ */
+function reportWords() {
+  return {
+    title: t('report.title', 'CleanDrive report'),
+    madeBy: t('report.madeBy', 'Made by'),
+    footer: t('report.footer', 'Every figure here was measured by CleanDrive on the computer named above. Nothing in this file was sent anywhere, and nothing in it is fetched when you open it — the numbers are embedded at the end as JSON.'),
+    privateOn: t('report.privateOn', 'Private mode: folder and file names have been replaced with generic ones. The same folder keeps the same name throughout, so the report still reads, and the data at the end of the file is replaced too.'),
+
+    volumes: t('report.volumes', 'Drives'),
+    noVolumes: t('report.noVolumes', 'No drive could be measured.'),
+    system: t('report.system', 'Where the drive went'),
+    noSystem: t('report.noSystem', 'Not measured in this session. Open the System screen and measure, then save the report again.'),
+    folders: t('report.folders', 'Folders that have been scanned'),
+    noFolders: t('report.noFolders', 'No folder has been scanned yet. Scan one on the Disk usage screen.'),
+    trends: t('report.trends', 'Over time'),
+    noTrends: t('report.noTrends', 'Two or more measurements are needed before anything can be said about a trend.'),
+    diff: t('report.diff', 'What changed'),
+    noDiff: t('report.noDiff', 'Two comparable scans of one folder are needed. Scan the same folder again in a few days.'),
+    actions: t('report.actions', 'What CleanDrive did'),
+    noActions: t('report.noActions', 'CleanDrive has not moved or deleted anything yet.'),
+    actionsNote: t('report.actionsNote', 'From the action journal, which records every file this app moved and where it went.'),
+
+    drive: t('report.col.drive', 'Drive'),
+    fileSystem: t('report.col.fileSystem', 'Format'),
+    total: t('report.col.total', 'Total'),
+    free: t('report.col.free', 'Free'),
+    used: t('report.col.used', 'Used'),
+    full: t('report.full', 'full'),
+    of: t('report.of', 'of'),
+    row: t('report.col.row', 'Where'),
+    size: t('report.col.size', 'Size'),
+    note: t('report.col.note', 'Note'),
+    systemDrive: t('report.systemDrive', 'Drive'),
+    measured: t('report.measured', 'measured'),
+    notElevated: t('report.notElevated', 'measured without administrator rights, so some rows are incomplete'),
+    folder: t('report.col.folder', 'Folder'),
+    files: t('report.col.files', 'Files'),
+    scanned: t('report.col.scanned', 'Scanned'),
+    growth: t('report.growth', 'Growing by'),
+    perMonth: t('report.perMonth', 'per month'),
+    noChart: t('report.noChart', 'The measurements below could not be drawn as a line — not enough of them say how full the drive was.'),
+    noGrowth: t('report.noGrowth', 'Not enough measurements to say whether it is growing.'),
+    readings: t('report.readings', 'measurements'),
+    at: t('report.col.at', 'When'),
+    from: t('report.col.from', 'Measured by'),
+    whereChanged: t('report.whereChanged', 'Where it changed'),
+    filesChanged: t('report.filesChanged', 'Files that changed'),
+    change: t('report.col.change', 'Change'),
+    what: t('report.col.what', 'What'),
+    file: t('report.col.file', 'File'),
+    items: t('report.items', 'items'),
+    andMore: t('report.andMore', 'and {n} more'),
+
+    kinds: {
+      recycle: t('report.kind.recycle', 'Moved to the Recycle Bin'),
+      quarantine: t('report.kind.quarantine', 'Moved to another drive'),
+      restore: t('report.kind.restore', 'Put back'),
+      handoff: t('report.kind.handoff', 'Handed to a Windows tool'),
+      dehydrate: t('report.kind.dehydrate', 'Made online-only'),
+      purge: t('report.kind.purge', 'Removed from the Recycle Bin'),
+    },
+
+    // The words private mode builds its stand-in names from.
+    pseudonyms: {
+      folderWord: t('report.pseudonym.folder', 'Folder'),
+      fileWord: t('report.pseudonym.file', 'File'),
+      driveWord: t('report.pseudonym.drive', 'Drive'),
+    },
+  };
+}
+
 /** The volumes a set of ledger entries came from, so only those bins are opened. */
 function volumesOf(entries) {
   const roots = new Set();
@@ -3026,6 +3222,9 @@ function cancelAll() {
 
 module.exports = {
   register,
+  // The report’s words, so a harness photographs what the app writes
+  // rather than a second copy made for the camera (G2).
+  reportWords,
   cancelAll,
   noteReconciliation,
   allowUnconfirmedForHarness,

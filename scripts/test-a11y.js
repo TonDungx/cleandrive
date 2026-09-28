@@ -222,10 +222,104 @@ app.whenReady().then(async () => {
     await wait(60);
   };
   const tab = (name) => run(`document.querySelector('.tab[data-tab="${name}"]').click();`);
+  /**
+   * Wait until the page is wearing one palette rather than two.
+   *
+   * Switching the theme moves two things that do not move together: the
+   * `data-theme` attribute, which this harness sets, and `prefers-color-scheme`,
+   * which Chromium re-evaluates when `nativeTheme.themeSource` changes. For a
+   * few frames some tokens can come from one side and some from the other, and
+   * axe run in that window reports contrast failures that are real in the
+   * sense that it measured them and meaningless in the sense that nobody ever
+   * sees that page.
+   *
+   * That is what the unreproducible runs in ROADMAP 11.9 were. The giveaway is
+   * in the numbers: `.brand-name` at a contrast of 1.01, dark ink on a dark
+   * surface -- nothing ships text at 1.01, so it is two palettes at once.
+   *
+   * A fixed sleep is what was there before, and a fixed sleep is a guess about
+   * a machine's load. This waits for the thing itself: the body's own ink and
+   * background have to stop changing, be legible against each other -- which a
+   * mixed palette never is -- *and* be the palette that was asked for.
+   *
+   * That last one is not belt and braces, it is the whole point. The
+   * stylesheet is written in `light-dark()`, which resolves from
+   * `color-scheme`, and `color-scheme` follows `nativeTheme.themeSource` --
+   * which is set in the main process and reaches the renderer whenever it
+   * reaches it. Without the check, a page that is still *entirely light* after
+   * "switch to dark" looks perfectly settled and perfectly legible, so the
+   * wait returns at once and dark arrives in the middle of the sweep. That is
+   * exactly what the failing runs showed: `usage` clean, the next six mixed,
+   * `trends` onwards clean again.
+   */
+  const paletteSettled = async (mode, ms = 8000) => {
+    /*
+     * Sampled at the elements that have actually been caught wearing the
+     * wrong palette, not only at `body`.
+     *
+     * `light-dark()` is resolved per element, from that element's own used
+     * `color-scheme`, so "the body has settled" is not the same claim as "the
+     * page has settled" -- and the failing runs proved it: body fully dark
+     * while `.brand-name` still had the light ink on it. These three are where
+     * it showed, so these three are what is waited for.
+     */
+    const sample = () =>
+      js(`(() => {
+        const rgb = (v) => (String(v).match(/[\\d.]+/g) || [0, 0, 0]).slice(0, 3).map(Number);
+        const lum = (c) => {
+          const [r, g, b] = rgb(c).map((n) => {
+            const x = n / 255;
+            return x <= 0.03928 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4);
+          });
+          return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+        };
+        const body = getComputedStyle(document.body);
+        const inks = ['body', '.brand-name', '.tab .tab-label']
+          .map((sel) => (sel === 'body' ? document.body : document.querySelector(sel)))
+          .filter(Boolean)
+          .map((el) => lum(getComputedStyle(el).color));
+        const a = lum(body.color), b = lum(body.backgroundColor);
+        return {
+          key: [body.color, body.backgroundColor, ...inks.map((n) => n.toFixed(4))].join('|'),
+          contrast: (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05),
+          background: b,
+          // Every ink on the same side of the fence, or the page is wearing
+          // two palettes at once.
+          inksAgree: inks.every((n) => n > 0.3) || inks.every((n) => n < 0.2),
+          inksLight: inks.every((n) => n > 0.3),
+        };
+      })()`);
+
+    // 'custom' here is built on dark; 'system' follows Windows and is not
+    // asserted either way.
+    const wantDark = mode === 'dark' || mode === 'custom';
+    // Dark means: a dark surface, light ink, and every ink agreeing about it.
+    const isWanted = (now) =>
+      now.inksAgree &&
+      (mode === 'system' ? true : wantDark
+        ? now.background < 0.2 && now.inksLight
+        : now.background > 0.5 && !now.inksLight);
+
+    const started = Date.now();
+    let last = null;
+    while (Date.now() - started < ms) {
+      const now = await sample();
+      // Settled means: the same as the previous sample, legible -- 4.5 is the
+      // rule the app holds itself to everywhere else -- and the right palette.
+      if (last && last.key === now.key && now.contrast >= 4.5 && isWanted(now)) return true;
+      last = now;
+      await wait(120);
+    }
+    return false;
+  };
+
   const setTheme = async (mode) => {
     nativeTheme.themeSource = mode;
     await js(`document.documentElement.setAttribute('data-theme', ${JSON.stringify(mode)})`);
-    await wait(250);
+    if (!(await paletteSettled(mode))) {
+      check(`the ${mode} palette settled before anything was measured`, false,
+        'the page was still wearing two palettes; every contrast reading after this is suspect');
+    }
   };
 
   /* ---- fill every screen ---- */
@@ -453,9 +547,24 @@ app.whenReady().then(async () => {
 
   await openTrends();
   await tab('restore');
-  await until(`document.querySelector('[data-restore-toggle]')`, 15000);
-  await run(`document.querySelector('[data-restore-toggle]').click();`);
-  check('Restore lists the journal session', await until(`document.querySelectorAll('#restore-sessions .file-row').length >= 2`, 15000));
+
+  /*
+   * Reopening Restore asks the disk where every recorded item is now, which
+   * means reading the real Recycle Bins of every connected drive. Measured on
+   * this machine: three to eight seconds, and it varies with what is in those
+   * bins -- which is not something this harness controls.
+   *
+   * Fifteen seconds was not always enough, and when it was not, the next line
+   * called `.click()` on null and the whole run died with a TypeError that
+   * named nothing. Now the wait is longer, and a wait that still fails is a
+   * failure that says which thing never appeared.
+   */
+  const restoreReady = await until(`document.querySelector('[data-restore-toggle]')`, 45000);
+  check('Restore draws its sessions', restoreReady, 'it reads the real Recycle Bins, which can be slow');
+  if (restoreReady) {
+    await run(`document.querySelector('[data-restore-toggle]').click();`);
+    check('Restore lists the journal session', await until(`document.querySelectorAll('#restore-sessions .file-row').length >= 2`, 20000));
+  }
   await tab('usage');
 
   /* ---- 1. axe ---- */
@@ -511,6 +620,22 @@ app.whenReady().then(async () => {
   open = await axeRun();
   check('with the list of keys open, no violations', open.violations.length === 0, open.violations.map((v) => `${v.id}: ${v.nodes.join(' | ')}`).join(' || '));
   await run(`document.getElementById('shortcuts').close();`);
+
+  // The report dialog (G2): a checkbox per section, some of them disabled with
+  // a reason, and a note that changes as they are ticked.
+  await tab('trends');
+  await run(`await window.ReportDialog.open();`);
+  await until(`document.getElementById('report').open === true`, 10000);
+  await settle();
+  open = await axeRun();
+  check('with the report dialog open, no violations', open.violations.length === 0, open.violations.map((v) => `${v.id}: ${v.nodes.join(' | ')}`).join(' || '));
+  check('every section in it is a labelled control', await js(`
+    [...document.querySelectorAll('#report-sections input[type=checkbox]')]
+      .every((b) => b.closest('label') && b.closest('label').textContent.trim().length > 4)
+  `));
+  await run(`document.getElementById('report').close();`);
+
+  await tab('usage');
   await run(`await openViewer(${JSON.stringify(path.join(tree, 'notes.txt'))});`);
   await until(`document.querySelector('#viewer-body pre, #viewer-body .doc, #viewer-body *')`, 10000);
   await settle();
@@ -858,7 +983,10 @@ app.whenReady().then(async () => {
   // The user's own colours, chosen: they win over the Windows theme.
   const mine = { ...T.template('dark', 'Harness'), colors: { ...T.BASES.dark, background: '#101820', accent: '#b48cff' } };
   await run(`ThemeSwitch.setStored(${JSON.stringify(mine)}); ThemeSwitch.adopt('custom');`);
-  await wait(300);
+  // The same wait as every other theme change: the custom palette is applied
+  // as inline properties on :root, and reading before they land measures the
+  // one underneath.
+  await paletteSettled('custom');
   const custom = await js(`({ bg: getComputedStyle(document.body).backgroundColor, adjust: getComputedStyle(document.documentElement).forcedColorAdjust })`);
   check('with Custom chosen, the user’s colours are drawn over the Windows theme',
     custom.bg === 'rgb(16, 24, 32)' && custom.adjust === 'none', JSON.stringify(custom));
@@ -867,6 +995,7 @@ app.whenReady().then(async () => {
   console.log('\nThe user’s own colours, axe over the whole app:');
   await axeScreens('custom');
   await run(`ThemeSwitch.setStored(null); ThemeSwitch.adopt('light');`);
+  await paletteSettled('light');
   await settle();
 
   /* ---- 5. the colour editor, through the real IPC ---- */

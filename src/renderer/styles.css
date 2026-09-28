@@ -2540,6 +2540,42 @@ main {
 }
 
 /* --------------------------------------------------------------------------
+   the report dialog (G2)
+   -------------------------------------------------------------------------- */
+
+.report-dialog {
+  max-width: 560px;
+}
+
+.report-section {
+  align-items: flex-start;
+  margin-bottom: 14px;
+}
+
+.report-section-what {
+  display: block;
+  margin-top: 2px;
+  color: var(--text-2);
+  font-size: 12px;
+}
+
+/* A section with nothing behind it stays on screen, dimmed, with the reason
+   where its description would be -- "there is no System breakdown because
+   nobody measured one" is worth knowing. */
+.report-section.is-unavailable {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.report-section.is-unavailable:hover {
+  color: var(--text-2);
+}
+
+#report-private-note.is-warning {
+  color: var(--warn);
+}
+
+/* --------------------------------------------------------------------------
    automatic cleanup profiles (G4)
    -------------------------------------------------------------------------- */
 

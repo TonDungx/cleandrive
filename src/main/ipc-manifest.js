@@ -114,6 +114,10 @@ const INVOKE = Object.freeze([
 
   'history:get',
   'history:export',
+  // The self-contained HTML report (G2). Two channels: what could be in one,
+  // and write it.
+  'report:options',
+  'report:save',
   'trends:sample',
 
   'monitor:status',

@@ -571,8 +571,10 @@ function applyTrends(report) {
     select.replaceChildren();
     for (const volume of report.volumes) {
       const option = document.createElement('option');
+      // The value is the key the main process answers to, which is lowercased
+      // for comparing; the label is how a person writes a drive.
       option.value = volume;
-      option.textContent = volume;
+      option.textContent = /^[a-z]:/.test(volume) ? volume[0].toUpperCase() + volume.slice(1) : volume;
       select.append(option);
     }
   }

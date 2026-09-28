@@ -753,6 +753,114 @@
     'trends.savings.total': 'Tổng cộng',
     'trends.savings.none': 'Chưa xoá gì qua CleanDrive.',
 
+
+    /* ---- the HTML report (G2) ------------------------------------------ */
+    'report.button': 'Lưu báo cáo…',
+    'report.label': 'Báo cáo',
+    'report.locked': 'Lưu báo cáo HTML thuộc CleanDrive Pro.',
+    'report.nothingChosen': 'Hãy chọn ít nhất một mục.',
+    'dialog.saveReport': 'Lưu báo cáo',
+    'report.cancelled': 'Chưa lưu báo cáo.',
+    'report.saved': 'Đã lưu báo cáo: {name} ({size}).',
+    'report.savedPrivate': 'Tên đã được thay.',
+
+    'report.dialog.title': 'Lưu báo cáo',
+    'report.dialog.save': 'Lưu…',
+    'report.dialog.what':
+      'Một tệp HTML duy nhất, số liệu nhúng sẵn bên trong. Mở được bằng mọi trình duyệt, trên mọi máy, ' +
+      'và khi mở không tải gì từ mạng.',
+    'report.dialog.private': 'Thay tên thư mục và tên tệp bằng tên chung',
+    'report.dialog.privateOn':
+      'Thư mục thành “Thư mục 1”, tệp thành “Tệp 1.jpg”. Cùng một thư mục giữ nguyên một tên xuyên suốt, ' +
+      'và dữ liệu nhúng trong tệp cũng được thay theo.',
+    'report.dialog.privateOffWarn': 'Báo cáo sẽ chứa tên thật của các tệp trên máy này.',
+    'report.dialog.privateOff': 'Báo cáo sẽ chứa tên thư mục thật, nhưng không có tên tệp.',
+
+    'report.section.volumes': 'Các ổ đĩa',
+    'report.section.volumes.what': 'Mỗi ổ lớn bao nhiêu và đầy bao nhiêu. Không có tên tệp hay tên thư mục.',
+    'report.section.system': 'Ổ đĩa đi đâu mất',
+    'report.section.system.what': 'Bảng bóc tách cả ổ của màn Hệ thống. Có tên thư mục, không có tên tệp.',
+    'report.section.folders': 'Các thư mục đã quét',
+    'report.section.folders.what': 'Từng thư mục đã quét kèm kích thước. Có tên thư mục, không có tên tệp.',
+    'report.section.trends': 'Theo thời gian',
+    'report.section.trends.what': 'Biểu đồ và mọi lần đo đằng sau nó. Không có tên tệp hay tên thư mục.',
+    'report.section.diff': 'Những gì đã thay đổi',
+    'report.section.diff.what':
+      'Lần so sánh mới nhất của một thư mục với chính nó ở lần quét trước — gồm cả tệp nào mới xuất hiện và tệp nào biến mất.',
+    'report.section.actions': 'CleanDrive đã làm gì',
+    'report.section.actions.what': 'Mọi tệp ứng dụng này đã chuyển hoặc xoá, và chúng đi đâu.',
+
+    'report.missing.system': 'Chưa đo lần nào — hãy mở màn Hệ thống và bấm đo.',
+    'report.missing.folders': 'Chưa quét thư mục nào.',
+    'report.missing.trends': 'Cần từ hai lần đo trở lên.',
+    'report.missing.diff': 'Cần hai lần quét so sánh được của cùng một thư mục.',
+    'report.missing.actions': 'CleanDrive chưa chuyển hay xoá gì cả.',
+
+    'report.title': 'Báo cáo CleanDrive',
+    'report.madeBy': 'Lập bởi',
+    'report.footer':
+      'Mọi con số ở đây đều do CleanDrive đo trên máy có tên ghi bên trên. Không có gì trong tệp này được gửi đi đâu, ' +
+      'và khi mở nó cũng không tải gì — số liệu được nhúng ở cuối tệp dưới dạng JSON.',
+    'report.privateOn':
+      'Chế độ riêng tư: tên thư mục và tên tệp đã được thay bằng tên chung. Cùng một thư mục giữ nguyên một tên ' +
+      'xuyên suốt nên báo cáo vẫn đọc được, và phần dữ liệu ở cuối tệp cũng được thay theo.',
+
+    'report.volumes': 'Các ổ đĩa',
+    'report.noVolumes': 'Không đo được ổ nào.',
+    'report.system': 'Ổ đĩa đi đâu mất',
+    'report.noSystem': 'Chưa đo trong phiên này. Hãy mở màn Hệ thống, bấm đo, rồi lưu lại báo cáo.',
+    'report.folders': 'Các thư mục đã quét',
+    'report.noFolders': 'Chưa quét thư mục nào. Hãy quét một thư mục ở màn Dung lượng đĩa.',
+    'report.trends': 'Theo thời gian',
+    'report.noTrends': 'Cần từ hai lần đo trở lên thì mới nói được gì về xu hướng.',
+    'report.diff': 'Những gì đã thay đổi',
+    'report.noDiff': 'Cần hai lần quét so sánh được của cùng một thư mục. Hãy quét lại thư mục đó sau vài ngày.',
+    'report.actions': 'CleanDrive đã làm gì',
+    'report.noActions': 'CleanDrive chưa chuyển hay xoá gì cả.',
+    'report.actionsNote': 'Lấy từ nhật ký hành động, nơi ghi lại mọi tệp ứng dụng đã chuyển và chuyển đi đâu.',
+
+    'report.col.drive': 'Ổ đĩa',
+    'report.col.fileSystem': 'Định dạng',
+    'report.col.total': 'Tổng',
+    'report.col.free': 'Còn trống',
+    'report.col.used': 'Đã dùng',
+    'report.full': 'đã đầy',
+    'report.of': 'trên',
+    'report.col.row': 'Ở đâu',
+    'report.col.size': 'Kích thước',
+    'report.col.note': 'Ghi chú',
+    'report.systemDrive': 'Ổ đĩa',
+    'report.measured': 'đo lúc',
+    'report.notElevated': 'đo không có quyền quản trị, nên một số dòng chưa đầy đủ',
+    'report.col.folder': 'Thư mục',
+    'report.col.files': 'Số tệp',
+    'report.col.scanned': 'Quét lúc',
+    'report.growth': 'Đang tăng',
+    'report.perMonth': 'mỗi tháng',
+    'report.noChart': 'Không vẽ được các lần đo bên dưới thành đường — không đủ lần đo nói rõ ổ đầy bao nhiêu.',
+    'report.noGrowth': 'Chưa đủ số lần đo để nói là nó có đang tăng hay không.',
+    'report.readings': 'lần đo',
+    'report.col.at': 'Lúc',
+    'report.col.from': 'Do ai đo',
+    'report.whereChanged': 'Thay đổi ở đâu',
+    'report.filesChanged': 'Những tệp đã thay đổi',
+    'report.col.change': 'Thay đổi',
+    'report.col.what': 'Là gì',
+    'report.col.file': 'Tệp',
+    'report.items': 'mục',
+    'report.andMore': 'và {n} mục nữa',
+
+    'report.kind.recycle': 'Đã chuyển vào Thùng rác',
+    'report.kind.quarantine': 'Đã chuyển sang ổ khác',
+    'report.kind.restore': 'Đã đưa về chỗ cũ',
+    'report.kind.handoff': 'Đã giao cho công cụ của Windows',
+    'report.kind.dehydrate': 'Đã chuyển thành chỉ-có-trên-mây',
+    'report.kind.purge': 'Đã xoá khỏi Thùng rác',
+
+    'report.pseudonym.folder': 'Thư mục',
+    'report.pseudonym.file': 'Tệp',
+    'report.pseudonym.drive': 'Ổ đĩa',
+
     /* ---- automatic cleanup -------------------------------------------- */
     // G4 — nhiều hồ sơ tự động.
     'auto.profile.heading': 'Hồ sơ',

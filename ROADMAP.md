@@ -202,7 +202,7 @@ hoạch đều trỏ về một màn đã có. G3 và F3 là P2 nên để cuố
 | Mã | Tính năng | Ưu tiên | Trạng thái |
 | --- | --- | --- | --- |
 | G1 | Space Planner | P1 | ✅ Đã code xong (2026-09-28) — không có nút "thực hiện kế hoạch"; mỗi bước mang **ba** con số thay vì một, và có thêm bước dọn Thùng rác vì nếu không thì 5/8 bước của đặc tả giải phóng đúng 0 byte |
-| G2 | Báo cáo HTML | P1 | |
+| G2 | Báo cáo HTML | P1 | ✅ Đã code xong (2026-09-28) — **chế độ riêng tư che cả khối JSON nhúng**, nếu không thì hai yêu cầu của đặc tả tự phủ định nhau. Không tự đo gì để lấp chỗ trống: mục nào chưa có dữ liệu thì nói rõ là chưa có |
 | G3 | Tóm tắt định kỳ | P2 | |
 | G4 | Nhiều hồ sơ tự động | P1 | ✅ Đã code xong (2026-09-28) — settings lên **v7**, chính sách đơn trở thành `autoClean.profiles`. "Mutex có tên" thay bằng **tệp khoá** (Node không có named mutex). Mẫu *Installer hàng tháng* của đặc tả **không dựng được**: `installer` không nằm trong danh sách trắng chạy ngầm |
 | F1 | Trùng lặp xuyên thư mục / xuyên ổ | P1 | ✅ Đã code xong (2026-09-28) — phần "nhiều gốc nhiều ổ" **A4 đã giao từ trước**; mục này thêm tiêu chí chọn bản giữ theo loại ổ. **Không làm** nhánh hash qua ổ mạng: không đo được tốc độ thật trên máy này |
@@ -1506,6 +1506,31 @@ Thêm trục **"Cuộc trò chuyện"** vào màn Photos & video, dùng thanh t�
 - **Chế độ riêng tư:** tuỳ chọn thay đường dẫn bằng tên chung (*"Thư mục 1"*) và ẩn tên file, bật mặc định khi báo cáo có chứa danh sách file.
 - JSON và CSV hiện có vẫn giữ nguyên, và vẫn miễn phí.
 
+> **✅ Đã code xong (2026-09-28).**
+>
+> Code:
+> - `src/main/report/html.js` — **mới**, thuần, không I/O: nhận dữ liệu, trả về một chuỗi HTML. CSS nội tuyến, SVG nội tuyến dựng bằng chuỗi, JSON nhúng. Không `<link>`, không `src=`, không `@import`, không `url()` — đo bằng test.
+> - `src/main/report/redact.js` — **mới**. Bí danh **ổn định** và **giữ cây**: cùng một thư mục đọc ra cùng một tên ở mọi chỗ, và `Thư mục 3\Thư mục 6` vẫn nằm trong `Thư mục 3`.
+> - `src/main/report/collect.js` — **mới**. Gom từ những thứ app **đã đo và đã ghi**: `history.json`, kho snapshot, journal, danh sách ổ.
+> - `src/main/ipc.js` (+ manifest, preload), `src/renderer/report.js` **mới**, `index.html`, `styles.css`, `src/i18n/vi.js` (88 khoá).
+>
+> Harness: `scripts/test-report.js` **mới, 46 kiểm tra** (`npm run test:report`, đã vào `npm test`); 14 trong `smoke.js`; 2 trong `test-a11y.js`. `scripts/shoot-report.js` chụp cả hộp thoại **và bản báo cáo thật**, mở trong một cửa sổ thứ hai. `npm test` **2.269/0** (50 bộ), `test:e2e` **449/0**, a11y **176/0**.
+>
+> **Khác đặc tả — bốn chỗ:**
+>
+> 1. **Chế độ riêng tư che luôn khối JSON.** Đặc tả đòi hai thứ trong cùng một tệp: thay đường dẫn bằng tên chung, **và** nhúng "dữ liệu gốc" để trích xuất lại. Đọc đúng chữ thì chúng triệt tiêu nhau — ai mở khối JSON là có lại đường dẫn thật, và "riêng tư" chỉ còn là cái nhãn. Nên việc che xảy ra **trước khi dựng trang**, và JSON trong tệp là dữ liệu đã che. Không có bản thứ hai.
+> 2. **Tên máy cũng bị che.** Đặc tả không nhắc tới vì nó không phải đường dẫn, nhưng "DUNG-PC" chỉ đích danh một người chẳng kém gì một thư mục trong hồ sơ người dùng — mà cả điểm của chế độ này là một tệp gửi đi được.
+> 3. **Không tự đo gì để lấp chỗ trống.** Mục "bóc tách hệ thống" chỉ có nếu đã bấm đo ở màn Hệ thống trong phiên này: kết quả ấy **chỉ nằm trong RAM** (`ipc.js` `systemState`), và một nút "Lưu báo cáo" không được phép đi quét cả ổ hay bật hộp UAC. Mục nào chưa có thì báo cáo nói rõ là chưa có, kèm tên màn hình cần mở.
+> 4. **Nhãn các dòng của mục hệ thống do cửa sổ gửi sang.** Chúng chỉ tồn tại trong `renderer/system.js`, nơi `test:i18n` đọc được key literal; chép 20 chuỗi ấy sang tiến trình chính là đặt từ vựng của app ở hai nơi, và bản thứ hai là bản sẽ lạc hậu.
+>
+> **Hai lỗi thật tìm được khi chạy:**
+> - `chart()` **ném lỗi** trên một lần đo thiếu `usedPercent` — mà tệp lịch sử do bản cũ ghi, hoặc sửa tay, đúng là thứ báo cáo được yêu cầu mô tả. Nay dòng hỏng bị bỏ, và nếu còn quá ít thì mục nói lý do thay vì gục.
+> - Cột "Do ai đo" **luôn rỗng**: `volumeSeries` trải các trường của volume, còn `source` nằm ở snapshot bao ngoài. Nay tra ngược lại.
+>
+> **Đo được, và nó đổi cả tiền đề của test:** Windows **chấp nhận** `&` và `'` trong tên tệp, **từ chối** `"` và `<`. Nên `</script>` không thể đến từ một tên tệp — nhưng `&` thì có, và nếu không escape thì nó nuốt luôn phần sau. Test ghi rõ chuỗi nào là thật và chuỗi nào là để thử cho chắc.
+>
+> **Nút đặt cạnh Export JSON/CSV trên màn Xu hướng** (đặc tả không nói chỗ). JSON và CSV **không đổi một dòng nào** và vẫn miễn phí, đúng như đặc tả đòi.
+
 ---
 
 #### G3. Tóm tắt định kỳ
@@ -2215,7 +2240,7 @@ cứng, cần tai người nghe, hoặc cần một quyết định. **Trợ lý
 | 6 | Theme tương phản cao thật của Windows (I2) | **Người dùng** | Bật High Contrast trong Windows rồi mở app | Mới kiểm trên bản giả lập `forced-colors`. Canvas của treemap **chưa theo** `forced-colors` — đã biết, để I2 làm nốt. |
 | 7 | Gỡ cài đặt thật để xác nhận menu Explorer bị xoá (I3) | **Người dùng** | Cài `CleanDrive-Setup-0.2.0.exe` rồi gỡ, kiểm khoá registry của menu chuột phải | Mới kiểm được là NSIS biên dịch được script gỡ. |
 | 8 | Quét tăng dần qua USN journal (mục 3 của đặc tả A2) | — | **Quyết định: không làm** | Đo được: USN record **không mang kích thước tệp**, nên chỉ thay được 9% công việc, còn `stat` chiếm 91%. Ghi ở đây để đừng ai mở lại mà không biết lý do. |
-| 9 | `test:a11y` đã hỏng **hai lần**: 22 lỗi, rồi 42 lỗi | **Trợ lý** | Chạy lại và **giữ toàn bộ output** | Lần hai: 2026-09-28, 42 lỗi, ngay sau một lượt `test:e2e` trong cùng một shell. **Danh sách lại mất** — lần đầu vì `tail`, lần này vì một vòng lặp shell chỉ *đếm* số dòng PASS/FAIL rồi ghi đè biến. Sau đó **8 lượt liên tiếp đều 174/0 ALL PASS**, kể cả lặp lại đúng thứ tự `test:e2e` → `test:a11y`. Chưa có chẩn đoán. Harness nay **ghi hẳn danh sách ra tệp** trong `%TEMP%\cleandrive-a11y-failures-*.txt` và in đường dẫn — in ra màn hình không đủ khi người đọc đã nối output qua một cái ống. |
+| 9 | ~~Một lượt `test:a11y` cho 22 lỗi~~ **Đã chẩn đoán 2026-09-28** — | Chạy lại; nếu tái diễn thì tệp `%TEMP%\cleandrive-a11y-failures-*.txt` đã có sẵn danh sách | **Nguyên nhân: axe chạy trước khi theme mới thật sự tới trang.** Tái hiện được hai lần nữa (40 rồi 42 FAIL), và lần này **giữ được output**. Bằng chứng nằm ngay trong các con số: `.brand-name` có độ tương phản **1,01** — mực `#11151c` trên nền `#10131a`, tức là **mực của bảng sáng trên nền của bảng tối**. Không ai ship chữ ở 1,01; đó là hai bảng màu chồng nhau. Thứ tự trong log khớp hẳn: trong lượt `dark`, màn đầu PASS, sáu màn giữa FAIL, rồi `trends` trở đi PASS lại — một **cửa sổ**, không phải một trạng thái dính. **Cơ chế:** `styles.css` viết bằng `light-dark()` (dòng 31–46), mà hàm này giải theo `color-scheme`, còn `color-scheme` đi theo `nativeTheme.themeSource` — đặt ở **tiến trình chính** và tới renderer lúc nào thì tới. Harness cũ chỉ `await wait(250)`: một phỏng đoán về tải máy, và khi đang chạy nhiều tiến trình Electron thì không đủ. **Lần sửa đầu chưa đủ, và chỗ hụt ấy đáng ghi lại:** chờ "màu đã ổn định và đọc được" vẫn hỏng, vì một trang **vẫn sáng hoàn toàn** sau lệnh "đổi sang tối" thì cũng ổn định và cũng đọc được — hàm chờ trả về ngay, rồi bảng tối ập tới giữa lượt quét. **Lần sửa thứ hai vẫn hụt:** thêm điều kiện "đúng bảng màu được yêu cầu" đo trên `body` thì lượt axe hết lỗi, nhưng phần hover/focus vẫn hỏng — vì `light-dark()` giải **theo từng phần tử**, nên `body` đã tối hẳn mà `.brand-name` vẫn đang đeo mực sáng. **Đã sửa (2026-09-28):** `paletteSettled(mode)` lấy mẫu ở `body`, `.brand-name` và `.tab .tab-label`, chờ tới khi **mọi mực cùng một phía** và nền đúng bảng màu được yêu cầu. Tối đa 8 giây; quá hạn thì là một FAIL **nói rõ lý do**, chứ không phải một loạt lỗi tương phản khó hiểu. Harness cũng ghi danh sách lỗi ra `%TEMP%\cleandrive-a11y-failures-*.txt`. [Inference] Hai lần 22 và 42 lỗi trước đó rất có thể cùng nguyên nhân — cũng toàn lỗi tương phản, cũng không tái hiện được, số lượng đổi theo chỗ trang bị bắt gặp giữa chừng — nhưng output của hai lần ấy đã mất nên **không khẳng định được**. |
 | 10 | ~~Ảnh chụp màn hình nằm trong thư mục tên `logs\`~~ **Đã quyết và làm xong 2026-09-27** | — | — | Người dùng chọn **phương án A**: trong thư mục mang nhãn `log`, chỉ tính là log khi **đuôi của chính tệp** cũng nói vậy (`log`, `txt`, `etl`, `out`, `err`, `trace`, `dbg`, đuôi số kiểu `.log.1`, hoặc không có đuôi). Mọi thứ khác rơi xuống các luật sau và được xử như ở bất kỳ đâu. Đo lại trên `D:\work\tow_tool\logs`: **82 ảnh / 78,9 MB trước đây là `safe`, nay còn 0**; 108 tệp `.log` vẫn dọn được như cũ. 8 kiểm tra trong `test-advisor.js`. |
 | 11 | Chỉ có **một** máy test | **Người dùng** | Máy thứ hai, hoặc chấp nhận giới hạn | A1 ghi là ba máy. Mọi phép đo trong tài liệu này đều từ một máy Windows 11 duy nhất. |
 | 12 | Tốc độ hash qua ổ mạng thật (F1) | **Người dùng** | Một NAS, hoặc một máy thứ hai trên cùng mạng, rồi hash một tệp vài trăm MB từ đó | Đã thử đo qua `\\<địa chỉ LAN>\D$\…` của chính máy này: **không chậm hơn đọc cục bộ** (363–795 MB/s), vì địa chỉ đó là link-local `169.254.x.x` và byte không hề rời khỏi máy — phép đo vô dụng. Chưa có số thật thì không mở nhánh hash ổ mạng trong Duplicates (nguyên tắc D4). |

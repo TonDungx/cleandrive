@@ -129,6 +129,9 @@ const api = {
   /* trends */
   getHistory: (options) => ipcRenderer.invoke('history:get', options),
   exportHistory: (format) => ipcRenderer.invoke('history:export', format),
+  /* the self-contained HTML report (G2) */
+  reportOptions: () => ipcRenderer.invoke('report:options'),
+  saveReport: (request) => ipcRenderer.invoke('report:save', request),
   sampleNow: () => ipcRenderer.invoke('trends:sample'),
 
   /* disk monitoring */

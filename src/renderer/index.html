@@ -804,6 +804,10 @@
           <span class="status" id="trend-status" data-i18n="app.loading">Loading…</span>
           <button class="btn btn-sm" id="trend-export-json" data-i18n="trends.exportJson">Export JSON</button>
           <button class="btn btn-sm" id="trend-export-csv" data-i18n="trends.exportCsv">Export CSV</button>
+          <!-- G2. Beside the exports that were already here, because it is the
+               same act: hand the numbers over in a form somebody else can
+               open. JSON and CSV stay exactly as they were, and stay free. -->
+          <button class="btn btn-sm" id="trend-report" data-i18n="report.button">Save a report…</button>
         </div>
 
         <div class="stats">
@@ -1699,6 +1703,35 @@
       <div class="shortcuts-body" id="shortcuts-body"></div>
     </dialog>
 
+    <!--
+      G2. What goes into the report, chosen before it is written.
+
+      A section with nothing behind it is shown disabled with the reason, rather
+      than hidden: "the report has no System breakdown because nobody measured
+      one" is worth knowing, and a checkbox that silently vanishes is not.
+    -->
+    <dialog class="shortcuts report-dialog" id="report" aria-labelledby="report-title">
+      <div class="shortcuts-head">
+        <h2 id="report-title" data-i18n="report.dialog.title">Save a report</h2>
+        <span class="spacer"></span>
+        <button class="btn btn-sm" id="report-cancel" data-i18n="app.cancel">Cancel</button>
+        <button class="btn btn-primary btn-sm" id="report-save" data-i18n="report.dialog.save">Save…</button>
+      </div>
+      <div class="shortcuts-body">
+        <p class="card-note" data-i18n="report.dialog.what">
+          One HTML file, with the numbers embedded in it. It opens in any browser, on any
+          computer, and fetches nothing when it does.
+        </p>
+        <div id="report-sections"></div>
+        <label class="check" id="report-private-row">
+          <input type="checkbox" id="report-private" />
+          <span data-i18n="report.dialog.private">Replace folder and file names with generic ones</span>
+        </label>
+        <p class="card-note" id="report-private-note"></p>
+        <p class="notice" id="report-problem" hidden></p>
+      </div>
+    </dialog>
+
     <script src="sidebar.js"></script>
     <script src="critters.js"></script>
     <script src="candidates.js"></script>
@@ -1723,6 +1756,7 @@
     <script src="quarantine.js"></script>
     <script src="restore.js"></script>
     <script src="system.js"></script>
+    <script src="report.js"></script>
     <script src="apps.js"></script>
     <script src="games.js"></script>
     <script src="dev.js"></script>

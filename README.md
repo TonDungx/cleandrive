@@ -1345,6 +1345,39 @@ earlier measurements of *the same folder*, and one scanned a single time says
   monitoring is on, and the **Measure now** button.
 - **Export**, as JSON or CSV. Not PDF: a PDF of a chart is a picture of the data
   and cannot be checked, replotted or joined to anything.
+- **Save a report…**, described below.
+
+### A report you can send to somebody
+
+One HTML file, for when the person who has to look at the disk is not the
+person sitting at it — a relative, or whoever fixes the computer. It opens in
+any browser on any machine and **fetches nothing when it does**: the styles are
+inline, the chart is inline SVG, and the numbers are embedded at the end as
+JSON, so the file is the data rather than a picture of it.
+
+You choose what goes in: the drives, the [System breakdown](#screen-2--system),
+the folders that have been scanned, the chart and its measurements,
+[what changed](#what-changed-in-a-folder), and what CleanDrive itself has done.
+A section with nothing behind it is shown greyed out with the reason — "nothing
+measured yet, open the System screen" — rather than quietly disappearing.
+
+**Nothing is measured to fill it in.** Saving a report never starts a scan and
+never raises an administrator prompt; it writes down what has already been
+measured. The System breakdown is the one section that is only available in a
+session where you have measured it, because that result is never written to
+disk.
+
+**Private mode** replaces folder and file names with generic ones — `Folder 1`,
+`File 7.jpg` — and is on by default whenever the report would name individual
+files. The same folder keeps the same name throughout and folders inside it
+still read as inside it, so the report still says something. The drive letter
+stays, because `C:\` names nobody; a file's extension stays, because that is
+the part worth reporting. The computer's name goes too. **The embedded JSON is
+replaced as well** — otherwise anyone who opened it would have the real names
+back and private mode would be a label rather than a fact.
+
+This is Pro (`pro.reports`). The JSON and CSV exports are unchanged and stay
+free.
 
 ### Predictions that refuse themselves
 

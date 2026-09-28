@@ -10,7 +10,7 @@ const path = require('node:path');
 const os = require('node:os');
 const fs = require('node:fs');
 const crypto = require('node:crypto');
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, dialog } = require('electron');
 
 const ipc = require('../src/main/ipc');
 // The delete-progress check below really deletes forty throwaway files, and a
@@ -2085,6 +2085,110 @@ app.whenReady().then(async () => {
     `);
     check('a threshold far outside the range is left off the chart',
       outOfRange === 0, String(outOfRange));
+
+    /* -- the HTML report (G2) ---------------------------------------------- */
+    //
+    // The file is the deliverable, so what is checked is the file: that it
+    // opens with nothing to fetch, that the data can be taken back out of it,
+    // and -- the one that matters -- that private mode is true of the whole
+    // thing and not just of the part a reader sees first.
+    console.log('\nThe HTML report:');
+
+    const reportOptions = await win.webContents.executeJavaScript(`window.cleandrive.reportOptions()`);
+    check('the app can say what a report could hold', reportOptions.ok === true, reportOptions.error || '');
+    check('and every section is accounted for, available or not',
+      reportOptions.ok && reportOptions.data.sections.length === 6 &&
+        reportOptions.data.sections.every((s) => s in reportOptions.data.available),
+      reportOptions.ok ? JSON.stringify(reportOptions.data.available) : '');
+
+    // The dialog: a section with nothing behind it stays visible, disabled,
+    // with the reason where its description would be.
+    const dialogState = await win.webContents.executeJavaScript(`
+      (async () => {
+        document.querySelector('.tab[data-tab="trends"]').click();
+        await new Promise((r) => setTimeout(r, 200));
+        await window.ReportDialog.open();
+        await new Promise((r) => setTimeout(r, 200));
+        const rows = [...document.querySelectorAll('#report-sections .report-section')];
+        return {
+          open: document.getElementById('report').open,
+          rows: rows.length,
+          disabled: rows.filter((r) => r.querySelector('input').disabled).length,
+          disabledSayWhy: rows
+            .filter((r) => r.querySelector('input').disabled)
+            .every((r) => r.querySelector('.report-section-what').textContent.trim().length > 10),
+          privateOn: document.getElementById('report-private').checked,
+          note: document.getElementById('report-private-note').textContent.slice(0, 60),
+        };
+      })()
+    `);
+    check('the dialog opens with a row per section', dialogState.open && dialogState.rows === 6,
+      `${dialogState.rows} rows`);
+    check('a section with nothing behind it is disabled and says why',
+      dialogState.disabled === 0 || dialogState.disabledSayWhy,
+      `${dialogState.disabled} disabled`);
+    check('private mode is on by default, because the report names files',
+      dialogState.privateOn === true, dialogState.note);
+
+    // Untick the two sections that name files: private mode follows.
+    const followed = await win.webContents.executeJavaScript(`
+      (() => {
+        for (const id of ['diff', 'actions']) {
+          const box = document.getElementById('report-section-' + id);
+          if (box && box.checked) { box.checked = false; box.dispatchEvent(new Event('change')); }
+        }
+        return document.getElementById('report-private').checked;
+      })()
+    `);
+    check('and it follows what is being included, until somebody sets it',
+      followed === false, String(followed));
+    await win.webContents.executeJavaScript(`document.getElementById('report').close()`);
+
+    // Write one for real, through the save dialog, answered by the harness.
+    const reportDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cleandrive-smoke-report-'));
+    const reportPath = path.join(reportDir, 'report.html');
+    const realSave = dialog.showSaveDialog;
+    dialog.showSaveDialog = async () => ({ canceled: false, filePath: reportPath });
+    try {
+      const written = await win.webContents.executeJavaScript(`
+        window.cleandrive.saveReport({ sections: ['volumes', 'trends', 'actions'], private: false })
+      `);
+      check('a report is written', written.ok === true && written.data.written === true,
+        written.error || JSON.stringify(written.data));
+
+      const file = fs.readFileSync(reportPath, 'utf8');
+      check('it is one self-contained file', file.startsWith('<!doctype html>') &&
+        !/<link|<script[^>]+src=|@import|url\(/i.test(file), `${(file.length / 1024).toFixed(0)} KB`);
+      check('with the numbers embedded in it',
+        file.includes('<script type="application/json" id="cleandrive-report-data">'));
+
+      const json = JSON.parse(
+        file.slice(file.indexOf('>', file.indexOf('id="cleandrive-report-data"')) + 1, file.lastIndexOf('</script>'))
+      );
+      check('and the data reads back out of it', Array.isArray(json.volumes) && json.volumes.length >= 1,
+        `${json.volumes.length} drives`);
+      check('the sections asked for are the sections in it',
+        json.sections.join(',') === 'volumes,trends,actions', json.sections.join(','));
+
+      /* -- private mode, over the whole file -- */
+
+      const privatePath = path.join(reportDir, 'private.html');
+      dialog.showSaveDialog = async () => ({ canceled: false, filePath: privatePath });
+      const hidden = await win.webContents.executeJavaScript(`
+        window.cleandrive.saveReport({ sections: ['volumes', 'trends', 'actions'], private: true })
+      `);
+      check('a private report is written', hidden.ok === true && hidden.data.private === true);
+
+      const privateFile = fs.readFileSync(privatePath, 'utf8');
+      const home = os.homedir().split(path.sep).pop();
+      check('it names no folder of this machine, in the markup or the JSON',
+        !privateFile.includes(home) && !privateFile.includes(os.hostname()),
+        `looked for "${home}" and "${os.hostname()}"`);
+      check('and it says that names were replaced', /Private mode/i.test(privateFile));
+    } finally {
+      dialog.showSaveDialog = realSave;
+      fs.rmSync(reportDir, { recursive: true, force: true });
+    }
 
     /* -- disk monitoring --------------------------------------------------- */
     console.log('\nDisk monitoring:');
