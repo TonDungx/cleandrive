@@ -864,6 +864,19 @@
               <span data-i18n="app.at">At</span>
               <input type="time" id="trend-time" />
             </label>
+
+            <!-- G3. It rides on the daily measurement above, and needs it: a
+                 summary of growth with nothing measured is not a summary. -->
+            <label class="field field-row" id="trend-recap-row">
+              <span data-i18n="recap.every">Tell me what changed</span>
+              <select id="trend-recap">
+                <option value="off" data-i18n="recap.off">never</option>
+                <option value="weekly" data-i18n="recap.weekly">once a week</option>
+                <option value="monthly" data-i18n="recap.monthly">once a month</option>
+              </select>
+            </label>
+            <p class="card-note" id="trend-recap-note"></p>
+
             <ul class="path-list" id="trend-sampling"></ul>
             <div class="panel-actions panel-actions-tight">
               <button class="btn btn-sm" id="trend-sample" data-i18n="trends.measureNow">Measure now</button>

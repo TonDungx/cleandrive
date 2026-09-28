@@ -861,6 +861,34 @@
     'report.pseudonym.file': 'Tệp',
     'report.pseudonym.drive': 'Ổ đĩa',
 
+
+    /* ---- the weekly or monthly summary (G3) ---------------------------- */
+    'recap.every': 'Báo cho tôi biết có gì thay đổi',
+    'recap.off': 'không bao giờ',
+    'recap.weekly': 'mỗi tuần một lần',
+    'recap.monthly': 'mỗi tháng một lần',
+    'recap.note.off':
+      'Không hiện gì cả. CleanDrive không bao giờ gửi thông báo chỉ để đòi bạn chú ý.',
+    'recap.note.needsDaily':
+      'Mục này cần phép đo hằng ngày ở trên: không có nó thì chẳng có gì để tóm tắt, và sẽ không hiện gì.',
+    'recap.note.on':
+      'Một thông báo Windows nói ổ đĩa đã thay đổi thế nào và thư mục nào phình ra. Chỉ hiện khi đã đủ số lần ' +
+      'đo để nói được điều gì đó đúng — ít nhất bốn lần trong một tuần — còn không thì thôi. Bấm vào nó sẽ mở ' +
+      '“Thư mục đã thay đổi những gì”; nó không bao giờ bắt đầu dọn dẹp.',
+
+    'recap.title': 'CleanDrive: {days} ngày qua trên {volume}',
+    'recap.grew': '{volume} tăng thêm {size}. Hiện đã dùng {percent}%, còn trống {free}.',
+    'recap.shrank': '{volume} giảm đi {size}. Hiện đã dùng {percent}%, còn trống {free}.',
+    'recap.biggest.one': 'Nhiều nhất: {a} tăng {an}.',
+    'recap.biggest.two': 'Nhiều nhất: {a} tăng {an}, rồi tới {b} tăng {bn}.',
+
+    // Lý do không gửi — chỉ ra ở nhật ký, không hiện lên màn hình.
+    'recap.no.off': 'Tóm tắt định kỳ đang tắt',
+    'recap.no.tooSoon': 'Chưa đủ thời gian kể từ lần đo đầu tiên',
+    'recap.no.notYet': 'Lần tóm tắt gần nhất chưa cách đây trọn một kỳ',
+    'recap.no.noReadings': 'Chưa có gì đo đĩa này cả',
+    'recap.no.thinWindow': 'Quá ít lần đo trong kỳ này để so sánh',
+
     /* ---- automatic cleanup -------------------------------------------- */
     // G4 — nhiều hồ sơ tự động.
     'auto.profile.heading': 'Hồ sơ',

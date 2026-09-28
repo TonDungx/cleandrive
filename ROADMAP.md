@@ -203,7 +203,7 @@ hoạch đều trỏ về một màn đã có. G3 và F3 là P2 nên để cuố
 | --- | --- | --- | --- |
 | G1 | Space Planner | P1 | ✅ Đã code xong (2026-09-28) — không có nút "thực hiện kế hoạch"; mỗi bước mang **ba** con số thay vì một, và có thêm bước dọn Thùng rác vì nếu không thì 5/8 bước của đặc tả giải phóng đúng 0 byte |
 | G2 | Báo cáo HTML | P1 | ✅ Đã code xong (2026-09-28) — **chế độ riêng tư che cả khối JSON nhúng**, nếu không thì hai yêu cầu của đặc tả tự phủ định nhau. Không tự đo gì để lấp chỗ trống: mục nào chưa có dữ liệu thì nói rõ là chưa có |
-| G3 | Tóm tắt định kỳ | P2 | |
+| G3 | Tóm tắt định kỳ | P2 | ✅ Đã code xong (2026-09-28) — cưỡi trên **phép đo hằng ngày**, không thêm tác vụ Windows thứ ba, và **chỉ trả giá Chromium vào đúng ngày có tóm tắt** (đo được: ngày thường vẫn 612–753 ms). Ví dụ của đặc tả đòi dữ liệu mà sampler không có |
 | G4 | Nhiều hồ sơ tự động | P1 | ✅ Đã code xong (2026-09-28) — settings lên **v7**, chính sách đơn trở thành `autoClean.profiles`. "Mutex có tên" thay bằng **tệp khoá** (Node không có named mutex). Mẫu *Installer hàng tháng* của đặc tả **không dựng được**: `installer` không nằm trong danh sách trắng chạy ngầm |
 | F1 | Trùng lặp xuyên thư mục / xuyên ổ | P1 | ✅ Đã code xong (2026-09-28) — phần "nhiều gốc nhiều ổ" **A4 đã giao từ trước**; mục này thêm tiêu chí chọn bản giữ theo loại ổ. **Không làm** nhánh hash qua ổ mạng: không đo được tốc độ thật trên máy này |
 | F2 | Thư mục trùng toàn bộ | P1 | ✅ Đã code xong (2026-09-28) — **không có** `archive`/`quarantine` cả thư mục: `archive` chưa có handler nào (là B5), `quarantine` cũng `allowsFolders: false`. Hành động duy nhất là `recycle`/`quarantine` **từng tệp**, đúng quy tắc bất biến. Pha thư mục **đi cây riêng, nhìn cả `node_modules`, `.git`, tên chấm** — nếu không thì "trùng khớp" là lời nói dối |
@@ -1544,6 +1544,29 @@ Thêm trục **"Cuộc trò chuyện"** vào màn Photos & video, dùng thanh t�
 - **Chỉ gửi khi có đủ dữ liệu** (theo đúng quy tắc từ chối của Trends). Nếu không đủ thì không gửi gì. Không có thông báo kiểu "nhắc bạn mở app".
 - Bấm vào thông báo thì mở màn Diff. **Không** bắt đầu cleanup (giữ nguyên quy tắc hiện có).
 - Không bao giờ chứa nội dung upsell.
+
+> **✅ Đã code xong (2026-09-28).**
+>
+> Code:
+> - `src/main/recap.js` — **mới**, thuần, không I/O: nhận history + settings + `now`, trả về "có tới hạn không, và nó sẽ nói gì". Mọi luật nằm ở đây nên test được hết mà không cần cửa sổ.
+> - `src/main/sample-only.js` — quyết định **trước** `whenReady`, chỉ khởi động Chromium khi thật sự có gì để nói.
+> - `src/main/launch-target.js` — thêm `kind: 'changes'`, **không mang đường dẫn**.
+> - `src/main/lib/settings.js` — **schema v8**: `trends.recap` (`off`/`weekly`/`monthly`, mặc định off) và `trends.recapLastAt`.
+> - `src/renderer/trends.js` + `index.html` + `changes.js` (`openBest`), `src/main/ipc.js`, `src/i18n/vi.js` (17 khoá).
+>
+> Harness: `scripts/test-recap.js` **mới, 34 kiểm tra** (`npm run test:recap`, đã vào `npm test`); 10 trong `smoke.js`. `scripts/shoot-recap.js` chụp 6 ảnh và **in ra đúng câu sẽ hiện**. `npm test` **2.307/0** (51 bộ), `test:e2e` **459/0**.
+>
+> **Khác đặc tả — ba chỗ:**
+>
+> 1. **Nó cưỡi trên phép đo hằng ngày, và cần phép đo ấy.** Chỉ có hai thứ trong app chạy khi cửa sổ đóng. Cái kia là tác vụ dọn dẹp — gắn vào đó nghĩa là *"muốn có tóm tắt hằng tháng thì phải cho app xoá tệp lúc 2h sáng"*, đúng cái đánh đổi mà comment đầu `sample-only.js` nói đã từ chối. Một tác vụ Windows thứ ba là thêm một thứ để đăng ký, kiểm, sửa và quét, cho một việc **không có công việc của riêng nó** — nó chỉ đọc thứ mà tiến trình kia vừa ghi. Giao diện nói thẳng chỗ phụ thuộc này, và cảnh báo khi bật tóm tắt mà tắt phép đo.
+> 2. **Quyết định đứng trước `whenReady`.** Hiện thông báo cần Chromium — một tiến trình trình duyệt, một tiến trình GPU, vài chục MB — mà cả lý do tồn tại của `sample-only.js` là *không* làm thế. Nên nó quyết định trên phía Node từ history đã nạp sẵn, và chỉ khởi động Chromium vào một ngày trong bảy hoặc hai mươi tám. **Đo được:** ngày thường **612 / 712 / 753 ms**, đúng khoảng 672 ms mà tài liệu đã ghi.
+> 3. **Ví dụ của đặc tả đòi dữ liệu sampler không có.** *"Lớn nhất: Zalo +2,1 GB, Downloads +1,8 GB"* là các thư mục **bên trong** một gốc — thứ đó đến từ diff snapshot, cần hai lần quét tay. Sampler chỉ đọc chỗ trống, không thu cây. Nên tóm tắt nói **tăng trưởng của ổ** (luôn có) và **các gốc đã quét phình nhanh nhất** (khi có hai lần quét), và bỏ hẳn vế thứ hai khi không có gì để điền — chứ không viết "Lớn nhất: không có", đọc như một lỗi.
+>
+> **Ba quyết định nhỏ, ghi ra để khỏi bị coi là ngẫu nhiên:** "hằng tháng" là **28 ngày** chứ không phải 30, để nó rơi đúng thứ trong tuần thay vì trôi; lần đầu tiên **đợi trọn một kỳ** kể từ phép đo đầu, vì tóm tắt của hư không không phải tóm tắt; và `recapLastAt` chỉ ghi khi **thật sự có gì hiện ra**, nên một lượt không hiện được sẽ thử lại hôm sau chứ không bỏ cả kỳ.
+>
+> **Luật từ chối là luật của Trends, không phải ý kiến thứ hai:** `historyLib.growth()` đòi **≥ 4 phép đo trong ≥ 7 ngày**. Không đủ thì **không hiện gì** — không có thông báo kiểu "mở app lên xem". Harness kiểm cả "ba phép đo dù cách nhau 20 ngày cũng không phải xu hướng" và "sáu phép đo trong nửa ngày cũng không".
+>
+> **Không upsell**, và có một kiểm tra regex tìm *pro / upgrade / unlock / buy / trial / premium / licence* trong câu, để nó là tính chất của mã chứ không phải thói quen của người viết.
 
 ---
 

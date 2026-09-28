@@ -396,6 +396,17 @@
       const root = bestRoot(on);
       return root ? { root, days: entryFor(root).pair.days } : null;
     },
+    /**
+     * Open whichever folder has most to say, for the periodic summary's click
+     * (G3). Nothing to compare means the card is left as it is: the Trends tab
+     * still opens, and it already explains what a comparison needs.
+     */
+    async openBest() {
+      await load();
+      const ready = view.roots.filter((r) => r.pair && r.pair.ok);
+      const root = bestRoot(ready);
+      if (root) await this.open(root);
+    },
     /** Open the card on a folder, with its default pair, and bring it into view. */
     async open(root) {
       const entry = entryFor(root);

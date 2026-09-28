@@ -47,8 +47,10 @@ const themePalette = require('../../shared/theme-palette');
  *   6 -> 7   `autoClean.profiles`: the one policy becomes a list of them, and
  *            each one gains an action (G4). What was configured becomes the
  *            first profile, unchanged and still enabled.
+ *   7 -> 8   `trends.recap`: a weekly or monthly note about what the disk
+ *            did, off (G3)
  */
-const SCHEMA_VERSION = 7;
+const SCHEMA_VERSION = 8;
 
 const MIGRATIONS = Object.freeze([
   {
@@ -142,6 +144,16 @@ const MIGRATIONS = Object.freeze([
         ...auto,
       };
       return { ...raw, version: 7, autoClean: { profiles: [first] } };
+    },
+  },
+  {
+    from: 7,
+    to: 8,
+    migrate(raw) {
+      // Additive, and off: nothing appears on anybody's screen until they ask
+      // for it.
+      const trends = isObject(raw.trends) ? raw.trends : {};
+      return { ...raw, version: 8, trends: { recap: 'off', recapLastAt: 0, ...trends } };
     },
   },
 ]);
@@ -414,6 +426,18 @@ function defaults() {
        */
       dailySample: true,
       sampleTime: '12:00',
+      /**
+       * A weekly or monthly note saying what the disk did (G3).
+       *
+       * Off by default: a notification is the one thing this app can put on
+       * somebody's screen while they are busy, and it should be asked for.
+       * It rides on the daily measurement above rather than registering a
+       * third Windows task -- and it needs those measurements anyway, since a
+       * summary of growth with nothing measured is not a summary.
+       */
+      recap: 'off',
+      /** When one was last shown, so a period means a period. */
+      recapLastAt: 0,
     },
     snapshots: {
       // A compressed tree of each scan, kept so two can be compared. Twelve of
@@ -699,6 +723,21 @@ function coerceProfile(raw, id, warnings, minMinutes) {
   return profile;
 }
 
+/**
+ * How often a periodic summary is shown, or off (G3).
+ *
+ * Not imported from `recap.js`: that file requires `lib/history`, and settings
+ * is loaded by every process in the app including the one that must stay under
+ * a second. The list is three words and `scripts/test-recap.js` checks the two
+ * agree.
+ */
+function coerceRecap(value, warnings, fallback) {
+  if (value === undefined) return fallback;
+  if (value === 'off' || value === 'weekly' || value === 'monthly') return value;
+  warnings.push(`trends.recap: "${value}" is not one of off, weekly, monthly`);
+  return fallback;
+}
+
 function coerceSchedule(value, warnings, minMinutes = 1) {
   // A schedule belongs to a profile now (G4), so the fallback comes from an
   // empty profile rather than from a policy at the top of the file.
@@ -898,6 +937,12 @@ function coerceSettings(input, { minMinutes = 1 } = {}) {
       warnings,
       base.trends.sampleTime
     ),
+    recap: coerceRecap(rawTrends.recap, warnings, base.trends.recap),
+    // A time from the future would hold the next summary back for ever, so it
+    // is clamped to now rather than trusted.
+    recapLastAt: Number.isFinite(rawTrends.recapLastAt) && rawTrends.recapLastAt > 0
+      ? Math.min(rawTrends.recapLastAt, Date.now())
+      : 0,
   };
 
   const rawSnapshots = isObject(raw.snapshots) ? raw.snapshots : {};

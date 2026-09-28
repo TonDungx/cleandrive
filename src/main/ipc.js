@@ -2101,6 +2101,9 @@ function register() {
         sampling: {
           dailySample: settings.trends.dailySample,
           sampleTime: settings.trends.sampleTime,
+          // The periodic summary (G3), and when one was last shown.
+          recap: settings.trends.recap,
+          recapLastAt: settings.trends.recapLastAt,
           taskInstalled: taskStatus.sampler.installed,
           taskVerified: taskStatus.sampler.verified,
           taskProblems: taskStatus.sampler.problems || [],

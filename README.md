@@ -1398,6 +1398,31 @@ plausible lie the app could tell.
 Trends need history and history starts empty. A fresh install shows "not enough
 measurements" for roughly the first week, and there is no way around that.
 
+### A note once a week or once a month
+
+**Tell me what changed** puts a Windows notification on screen saying what the
+drive did over the period and which folders grew: *"C: grew by 5.7 GB. It is
+61.3% full, with 194 GB left. Biggest: D:\Downloads is up 2.4 GB."* Off until
+you ask for it.
+
+It is shown only when the data supports it — the same rule the chart holds
+itself to, at least four measurements over a week — and **otherwise nothing is
+shown at all**. There is deliberately no notification whose only content is
+that it would like your attention.
+
+Clicking it opens [What changed in a folder](#what-changed-in-a-folder) and
+does nothing else. It never starts a cleanup.
+
+It rides on the daily measurement above rather than registering a Windows task
+of its own, and it needs it: a summary of growth with nothing measured is not a
+summary. With the daily measurement off, the setting says so rather than
+sitting there doing nothing. The cost on every other day is one comparison —
+measured at 612–753 ms for the whole daily process, the same as before it
+existed, because the decision is made before the part that would start a
+browser.
+
+This is Pro (`pro.reports`).
+
 ### What changed in a folder
 
 The chart can say the disk is growing and how fast; it measures the volume, so

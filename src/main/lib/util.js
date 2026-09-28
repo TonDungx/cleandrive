@@ -99,6 +99,18 @@ function canonicalPath(p) {
   return path.resolve(s);
 }
 
+/**
+ * A path as a person writes it, for anything a person reads.
+ *
+ * `pathKey` lowercases so paths can be compared, and that key ends up being
+ * the thing stored -- the history keys its volumes by it. Printed straight
+ * out, `c:\` in a report or a notification just looks like a mistake.
+ */
+function displayPath(p) {
+  const text = String(p === undefined || p === null ? '' : p);
+  return /^[a-z]:/.test(text) ? text[0].toUpperCase() + text.slice(1) : text;
+}
+
 /** Normalised comparison key for a path (case-insensitive on Windows). */
 function pathKey(p) {
   const resolved = canonicalPath(p);
@@ -417,6 +429,7 @@ module.exports = {
   pool,
   throttle,
   pathKey,
+  displayPath,
   canonicalPath,
   isNetworkPath,
   adminShare,

@@ -441,7 +441,9 @@ function renderSampling(report) {
     $('trend-daily').checked = sampling.dailySample;
     $('trend-time').value = sampling.sampleTime;
     $('trend-time-row').hidden = !sampling.dailySample;
+    $('trend-recap').value = sampling.recap || 'off';
   }
+  syncRecapNote(sampling);
 
   list.push(samplingRow(
     t('trends.sampler.daily', 'Daily Windows task'),
@@ -533,11 +535,46 @@ $('trend-daily').addEventListener('change', () => {
 $('trend-time').addEventListener('change', markTrendsDirty);
 $('trend-time').addEventListener('input', markTrendsDirty);
 
+/**
+ * What the periodic summary will and will not do (G3).
+ *
+ * It rides on the daily measurement, so with that switched off it would never
+ * fire -- and a control that quietly does nothing is worse than one that says
+ * so. It also never arrives when the data does not support it, which is the
+ * same rule the chart above holds itself to, and saying that here is the
+ * difference between "it is broken" and "there is nothing to say yet".
+ */
+function syncRecapNote(sampling) {
+  const chosen = $('trend-recap').value;
+  const el = $('trend-recap-note');
+  if (chosen === 'off') {
+    setText(el, t('recap.note.off', 'Nothing is shown. CleanDrive never sends a notification just to ask for your attention.'));
+  } else if (!sampling.dailySample) {
+    setText(el, t('recap.note.needsDaily', 'This needs the daily measurement above: without it there is nothing to summarise, and nothing would be shown.'));
+  } else {
+    setText(el, t(
+      'recap.note.on',
+      'A Windows notification saying what the drive did, and which folders grew. It is only shown when there are enough measurements to say something true — at least four over a week — and never otherwise. Clicking it opens “What changed in a folder”; it never starts a cleanup.'
+    ));
+  }
+  el.classList.toggle('is-warning', chosen !== 'off' && !sampling.dailySample);
+}
+
+for (const id of ['trend-recap', 'trend-daily']) {
+  $(id).addEventListener('change', () => {
+    syncRecapNote({ dailySample: $('trend-daily').checked, recap: $('trend-recap').value });
+  });
+}
+
 $('trend-save').addEventListener('click', async () => {
   $('trend-sampling-status').textContent = t('app.saving', 'Saving…');
   const data = unwrap(
     await api.saveSettings({
-      trends: { dailySample: $('trend-daily').checked, sampleTime: $('trend-time').value || '12:00' },
+      trends: {
+        dailySample: $('trend-daily').checked,
+        sampleTime: $('trend-time').value || '12:00',
+        recap: $('trend-recap').value,
+      },
     }),
     t('app.label.saveSettings', 'Save settings')
   );

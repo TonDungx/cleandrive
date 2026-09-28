@@ -2086,6 +2086,78 @@ app.whenReady().then(async () => {
     check('a threshold far outside the range is left off the chart',
       outOfRange === 0, String(outOfRange));
 
+    /* -- the periodic summary (G3) ----------------------------------------- */
+    //
+    // The decision is made in `recap.js` and tested there against constructed
+    // histories. What is checked here is the part only a window can show: the
+    // control, the sentence it warns about, and that a click on the
+    // notification opens the screen that explains the number rather than
+    // starting anything.
+    console.log('\nThe periodic summary:');
+
+    const recapUi = await win.webContents.executeJavaScript(`
+      (async () => {
+        document.querySelector('.tab[data-tab="trends"]').click();
+        await new Promise((r) => setTimeout(r, 300));
+        const pick = document.getElementById('trend-recap');
+        const note = document.getElementById('trend-recap-note');
+        const shown = { options: [...pick.options].map((o) => o.value), off: note.textContent };
+        pick.value = 'monthly';
+        pick.dispatchEvent(new Event('change'));
+        shown.on = note.textContent;
+        // With the daily measurement off it would never fire, and the note has
+        // to say so rather than leaving a control that quietly does nothing.
+        const daily = document.getElementById('trend-daily');
+        const had = daily.checked;
+        daily.checked = false;
+        daily.dispatchEvent(new Event('change'));
+        shown.withoutDaily = note.textContent;
+        shown.warned = note.classList.contains('is-warning');
+        daily.checked = had;
+        daily.dispatchEvent(new Event('change'));
+        pick.value = 'off';
+        pick.dispatchEvent(new Event('change'));
+        return shown;
+      })()
+    `);
+    check('the summary can be switched to weekly or monthly',
+      recapUi.options.join(',') === 'off,weekly,monthly', recapUi.options.join(','));
+    check('switched off, it says nothing is shown and why that is deliberate',
+      /never sends a notification just to ask/i.test(recapUi.off), recapUi.off.slice(0, 80));
+    check('switched on, it says when it will refuse to speak',
+      /at least four over a week/i.test(recapUi.on), recapUi.on.slice(0, 90));
+    check('and it never promises a cleanup', /never starts a cleanup/i.test(recapUi.on));
+    check('without the daily measurement it says it would never fire',
+      /needs the daily measurement/i.test(recapUi.withoutDaily) && recapUi.warned === true,
+      recapUi.withoutDaily.slice(0, 80));
+
+    // The click: the same `app:target` path Explorer's menu uses, with a kind
+    // that carries no path at all.
+    const target = require('../src/main/launch-target');
+    check('a summary click parses with no path, so nothing can be aimed at it',
+      JSON.stringify(target.parse(['app.exe', '--changes'])) === '{"kind":"changes"}',
+      JSON.stringify(target.parse(['app.exe', '--changes'])));
+    check('and a path smuggled after it is ignored',
+      JSON.stringify(target.parse(['app.exe', '--changes', 'C:\\\\Windows'])) === '{"kind":"changes"}');
+    check('the flags that do take a path still refuse a bad one',
+      target.parse(['app.exe', '--analyze=C:\\\\nope-not-here']) === null);
+
+    // Down the real channel, from the main process, exactly as a click on the
+    // notification would arrive.
+    await win.webContents.executeJavaScript(`document.querySelector('.tab[data-tab="usage"]').click()`);
+    const before = await win.webContents.executeJavaScript(`document.querySelector('.tab.is-active').dataset.tab`);
+    win.webContents.send('app:target', { kind: 'changes' });
+    await until(win, `document.querySelector('.tab.is-active').dataset.tab === 'trends'`, 8000).catch(() => {});
+    const landed = await win.webContents.executeJavaScript(`({
+      tab: document.querySelector('.tab.is-active').dataset.tab,
+      scanning: document.getElementById('cancel-scan').hidden === false,
+      cleaning: document.getElementById('auto-cancel').hidden === false,
+    })`);
+    check('a click opens the screen that explains the number',
+      before === 'usage' && landed.tab === 'trends', `${before} -> ${landed.tab}`);
+    check('and starts nothing -- no scan, and certainly no cleanup',
+      landed.scanning === false && landed.cleaning === false);
+
     /* -- the HTML report (G2) ---------------------------------------------- */
     //
     // The file is the deliverable, so what is checked is the file: that it

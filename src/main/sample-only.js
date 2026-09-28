@@ -56,7 +56,84 @@ async function runSample() {
     `[sample] ${result.coalesced ? 'updated' : 'recorded'} ${Object.keys(result.volumes).length} volume(s) ` +
       `(${roots}); ${history.snapshots.length} measurement(s) on file`
   );
+
+  await maybeRecap({ store, history, settings });
   return result;
+}
+
+/**
+ * The weekly or monthly summary (G3), if one is due.
+ *
+ * ## Why it rides on this process
+ *
+ * A periodic note has to arrive whether or not anybody opens the app, and
+ * there are only two things in this app that run with it closed. The other is
+ * the cleanup task, and hanging a summary on that would mean "you may have a
+ * monthly note about your disk once you let the app delete files unattended"
+ * -- exactly the trade the comment at the top of this file says was refused.
+ * A third Task Scheduler entry would be a third thing to register, verify,
+ * repair and sweep, for a job with no work of its own: it only reads what this
+ * process has just written.
+ *
+ * ## And why the check comes first
+ *
+ * Showing a notification needs `app.whenReady()`, which starts Chromium -- a
+ * browser process, a GPU process, tens of megabytes -- and this file exists
+ * because it does not do that. So the *decision* is made on the Node side out
+ * of the history that is already loaded, and Chromium is started only on the
+ * one day in seven or twenty-eight when there is actually something to say.
+ * Every other day this costs a comparison.
+ */
+async function maybeRecap({ store, history, settings }) {
+  const recap = require('./recap');
+  const decision = recap.consider({ history, settings });
+  if (!decision.due) {
+    console.log(`[sample] no summary: ${require('./language').render(decision.reason)}`);
+    return null;
+  }
+
+  // Only now.
+  await app.whenReady();
+  require('./language').apply(settings.appearance.language);
+
+  const words = recap.wording(decision.summary);
+  const language = require('./language');
+  const body = [language.render(words.body), words.named ? language.render(words.named) : null]
+    .filter(Boolean)
+    .join(' ');
+
+  const shown = require('./lib/notify').show(
+    { title: language.render(words.title), body, silent: true },
+    // A click opens the app at the screen that explains the number, and does
+    // nothing else. It never starts a cleanup -- the rule every notification
+    // in this app is already held to.
+    () => openChanges()
+  );
+
+  // Written down only when something was actually put on screen, so a run that
+  // could not show one tries again tomorrow rather than skipping a period.
+  if (shown) {
+    await store.patch(recap.recordSent(Date.now()));
+    console.log(`[sample] summary shown: ${body}`);
+  } else {
+    console.log('[sample] a summary was due but notifications are not available here');
+  }
+
+  // Long enough for Windows to take the toast; a notification from a process
+  // that has exited is dropped.
+  await new Promise((resolve) => setTimeout(resolve, shown ? 2500 : 0));
+  return shown;
+}
+
+/** Start the app on the screen that explains the summary. */
+function openChanges() {
+  const { spawn } = require('node:child_process');
+  const args = app.isPackaged ? ['--changes'] : [app.getAppPath(), '--changes'];
+  try {
+    spawn(process.execPath, args, { detached: true, stdio: 'ignore' }).unref();
+  } catch (err) {
+    console.error('[sample] could not open the app:', err.message);
+  }
 }
 
 module.exports = { runSample };

@@ -1139,7 +1139,17 @@ async function findCopiesOf(filePath) {
  * duplicates looks, and ticks nothing.
  */
 api.onTarget((target) => {
-  if (!target || typeof target.path !== 'string') return;
+  if (!target) return;
+
+  // The periodic summary was clicked (G3). It opens the screen that explains
+  // the number and does nothing else -- no scan, and certainly no cleanup.
+  if (target.kind === 'changes') {
+    document.querySelector('.tab[data-tab="trends"]').click();
+    if (window.Changes && typeof window.Changes.openBest === 'function') window.Changes.openBest();
+    return;
+  }
+
+  if (typeof target.path !== 'string') return;
   if (target.kind === 'analyze') {
     document.querySelector('.tab[data-tab="usage"]').click();
     if (!$('cancel-scan').hidden) {

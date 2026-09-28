@@ -2571,7 +2571,11 @@ main {
   color: var(--text-2);
 }
 
-#report-private-note.is-warning {
+/* A note that is not describing a setting but warning about it: the periodic
+   summary switched on with nothing to summarise, or a report that will carry
+   real file names. */
+#report-private-note.is-warning,
+#trend-recap-note.is-warning {
   color: var(--warn);
 }
 

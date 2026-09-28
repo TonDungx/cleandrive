@@ -40,6 +40,10 @@ function clean(raw) {
 function validate(target, fsImpl = fs) {
   if (!target || typeof target !== 'object') return null;
   const { kind } = target;
+  // The periodic summary's own click (G3). It carries no path: it opens a
+  // screen and reads what is already on disk, so there is nothing here for a
+  // hostile command line to aim at.
+  if (kind === 'changes') return { kind: 'changes' };
   if (kind !== 'analyze' && kind !== 'duplicates') return null;
   if (typeof target.path !== 'string' || !target.path || target.path.length > 32767) return null;
   const cleaned = clean(target.path);
@@ -62,6 +66,8 @@ function validate(target, fsImpl = fs) {
  */
 function parse(argv, fsImpl = fs) {
   if (!Array.isArray(argv)) return null;
+  // `--changes` takes no value, so it is read before the flags that do.
+  if (argv.some((a) => String(a) === '--changes')) return { kind: 'changes' };
   for (let i = 0; i < argv.length; i++) {
     const arg = String(argv[i]);
     const eq = arg.indexOf('=');
