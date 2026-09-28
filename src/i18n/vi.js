@@ -318,6 +318,16 @@
     'evidence.dupes.identical.other':
       'Giống hệt từng byte với {n} bản sao khác, đã xác nhận bằng SHA-256 toàn bộ từng tệp',
     'evidence.dupes.oldest': 'Bản cũ nhất — được gợi ý là bản nên giữ lại',
+    // F2 — thư mục trùng toàn bộ.
+    'evidence.dupes.folder.one':
+      'Cả {n} tệp bên trong đều giống hệt từng byte với tệp ở đúng vị trí đó trong 1 thư mục khác',
+    'evidence.dupes.folder.other':
+      'Cả {n} tệp bên trong đều giống hệt từng byte với tệp ở đúng vị trí đó trong {c} thư mục khác',
+    'evidence.dupes.folder.keeper': 'Bản được đề xuất giữ lại — không có gì trong đây bị đem ra xoá',
+    'evidence.dupes.folderFile': 'Nằm trong {folder}, một bản sao giống từng byte của thư mục đang được giữ',
+    'evidence.dupes.near':
+      'Giống {pct}% so với {other}: {same} tệp giống hệt, {differ} tệp khác nhau, {only} tệp chỉ có ở đây',
+    'evidence.dupes.nearFile': 'Giống hệt tệp ở đúng vị trí đó trong {folder}, thư mục đang được giữ',
 
     // The unit picks the key, so the number can sit where Vietnamese puts it.
     'reason.stale.years': 'Không mở trong {n} năm',
@@ -436,6 +446,38 @@
     'dupes.groupTitle': '{n} bản giống hệt nhau · mỗi bản {size}',
     'dupes.reclaimableAmount': 'thu hồi được {size}',
     'dupes.oldest': 'cũ nhất',
+
+    // F2 — thư mục trùng toàn bộ và thư mục gần trùng.
+    'dupes.folders.toggle': 'So cả thư mục',
+    'dupes.folders.heading': 'Thư mục chứa cùng một thứ',
+    'dupes.files.heading': 'Từng tệp một',
+    'dupes.folders.groupTitle': '{n} thư mục giống hệt nhau · mỗi thư mục {size}',
+    'dupes.folders.facts': '{size} · {n} tệp',
+    'dupes.folders.keeping': 'đang giữ',
+    'dupes.folders.copy': 'bản sao',
+    'dupes.folders.selectCopy': 'Chọn mọi tệp trong bản sao này',
+    'dupes.folders.tooMany':
+      'Bản sao này chứa {n} tệp — quá nhiều để liệt kê ở đây. Hãy mở trong Explorer để xử lý.',
+    'dupes.folders.locked':
+      'So cả thư mục thuộc CleanDrive Pro, nên chỉ có từng tệp được đối chiếu.',
+    'dupes.folders.checked':
+      'Đã so {n} thư mục, đọc mọi thứ bên trong — kể cả tên ẩn, node_modules và .git.',
+    'dupes.folders.nested':
+      '{n} thư mục nằm bên trong một bản sao khác không được liệt kê riêng, nên không có gì bị tính hai lần.',
+    'dupes.folders.unreadable':
+      '{n} thư mục có tệp không đọc được, nên không được coi là bản sao.',
+    'dupes.near.title': 'Giống nhau {pct}% · {n} tệp giống hệt',
+    'dupes.near.shared': 'giữ hai lần {size}',
+    'dupes.near.other': 'gần giống',
+    'dupes.near.onlyIn': 'Chỉ có trong {name}',
+    'dupes.near.changed': 'Cùng vị trí, khác nội dung',
+    'dupes.near.nothingOnly': 'Không có gì ở đây mà bên kia không có.',
+    'dupes.near.nothingChanged': 'Mọi tệp dùng chung đều giữ đúng cùng một nội dung.',
+    'dupes.near.truncated': 'Chỉ liệt kê 200 khác biệt đầu tiên của mỗi loại.',
+    'dupes.empty.filesOnly': 'Không có tệp trùng nào ngoài các thư mục ở trên.',
+    'dupes.phase.shape': 'Đang so thư mục theo tên và kích thước',
+    'dupes.phase.folders': 'Đang đối chiếu nội dung thư mục',
+    'dupes.phase.near': 'Đang so các thư mục gần trùng',
     'dupes.skippedNote':
       '{n} {files} không được chọn — chúng thuộc về chương trình đã cài hoặc thư mục phụ thuộc. ' +
       'Nếu bạn chắc chắn thì hãy tự tích từng tệp.',

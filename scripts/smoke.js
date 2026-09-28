@@ -692,6 +692,132 @@ app.whenReady().then(async () => {
       check('clear selection works', cleared.checked === 0 && cleared.disabled);
     }
 
+    /* -- whole folders (F2) ---------------------------------------------- */
+    //
+    // Its own fixture, because this is the one part of the screen whose
+    // answer has to be exact: two folders that are copies, one that differs
+    // by a single file inside `node_modules`, and a third pair small enough
+    // to be under the floor. Against whatever the tester's Downloads holds
+    // none of that could be asserted.
+    //
+    // On `D:` rather than under `os.tmpdir()`, which is inside AppData --
+    // and the harness checks that rather than assuming it.
+    {
+      const secondDrive = (() => {
+        for (const letter of 'DEFGH') {
+          const root = `${letter}:\\`;
+          try {
+            if (fs.statSync(root).dev !== fs.statSync(path.parse(os.tmpdir()).root).dev) return root;
+          } catch {
+            // not there
+          }
+        }
+        return null;
+      })();
+      const f2Root = secondDrive
+        ? fs.mkdtempSync(path.join(secondDrive, 'cleandrive-smoke-f2-'))
+        : fs.mkdtempSync(path.join(os.tmpdir(), 'cleandrive-smoke-f2-'));
+      const folderBefore = await win.webContents.executeJavaScript(`state.folder`);
+      console.log(`\nWhole folders (${f2Root}):`);
+      check('the fixture is off the drive AppData is on',
+        Boolean(secondDrive) && !f2Root.toLowerCase().startsWith(os.tmpdir().toLowerCase()),
+        secondDrive ? f2Root : 'no second drive — fixture is under AppData, results are weaker');
+
+      const project = (dir, differs) => {
+        const at = (...bits) => path.join(f2Root, dir, ...bits);
+        fs.mkdirSync(at('src'), { recursive: true });
+        fs.mkdirSync(at('.git'), { recursive: true });
+        fs.writeFileSync(at('app.js'), Buffer.alloc(300 * 1024, 1));
+        fs.writeFileSync(at('src', 'index.js'), Buffer.alloc(400 * 1024, 2));
+        fs.writeFileSync(at('.git', 'HEAD'), Buffer.alloc(2048, 3));
+        for (let i = 0; i < 7; i++) {
+          fs.mkdirSync(at('node_modules', `pkg${i}`), { recursive: true });
+          fs.writeFileSync(at('node_modules', `pkg${i}`, 'index.js'), Buffer.alloc(200 * 1024, differs && i === 0 ? 99 : i + 10));
+        }
+      };
+      project('project-a', false);
+      project('project-b', false);
+      project('project-c', true);
+
+      try {
+        await win.webContents.executeJavaScript(`setFolder(${JSON.stringify(f2Root)})`);
+        await until(win, `document.getElementById('run-dupes').disabled === false`);
+        await win.webContents.executeJavaScript(`
+          document.getElementById('dupes-folders').checked = true;
+          document.getElementById('dupes-prefer').value = 'oldest';
+          document.getElementById('run-dupes').click();
+        `);
+        await until(win, `document.getElementById('cancel-dupes').hidden === true`, 120000);
+
+        const f2 = await win.webContents.executeJavaScript(`({
+          status: document.getElementById('dupes-status').textContent,
+          sectionShown: document.getElementById('dupe-folders-section').hidden === false,
+          exactCards: document.querySelectorAll('#dupe-folders .group:not(.group-near)').length,
+          nearCards: document.querySelectorAll('#dupe-folders .group-near').length,
+          folderRows: document.querySelectorAll('#dupe-folders .folder-row').length,
+          keepers: document.querySelectorAll('#dupe-folders .keeper-tag').length,
+          ticks: document.querySelectorAll('#dupe-folders input[type=checkbox]').length,
+          compareColumns: document.querySelectorAll('#dupe-folders .compare-column').length,
+          changedRows: [...document.querySelectorAll('#dupe-folders .compare-column')]
+            .map((c) => c.querySelectorAll('.compare-list li').length),
+          headings: [...document.querySelectorAll('#dupe-folders .compare-column h4')].map((h) => h.textContent),
+        })`);
+        console.log(`    status: ${f2.status}`);
+
+        check('the folder section appears', f2.sectionShown && f2.exactCards === 1 && f2.nearCards === 1,
+          `${f2.exactCards} identical, ${f2.nearCards} near`);
+        // Two folders in the identical group, two in the near pair.
+        check('each folder in a finding gets a row of its own', f2.folderRows === 4, String(f2.folderRows));
+        check('one of each pair is marked as the one being kept', f2.keepers === 2, String(f2.keepers));
+        check('a folder row has no tick, because the app never deletes a folder',
+          f2.ticks === 19, `${f2.ticks} ticks for 19 files and 4 folders`);
+        check('the near pair shows the three-column comparison', f2.compareColumns === 3,
+          JSON.stringify(f2.headings));
+        check('and names the one file that differs', f2.changedRows.join(',') === '0,0,1',
+          JSON.stringify(f2.changedRows));
+        check('the line says the walk went everywhere, since that is what it did',
+          /node_modules/.test(f2.status), f2.status.slice(0, 160));
+
+        /* -- select a whole copy --------------------------------------- */
+        const ticked = await win.webContents.executeJavaScript(`
+          (() => {
+            const buttons = [...document.querySelectorAll('#dupe-folders .folder-files .btn')];
+            buttons[0].click();
+            return {
+              checked: document.querySelectorAll('#dupe-folders input:checked').length,
+              readout: document.getElementById('selection-status').textContent,
+              deleteEnabled: document.getElementById('delete-dupes').disabled === false,
+            };
+          })()
+        `);
+        check('"select every file in this copy" ticks the whole copy', ticked.checked === 10,
+          `${ticked.checked} ticked · ${ticked.readout}`);
+        check('and the delete button acts on files, as it always has', ticked.deleteEnabled);
+        await win.webContents.executeJavaScript(`document.getElementById('select-none').click()`);
+
+        /* -- refused out loud on Free ---------------------------------- */
+        process.env.CLEANDRIVE_ENTITLEMENTS = 'free';
+        await win.webContents.executeJavaScript(`document.getElementById('run-dupes').click()`);
+        await until(win, `document.getElementById('cancel-dupes').hidden === true`, 120000);
+        const onFree = await win.webContents.executeJavaScript(`({
+          status: document.getElementById('dupes-status').textContent,
+          sectionShown: document.getElementById('dupe-folders-section').hidden === false,
+        })`);
+        process.env.CLEANDRIVE_ENTITLEMENTS = 'all';
+        check('on Free the folder comparison is refused, and the line says so',
+          /part of CleanDrive Pro/.test(onFree.status) && !onFree.sectionShown, onFree.status.slice(0, 160));
+      } finally {
+        // Put the screen back where the rest of this run expects it, and
+        // leave the tick-box off so the next duplicate search is the narrow
+        // one every assertion above was written against.
+        await win.webContents.executeJavaScript(`
+          document.getElementById('dupes-folders').checked = false;
+          ${folderBefore ? `setFolder(${JSON.stringify(folderBefore)})` : ''};
+        `);
+        fs.rmSync(f2Root, { recursive: true, force: true });
+      }
+    }
+
     /* -- photos and video ------------------------------------------------ */
     //
     // Driven against a tree this harness builds, not against whatever the

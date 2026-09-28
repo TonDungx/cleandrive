@@ -83,11 +83,213 @@ function toCandidate(file, group) {
   };
 }
 
+/* -------------------------------------------------------------------------- */
+/* whole folders (F2)                                                          */
+/* -------------------------------------------------------------------------- */
+
+const pct = (ratio) => Math.round(ratio * 1000) / 10;
+
+/**
+ * Three more id namespaces, beside the file screen's own.
+ *
+ * A candidate's id is the identity of a *decision*, not of a path -- which is
+ * why the analyzer's name is already part of it. One path can now carry more
+ * than one decision on this screen: `project-b\app.js` is both "a copy of two
+ * other files" and "a file inside a folder that is wholly a copy", and
+ * `project-a` is both "one of two identical folders" and "the folder
+ * `project-c` is 90% the same as". Those are different rows with different
+ * evidence and, for a file, possibly *opposite* verdicts -- the oldest copy of
+ * a file can sit inside a folder that should go. Sharing one id would let the
+ * window's id-to-row map keep whichever arrived last and quietly drop the
+ * other.
+ *
+ * Ticking is still by path, so a file ticked in one list shows ticked in the
+ * other and is deleted once.
+ */
+const FOLDER_ID = `${ID}:folder`;
+const NEAR_ID = `${ID}:near`;
+const FOLDER_FILE_ID = `${ID}:folderFile`;
+
+function folderEvidence(group, member) {
+  const others = group.count - 1;
+  return others === 1
+    ? m(
+        'evidence.dupes.folder.one',
+        'Every one of its {n} files is byte-for-byte identical to the file at the same place in 1 other folder',
+        { n: member.fileCount }
+      )
+    : m(
+        'evidence.dupes.folder.other',
+        'Every one of its {n} files is byte-for-byte identical to the file at the same place in {c} other folders',
+        { n: member.fileCount, c: others }
+      );
+}
+
+const FOLDER_KEEPER = m('evidence.dupes.folder.keeper', 'The copy suggested for keeping — nothing here is offered up');
+
+/**
+ * A folder that holds the same thing as another.
+ *
+ * It carries no action, and that is deliberate rather than an omission: the
+ * app never deletes a folder, `actions/recycle.js` and `actions/quarantine.js`
+ * both refuse a directory, and the spec's `archive` is B5 and has no handler
+ * at all. What can be acted on is each file inside, below.
+ */
+function folderCandidate(group, member) {
+  return {
+    id: candidateId(FOLDER_ID, member.path),
+    path: member.path,
+    kind: 'folder',
+    bytes: member.bytes,
+    category: 'dupes.folder',
+    verdict: member.keeper ? 'keep' : 'review',
+    confidence: 'certain',
+    evidence: member.keeper
+      ? [evidence(1, FOLDER_KEEPER), evidence(2, folderEvidence(group, member))]
+      : [evidence(1, folderEvidence(group, member))],
+    actions: [],
+    unattendedEligible: false,
+    meta: {
+      group: group.id,
+      keeper: member.keeper,
+      fileCount: member.fileCount,
+      listedFiles: member.files.length,
+      truncated: member.truncated,
+      folderRow: true,
+    },
+  };
+}
+
+/** One file under a folder that is a copy: this is what a button acts on. */
+function folderFileCandidate(file, group, member, why) {
+  return {
+    id: candidateId(FOLDER_FILE_ID, file.path),
+    path: file.path,
+    kind: 'file',
+    bytes: file.size,
+    category: 'dupes.folderFile',
+    verdict: 'review',
+    confidence: 'certain',
+    evidence: [evidence(1, why)],
+    actions: ['recycle', 'quarantine'],
+    unattendedEligible: false,
+    meta: {
+      group: group.id,
+      folder: member.path,
+      rel: file.rel,
+      keeper: false,
+      mtimeMs: file.mtimeMs,
+    },
+  };
+}
+
+/**
+ * A folder that is nearly, but not quite, a copy of another.
+ *
+ * `review` and never `certain`: what is certain is which files match, and the
+ * evidence says exactly that. Whether the two folders are "the same thing" is
+ * the user's call, which is what the tree comparison is for.
+ */
+function nearCandidate(pair, side, keeper) {
+  const why = m(
+    'evidence.dupes.near',
+    '{pct}% the same as {other}: {same} files identical, {differ} different, {only} only here',
+    {
+      pct: pct(pair.ratio),
+      other: keeper ? pair.other.path : pair.keep.path,
+      same: pair.matched,
+      differ: pair.differing,
+      only: keeper ? pair.compare.onlyKeep.length : pair.compare.onlyOther.length,
+    }
+  );
+  return {
+    id: candidateId(NEAR_ID, side.path),
+    path: side.path,
+    kind: 'folder',
+    bytes: side.bytes,
+    category: 'dupes.nearFolder',
+    verdict: keeper ? 'keep' : 'review',
+    confidence: 'likely',
+    evidence: [evidence(1, why)],
+    actions: [],
+    unattendedEligible: false,
+    meta: {
+      group: pair.id,
+      keeper,
+      fileCount: side.fileCount,
+      ratio: pair.ratio,
+      listedFiles: (side.files || []).length,
+      truncated: Boolean(side.truncated),
+      folderRow: true,
+    },
+  };
+}
+
+/**
+ * The folder half of the reply, as candidates and as groups of ids.
+ *
+ * Yields everything it makes, so the registry validates each one the same way
+ * it validates a file.
+ */
+function* folderCandidates(folders) {
+  const exact = [];
+  for (const group of folders.exact) {
+    const ids = [];
+    const fileIds = [];
+    for (const member of group.members) {
+      const row = folderCandidate(group, member);
+      ids.push(row.id);
+      yield { type: 'candidate', candidate: row };
+
+      if (member.keeper) continue;
+      const why = m(
+        'evidence.dupes.folderFile',
+        'Inside {folder}, which is a byte-for-byte copy of a folder being kept',
+        { folder: member.path }
+      );
+      for (const file of member.files) {
+        const candidate = folderFileCandidate(file, group, member, why);
+        fileIds.push(candidate.id);
+        yield { type: 'candidate', candidate };
+      }
+    }
+    exact.push({ ...group, members: group.members.map(({ files, ...rest }) => rest), ids, fileIds });
+  }
+
+  const near = [];
+  for (const pair of folders.near) {
+    const keepRow = nearCandidate(pair, pair.keep, true);
+    const otherRow = nearCandidate(pair, pair.other, false);
+    yield { type: 'candidate', candidate: keepRow };
+    yield { type: 'candidate', candidate: otherRow };
+
+    // Only the files that were *verified identical on both sides* can be
+    // acted on. A file that is only on one side, or that differs, is shown in
+    // the comparison and is never offered up -- it is the thing that would
+    // actually be lost.
+    const why = m(
+      'evidence.dupes.nearFile',
+      'Identical to the file at the same place in {folder}, which is being kept',
+      { folder: pair.keep.path }
+    );
+    const fileIds = [];
+    for (const file of pair.other.files) {
+      const candidate = folderFileCandidate(file, pair, pair.other, why);
+      fileIds.push(candidate.id);
+      yield { type: 'candidate', candidate };
+    }
+    const { files, ...other } = pair.other;
+    near.push({ ...pair, other, ids: [keepRow.id, otherRow.id], fileIds });
+  }
+
+  return { ...folders, exact, near };
+}
+
 const analyzer = {
   id: ID,
   feature: 'free',
   requiresElevation: false,
-  categories: ['dupes.copy'],
+  categories: ['dupes.copy', 'dupes.folder', 'dupes.nearFolder', 'dupes.folderFile'],
 
   /**
    * @param {object} ctx  { roots, options, deps: { findDuplicates } }
@@ -113,7 +315,10 @@ const analyzer = {
       groups.push({ ...rest, ids });
     }
 
-    yield { type: 'summary', summary: { ...result, groups } };
+    // Whole folders (F2), when the run asked for them.
+    const folders = result.folders ? yield* folderCandidates(result.folders) : null;
+
+    yield { type: 'summary', summary: { ...result, groups, folders } };
   },
 };
 

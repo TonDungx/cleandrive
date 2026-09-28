@@ -35,6 +35,15 @@ declare('cloud.dehydrate', { screen: 'cleanup' });
 
 // "Duplicates": one copy in a group of byte-identical files.
 declare('dupes.copy', { screen: 'duplicates' });
+// A whole folder that holds the same thing as another, and one that nearly
+// does (F2). The folder row itself is a heading and carries no action -- the
+// interface never deletes a folder -- so what can be acted on is the files
+// inside it, which are `dupes.folderFile`. Never on the automatic whitelist:
+// nothing about "which copy of a project to keep" is a decision to take while
+// nobody is looking.
+declare('dupes.folder', { screen: 'duplicates' });
+declare('dupes.nearFolder', { screen: 'duplicates' });
+declare('dupes.folderFile', { screen: 'duplicates' });
 
 // "Photos & video".
 declare('media.image', { screen: 'media' });

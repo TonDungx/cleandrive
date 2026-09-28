@@ -95,6 +95,19 @@ function buildFixture(root) {
   make(path.join(root, 'Reports', 'copy of q3.pdf'), 3 * MB, 10, 7);
   make(path.join(root, 'Archive', 'q3.pdf'), 3 * MB, 5, 7);
   make(path.join(root, 'notes.txt'), 'Meeting notes.\nNothing here needs deleting.\n');
+
+  // Two folders that hold the same thing, and a third that differs by one
+  // file, so the folder half of the Duplicates screen (F2) has rows for axe
+  // to look at -- the comparison columns included. Ten files each: at 90%
+  // that is the smallest number where "nearly the same" is not "the same".
+  for (const [name, differs] of [['Site 2023', false], ['Site 2023 backup', false], ['Site 2024', true]]) {
+    make(path.join(root, 'Sites', name, 'index.html'), 300 * 1024);
+    make(path.join(root, 'Sites', name, 'css', 'site.css'), 400 * 1024);
+    make(path.join(root, 'Sites', name, '.git', 'HEAD'), 200 * 1024);
+    for (let i = 0; i < 7; i++) {
+      make(path.join(root, 'Sites', name, 'img', `photo-${i}.jpg`), (differs && i === 0 ? 260 : 200) * 1024);
+    }
+  }
 }
 
 /** Real PNG headers, a few hundred bytes each: enough for the photo scan. */
@@ -225,8 +238,13 @@ app.whenReady().then(async () => {
   await run(`
     document.querySelector('.tab[data-tab="dupes"]').click();
     document.getElementById('min-size').value = '1024';
+    document.getElementById('dupes-folders').checked = true;
     document.getElementById('run-dupes').click();`);
   check('duplicates are found', await until(`document.getElementById('dupes-stats').hidden === false && document.querySelectorAll('#dupe-groups .file-row').length > 0`));
+  // F2's rows, so axe sees the folder half and the comparison columns too.
+  check('whole folders are found as well', await until(
+    `document.querySelectorAll('#dupe-folders .group').length > 0 && document.querySelectorAll('#dupe-folders .compare-column').length > 0`
+  ));
 
   await run(`
     document.querySelector('.tab[data-tab="media"]').click();
@@ -968,6 +986,22 @@ app.whenReady().then(async () => {
       // Again, at the end, where a tail will find them.
       console.log(`\nWhat failed, all ${failures} of them:\n`);
       for (const line of failed) console.log(`  FAIL  ${line}`);
+
+      // And on disk, where nothing can lose them.
+      //
+      // This harness has now failed twice with a list nobody could reproduce
+      // (§11 item 9: 22 errors once, 42 another time), and both times the
+      // list was gone before anyone read it -- the first to a `tail`, the
+      // second to a shell loop that counted the lines and threw the text
+      // away. Printing it is not enough when whoever is reading has piped
+      // the output through something. A file survives all of that.
+      try {
+        const report = path.join(os.tmpdir(), `cleandrive-a11y-failures-${Date.now()}.txt`);
+        fs.writeFileSync(report, `${failures} failures\n\n${failed.map((l) => `FAIL  ${l}`).join('\n')}\n`, 'utf8');
+        console.log(`\n  the same list, kept: ${report}`);
+      } catch (err) {
+        console.log(`\n  (could not write the list: ${err.message})`);
+      }
     }
     console.log(failures === 0 ? '\nALL PASS\n' : `\n${failures} FAILURE(S)\n`);
     app.exit(failures === 0 ? 0 : 1);

@@ -6,9 +6,10 @@ const os = require('node:os');
 const path = require('node:path');
 const crypto = require('node:crypto');
 
-const { CancelToken, pool, throttle } = require('./util');
+const { CancelToken, pool, throttle, pathKey, isHiddenName, NOISE_DIR_NAMES } = require('./util');
 const { collectFiles } = require('./scanner');
 const { programComponentReason } = require('./advisor');
+const folderDupes = require('./folder-dupes');
 
 const DEFAULTS = {
   minSize: 1024, // ignore anything under 1 KB -- not worth the syscalls
@@ -18,7 +19,35 @@ const DEFAULTS = {
   progressMs: 120,
   useCache: true,
   cacheMaxEntries: 50000,
+  // Whole folders that hold the same thing (F2). Off unless asked for: it
+  // widens the walk to everything, which is a cost nobody should pay for a
+  // search they did not ask for.
+  folders: false,
 };
+
+/**
+ * Whether the ordinary file search would have seen this file (F2).
+ *
+ * When the folder pass is on, the walk is widened to everything -- hidden
+ * names, `node_modules`, `.git` -- because "these two folders are identical"
+ * is a claim about the real folder and not about the part of it the scan
+ * likes to look at. The *file* half of the screen has to go on showing what
+ * it always showed, so its list is filtered back out of the wide one rather
+ * than the disk being walked a second time.
+ */
+function visibleToFileSearch(filePath, roots) {
+  const root = roots.find((r) => {
+    const key = pathKey(r);
+    const here = pathKey(filePath);
+    return here === key || here.startsWith(key.endsWith(path.sep) ? key : key + path.sep);
+  });
+  const rest = root ? filePath.slice(root.length) : filePath;
+  for (const part of rest.split(/[\\/]/)) {
+    if (part === '') continue;
+    if (isHiddenName(part) || NOISE_DIR_NAMES.has(part.toLowerCase())) return false;
+  }
+  return true;
+}
 
 /* -------------------------------------------------------------------------- */
 /* hash cache                                                                  */
@@ -200,13 +229,28 @@ async function findDuplicates(roots, options = {}, handlers = {}) {
 
   /* --- pass 0: index ----------------------------------------------------- */
 
-  const { files, errors: walkErrors, cancelled: walkCancelled } = await collectFiles(
+  // With the folder pass on, one wide walk serves both halves: everything for
+  // the folder comparison, and the part the file search has always shown,
+  // filtered out of it. Copies-of-one-file (I3) never widens -- it is looking
+  // for one file, not comparing folders.
+  const wide = Boolean(opts.folders) && !target;
+  const walkOpts = wide
+    ? { ...opts, minSize: 0, ignoreHidden: false, includeNoiseDirs: true }
+    : opts;
+
+  const { files: walked, errors: walkErrors, cancelled: walkCancelled } = await collectFiles(
     rootList,
-    opts,
+    walkOpts,
     { token, onProgress: handlers.onProgress }
   );
   errors.push(...walkErrors);
+
+  const allFiles = wide ? walked : null;
+  const files = wide
+    ? walked.filter((f) => f.size >= opts.minSize && visibleToFileSearch(f.path, rootList))
+    : walked;
   stats.indexedFiles = files.length;
+  if (wide) stats.indexedForFolders = walked.length;
 
   if (token.cancelled || walkCancelled) return finish(true);
 
@@ -283,6 +327,10 @@ async function findDuplicates(roots, options = {}, handlers = {}) {
 
   /* --- pass 3: full hash ------------------------------------------------- */
 
+  // Every full hash this pass computes, kept for the folder pass so a file
+  // that is both a duplicate and part of a duplicate folder is read once.
+  const known = new Map();
+
   const groups = [];
   for (const group of partialSurvivors) {
     if (token.cancelled) return finish(true);
@@ -293,6 +341,7 @@ async function findDuplicates(roots, options = {}, handlers = {}) {
       const cached = cache && cache.get(key);
       if (cached) {
         stats.cacheHits = cache.hits;
+        known.set(pathKey(file.path), cached);
         return { ...file, hash: cached };
       }
       try {
@@ -300,6 +349,7 @@ async function findDuplicates(roots, options = {}, handlers = {}) {
         stats.filesHashed++;
         stats.bytesHashed += file.size;
         if (cache) cache.set(key, digest);
+        known.set(pathKey(file.path), digest);
         emitHash('hashing-full');
         return { ...file, hash: digest };
       } catch (err) {
@@ -362,17 +412,181 @@ async function findDuplicates(roots, options = {}, handlers = {}) {
   }
 
   groups.sort((a, b) => b.wastedBytes - a.wastedBytes);
-  return finish(token.cancelled, groups);
+
+  /* --- pass 4: whole folders (F2) ---------------------------------------- */
+
+  let folderResult = null;
+  if (wide && !token.cancelled) {
+    folderResult = await folderDupes.findFolderDuplicates(
+      allFiles,
+      { ...opts, roots: rootList },
+      {
+        token,
+        onProgress: handlers.onProgress
+          ? (p) => handlers.onProgress({ elapsedMs: Date.now() - started, ...stats, ...p })
+          : null,
+        hashOf: hashForFolder,
+      }
+    );
+  }
+
+  return finish(token.cancelled, groups, folderResult);
 
   /* ----------------------------------------------------------------------- */
 
-  async function finish(cancelled, resultGroups = []) {
+  /**
+   * The full hash of one file, for the folder pass.
+   *
+   * Three places are asked before the disk is: this run's own pass 3, the
+   * persistent cache, and only then a read. Returns null rather than throwing
+   * when the file cannot be read -- the folder pass treats an unreadable file
+   * as a reason not to claim the folder, which is the safe direction.
+   */
+  async function hashForFolder(file) {
+    const already = known.get(pathKey(file.path));
+    if (already) return already;
+
+    const key = HashCache.keyOf(file, `f${opts.algorithm}`);
+    const cached = cache && cache.get(key);
+    if (cached) {
+      stats.cacheHits = cache.hits;
+      known.set(pathKey(file.path), cached);
+      return cached;
+    }
+    try {
+      const digest = await hashFile(file.path, { algorithm: opts.algorithm, token });
+      stats.filesHashed++;
+      stats.bytesHashed += file.size;
+      if (cache) cache.set(key, digest);
+      known.set(pathKey(file.path), digest);
+      emitHash('hashing-folders');
+      return digest;
+    } catch (err) {
+      if (err.code !== 'ECANCELLED') {
+        errors.push({ path: file.path, code: err.code || 'EHASH', message: err.message });
+      }
+      return null;
+    }
+  }
+
+  /**
+   * The folder pass, as something that can cross an IPC boundary (F2).
+   *
+   * Its nodes point at their parents, so they are a cycle and not a message.
+   * This turns each one into a flat record, and while it is here it settles
+   * two things the pass itself has no business deciding:
+   *
+   *   which copy is kept -- the same `keeperRank` F1 gave the file groups,
+   *                         with the oldest breaking a tie, so a folder and
+   *                         the files inside it never disagree about it
+   *   which files are listed -- only those under a copy that is *not* the
+   *                         keeper, because those are the only ones any
+   *                         button will ever act on, and listing both sides
+   *                         of a big folder doubles the message for nothing
+   *
+   * `budget` caps how many file records the whole reply may carry. A folder
+   * past the cap is still reported, with `truncated` set, so the screen can
+   * say "too many files to list here" instead of quietly offering half.
+   */
+  function projectFolders(result) {
+    if (!result) return null;
+    let budget = opts.maxFolderFiles ?? 20000;
+    let truncatedFolders = 0;
+
+    const order = (a, b) =>
+      keeperRank({ path: a.path, size: a.bytes, mtimeMs: a.oldestMs }) -
+        keeperRank({ path: b.path, size: b.bytes, mtimeMs: b.oldestMs }) ||
+      a.oldestMs - b.oldestMs ||
+      a.path.localeCompare(b.path);
+
+    const summarise = (node) => ({
+      path: node.path,
+      bytes: node.bytes,
+      fileCount: node.fileCount,
+      newestMs: node.newestMs,
+      oldestMs: node.oldestMs,
+    });
+
+    const listing = (records) => {
+      if (records.length > budget) {
+        truncatedFolders++;
+        return { files: [], truncated: true };
+      }
+      budget -= records.length;
+      return {
+        files: records.map((e) => ({ path: e.path, rel: e.rel, size: e.size, mtimeMs: e.mtimeMs })),
+        truncated: false,
+      };
+    };
+
+    const exact = result.exact
+      .map((group) => {
+        const members = [...group.members].sort(order);
+        return {
+          id: group.content.slice(0, 16),
+          bytes: members[0].bytes,
+          fileCount: members[0].fileCount,
+          count: members.length,
+          wastedBytes: members[0].bytes * (members.length - 1),
+          members: members.map((node, i) => ({
+            ...summarise(node),
+            keeper: i === 0,
+            ...(i === 0 ? { files: [], truncated: false } : listing(folderDupes.entriesOf(node))),
+          })),
+        };
+      })
+      .sort((a, b) => b.wastedBytes - a.wastedBytes);
+
+    const near = result.near.map((pair) => {
+      const [keep, other] = [pair.a, pair.b].sort(order);
+      // `left` is always the `a` side of the comparison; when the keeper came
+      // out as `b`, the copy being offered up is the `left` one.
+      const flip = keep === pair.b;
+      const fromOther = pair.same.map((e) => (flip ? e.left : e.right));
+      return {
+        id: `${pathKey(keep.path)}|${pathKey(other.path)}`.slice(0, 32),
+        ratio: pair.ratio,
+        matched: pair.matched,
+        differing: pair.differing,
+        unreadable: pair.unreadable,
+        sameBytes: pair.sameBytes,
+        keep: summarise(keep),
+        other: { ...summarise(other), ...listing(fromOther) },
+        // "Only here" is named from the copy being kept, so the two columns
+        // on screen are always in the same order as the two folders above them.
+        compare: {
+          onlyKeep: flip ? pair.compare.onlyRight : pair.compare.onlyLeft,
+          onlyOther: flip ? pair.compare.onlyLeft : pair.compare.onlyRight,
+          changed: pair.compare.changed,
+          truncated: pair.compare.truncated,
+        },
+      };
+    });
+
+    return {
+      exact,
+      near,
+      totalFolderGroups: exact.length,
+      folderReclaimableBytes: exact.reduce((n, g) => n + g.wastedBytes, 0),
+      nearReclaimableBytes: near.reduce((n, p) => n + p.sameBytes, 0),
+      foldersIndexed: result.folders,
+      shapeGroups: result.shapeGroups,
+      nearProposed: result.nearProposed,
+      nestedDropped: result.nestedDropped,
+      unreadableFolders: result.unreadable.length,
+      truncatedFolders,
+      durationMs: result.durationMs,
+    };
+  }
+
+  async function finish(cancelled, resultGroups = [], folderResult = null) {
     if (cache) await cache.save(opts.cacheMaxEntries);
     if (cache) stats.cacheHits = cache.hits;
 
     return {
       roots: rootList,
       copiesOf: target ? target.path : null,
+      folders: projectFolders(folderResult),
       groups: resultGroups,
       totalGroups: resultGroups.length,
       totalDuplicateFiles: resultGroups.reduce((n, g) => n + g.count - 1, 0),

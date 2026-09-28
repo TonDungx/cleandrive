@@ -666,11 +666,25 @@ function register() {
       const prefer = preferRefused ? 'oldest' : asked;
       const keeperRank = scanRoots.keeperRankFor(local, prefer) || undefined;
 
+      // Whole folders (F2). Pro, and refused out loud for the same reason the
+      // keeper rule is: somebody who asked for folders and is handed a list of
+      // files has been told nothing about why. Off for copies-of-one-file --
+      // that is a search for one file, not a comparison of folders.
+      const wantFolders = Boolean(options.folders) && !options.copiesOf;
+      const foldersRefused = wantFolders && !can('pro.dupes.advanced') ? 'locked' : null;
+      const folders = wantFolders && !foldersRefused;
+
       const { candidates, summary } = await analyzers.collect(
         'duplicates',
         {
           roots: local.map((r) => r.root),
-          options: { ...options, prefer, keeperRank, cachePath: path.join(app.getPath('userData'), 'hash-cache.json') },
+          options: {
+            ...options,
+            prefer,
+            keeperRank,
+            folders,
+            cachePath: path.join(app.getPath('userData'), 'hash-cache.json'),
+          },
         },
         { token, onProgress: send, can }
       );
@@ -689,6 +703,8 @@ function register() {
         // rather than the window assuming its own setting was honoured.
         prefer,
         preferRefused,
+        foldersAsked: wantFolders,
+        foldersRefused,
         skipped: prepared.roots.filter((r) => r.kind === 'network').map((r) => r.root),
         merged: prepared.merged,
       };

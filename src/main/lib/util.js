@@ -295,7 +295,12 @@ function skipReason(name, fullPath, opts) {
       reason: m('protected.programs', 'Operating system or installed programs live here'),
     };
   }
-  if (NOISE_DIR_NAMES.has(lower)) {
+  // `includeNoiseDirs` is the folder-duplicate pass and nothing else (F2).
+  // Everywhere else these folders would drown out what the user can act on;
+  // there, leaving them out would let the app call two folders identical on
+  // the strength of the part of them it happened to look at, which is how a
+  // `.env` or a `.git` gets deleted with a copy that was not really a copy.
+  if (!opts.includeNoiseDirs && NOISE_DIR_NAMES.has(lower)) {
     return { kind: 'noise', reason: m('protected.dependency', 'Dependency or version-control folder') };
   }
   if (opts.ignoreHidden && isHiddenName(name)) {

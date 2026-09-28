@@ -606,6 +606,14 @@
               <option value="backup" data-i18n="dupes.keep.backup">the copy on an external or network drive</option>
             </select>
           </label>
+          <!-- F2: whole folders. Pro. Off by default because it widens the
+               walk to everything, including node_modules and hidden names,
+               which is a cost nobody should pay for a search they did not
+               ask for. -->
+          <label class="field dupes-folders-box" id="dupes-folders-field">
+            <input type="checkbox" id="dupes-folders">
+            <span data-i18n="dupes.folders.toggle">Also compare whole folders</span>
+          </label>
           <span class="status" id="dupes-status" data-i18n="app.pickToBegin">Pick a folder to begin.</span>
         </div>
 
@@ -626,6 +634,13 @@
           <button class="btn btn-sm" id="select-none" data-i18n="app.clearSelection">Clear selection</button>
         </div>
 
+        <!-- F2. Folders come first: one row here stands for hundreds below. -->
+        <section id="dupe-folders-section" hidden>
+          <h3 class="section-heading" id="dupe-folders-heading" data-i18n="dupes.folders.heading">Folders that hold the same thing</h3>
+          <div id="dupe-folders" class="groups"></div>
+        </section>
+
+        <h3 class="section-heading" id="dupe-files-heading" hidden data-i18n="dupes.files.heading">Individual files</h3>
         <div id="dupe-groups" class="groups"></div>
 
         <div class="actionbar" id="dupes-actionbar" hidden>

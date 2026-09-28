@@ -100,7 +100,7 @@ while skimming.
 | **System** | Where did the rest of the drive go? | The whole system drive |
 | **What to delete** | Which of it is safe to remove, and why? | The same scan |
 | **Photos & video** | What is in my picture library, and where did it come from? | Curated photo folders |
-| **Duplicates** | What do I have more than one copy of? | One folder you choose |
+| **Duplicates** | What do I have more than one copy of — file by file, or a whole folder at a time? | One folder you choose |
 | **Apps** | What is installed, how big is it, when did I last start it? | The installed-apps list, and the folders it names |
 | **Games** | Which games am I keeping and not playing? | The Steam library |
 | **Developer** | What have my development tools filled the disk with? | Package caches, SDKs, editor caches, WSL and Docker, and your own projects |
@@ -511,6 +511,7 @@ Disk usage, What to delete and Duplicates are built from one shared list:
 | Hidden entries | Skipped |
 | System locations | Skipped, and reported — never entered |
 | Development noise | `.git`, `node_modules`, `.venv`, `__pycache__` are skipped; they would drown out everything actionable |
+| The one exception | Duplicates' [whole-folder comparison](#whole-folders) does enter all of those. Nothing else does, and system locations stay out even there |
 | Unreadable entries | Recorded and reported as a count; the scan continues |
 
 Because system locations are excluded by design, **scanning `C:\` under-reports
@@ -914,11 +915,14 @@ a fixed list of categories, and nothing here produces one.
 
 ## Screen 6 — Duplicates
 
-Byte-identical files inside the chosen folder.
+Byte-identical files inside the chosen folder — and, if you ask for it, whole
+folders that hold the same thing.
 
 ### Controls
 
 **Ignore files under** — 1 KB, 100 KB (default), 1 MB or 10 MB.
+
+**Also compare whole folders** — off by default. See *Whole folders* below.
 
 **Suggest keeping** — which copy of a group carries the *keep* tag:
 
@@ -952,9 +956,11 @@ nothing is ticked. "No other copy" says where it looked.
 
 ### What it reports while it works
 
-Four named phases, with counts and elapsed time, so a long search is legible
-rather than a spinner: **Indexing files → Grouping by size → Comparing file heads
-→ Verifying full contents**.
+Named phases, with counts and elapsed time, so a long search is legible rather
+than a spinner: **Indexing files → Grouping by size → Comparing file heads
+→ Verifying full contents**, and with whole folders on, **Comparing folders by
+name and size → Verifying folder contents → Comparing folders that nearly
+match**.
 
 It can be stopped at any phase boundary and returns what it found so far.
 
@@ -969,6 +975,64 @@ It can be stopped at any phase boundary and returns what it found so far.
   gap and how many copies were held back.
 - **Statistics** for the run: files indexed, candidates surviving each pass,
   files hashed, and how many hashes were reused from the cache.
+
+### Whole folders
+
+Tick **Also compare whole folders** and the screen gains a section above the
+file groups: folders that hold the same thing, and folders that nearly do. One
+row there stands for hundreds below it — two copies of a project, a photo
+import done twice, a `dist` and a `release` built from the same source.
+
+This is Pro (`pro.dupes.advanced`). Asked for without it, the search still runs
+over files and the status line says the folder comparison was refused, the same
+way the drive rules do.
+
+**Two folders are the same when their files are**: the same relative paths,
+and the same bytes at every one of them, confirmed by a full SHA-256 on both
+sides. A folder that exists on one side and holds nothing does not make them
+different — there is nothing in it to lose.
+
+**It looks at everything.** For this comparison, and only this one, the walk
+goes into `node_modules`, `.git`, `.venv`, `__pycache__` and names beginning
+with `.` or `$`, which every other scan in the app leaves out. It has to: if
+two folders differ only in a `.env` the app never looked at, calling them
+identical would be how you lose that file. There is no switch for it, because
+a switch you could set wrong is a switch that costs you a file.
+
+That costs walking time and nothing else — measured on this machine,
+`D:\personal_projects` goes from 15,518 files in 5.9 s to 87,371 in 21.6 s, and
+the whole of `D:` from 173,664 in 41.8 s to 464,617 in 79.5 s. No extra file is
+*read*: the first pass compares names and sizes only, and contents are hashed
+just for the folders that survive it.
+
+**Nearly the same** means at least 90% of the files are identical, counted as
+`matching / the larger side` and counted from the hashes rather than estimated.
+Such a pair opens a three-column comparison — only on the left, only on the
+right, and same place but different contents — because "97% the same" is not
+something you can act on until you can see the other 3%.
+
+**What you can do with one.** Nothing acts on a folder: the app does not delete
+folders, and neither *Move to Recycle Bin* nor *Move to another drive* accepts
+one. A folder row is a heading with no tick. Under a copy that is not the one
+being kept, its files are listed and tickable, with **Select every file in this
+copy** above them — so "get rid of this copy" is, visibly, sending those N files
+to the Recycle Bin.
+
+Under a *nearly* matching folder, only the files verified identical on both
+sides are offered. Files that exist on one side alone, or that differ, appear in
+the comparison and nowhere else — those are the ones you would actually lose.
+
+**Two things it deliberately does not show.**
+
+- **Folders inside a folder that is already reported.** If `A\` is a copy of
+  `B\` then so is `A\sub\`, and listing both would count the same space twice.
+  The status line says how many were folded away.
+- **Anything under 1 MB.** Measured on `D:\personal_projects`: with no floor,
+  233 groups totalling 307 MB; with the 1 MB floor, 13 groups totalling 286 MB.
+  220 extra rows to find another 21 MB.
+
+A folder holding a file that could not be read is never claimed as a copy of
+anything, and the status line counts those separately.
 
 ### Files in use stay visible and are never bulk-selected
 

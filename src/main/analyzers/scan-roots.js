@@ -249,7 +249,10 @@ function keeperRankFor(roots, prefer) {
   if (prefer !== 'internal' && prefer !== 'backup') return null;
   const list = Array.isArray(roots) ? roots : [];
   return (file) => {
-    const root = list.find((r) => inside(file.path, r.root));
+    // A chosen folder is under itself, for this purpose: F2 compares whole
+    // folders, and two backup folders on two drives are exactly the case the
+    // preference is for. For a file the two tests are the same test.
+    const root = list.find((r) => pathKey(file.path) === pathKey(r.root) || inside(file.path, r.root));
     if (!root) return 2;
     const away = Boolean(root.external) || root.readOnly !== null;
     return prefer === 'backup' ? (away ? 0 : 1) : (away ? 1 : 0);

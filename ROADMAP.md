@@ -206,7 +206,7 @@ hoạch đều trỏ về một màn đã có. G3 và F3 là P2 nên để cuố
 | G3 | Tóm tắt định kỳ | P2 | |
 | G4 | Nhiều hồ sơ tự động | P1 | |
 | F1 | Trùng lặp xuyên thư mục / xuyên ổ | P1 | ✅ Đã code xong (2026-09-28) — phần "nhiều gốc nhiều ổ" **A4 đã giao từ trước**; mục này thêm tiêu chí chọn bản giữ theo loại ổ. **Không làm** nhánh hash qua ổ mạng: không đo được tốc độ thật trên máy này |
-| F2 | Thư mục trùng toàn bộ | P1 | |
+| F2 | Thư mục trùng toàn bộ | P1 | ✅ Đã code xong (2026-09-28) — **không có** `archive`/`quarantine` cả thư mục: `archive` chưa có handler nào (là B5), `quarantine` cũng `allowsFolders: false`. Hành động duy nhất là `recycle`/`quarantine` **từng tệp**, đúng quy tắc bất biến. Pha thư mục **đi cây riêng, nhìn cả `node_modules`, `.git`, tên chấm** — nếu không thì "trùng khớp" là lời nói dối |
 | F3 | Phiên bản tài liệu | P2 | |
 
 ### Giai đoạn 4 — Ảnh, chat, di chuyển dữ liệu
@@ -1382,6 +1382,32 @@ Thêm trục **"Cuộc trò chuyện"** vào màn Photos & video, dùng thanh t�
 - Thư mục **gần trùng** (≥ 90% file giống nhau): hiện riêng, verdict `review`, và có màn so sánh cây để thấy file nào chỉ có ở một bên.
 - Hành động trên thư mục trùng: `recycle` **từng file** trong thư mục (giữ nguyên quy tắc "interface không xoá thư mục"), hoặc `archive` / `quarantine` cả thư mục.
 
+> **✅ Đã code xong (2026-09-28).**
+>
+> Code:
+> - `src/main/lib/folder-dupes.js` — **mới**, thuần, không I/O (hàm `hashOf` truyền từ ngoài vào). Bốn pha: dựng cây từ danh sách tệp → **chữ ký hình dạng** (tên + kích thước, đệ quy, *không đọc byte nào*) → **chữ ký nội dung** (SHA-256 mọi tệp, chỉ cho thư mục đã khớp hình dạng) → **gần trùng** bằng sketch bottom-k rồi đếm lại chính xác.
+> - `src/main/lib/duplicate.js` — cờ `folders`. Khi bật thì đi cây **một lần, rộng**, và danh sách của màn tệp được *lọc ra từ* cây rộng đó chứ không đi cây lần hai. `projectFolders()` làm phẳng cây thành thứ qua được IPC và chốt luôn bản giữ bằng `keeperRank` của F1.
+> - `src/main/analyzers/duplicates.js` — ba loại candidate mới, **ba không gian id riêng**: một đường dẫn giờ mang được nhiều hơn một quyết định.
+> - `src/main/analyzers/categories.js`, `src/main/ipc.js`, `src/renderer/*`, `src/i18n/vi.js`.
+> - `src/main/lib/util.js` — `skipReason` nhận `includeNoiseDirs`, chỉ F2 dùng.
+>
+> Harness: `scripts/test-folder-dupes.js` **mới, 42 kiểm tra** (`npm run test:folderdupes`, đã vào `npm test`) — nửa đầu là danh sách tệp dựng sẵn, nửa sau là thư mục thật trên `D:` chạy cả pipeline; 11 kiểm tra trong `smoke.js`; 1 trong `test-a11y.js` (axe soi cả ba theme). `scripts/shoot-folder-dupes.js` chụp 9 ảnh: hai theme, cửa sổ hẹp, tiếng Việt, và màn bị từ chối trên Free.
+>
+> **Khác đặc tả — bốn chỗ:**
+>
+> 1. **Không có hành động trên cả thư mục.** Đặc tả cho phép `archive`/`quarantine` cả thư mục. `archive` **không có handler nào** trong `actions/handlers.js` (nó là B5, Giai đoạn 4), còn `quarantine.js:247` là `allowsFolders: false` y như `recycle.js:129`. Nên dòng thư mục là **tiêu đề, `actions: []`**, và thứ bấm được là từng tệp bên trong — đúng nghĩa đen của "giao diện không bao giờ xoá thư mục": app chuyển N tệp vào Thùng rác.
+> 2. **Ngược lại với đặc tả về tệp ẩn.** Đặc tả viết *"mặc định có tính file ẩn"*; app thì `ignoreHidden: true` và bỏ `node_modules`/`.git`/`.venv`/`__pycache__` **vô điều kiện** (`util.js:141`). Nếu giữ nguyên, hai thư mục khác nhau đúng ở `.env` sẽ được tuyên bố trùng khớp `certain` — đường mất dữ liệu. **Người dùng chốt 2026-09-28: F2 nhìn tất cả.** Giá đã đo: `D:\personal_projects` 15.518 → 87.371 tệp, 5,9 → 21,6 s; cả `D:` 173.664 → 464.617 tệp, 41,8 → 79,5 s. Chỉ là giá đi cây — pha hash chỉ chạm thư mục đã khớp hình dạng. **Không thêm công tắc**: một công tắc mà chọn sai thì mất tệp.
+> 3. **Chỉ báo thư mục ngoài cùng.** Đặc tả không nói. `A\` trùng `B\` thì `A\sub\` cũng trùng — báo cả hai là đếm đôi, và Space Planner sẽ cộng đôi theo. Đo trên `D:\personal_projects`: 67 thư mục bị loại vì nằm trong một bản sao khác.
+> 4. **Có sàn 1 MB, và sàn ấy tự trả giá cho mình.** Đo được: bỏ sàn → **233 nhóm / 307 MB**, 29,2 s; sàn 1 MB → **13 nhóm / 286 MB**, 18,4 s. Tức là 220 dòng nữa để tìm thêm 21 MB. Nhóm nhỏ nhất còn lại 1,3 MB, trung vị 12,8 MB.
+>
+> **"≥ 90%" tính thế nào:** `số tệp khớp / max(|A|, |B|)` theo **số tệp**. Ngưỡng 0,9 tự nó bắt cặp gần trùng phải có ít nhất 10 tệp bên lớn và 9 bên nhỏ — con số ấy **suy ra từ tỉ lệ** (`nearFloor`) chứ không đặt tay. Tệp chỉ có ở một bên, hoặc cùng đường dẫn mà khác byte, **hiện trong màn so cây nhưng không bao giờ nằm trong danh sách nút bấm chạm tới** — nó chính là thứ sẽ mất.
+>
+> **Một quyết định nữa, không có trong đặc tả:** một thư mục đã nằm trong nhóm trùng hoàn toàn vẫn được để lại **một đại diện** làm nửa kia của một cặp gần trùng, vì "còn một bản cũ hơn giống 90%" là thứ đáng thấy. Các bản sinh đôi của nó và mọi thứ bên dưới thì loại, nếu không màn hình sẽ lặp lại cùng một phát hiện.
+>
+> **Đã đo ở quy mô cả ổ:** toàn bộ `D:` — 464.655 tệp → **62.851 thư mục, 5.777 nhóm hình dạng, 3,0 s**, đỉnh **245 MB heap / 419 MB RSS** (phần giữ bộ nhớ: cây, chữ ký hình dạng, sketch; pha hash bị chặn bằng sàn không với tới nên phép đo này chỉ tính phần trong RAM). Đi cây chiếm 19,9 s, tức là phần thư mục **rẻ hơn chính cái walk nuôi nó**.
+>
+> **Còn mở:** chưa chạy trọn vẹn cả pha hash trên một ổ đầy — `D:\personal_projects` là lần chạy đủ lớn nhất (87.371 tệp, 15.761 thư mục, 9.553 tệp/2,9 GB đã hash, 18,4 s). Sketch gần trùng có trần 200 cặp được đối chiếu, lấy cặp to trước; trên `D:\personal_projects` trần này **đã chạm** (200 đề xuất, giữ lại 2), nên một cặp gần trùng nhỏ hơn trần có thể bị bỏ sót — chưa có số để nói bỏ sót bao nhiêu.
+
 #### F3. Phiên bản tài liệu
 
 | | |
@@ -2160,7 +2186,7 @@ cứng, cần tai người nghe, hoặc cần một quyết định. **Trợ lý
 | 6 | Theme tương phản cao thật của Windows (I2) | **Người dùng** | Bật High Contrast trong Windows rồi mở app | Mới kiểm trên bản giả lập `forced-colors`. Canvas của treemap **chưa theo** `forced-colors` — đã biết, để I2 làm nốt. |
 | 7 | Gỡ cài đặt thật để xác nhận menu Explorer bị xoá (I3) | **Người dùng** | Cài `CleanDrive-Setup-0.2.0.exe` rồi gỡ, kiểm khoá registry của menu chuột phải | Mới kiểm được là NSIS biên dịch được script gỡ. |
 | 8 | Quét tăng dần qua USN journal (mục 3 của đặc tả A2) | — | **Quyết định: không làm** | Đo được: USN record **không mang kích thước tệp**, nên chỉ thay được 9% công việc, còn `stat` chiếm 91%. Ghi ở đây để đừng ai mở lại mà không biết lý do. |
-| 9 | Một lượt `test:a11y` cho 22 lỗi | **Trợ lý** | Chạy lại và **giữ toàn bộ output** | Không tái hiện được trong 4 lượt sau, kể cả một lượt trên cây sạch `2e9a4eb`. Nguyên nhân mất dấu là output bị cắt bằng `tail`. Harness nay **in lại toàn bộ danh sách lỗi ở cuối**, nên lần sau `tail` cũng thấy. Chưa có chẩn đoán. |
+| 9 | `test:a11y` đã hỏng **hai lần**: 22 lỗi, rồi 42 lỗi | **Trợ lý** | Chạy lại và **giữ toàn bộ output** | Lần hai: 2026-09-28, 42 lỗi, ngay sau một lượt `test:e2e` trong cùng một shell. **Danh sách lại mất** — lần đầu vì `tail`, lần này vì một vòng lặp shell chỉ *đếm* số dòng PASS/FAIL rồi ghi đè biến. Sau đó **8 lượt liên tiếp đều 174/0 ALL PASS**, kể cả lặp lại đúng thứ tự `test:e2e` → `test:a11y`. Chưa có chẩn đoán. Harness nay **ghi hẳn danh sách ra tệp** trong `%TEMP%\cleandrive-a11y-failures-*.txt` và in đường dẫn — in ra màn hình không đủ khi người đọc đã nối output qua một cái ống. |
 | 10 | ~~Ảnh chụp màn hình nằm trong thư mục tên `logs\`~~ **Đã quyết và làm xong 2026-09-27** | — | — | Người dùng chọn **phương án A**: trong thư mục mang nhãn `log`, chỉ tính là log khi **đuôi của chính tệp** cũng nói vậy (`log`, `txt`, `etl`, `out`, `err`, `trace`, `dbg`, đuôi số kiểu `.log.1`, hoặc không có đuôi). Mọi thứ khác rơi xuống các luật sau và được xử như ở bất kỳ đâu. Đo lại trên `D:\work\tow_tool\logs`: **82 ảnh / 78,9 MB trước đây là `safe`, nay còn 0**; 108 tệp `.log` vẫn dọn được như cũ. 8 kiểm tra trong `test-advisor.js`. |
 | 11 | Chỉ có **một** máy test | **Người dùng** | Máy thứ hai, hoặc chấp nhận giới hạn | A1 ghi là ba máy. Mọi phép đo trong tài liệu này đều từ một máy Windows 11 duy nhất. |
 | 12 | Tốc độ hash qua ổ mạng thật (F1) | **Người dùng** | Một NAS, hoặc một máy thứ hai trên cùng mạng, rồi hash một tệp vài trăm MB từ đó | Đã thử đo qua `\\<địa chỉ LAN>\D$\…` của chính máy này: **không chậm hơn đọc cục bộ** (363–795 MB/s), vì địa chỉ đó là link-local `169.254.x.x` và byte không hề rời khỏi máy — phép đo vô dụng. Chưa có số thật thì không mở nhánh hash ổ mạng trong Duplicates (nguyên tắc D4). |

@@ -671,9 +671,20 @@ const bars = {
     root: $('dupes-actionbar'),
     readout: $('selection-status'),
     buttons: { quarantine: $('quarantine-dupes'), recycle: $('delete-dupes') },
-    selected: () => selectedIn(state.dupes && state.dupes.groups, state.selectedDupes),
+    // The file groups, plus the files inside a folder that is a copy (F2).
+    // `selectedIn` drops a path it has already seen, so a file that is both
+    // is counted once.
+    selected: () => selectedIn(dupeGroupsForSelection(), state.selectedDupes),
   }),
 };
+
+/** Everything on the Duplicates screen a tick can land on: files, then folders. */
+function dupeGroupsForSelection() {
+  const dupes = state.dupes;
+  if (!dupes) return [];
+  if (!dupes.folders) return dupes.groups;
+  return [...dupes.groups, ...dupes.folders.exact, ...dupes.folders.near];
+}
 
 /** What is ticked on Disk usage, from the largest list and from the map, each once. */
 function selectedOnUsage() {
@@ -1041,6 +1052,11 @@ const PHASE_LABEL = {
   grouping: ['dupes.phase.grouping', 'Grouping by size'],
   'hashing-partial': ['dupes.phase.partial', 'Comparing file heads'],
   'hashing-full': ['dupes.phase.full', 'Verifying full contents'],
+  // F2. The shape pass reads nothing at all, which is why it goes by so fast.
+  'folders-shape': ['dupes.phase.shape', 'Comparing folders by name and size'],
+  'folders-content': ['dupes.phase.folders', 'Verifying folder contents'],
+  'hashing-folders': ['dupes.phase.folders', 'Verifying folder contents'],
+  'folders-near': ['dupes.phase.near', 'Comparing folders that nearly match'],
 };
 
 api.onDuplicateProgress((p) => {
@@ -1065,6 +1081,7 @@ $('run-dupes').addEventListener('click', async () => {
   setDupesRunning(true);
   $('dupes-empty').hidden = true;
   $('dupe-groups').replaceChildren();
+  $('dupe-folders').replaceChildren();
   state.selectedDupes.clear();
 
   const minSize = Number($('min-size').value);
@@ -1073,8 +1090,10 @@ $('run-dupes').addEventListener('click', async () => {
   // actually applied -- so the line below reports what happened rather than
   // what was asked for.
   const prefer = $('dupes-prefer').value;
+  // Whole folders (F2). Asked for here, allowed or refused there.
+  const folders = $('dupes-folders').checked;
   const result = unwrap(
-    await api.findDuplicates(state.roots, { minSize, prefer }),
+    await api.findDuplicates(state.roots, { minSize, prefer, folders }),
     t('app.label.dupes', 'Duplicate search')
   );
   setDupesRunning(false);
@@ -1153,6 +1172,24 @@ function hydrateDupes(result) {
         protectionReason: file.component ? file.reason : null,
       })),
     })),
+    folders: result.folders ? hydrateFolders(result.folders, byId) : null,
+  };
+}
+
+/** The folder half (F2): folder rows, and the files each copy holds. */
+function hydrateFolders(folders, byId) {
+  return {
+    ...folders,
+    exact: folders.exact.map(({ ids, fileIds, ...group }) => ({
+      ...group,
+      rows: viewsOf(ids, byId),
+      files: viewsOf(fileIds, byId),
+    })),
+    near: folders.near.map(({ ids, fileIds, ...pair }) => ({
+      ...pair,
+      rows: viewsOf(ids, byId),
+      files: viewsOf(fileIds, byId),
+    })),
   };
 }
 
@@ -1212,6 +1249,32 @@ function renderDupes(result) {
   } else if (result.prefer === 'backup') {
     notes.push(t('dupes.kept.backup', 'The copy on an external or network drive is the one suggested for keeping.'));
   }
+  // Whole folders (F2), from the reply rather than from the tick-box: on Free
+  // the request is refused and the line has to say so, the same way the
+  // keeper rule does.
+  if (result.foldersRefused === 'locked') {
+    notes.push(t('dupes.folders.locked', 'Comparing whole folders is part of CleanDrive Pro, so only individual files were compared.'));
+  } else if (result.folders) {
+    notes.push(
+      t('dupes.folders.checked', 'Compared {n} folders, reading everything inside them — including hidden names, node_modules and .git.', {
+        n: formatCount(result.folders.foldersIndexed),
+      })
+    );
+    if (result.folders.nestedDropped) {
+      notes.push(
+        t('dupes.folders.nested', '{n} folders inside another copy are not listed separately, so nothing is counted twice.', {
+          n: formatCount(result.folders.nestedDropped),
+        })
+      );
+    }
+    if (result.folders.unreadableFolders) {
+      notes.push(
+        t('dupes.folders.unreadable', '{n} folders hold a file that could not be read, so they are not claimed as copies.', {
+          n: formatCount(result.folders.unreadableFolders),
+        })
+      );
+    }
+  }
   if (result.cacheHits) {
     notes.push(t('dupes.cacheHits', '{n} hashes reused from cache.', { n: formatCount(result.cacheHits) }));
   }
@@ -1225,12 +1288,26 @@ function renderDupes(result) {
   container.replaceChildren();
   lists.dupes = [];
 
+  // Folders first: one row there stands for hundreds here.
+  renderFolders(result.folders);
+  const anyFolders = Boolean(result.folders && (result.folders.exact.length || result.folders.near.length));
+  $('dupe-files-heading').hidden = !anyFolders;
+
+  // "Select all but the oldest copy" is about file groups. With folders found
+  // and no file groups it would clear a folder selection and tick nothing, so
+  // it goes and the toolbar keeps only Clear selection.
+  $('select-extra').hidden = result.totalGroups === 0;
+
   if (result.totalGroups === 0) {
-    $('dupes-toolbar').hidden = true;
+    $('dupes-toolbar').hidden = !anyFolders;
+    $('dupe-files-heading').hidden = true;
     $('dupes-empty').textContent = result.copiesOf
       ? t('dupes.copies.empty', 'No other copy of this file, byte for byte, in {scope}.', { scope: result.scope })
-      : t('dupes.empty', 'No duplicate files found in this folder.');
+      : anyFolders
+        ? t('dupes.empty.filesOnly', 'No duplicate files outside the folders above.')
+        : t('dupes.empty', 'No duplicate files found in this folder.');
     $('dupes-empty').hidden = false;
+    if (anyFolders) updateSelectionStatus();
     return;
   }
 
@@ -1239,6 +1316,248 @@ function renderDupes(result) {
     container.appendChild(renderGroup(group));
   }
   updateSelectionStatus();
+}
+
+/* ---- whole folders (F2) ------------------------------------------------- */
+
+/**
+ * The folder half of the screen.
+ *
+ * A folder row is a heading and never a thing to tick: the app does not
+ * delete folders, and neither `recycle` nor `quarantine` accepts one. What is
+ * tickable is the files inside a copy, which the row unfolds to show -- so
+ * "delete this copy" is, honestly and visibly, "send these N files to the
+ * Recycle Bin".
+ */
+function renderFolders(folders) {
+  const section = $('dupe-folders-section');
+  const container = $('dupe-folders');
+  container.replaceChildren();
+
+  if (!folders || (folders.exact.length === 0 && folders.near.length === 0)) {
+    section.hidden = true;
+    return;
+  }
+  section.hidden = false;
+  for (const group of folders.exact.slice(0, 200)) container.appendChild(renderFolderGroup(group));
+  for (const pair of folders.near.slice(0, 200)) container.appendChild(renderNearPair(pair));
+}
+
+/** One folder row: what it is, how big, and how many files it holds. */
+function folderHead(row, extra) {
+  const head = document.createElement('div');
+  head.className = `folder-row${row.keeper ? ' is-keeper' : ''}`;
+
+  const name = document.createElement('div');
+  name.className = 'folder-path';
+  name.textContent = row.path;
+  name.title = row.path;
+
+  const facts = document.createElement('span');
+  facts.className = 'folder-facts';
+  facts.textContent = t('dupes.folders.facts', '{size} · {n} files', {
+    size: formatBytes(row.size),
+    n: formatCount(row.fileCount),
+  });
+
+  const tag = document.createElement('span');
+  tag.className = row.keeper ? 'keeper-tag' : 'badge badge-confidence';
+  tag.textContent = extra;
+
+  head.append(name, facts, tag);
+  return head;
+}
+
+function renderFolderGroup(group) {
+  const section = document.createElement('section');
+  section.className = 'group group-folder';
+
+  const head = document.createElement('div');
+  head.className = 'group-head';
+  const title = document.createElement('strong');
+  title.textContent = t('dupes.folders.groupTitle', '{n} identical folders · {size} each', {
+    n: group.count,
+    size: formatBytes(group.bytes),
+  });
+  const waste = document.createElement('span');
+  waste.className = 'group-waste';
+  waste.textContent = t('dupes.reclaimableAmount', '{size} reclaimable', { size: formatBytes(group.wastedBytes) });
+  head.append(title, waste);
+
+  const body = document.createElement('div');
+  body.className = 'group-body';
+  for (const row of group.rows) {
+    body.appendChild(
+      folderHead(
+        row,
+        row.keeper
+          ? t('dupes.folders.keeping', 'keeping')
+          : `${t('dupes.folders.copy', 'copy')} · ${confidenceWord(row.confidence)}`
+      )
+    );
+    if (row.keeper) continue;
+    body.appendChild(filesOfCopy(group.files.filter((f) => f.folder === row.path), row));
+  }
+
+  section.append(head, body);
+  return section;
+}
+
+/**
+ * The files a copy holds, ticked together.
+ *
+ * A folder past the message's file budget lists none, and says so rather than
+ * offering half of itself -- half a folder deleted is the one outcome nobody
+ * asked for.
+ */
+function filesOfCopy(files, row) {
+  const wrap = document.createElement('div');
+  wrap.className = 'folder-files';
+
+  if (row.truncated || (files.length === 0 && row.fileCount > 0)) {
+    const note = document.createElement('p');
+    note.className = 'empty';
+    note.textContent = t(
+      'dupes.folders.tooMany',
+      'This copy holds {n} files — too many to list here. Open it in Explorer to deal with it.',
+      { n: formatCount(row.fileCount) }
+    );
+    wrap.appendChild(note);
+    return wrap;
+  }
+
+  const bar = document.createElement('div');
+  bar.className = 'panel-actions';
+  const all = document.createElement('button');
+  all.className = 'btn btn-sm';
+  all.textContent = t('dupes.folders.selectCopy', 'Select every file in this copy');
+  all.addEventListener('click', () => {
+    for (const file of files) state.selectedDupes.add(file.path);
+    syncCheckboxes();
+    updateSelectionStatus();
+  });
+  bar.appendChild(all);
+
+  const list = document.createElement('ul');
+  list.className = 'files';
+  lists.dupes.push(
+    CandidateList(list, {
+      rows: files,
+      selection: state.selectedDupes,
+      onChange: updateSelectionStatus,
+      meta: (file) => `${file.rel} · ${timeLabel(file)}`,
+      badge: (file) =>
+        evidencePill(file, {
+          className: 'badge badge-confidence badge-button',
+          text: `${t('dupes.identical', 'identical')} · ${confidenceWord(file.confidence)}`,
+        }),
+    })
+  );
+
+  wrap.append(bar, list);
+  return wrap;
+}
+
+/**
+ * Two folders that nearly match, and what is actually different about them.
+ *
+ * The comparison is the point of the row: "97% the same" is not a number
+ * anybody can act on until they can see which files make up the other 3%.
+ */
+function renderNearPair(pair) {
+  const section = document.createElement('section');
+  section.className = 'group group-folder group-near';
+
+  const head = document.createElement('div');
+  head.className = 'group-head';
+  const title = document.createElement('strong');
+  title.textContent = t('dupes.near.title', '{pct}% the same · {n} files identical', {
+    pct: (pair.ratio * 100).toFixed(1),
+    n: formatCount(pair.matched),
+  });
+  const waste = document.createElement('span');
+  waste.className = 'group-waste';
+  waste.textContent = t('dupes.near.shared', '{size} held twice', { size: formatBytes(pair.sameBytes) });
+  head.append(title, waste);
+
+  const body = document.createElement('div');
+  body.className = 'group-body';
+  const [keepRow, otherRow] = [pair.rows.find((r) => r.keeper), pair.rows.find((r) => !r.keeper)];
+  if (keepRow) body.appendChild(folderHead(keepRow, t('dupes.folders.keeping', 'keeping')));
+  if (otherRow) {
+    body.appendChild(
+      folderHead(otherRow, `${t('dupes.near.other', 'nearly the same')} · ${confidenceWord(otherRow.confidence)}`)
+    );
+  }
+  body.appendChild(compareTree(pair, keepRow, otherRow));
+  if (otherRow) body.appendChild(filesOfCopy(pair.files, otherRow));
+
+  section.append(head, body);
+  return section;
+}
+
+/** Three columns: only on the left, only on the right, same place different bytes. */
+function compareTree(pair, keepRow, otherRow) {
+  const wrap = document.createElement('div');
+  wrap.className = 'compare-tree';
+
+  const column = (headingText, entries, emptyText) => {
+    const col = document.createElement('div');
+    col.className = 'compare-column';
+    const heading = document.createElement('h4');
+    heading.textContent = headingText;
+    col.appendChild(heading);
+    if (entries.length === 0) {
+      const none = document.createElement('p');
+      none.className = 'empty';
+      none.textContent = emptyText;
+      col.appendChild(none);
+      return col;
+    }
+    const list = document.createElement('ul');
+    list.className = 'compare-list';
+    for (const entry of entries.slice(0, 200)) {
+      const item = document.createElement('li');
+      const rel = document.createElement('span');
+      rel.className = 'compare-rel';
+      rel.textContent = entry.rel;
+      rel.title = entry.rel;
+      const size = document.createElement('span');
+      size.className = 'compare-size';
+      size.textContent = formatBytes(entry.bytes);
+      item.append(rel, size);
+      list.appendChild(item);
+    }
+    col.appendChild(list);
+    return col;
+  };
+
+  const nameOf = (row, fallback) => (row ? row.path.split(/[\\/]/).pop() : fallback);
+  wrap.append(
+    column(
+      t('dupes.near.onlyIn', 'Only in {name}', { name: nameOf(keepRow, 'A') }),
+      pair.compare.onlyKeep,
+      t('dupes.near.nothingOnly', 'Nothing here that is not on the other side.')
+    ),
+    column(
+      t('dupes.near.onlyIn', 'Only in {name}', { name: nameOf(otherRow, 'B') }),
+      pair.compare.onlyOther,
+      t('dupes.near.nothingOnly', 'Nothing here that is not on the other side.')
+    ),
+    column(
+      t('dupes.near.changed', 'Same place, different contents'),
+      pair.compare.changed,
+      t('dupes.near.nothingChanged', 'Every shared file holds the same bytes.')
+    )
+  );
+
+  if (pair.compare.truncated) {
+    const note = document.createElement('p');
+    note.className = 'empty';
+    note.textContent = t('dupes.near.truncated', 'Only the first 200 differences of each kind are listed.');
+    wrap.appendChild(note);
+  }
+  return wrap;
 }
 
 function renderGroup(group) {
@@ -1342,6 +1661,36 @@ function syncCheckboxes() {
   for (const list of lists.dupes) list.sync();
 }
 
+/**
+ * The folder half, after some of its files have gone to the bin (F2).
+ *
+ * A copy that has lost files is no longer a copy of anything, so it stops
+ * claiming to be one: the row goes, and with it the group when there is no
+ * longer a second folder in it. The alternative -- redrawing the same row
+ * over files that are not there any more -- is the screen lying about what
+ * it just did.
+ */
+function pruneFolders(gone) {
+  const folders = state.dupes && state.dupes.folders;
+  if (!folders) return;
+
+  const survived = (row) => !(row.files || []).some((f) => gone.has(f.path));
+
+  folders.exact = folders.exact
+    .map((group) => ({
+      ...group,
+      rows: group.rows.filter((row) => row.keeper || !group.files.some((f) => f.folder === row.path && gone.has(f.path))),
+      files: group.files.filter((f) => !gone.has(f.path)),
+    }))
+    .filter((group) => group.rows.filter((r) => !r.keeper).length > 0)
+    .map((group) => ({ ...group, count: group.rows.length, wastedBytes: group.bytes * (group.rows.length - 1) }));
+
+  folders.near = folders.near.filter((pair) => survived(pair));
+  folders.totalFolderGroups = folders.exact.length;
+  folders.folderReclaimableBytes = folders.exact.reduce((n, g) => n + g.wastedBytes, 0);
+  folders.nearReclaimableBytes = folders.near.reduce((n, p) => n + p.sameBytes, 0);
+}
+
 const onDupesAction = (kind) => async () => {
   await deleteSelected([...state.selectedDupes], (moved) => {
     const gone = new Set(moved.map((m) => m.path));
@@ -1360,6 +1709,7 @@ const onDupesAction = (kind) => async () => {
 
     state.dupes.totalGroups = state.dupes.groups.length;
     state.dupes.reclaimableBytes = state.dupes.groups.reduce((n, g) => n + g.wastedBytes, 0);
+    pruneFolders(gone);
     renderDupes(state.dupes);
   }, { kind });
 };
