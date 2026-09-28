@@ -2902,8 +2902,9 @@ app.whenReady().then(async () => {
           menu.tipText.slice(0, 80));
         check('right-clicking a file offers View, Reveal and Add to selection, with focus in the menu',
           menu.items.join('|') === 'View|Reveal|Add to selection' && menu.focusedInMenu, menu.items.join(', '));
-        check('right-clicking a folder offers Open, Reveal and the move to another drive (B2)',
-          menu.folderMenu.join('|') === 'Open this folder|Reveal|Move to another drive…', menu.folderMenu.join(', '));
+        check('right-clicking a folder offers Open, Reveal, the move (B2) and the archive (B5)',
+          menu.folderMenu.join('|') === 'Open this folder|Reveal|Move to another drive…|Pack into an archive…',
+          menu.folderMenu.join(', '));
         check('adding it ticks the tile and brings up the same bar the largest list uses',
           menu.menuClosed && menu.selected === 'true' && menu.bar && /1 selected/.test(menu.readout), menu.readout);
 
@@ -3558,6 +3559,84 @@ app.whenReady().then(async () => {
         ipc.setRelocateHarness(null);
         fs.rmSync(rBase, { recursive: true, force: true });
         fs.rmSync(rFar, { recursive: true, force: true });
+      }
+    }
+    /* -- a folder into one archive (B5) ------------------------------------ */
+
+    console.log('\nPacking a folder into an archive (B5):');
+    {
+      const js = (expr) => win.webContents.executeJavaScript(expr);
+      const aBase = fs.mkdtempSync(path.join(os.tmpdir(), 'cleandrive-smoke-archive-'));
+      const aKeep = path.join(aBase, 'archives');
+      const aBin = path.join(aBase, 'bin');
+      fs.mkdirSync(aKeep);
+      fs.mkdirSync(aBin);
+
+      const folder = path.join(aBase, 'Dự án cũ');
+      fs.mkdirSync(path.join(folder, 'src'), { recursive: true });
+      fs.mkdirSync(path.join(folder, 'nothing in here'), { recursive: true });
+      const code = path.join(folder, 'src', 'app.js');
+      fs.writeFileSync(code, 'const value = 1;\n'.repeat(8000));
+      fs.writeFileSync(path.join(folder, 'ảnh.jpg'), crypto.randomBytes(200000));
+      const codeHash = crypto.createHash('sha256').update(fs.readFileSync(code)).digest('hex');
+      const when = new Date('2015-06-11T08:20:00Z');
+      fs.utimesSync(code, when, when);
+
+      ipc.setRelocateHarness({
+        pick: async () => aKeep,
+        shell: {
+          async trashItem(target) {
+            fs.renameSync(target, path.join(aBin, path.basename(target)));
+          },
+        },
+      });
+
+      try {
+        const packed = await js(`window.cleandrive.archive([${JSON.stringify(folder)}], {
+          destination: ${JSON.stringify(aKeep)}, confirm: false })`);
+        const out = packed.data;
+        const made = path.join(aKeep, 'Dự án cũ.zip');
+
+        check('the folder was packed through the real pipeline, in the real app',
+          out && out.moved.length === 1, JSON.stringify((out && out.failed) || packed));
+        check('the archive is on disk', fs.existsSync(made), made);
+        check('the folder is gone from where it was', !fs.existsSync(folder));
+        check('and is in the bin, whole', fs.existsSync(path.join(aBin, 'Dự án cũ')));
+        check('moved is not freed: the folder is in the bin, on the same drive',
+          out.movedBytes > 0 && out.freedBytes === 0, `${out.movedBytes} / ${out.freedBytes}`);
+
+        const zip = require('../src/main/lib/archive-zip');
+        const idx = await zip.index(made);
+        const names = idx.entries.map((e) => e.name);
+        check('every file and the manifest are inside',
+          names.includes('src/app.js') && names.includes('ảnh.jpg') && names.includes('manifest.json'),
+          names.join(', '));
+        check('the empty folder is inside too', names.includes('nothing in here/'));
+
+        const checked = await zip.verify(made, {});
+        check('every member reads back with the CRC it claims', checked.ok === true, JSON.stringify(checked.bad));
+
+        // Text compresses, a JPEG does not, and the archive says which it did.
+        const codeEntry = idx.entries.find((e) => e.name === 'src/app.js');
+        const photoEntry = idx.entries.find((e) => e.name === 'ảnh.jpg');
+        check('the source file was deflated and the photo was stored',
+          codeEntry.compressedSize < codeEntry.size / 2 && photoEntry.compressedSize >= photoEntry.size,
+          `code ${codeEntry.compressedSize}/${codeEntry.size}, photo ${photoEntry.compressedSize}/${photoEntry.size}`);
+
+        // And the way back, which is what makes this a backup rather than a delete.
+        const restored = await zip.extract(made, folder, { skip: (e) => e.name === 'manifest.json' });
+        check('the Restore Center\u2019s way back puts every file where it was',
+          restored.ok === true && restored.written.length === 2, JSON.stringify(restored.failed));
+        check('byte for byte',
+          crypto.createHash('sha256').update(fs.readFileSync(code)).digest('hex') === codeHash);
+        check('with the timestamp it had, not the time it was unpacked',
+          Math.abs(fs.statSync(code).mtime.getTime() - when.getTime()) <= 2000,
+          fs.statSync(code).mtime.toISOString());
+        check('and without the manifest, which was never the person\u2019s file',
+          !fs.existsSync(path.join(folder, 'manifest.json')));
+      } finally {
+        ipc.setRelocateHarness(null);
+        fs.rmSync(aBase, { recursive: true, force: true });
       }
     }
     /* -- installed apps (D1) ----------------------------------------------- */

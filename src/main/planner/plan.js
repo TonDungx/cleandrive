@@ -46,7 +46,6 @@
 const WHEN = Object.freeze({
   dehydrate: 'now',
   compress: 'now',
-  archive: 'now',
   // Into the bin, on the same volume. Real when the bin is emptied.
   recycle: 'bin',
   // Quarantine copies elsewhere; whether the original goes depends on a
@@ -59,6 +58,12 @@ const WHEN = Object.freeze({
   // left. Same shape as quarantine, same answer, and only the "delete the
   // original" setting makes it 'now'.
   relocate: 'bin',
+  // B5 was written here as 'now' for the same reason relocate was, and is
+  // wrong the same way: the folder it packed goes to the Recycle Bin. More
+  // so, in fact -- when the archive is kept on the drive it came from, what
+  // eventually comes back is the folder less the archive, and for photos
+  // that is close to nothing.
+  archive: 'bin',
   // The app hands the user to a Windows tool and counts nothing itself.
   handoff: 'windows',
   hardlink: 'now',
@@ -72,14 +77,15 @@ const APP_CACHE = /^cleanup\.app\./;
  *
  * `compress` (B4) is Phase 4 and has no step here yet.
  *
- * `relocate` (B2) is built and still has no step, which is not an oversight.
+ * `relocate` (B2) and `archive` (B5) are built and still have no step, which
+ * is not an oversight.
  * A step is matched against *candidates*, and every candidate in this app is
- * a file an analyzer decided something about. Relocate acts on a folder the
- * person picked off the treemap, because nothing here can honestly rank
- * "which of your folders should live on another drive" -- that depends on
- * what you open, not on what the disk can see. Giving it a step would mean
- * inventing that judgement, and a plan built on an invented judgement is
- * worse than a plan with one fewer step.
+ * a file an analyzer decided something about. Both of these act on a folder
+ * the person picked off the treemap, because nothing here can honestly rank
+ * "which of your folders should live on another drive" or "which should be
+ * packed away" -- that depends on what you open, not on what the disk can
+ * see. Giving them a step would mean inventing that judgement, and a plan
+ * built on an invented judgement is worse than a plan with fewer steps.
  * Quarantine is not a step either -- it is an action offered on files the
  * "large and untouched" step already lists, so giving it a step of its own
  * would count the same bytes twice.

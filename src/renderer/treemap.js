@@ -667,6 +667,14 @@
           run: () => relocateFolder(entry.path),
         });
       }
+      // B5, next to B2 because they answer the same question -- "this folder
+      // is big and I am not using it" -- with the two different answers.
+      if (entry.path && typeof archiveFolder === 'function') {
+        items.push({
+          label: t('map.menu.archive', 'Pack into an archive…'),
+          run: () => archiveFolder(entry.path),
+        });
+      }
       return items;
     }
     if (entry.kind === 'file') {

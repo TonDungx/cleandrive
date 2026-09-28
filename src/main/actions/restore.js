@@ -86,8 +86,12 @@ async function inspect(journal, { only = null, deps = {} } = {}) {
         size: Number.isFinite(line.bytes) ? line.bytes : 0,
         trashedAt: Date.parse(line.t),
         mtimeMs: line.mtime ? Date.parse(line.mtime) : null,
-        // A quarantine's copy on the other drive, and what it was checked against.
-        stored: session.kind === 'quarantine' && typeof line.to === 'string' ? line.to : null,
+        // Where the app put it: a quarantine's copy on the other drive (B1),
+        // or the archive a folder was packed into (B5). Both are things this
+        // app wrote and can read back; the bin is not, which is why `recycle`
+        // has no `to` to record.
+        stored:
+          (session.kind === 'quarantine' || session.kind === 'archive') && typeof line.to === 'string' ? line.to : null,
         sha256: typeof line.sha256 === 'string' ? line.sha256 : null,
         original: line.original || null,
       });
@@ -116,10 +120,18 @@ async function inspect(journal, { only = null, deps = {} } = {}) {
   return { sessions, records, status };
 }
 
-const STATES = ['inBin', 'inQuarantine', 'restored', 'purged', 'gone', 'unavailable'];
+const STATES = ['inBin', 'inQuarantine', 'inArchive', 'restored', 'purged', 'gone', 'unavailable'];
 
 /** The states an item can be put back from: the Recycle Bin, or a quarantine folder. */
-const RESTORABLE = new Set(['inBin', 'inQuarantine']);
+/**
+ * The states from which something can actually be put back.
+ *
+ * `inArchive` joined them with B5. Without it the Restore Center listed the
+ * archive sessions and then said "0 items can be put back", which is the
+ * worst of both: a record of something it will not undo. The screenshots
+ * caught it.
+ */
+const RESTORABLE = new Set(['inBin', 'inQuarantine', 'inArchive']);
 
 /** One session as the Restore Center lists it: what happened, and where it all is now. */
 function summarise(session, records, status) {
@@ -274,12 +286,22 @@ const say = {
   goneZone: () => i18n.t('restore.why.goneZone', 'No longer in the quarantine folder'),
   unavailableZone: () => i18n.t('restore.why.unavailableZone', 'The drive the quarantine folder is on is not connected'),
   hash: () => i18n.t('restore.why.hash', 'The copy no longer matches what was quarantined, so it was not put back'),
+  // An archive's folder is inside one file this app wrote (B5).
+  goneArchive: () => i18n.t('restore.why.goneArchive', 'The archive is no longer there, or can no longer be opened'),
+  unavailableArchive: () =>
+    i18n.t('restore.why.unavailableArchive', 'The drive the archive is on is not connected'),
+  extractFailed: () =>
+    i18n.t('restore.why.extractFailed', 'The archive could not be unpacked, so nothing was put back'),
+  escape: () =>
+    i18n.t('restore.why.escape', 'The archive names a file outside the folder, so it was not unpacked'),
 };
 
 /** The words for a state an item is in, when that state means "cannot be put back". */
 function whyNot(state, kind) {
   if (kind === 'quarantine' && state === 'gone') return say.goneZone();
   if (kind === 'quarantine' && state === 'unavailable') return say.unavailableZone();
+  if (kind === 'archive' && state === 'gone') return say.goneArchive();
+  if (kind === 'archive' && state === 'unavailable') return say.unavailableArchive();
   return (say[state] || say.gone)();
 }
 
@@ -287,7 +309,14 @@ function whyNot(state, kind) {
 function putBackError(result, kind) {
   if (result && result.code === 'EEXIST') return say.inTheWay();
   if (result && result.code === 'EHASH') return say.hash();
-  if (result && result.code === 'ENOENT') return kind === 'quarantine' ? say.goneZone() : say.gone();
+  if (result && result.code === 'EESCAPE') return say.escape();
+  if (result && result.code === 'ECRC') return say.hash();
+  if (result && result.code === 'EEXTRACT') return say.extractFailed();
+  if (result && result.code === 'ENOENT') {
+    if (kind === 'quarantine') return say.goneZone();
+    if (kind === 'archive') return say.goneArchive();
+    return say.gone();
+  }
   return say.failed();
 }
 

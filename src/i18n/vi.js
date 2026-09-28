@@ -1158,6 +1158,64 @@
     'action.refused.folder': 'Thao tác này không áp dụng cho thư mục',
 
     'map.menu.relocate': 'Chuyển sang ổ khác…',
+    'map.menu.archive': 'Đóng gói lưu trữ…',
+
+    'archive.label': 'Đóng gói lưu trữ',
+    'archive.checking': 'Đang đọc thư mục',
+    'archive.cancelled': 'Đã huỷ — không có gì được đóng gói.',
+    'archive.locked': 'Đóng gói cả thư mục là tính năng của CleanDrive Pro.',
+    'archive.done':
+      'Đã đóng gói {name} thành {archive} — {files} tệp, {from} còn {size}, và kiểm đủ từng tệp bên trong. {shrunk}Thư mục nằm trong Thùng rác, chưa giải phóng cho tới khi dọn Thùng rác.',
+    'archive.noSmaller': 'Không nhỏ hơn được — các tệp này vốn đã nén sẵn.',
+    'archive.nothing': 'Không có gì được đóng gói. {reason}',
+
+    'archive.why.notThere': 'Thư mục đó không còn ở đó nữa',
+    'archive.why.notAFolder': 'Cái này đóng gói thư mục, mà đó không phải thư mục',
+    'archive.why.root': 'Gốc ổ đĩa hay thư mục cá nhân không phải thứ để đóng gói',
+    'archive.why.system': 'Đây là vị trí hệ thống của Windows',
+    'archive.why.network': 'Thư mục trên mạng thì để yên',
+    'archive.why.empty': 'Thư mục đó không có gì để đóng gói',
+    'archive.why.occupied': 'Đã có sẵn một tệp trùng tên ở nơi định đặt archive',
+    'archive.why.inside': 'Archive sẽ nằm bên trong chính thư mục đang được đóng gói',
+    'archive.why.full': 'Ổ {drive} không đủ chỗ',
+    'archive.why.noDestination': 'Chưa chọn nơi để archive',
+    'archive.why.destUnusable': 'Không ghi được vào nơi đó',
+    'archive.why.writeFailed': 'Archive chưa hoàn tất, nên không có gì thay đổi ({error})',
+    'archive.why.verifyFailed':
+      'Archive đã ghi xong nhưng {n} tệp đọc lại không khớp, nên thư mục được để yên và archive đã bị xoá',
+    'archive.why.binFailed':
+      'Archive thì ổn, nhưng không chuyển được thư mục ({error}), nên không có gì thay đổi',
+
+    'dialog.chooseArchive': 'Chọn nơi cất archive',
+    'dialog.archive.title': 'Đóng gói lưu trữ',
+    'dialog.archive.go': 'Đóng gói thư mục',
+    'dialog.archive.message': 'Đóng gói {n} thư mục thành archive?',
+    'dialog.archive.messageOne': 'Đóng gói “{name}” thành một tệp?',
+    'dialog.archive.detail':
+      '{files} tệp, {size}, sẽ được gói vào một tệp .zip và sau đó kiểm lại từng tệp bên trong.',
+    'dialog.archive.saving':
+      'Archive ước chừng {archive}, lấy mẫu từ các tệp — nhỏ hơn khoảng {percent}.',
+    'dialog.archive.noSaving':
+      'Thư mục này vốn đã gần nhỏ hết mức — archive ước chừng {archive}, nên đóng gói ở đây là để có một tệp thay vì {files} tệp, không phải để tiết kiệm dung lượng.',
+    'dialog.archive.sameDrive':
+      'Archive nằm cùng ổ, nên dọn Thùng rác sau đó sẽ lấy lại khoảng {freed}.',
+    'dialog.archive.otherDrive':
+      'Archive sang ổ {drive}, nên dọn Thùng rác sau đó sẽ lấy lại khoảng {freed} ở đây.',
+    'dialog.archive.back':
+      'Thư mục vào Thùng rác, và Khôi phục có thể giải nén archive về đúng chỗ cũ, giữ nguyên cả timestamp.',
+    'dialog.archive.links': '{n} lối tắt bên trong được bước qua chứ không đi theo, và không được gói.',
+
+    'restore.title.archive': 'Đã đóng gói {n} {items} vào archive',
+    'restore.state.inArchive': 'trong archive',
+    'restore.state.goneArchive': 'archive không còn',
+    'restore.row.inArchive': 'Đã gói vào {path} {when}, và kiểm lại từng tệp bên trong',
+    'restore.row.unavailableArchive': 'Ổ chứa archive không kết nối, nên không đọc được',
+    'restore.row.goneArchive':
+      'Archive không còn ở đó, hoặc không mở được nữa — không khôi phục được gì từ nó',
+    'restore.why.goneArchive': 'Archive không còn ở đó, hoặc không mở được nữa',
+    'restore.why.unavailableArchive': 'Ổ chứa archive không kết nối',
+    'restore.why.extractFailed': 'Không giải nén được archive, nên không có gì được khôi phục',
+    'restore.why.escape': 'Archive có tệp trỏ ra ngoài thư mục, nên không được giải nén',
     'relocate.label': 'Chuyển sang ổ khác',
     'relocate.checking': 'Đang đọc thư mục',
     'relocate.cancelled': 'Đã huỷ — không có gì được chuyển.',

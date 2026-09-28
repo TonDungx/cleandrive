@@ -60,6 +60,8 @@
         return s.drive
           ? t('restore.title.quarantine', 'Moved {n} {items} to {drive}', { n, items, drive: s.drive })
           : t('restore.title.quarantineAnywhere', 'Moved {n} {items} to another drive', { n, items });
+      case 'archive':
+        return t('restore.title.archive', 'Packed {n} {items} into an archive', { n, items });
       default:
         return t('restore.title.other', '{kind}: {n} {items}', { kind: s.kind, n, items });
     }
@@ -111,6 +113,8 @@
     inBin: ['restore.state.inBin', 'in the bin'],
     inQuarantine: ['restore.state.inQuarantine', 'in quarantine'],
     goneZone: ['restore.state.goneZone', 'not in the folder'],
+    inArchive: ['restore.state.inArchive', 'in an archive'],
+    goneArchive: ['restore.state.goneArchive', 'archive not there'],
     restored: ['restore.state.restored', 'put back'],
     purged: ['restore.state.purged', 'purged'],
     gone: ['restore.state.gone', 'not in the bin'],
@@ -119,6 +123,20 @@
 
   /** The sentence under a row: where this file is, and how the app knows. */
   function whereNow(row) {
+    if (row.kind === 'archive') {
+      if (row.state === 'inArchive') {
+        return t('restore.row.inArchive', 'Packed into {path} {when}, and every file checked against it', {
+          path: row.stored,
+          when: formatAgo(row.trashedAt),
+        });
+      }
+      if (row.state === 'unavailable') {
+        return t('restore.row.unavailableArchive', 'The drive the archive is on is not connected, so it cannot be read');
+      }
+      if (row.state === 'gone') {
+        return t('restore.row.goneArchive', 'The archive is no longer there, or can no longer be opened — nothing can be put back from it');
+      }
+    }
     if (row.kind === 'quarantine') {
       if (row.state === 'inQuarantine') {
         const at = t('restore.row.inQuarantine', 'Copied to {path} {when}, and the copy checked against it', {
@@ -164,7 +182,10 @@
   }
 
   function stateBadge(row) {
-    const state = row.kind === 'quarantine' && row.state === 'gone' ? 'goneZone' : row.state;
+    // "Gone" means somewhere different for each kind, and the badge is the
+    // one place a person reads before anything else.
+    const GONE = { quarantine: 'goneZone', archive: 'goneArchive' };
+    const state = row.state === 'gone' && GONE[row.kind] ? GONE[row.kind] : row.state;
     const [key, english] = STATE_WORD[state] || STATE_WORD.gone;
     const el = document.createElement('span');
     // Neutral on purpose: green, amber and red mean verdicts in this app, and

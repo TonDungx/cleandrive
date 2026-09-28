@@ -96,7 +96,20 @@ function open(buf) {
 /* the index at the end                                                        */
 /* -------------------------------------------------------------------------- */
 
-function findEocd(buf) {
+/**
+ * `base` is where `buf` starts inside the file it came from.
+ *
+ * Zero when the whole archive is in memory, which is every case this module
+ * was written for. B5 packs folders into archives far too big to hold, so it
+ * reads the last stretch of the file and passes that stretch's offset here:
+ * the records store *absolute* positions, and without `base` they would be
+ * read as positions inside a buffer that starts part way through.
+ *
+ * The alternative was a second copy of these offsets in the archive code.
+ * They have been unchanged since 1989 and are fiddly in exactly the way that
+ * makes two copies drift.
+ */
+function findEocd(buf, base = 0) {
   if (buf.length < 22) throw fail('NOT_A_ZIP', 'too short to be an archive');
 
   /*
@@ -120,7 +133,7 @@ function findEocd(buf) {
       size: buf.readUInt32LE(at + 12),
       offset: buf.readUInt32LE(at + 16),
     };
-    return needsZip64(eocd) ? readZip64(buf, at, eocd) : eocd;
+    return needsZip64(eocd) ? readZip64(buf, at, eocd, base) : eocd;
   }
   throw fail('NOT_A_ZIP', 'no end-of-archive record');
 }
@@ -130,11 +143,12 @@ function needsZip64(eocd) {
   return eocd.count === 0xffff || eocd.size === 0xffffffff || eocd.offset === 0xffffffff;
 }
 
-function readZip64(buf, eocdAt, fallback) {
+function readZip64(buf, eocdAt, fallback, base = 0) {
   const locAt = eocdAt - 20;
   if (locAt < 0 || buf.readUInt32LE(locAt) !== EOCD64_LOC_SIG) return fallback;
 
-  const at = Number(buf.readBigUInt64LE(locAt + 8));
+  // Absolute in the file; `base` brings it back to an index into this buffer.
+  const at = Number(buf.readBigUInt64LE(locAt + 8)) - base;
   if (!Number.isSafeInteger(at) || at < 0 || at + 56 > buf.length) return fallback;
   if (buf.readUInt32LE(at) !== EOCD64_SIG) return fallback;
 
@@ -145,9 +159,12 @@ function readZip64(buf, eocdAt, fallback) {
   };
 }
 
-function readCentralDirectory(buf, eocd) {
+function readCentralDirectory(buf, eocd, base = 0) {
   const entries = [];
-  let at = eocd.offset;
+  // `eocd.offset` is where the index sits in the file; `base` is where this
+  // buffer does. `entry.localOffset` below stays absolute, because the caller
+  // that reads from a file seeks with it.
+  let at = eocd.offset - base;
   if (at < 0 || at >= buf.length) throw fail('ZIP_TRUNCATED', 'the index points outside the file');
 
   // Bounded by the count the archive states *and* by the buffer, so a corrupt
@@ -277,4 +294,15 @@ function fail(code, detail) {
   return err;
 }
 
-module.exports = { open, MAX_ENTRY_BYTES, MAX_TOTAL_BYTES };
+module.exports = {
+  open,
+  MAX_ENTRY_BYTES,
+  MAX_TOTAL_BYTES,
+  // For `lib/archive-zip.js` (B5), which reads archives far too large to hold
+  // in memory and needs the index without the expanding.
+  findEocd,
+  readCentralDirectory,
+  dosTimeToMs,
+  STORED,
+  DEFLATED,
+};

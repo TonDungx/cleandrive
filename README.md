@@ -472,6 +472,40 @@ the rest) to Properties → Location, and a folder **inside OneDrive** to
 nothing at all — its files are on your other devices too, and binning the
 original here would delete them there.
 
+### Packing a folder into one archive
+
+The other answer to "this folder is big and I am not opening it": ten thousand
+files become one `.zip`, kept wherever you like, including on the same drive.
+The folder then goes to the Recycle Bin, so — as everywhere else in this app —
+nothing is freed until the bin is emptied.
+
+**Only what compresses is compressed.** Measured on this machine, deflating
+real files: a folder of source code gives back 68% of its size, a folder of
+documents 10%, and a folder of photos and video gives back nothing at all —
+`.docx` saves 1%, `.png` 1.5%, and an `.mp4` comes out very slightly *bigger*.
+So each file is tried on its first 64 KB and the ones that will not shrink are
+stored as they are, which saves minutes of processor on a folder of video for
+a saving that was never going to arrive. The confirmation states the estimate
+before you agree: for a source project it says how much smaller, and for
+photos it says plainly that packing them is about having one file instead of
+thousands rather than about space.
+
+**It is checked before your folder is touched.** The archive is written, then
+reopened and read back: every file's checksum, every file's length, and every
+file's SHA-256 against a `manifest.json` written inside the archive. Only then
+does the original folder go to the bin. An archive that cannot be opened is
+not a backup, it is a folder that has been deleted, so a single wrong byte
+anywhere means the archive is removed and the folder is left exactly where it
+was.
+
+**Getting it back.** A `.zip` opens in Explorer like any other, but Explorer
+will not restore the timestamps and checks nothing, so the Restore Center
+unpacks it itself — every file back where it was, every checksum verified,
+every modification time set, and the manifest left out, because it was never
+one of your files. Files larger than 4 GB are handled (ZIP64), Vietnamese
+names survive, empty folders come back, and a link inside the folder is
+stepped over rather than followed.
+
 It is drawn in weights of one colour: the top level at full strength, each
 level inside a step paler. Nothing is coloured by file type — green, amber and
 red mean verdicts in this app, and a palette of types would be nine more

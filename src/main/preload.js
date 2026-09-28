@@ -82,6 +82,11 @@ const api = {
   relocate: (folders, options) => ipcRenderer.invoke('action:execute', { kind: 'relocate', items: folders, options }),
   relocateChoose: (forFolder) => ipcRenderer.invoke('relocate:choose', forFolder),
 
+  // B5: a folder, into one .zip. Same shape as relocate: the destination is
+  // asked for in the main process, which is the only place that can.
+  archive: (folders, options) => ipcRenderer.invoke('action:execute', { kind: 'archive', items: folders, options }),
+  archiveChoose: (forFolder) => ipcRenderer.invoke('archive:choose', forFolder),
+
   reveal: (target) => ipcRenderer.invoke('shell:reveal', target),
   open: (target) => ipcRenderer.invoke('shell:open', target),
 

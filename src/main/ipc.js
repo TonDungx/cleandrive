@@ -812,6 +812,10 @@ function register() {
                     deleteOriginal: options.deleteOriginal === true,
                   }
                 : {}),
+              // B5 takes the same one answer: where the archive goes.
+              ...(kind === 'archive'
+                ? { destination: typeof options.destination === 'string' ? options.destination : null }
+                : {}),
             },
           },
           {
@@ -823,7 +827,7 @@ function register() {
             deps:
               kind === 'quarantine'
                 ? await quarantineDeps()
-                : kind === 'relocate'
+                : kind === 'relocate' || kind === 'archive'
                   ? relocateHarness || undefined
                   : kind === 'dehydrate' && cloudDeps
                   ? cloudDeps
@@ -1512,6 +1516,34 @@ function register() {
         const win = BrowserWindow.fromWebContents(event.sender);
         const result = await dialog.showOpenDialog(win, {
           title: t('dialog.chooseRelocate', 'Choose where this folder should go — on a different drive'),
+          properties: ['openDirectory', 'createDirectory'],
+        });
+        picked = result.canceled ? null : result.filePaths[0];
+      }
+      if (!picked) return { chosen: false };
+
+      const drive = await volumes.describePath(picked).catch(() => null);
+      return {
+        chosen: true,
+        destination: picked,
+        drive: drive ? displayPath(drive.root || picked) : null,
+        freeBytes: drive && Number.isFinite(drive.freeBytes) ? drive.freeBytes : null,
+      };
+    })
+  );
+
+  /** Where the archive goes (B5). Unlike B2, the same drive is allowed. */
+  handle('archive:choose', (event, forFolder) =>
+    guard(async () => {
+      let picked = null;
+      if (relocateHarness && typeof relocateHarness.pickArchive === 'function') {
+        picked = await relocateHarness.pickArchive(forFolder);
+      } else if (relocateHarness && typeof relocateHarness.pick === 'function') {
+        picked = await relocateHarness.pick(forFolder);
+      } else {
+        const win = BrowserWindow.fromWebContents(event.sender);
+        const result = await dialog.showOpenDialog(win, {
+          title: t('dialog.chooseArchive', 'Choose where to keep the archive'),
           properties: ['openDirectory', 'createDirectory'],
         });
         picked = result.canceled ? null : result.filePaths[0];
@@ -3121,9 +3153,92 @@ async function confirmRelocate(win, description) {
   return response === 0;
 }
 
+/**
+ * The confirmation in front of packing a folder away (B5).
+ *
+ * The line that matters is the second one. "Pack this folder" sounds like it
+ * saves space, and for a folder of photos it saves almost none -- so the
+ * dialog states the estimate before the person agrees rather than letting
+ * them find out from the disk afterwards. The figure is sampled and says so.
+ */
+async function confirmArchive(win, description) {
+  const one = description.folders && description.folders.length === 1 ? description.folders[0] : null;
+  const lines = [];
+
+  lines.push(
+    t('dialog.archive.detail', '{files} file(s), {size}, will be packed into one .zip and every one of them checked inside it afterwards.', {
+      files: description.files.toLocaleString(language.current()),
+      size: formatBytes(description.bytes),
+    })
+  );
+
+  const saving = description.bytes > 0 ? 1 - description.estimatedArchiveBytes / description.bytes : 0;
+  lines.push(
+    saving < 0.05
+      ? t(
+          'dialog.archive.noSaving',
+          'This folder is already about as small as it gets — the archive should be around {archive}, so packing it is about having one file instead of {files}, not about space.',
+          {
+            archive: formatBytes(description.estimatedArchiveBytes),
+            files: description.files.toLocaleString(language.current()),
+          }
+        )
+      : t('dialog.archive.saving', 'The archive should be around {archive}, from a sample of the files — roughly {percent} smaller.', {
+          archive: formatBytes(description.estimatedArchiveBytes),
+          percent: `${Math.round(saving * 100)}%`,
+        })
+  );
+
+  lines.push(
+    description.sameVolume
+      ? t(
+          'dialog.archive.sameDrive',
+          'The archive goes on the same drive, so emptying the Recycle Bin afterwards gives back about {freed}.',
+          { freed: formatBytes(description.estimatedFreedBytes) }
+        )
+      : t(
+          'dialog.archive.otherDrive',
+          'The archive goes to {drive}, so emptying the Recycle Bin afterwards gives back about {freed} here.',
+          { drive: description.destinationDrive || '', freed: formatBytes(description.estimatedFreedBytes) }
+        )
+  );
+
+  lines.push(
+    t(
+      'dialog.archive.back',
+      'The folder goes to the Recycle Bin, and the Restore Center can unpack the archive back to where it was, timestamps and all.'
+    )
+  );
+
+  if (description.skippedLinks > 0) {
+    lines.push(
+      t('dialog.archive.links', '{n} link(s) inside it are stepped over rather than followed, and are not packed.', {
+        n: description.skippedLinks.toLocaleString(language.current()),
+      })
+    );
+  }
+
+  const { response } = await dialog.showMessageBox(win, {
+    type: 'warning',
+    buttons: [t('dialog.archive.go', 'Pack the folder'), t('app.cancel', 'Cancel')],
+    defaultId: 1,
+    cancelId: 1,
+    title: t('dialog.archive.title', 'Pack into an archive'),
+    message: one
+      ? t('dialog.archive.messageOne', 'Pack “{name}” into one file?', { name: path.basename(one.path) })
+      : t('dialog.archive.message', 'Pack {n} folder(s) into archives?', {
+          n: description.count.toLocaleString(language.current()),
+        }),
+    detail: lines.join('\n\n'),
+  });
+
+  return response === 0;
+}
+
 async function confirmAction(win, description, planned, options) {
   if (description.kind === 'quarantine') return confirmQuarantine(win, description, planned);
   if (description.kind === 'relocate') return confirmRelocate(win, description);
+  if (description.kind === 'archive') return confirmArchive(win, description);
   if (description.kind === 'dehydrate') return confirmDehydrate(win, description);
   if (description.kind !== 'recycle') return false;
 

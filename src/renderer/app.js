@@ -2280,6 +2280,70 @@ async function relocateFolder(folderPath, options = {}) {
   if (result.failed.length) console.warn('Not moved:', result.failed);
 }
 
+/**
+ * Pack a folder into one archive (B5).
+ *
+ * The receipt says the two things that are not obvious from the map: how much
+ * smaller it actually turned out -- which for photos is "not at all" -- and
+ * that the folder is in the Recycle Bin, so nothing is freed until that is
+ * emptied.
+ */
+async function archiveFolder(folderPath, options = {}) {
+  const where = unwrap(await api.archiveChoose(folderPath), t('archive.label', 'Pack into an archive'));
+  if (!where || !where.chosen) return;
+
+  progressPanel.show(t('archive.checking', 'Reading the folder'));
+  let result;
+  try {
+    result = unwrap(
+      await api.archive([folderPath], { ...options, destination: where.destination }),
+      t('archive.label', 'Pack into an archive')
+    );
+  } finally {
+    progressPanel.hide();
+  }
+  if (!result) return;
+
+  if (result.refused === 'locked') {
+    toast(t('archive.locked', 'Packing a folder into an archive is part of CleanDrive Pro.'), true);
+    return;
+  }
+
+  const packed = result.moved.length;
+  if (packed > 0 && window.SpaceMap) window.SpaceMap.refresh();
+
+  if (result.cancelled && packed === 0) {
+    toast(t('archive.cancelled', 'Cancelled — nothing was packed.'));
+    return;
+  }
+
+  if (packed > 0) {
+    const one = result.moved[0];
+    const smaller = one.size > 0 ? 1 - one.archiveBytes / one.size : 0;
+    // Both figures rather than a percentage. 2.7 MB of repeated source text
+    // becomes 8 KB, which rounds to "100% smaller" and reads as though the
+    // folder had vanished; the two sizes cannot be misread.
+    toast(
+      t('archive.done', 'Packed {name} into {archive} — {files} file(s), {from} became {size}, and every one was checked inside it. {shrunk}The folder is in the Recycle Bin, not freed until it is emptied.', {
+        name: one.path.split('\\').pop(),
+        archive: one.to.split('\\').pop(),
+        files: formatCount(one.files),
+        from: formatBytes(one.size),
+        size: formatBytes(one.archiveBytes),
+        shrunk:
+          smaller < 0.05
+            ? `${t('archive.noSmaller', 'It is no smaller — these files were already compressed.')} `
+            : '',
+      })
+    );
+    return;
+  }
+
+  const why = result.failed[0];
+  toast(t('archive.nothing', 'Nothing was packed. {reason}', { reason: why ? why.error : '' }), true);
+  if (result.failed.length) console.warn('Not packed:', result.failed);
+}
+
 /* ------------------------------------------------------- language changes */
 
 /**
