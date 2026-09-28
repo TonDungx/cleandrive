@@ -13,6 +13,8 @@
 // names are derived from it.
 process.env.CLEANDRIVE_TASK_SUFFIX = process.env.CLEANDRIVE_TASK_SUFFIX || 'selftest';
 
+const path = require('node:path');
+
 const {
   buildTaskXml,
   buildSamplerTask,
@@ -27,6 +29,10 @@ const {
   uninstall,
   isInstalled,
   selfInvocation,
+  resolveAppRoot,
+  invocationProblem,
+  harnessTasks,
+  cleanupHarnessTasks,
   installedInvocation,
   installedSchedule,
   isStale,
@@ -288,6 +294,58 @@ const BASE = {
     check('the project path is quoted, so a space in it survives', source.args.startsWith('"'));
   }
 
+  {
+    // The bug, in the shape it actually shipped. `electron scripts/shoot-*.js`
+    // makes app.getAppPath() the *scripts* directory, so the task registered by
+    // every screenshot harness launched an Electron pointed at a folder with no
+    // package.json. Windows ran it at every logon and Electron put an "Unable to
+    // find Electron app" dialog on the screen. Three of them were sitting on the
+    // development machine on 2026-09-28.
+    //
+    // These use this repository's own directories, so they measure the real
+    // thing rather than a fixture that agrees with the code by construction.
+    const SCRIPTS = __dirname;
+    const PROJECT = path.dirname(__dirname);
+
+    check('the entry directory a harness reports is not an app directory',
+      invocationProblem({ command: 'electron.exe', args: `"${SCRIPTS}" --sample-only` }) !== null);
+
+    check('so the project root is found by walking up from it',
+      resolveAppRoot({ isPackaged: false, getAppPath: () => SCRIPTS }) === PROJECT,
+      resolveAppRoot({ isPackaged: false, getAppPath: () => SCRIPTS }));
+
+    const fromHarness = selfInvocation({ isPackaged: false, getAppPath: () => SCRIPTS }, '--sample-only');
+    check('and the invocation a harness builds points at the project, not at scripts',
+      fromHarness.args === `"${PROJECT}" --sample-only`, fromHarness.args);
+    check('which is an invocation Windows can actually run',
+      invocationProblem(fromHarness) === null, String(invocationProblem(fromHarness)));
+
+    check('a directory that is already the app root is left alone',
+      resolveAppRoot({ isPackaged: false, getAppPath: () => PROJECT }) === PROJECT);
+
+    check('a packaged invocation has no path to check and is accepted',
+      invocationProblem({ command: 'CleanDrive.exe', args: '--sample-only' }) === null);
+    check('an invocation with no program at all is still refused',
+      invocationProblem({ command: '', args: '--sample-only' }) !== null);
+
+    // The refusal has to happen before Windows is asked, or the dialog is
+    // simply registered instead of prevented.
+    const refused = await install({
+      schedule: { kind: 'daily', time: '02:00' },
+      taskPath: `${cleanupTaskPath()}_unrunnable`,
+      invocation: { command: 'electron.exe', args: `"${SCRIPTS}" --scheduled-run`, workingDirectory: SCRIPTS },
+    });
+    check('a task that could not run is refused rather than registered',
+      refused.ok === false && refused.unrunnable === true, refused.error || '');
+    check('and nothing was left in Task Scheduler by the attempt',
+      (await isInstalled(`${cleanupTaskPath()}_unrunnable`)) === false);
+  }
+
+  {
+    check('a harness has registered nothing yet, so it would leave nothing behind',
+      harnessTasks().length === 0, harnessTasks().join(', '));
+  }
+
   if (process.argv.includes('--live')) {
     console.log('\nscheduler: registering a real task (and removing it again)\n');
 
@@ -373,6 +431,36 @@ const BASE = {
 
     const again = await uninstall();
     check('removing a task that is not there is not an error', again.ok === true);
+
+    // A harness must not be able to walk away from a task it registered. Until
+    // 2026-09-28 every screenshot run did exactly that, and four of them were
+    // still in Task Scheduler with logon triggers when somebody looked.
+    console.log('\nscheduler: a harness cleans up after itself\n');
+
+    check('nothing is outstanding before this part', harnessTasks().length === 0, harnessTasks().join(', '));
+
+    const tracked = await install({
+      schedule: { kind: 'weekly', time: '02:00', weekday: 0, day: 1, catchUpAtLogon: false },
+      invocation: { command: process.execPath, args: '--scheduled-run --self-test', workingDirectory: process.cwd() },
+    });
+    check('a suffixed registration succeeds as before', tracked.ok === true, tracked.error || '');
+    check('and is remembered as this process’s to clean up',
+      harnessTasks().includes(TASK_PATH), harnessTasks().join(', '));
+
+    const sweptUp = cleanupHarnessTasks();
+    check('cleanup reports the task it removed', sweptUp.includes(TASK_PATH), sweptUp.join(', '));
+    check('Windows no longer holds it', (await isInstalled()) === false);
+    check('and nothing is left outstanding', harnessTasks().length === 0, harnessTasks().join(', '));
+
+    // The same bookkeeping has to notice a task removed the ordinary way, or
+    // the exit handler would try to delete something already gone.
+    await install({
+      schedule: { kind: 'weekly', time: '02:00', weekday: 0, day: 1, catchUpAtLogon: false },
+      invocation: { command: process.execPath, args: '--scheduled-run --self-test', workingDirectory: process.cwd() },
+    });
+    await uninstall();
+    check('an ordinary uninstall clears the bookkeeping too',
+      harnessTasks().length === 0, harnessTasks().join(', '));
   } else {
     console.log('\n  (skipping live Task Scheduler registration; pass --live to include it)\n');
   }

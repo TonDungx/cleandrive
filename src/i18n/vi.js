@@ -1153,6 +1153,10 @@
       'Không liệt kê được các tác vụ CleanDrive đã đăng ký ({error}), nên tác vụ do hồ sơ đã xoá để lại vẫn còn đó.',
     'task.problem.removeFailed': '{label}: không gỡ được tác vụ Windows ({error}).',
     'task.problem.refused': '{label}: Windows Task Scheduler từ chối tác vụ ({error}).',
+    'task.problem.unrunnable':
+      'Tác vụ chưa được đăng ký, vì Windows sẽ không chạy được nó: {problem}.',
+    'task.problem.noProgram': 'không có chương trình nào để tác vụ chạy',
+    'task.problem.notAppDirectory': '{path} không phải thư mục khởi chạy được ứng dụng',
     'task.problem.windowsOnly': 'Hiện chỉ lập lịch được trên Windows',
     'task.problem.windowsOnlyLong': 'Lập lịch hiện chỉ làm cho Windows. Mọi thứ vẫn chạy tay được.',
     'task.problem.notRegistered':

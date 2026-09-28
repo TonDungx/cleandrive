@@ -1,9 +1,10 @@
 'use strict';
 
+const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
-const { execFile } = require('node:child_process');
+const { execFile, execFileSync } = require('node:child_process');
 
 const { IS_WIN } = require('./util');
 const { t } = require('../../i18n');
@@ -400,14 +401,97 @@ function run(file, args, options = {}) {
  * How this build of the app relaunches itself without a window.
  *
  * Running from source, `process.execPath` is electron.exe and the project
- * directory has to be passed as its first argument. Packaged, execPath is the
+ * directory has to be passed as its first argument -- which project directory
+ * it is, is `resolveAppRoot`'s problem and used to be got wrong. Packaged,
+ * execPath is the
  * app itself and the directory would be read as a file to open.
  */
+function isAppDirectory(dir) {
+  try {
+    const manifest = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8'));
+    return typeof manifest.main === 'string' && manifest.main.length > 0;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The directory Electron can load this app from.
+ *
+ * `app.getAppPath()` is the directory of the *entry point*. For the packaged
+ * app and for `electron .` that is the project root, so the first version of
+ * this file used it directly. For `electron scripts/shoot-quarantine.js` --
+ * the form all 112 harnesses in this project use -- it is `<project>\scripts`,
+ * which has no package.json. An Electron told to load that directory dies with
+ * "Unable to find Electron app", so the registered task was one Windows could
+ * never run.
+ *
+ * That is measured, not feared: three such tasks (`DiskSample_explorer`,
+ * `_shootprofiles`, `_shootq`) sat in Task Scheduler with logon triggers and
+ * threw that dialog at every logon on the development machine until they were
+ * removed on 2026-09-28.
+ *
+ * So the entry directory is where the search starts, not where it ends: walk
+ * up until a package.json with a `main` turns up, which is the same thing
+ * Electron itself looks for. If nothing does, hand back the starting point and
+ * let `invocationProblem` refuse the registration -- guessing a root would only
+ * move the failure somewhere harder to see.
+ */
+function resolveAppRoot(app) {
+  const start = app && typeof app.getAppPath === 'function' ? app.getAppPath() : process.cwd();
+  let dir = path.resolve(start);
+
+  for (;;) {
+    if (isAppDirectory(dir)) return dir;
+    const parent = path.dirname(dir);
+    if (parent === dir) return path.resolve(start);
+    dir = parent;
+  }
+}
+
+/** The leading quoted path of an argument string, when it has one. */
+function firstQuotedArgument(args) {
+  const match = /^"([^"]+)"/.exec(String(args || ''));
+  return match ? match[1] : null;
+}
+
+/**
+ * Why Windows would not be able to run this invocation -- or null.
+ *
+ * `buildTaskXml` already refuses a document with no program at all. This is
+ * the subtler shape of the same mistake: a real electron.exe pointed at a
+ * directory that is not an app. Task Scheduler accepts that without complaint,
+ * so the failure surfaces much later and somewhere much worse -- as an
+ * Electron error dialog on the user's screen at logon, with nothing on it to
+ * connect it back to a schedule this app registered.
+ *
+ * A task that appears to be configured and cannot run is the failure this
+ * whole file is written against, which is why this refuses rather than warns.
+ */
+function invocationProblem(invocation) {
+  if (!invocation || !invocation.command) {
+    return t('task.problem.noProgram', 'there is no program for the task to run');
+  }
+
+  // Packaged, the arguments are flags only and there is nothing to check.
+  const appPath = firstQuotedArgument(invocation.args);
+  if (!appPath) return null;
+
+  if (!isAppDirectory(appPath)) {
+    return t(
+      'task.problem.notAppDirectory',
+      '{path} is not a folder the app can be started from',
+      { path: appPath }
+    );
+  }
+  return null;
+}
+
 function selfInvocation(app, flag = '--scheduled-run') {
   if (app && app.isPackaged) {
     return { command: process.execPath, args: flag, workingDirectory: path.dirname(process.execPath) };
   }
-  const appPath = app && typeof app.getAppPath === 'function' ? app.getAppPath() : process.cwd();
+  const appPath = resolveAppRoot(app);
   return { command: process.execPath, args: `"${appPath}" ${flag}`, workingDirectory: appPath };
 }
 
@@ -423,11 +507,98 @@ function cleanMessage(result) {
 }
 
 /* -------------------------------------------------------------------------- */
+/* harness leftovers                                                           */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The tasks this process registered under a harness suffix.
+ *
+ * CLEANDRIVE_TASK_SUFFIX was introduced so a test could not reach the task a
+ * person had configured, and it does that job. What it never did was stop the
+ * test leaving a task of its own behind: the *name* was isolated, the entry in
+ * Task Scheduler was not. Harnesses run with a fresh userData, where
+ * `trends.dailySample` defaults to true (settings.js), so every screenshot run
+ * quietly registered a real daily-plus-logon task under its own name and
+ * walked away from it. Four were found on this machine on 2026-09-28.
+ *
+ * A harness is the only thing that can clean these up, because it is the only
+ * thing that knows the task is not a user's. Hence the bookkeeping here rather
+ * than a sweep elsewhere: the sweep in tasks.js deliberately refuses to touch
+ * a suffixed name it cannot attribute, and that refusal is correct.
+ */
+const HARNESS_TASKS = new Set();
+let harnessCleanupArmed = false;
+
+function rememberHarnessTask(taskPath) {
+  if (!taskSuffix()) return;
+  HARNESS_TASKS.add(taskPath);
+  if (harnessCleanupArmed) return;
+  harnessCleanupArmed = true;
+  process.on('exit', () => {
+    cleanupHarnessTasks();
+  });
+}
+
+function forgetHarnessTask(taskPath) {
+  HARNESS_TASKS.delete(taskPath);
+}
+
+/** What this process would still leave behind if it stopped now. */
+function harnessTasks() {
+  return Array.from(HARNESS_TASKS);
+}
+
+/**
+ * Remove every task this process registered under a harness suffix.
+ *
+ * Synchronous on purpose: this runs from an `exit` handler, where a promise is
+ * never awaited and an async delete would simply not happen. It returns what
+ * it removed so a harness can *check* it cleaned up rather than assume it did.
+ *
+ * A harness killed outright still leaves its task -- there is no exit handler
+ * to run. The next run of the same harness overwrites it by name (`/Create /F`)
+ * and then removes it, and `npm run tasks:leftovers` lists anything else.
+ */
+function cleanupHarnessTasks() {
+  const removed = [];
+  for (const taskPath of Array.from(HARNESS_TASKS)) {
+    HARNESS_TASKS.delete(taskPath);
+    if (!IS_WIN) continue;
+    try {
+      execFileSync('schtasks.exe', ['/Delete', '/TN', taskPath, '/F'], {
+        stdio: 'ignore',
+        windowsHide: true,
+        timeout: 15000,
+      });
+      removed.push(taskPath);
+    } catch {
+      // Nothing can be usefully reported from an exit handler, and a failure
+      // here must not stop the remaining tasks being removed.
+    }
+  }
+  return removed;
+}
+
+/* -------------------------------------------------------------------------- */
 /* registration                                                                */
 /* -------------------------------------------------------------------------- */
 
 /** Stage the document and hand it to schtasks. */
-async function register({ taskPath, xml, tempDir }) {
+async function register({ taskPath, xml, tempDir, invocation }) {
+  // Refuse before Windows is asked, not after a user sees the dialog.
+  const problem = invocation ? invocationProblem(invocation) : null;
+  if (problem) {
+    return {
+      ok: false,
+      unrunnable: true,
+      error: t(
+        'task.problem.unrunnable',
+        'The task was not registered, because Windows would not have been able to run it: {problem}.',
+        { problem }
+      ),
+    };
+  }
+
   const dir = tempDir || os.tmpdir();
   const xmlPath = path.join(dir, `cleandrive-task-${process.pid}-${Date.now()}.xml`);
 
@@ -439,6 +610,7 @@ async function register({ taskPath, xml, tempDir }) {
     if (!result.ok) {
       return { ok: false, error: cleanMessage(result) || 'Task Scheduler refused the task', code: result.code };
     }
+    rememberHarnessTask(taskPath);
     return { ok: true, taskPath };
   } finally {
     await fsp.rm(xmlPath, { force: true }).catch(() => {});
@@ -467,7 +639,7 @@ async function install(options) {
     ...invocation,
   });
 
-  const created = await register({ taskPath, xml, tempDir: options.tempDir });
+  const created = await register({ taskPath, xml, tempDir: options.tempDir, invocation });
   if (!created.ok) return created;
 
   // Read it straight back. A create that returned success and left nothing
@@ -491,7 +663,7 @@ async function installSampler(options = {}) {
 
   const { xml, schedule, invocation, taskPath } = buildSamplerTask(options);
 
-  const created = await register({ taskPath, xml, tempDir: options.tempDir });
+  const created = await register({ taskPath, xml, tempDir: options.tempDir, invocation });
   if (!created.ok) return created;
 
   const check = await verify({ schedule, invocation, taskPath });
@@ -537,6 +709,7 @@ async function uninstall(taskPath = cleanupTaskPath()) {
   if (!IS_WIN) return { ok: true, unsupported: true };
   if (!(await isInstalled(taskPath))) return { ok: true, alreadyGone: true };
   const result = await run('schtasks.exe', ['/Delete', '/TN', taskPath, '/F']);
+  if (result.ok) forgetHarnessTask(taskPath);
   return result.ok ? { ok: true } : { ok: false, error: cleanMessage(result) };
 }
 
@@ -1184,6 +1357,10 @@ module.exports = {
   buildTaskXml,
   buildSamplerTask,
   selfInvocation,
+  resolveAppRoot,
+  invocationProblem,
+  harnessTasks,
+  cleanupHarnessTasks,
   currentUserId,
   escapeXml,
   unescapeXml,

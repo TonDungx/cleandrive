@@ -1695,6 +1695,12 @@ settings file says:
 - **Run now**, so "does it work when I am not looking" can be answered without
   waiting for 02:00
 
+A task Windows cannot run is never registered in the first place. The app checks
+that the program it is about to hand to Task Scheduler is one that can actually
+start, and refuses with a reason if it is not — because Task Scheduler accepts
+such a task without complaint, and the failure then surfaces days later as an
+error dialog at logon, with nothing on it to connect it back to this screen.
+
 Below that: the last result in figures — files scanned, selected, moved to the
 bin, permanently removed, disk before and after — and a list of recent runs.
 
@@ -2198,3 +2204,12 @@ that boots the real application and reads its rendered interface back out.
 `npm run verify:restore` puts throwaway files back from the real Recycle Bin.
 `npm run shoot:lists`, `shoot:media`, `shoot:viewer`, `shoot:restore`,
 `shoot:system`, `shoot:treemap`, `shoot:changes`, `shoot:cloud`, `shoot:appcaches`, `shoot:quarantine`, `shoot:a11y`, `shoot:intro` and `shoot:explorer` take screenshots of the real screens.
+
+Harnesses run against a sandbox userData and a suffixed task name, so they cannot
+reach anything of yours. They used to leave something of their own behind all the
+same: a real entry in Task Scheduler, since a fresh userData has the daily disk
+measurement switched on. `npm run verify:task-cleanup` registers a task in a child
+process and then asks Windows whether it survived the child, and
+`npm run tasks:leftovers` lists what this project has in Task Scheduler, marking
+which entries are the app's and which were left by a harness — `--remove` deletes
+the latter and never the former.

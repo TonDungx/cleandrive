@@ -84,6 +84,8 @@
     "capture:system": "electron scripts/capture-system.js",
     "verify:system": "electron scripts/verify-system.js",
     "test:scheduler:live": "node scripts/test-scheduler.js --live",
+    "tasks:leftovers": "node scripts/list-task-leftovers.js",
+    "verify:task-cleanup": "node scripts/verify-task-cleanup.js",
     "scheduled-run": "electron . --scheduled-run",
     "sample-only": "electron . --sample-only",
     "verify:schedule": "electron scripts/verify-schedule.js",
