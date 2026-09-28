@@ -87,6 +87,11 @@ const api = {
   archive: (folders, options) => ipcRenderer.invoke('action:execute', { kind: 'archive', items: folders, options }),
   archiveChoose: (forFolder) => ipcRenderer.invoke('archive:choose', forFolder),
 
+  // B4: NTFS holds the folder in less room. Nothing moves, so there is no
+  // destination to choose — only whether to compress or to stop.
+  compress: (folders, options) => ipcRenderer.invoke('action:execute', { kind: 'compress', items: folders, options }),
+  compressState: (folder) => ipcRenderer.invoke('compress:state', folder),
+
   reveal: (target) => ipcRenderer.invoke('shell:reveal', target),
   open: (target) => ipcRenderer.invoke('shell:open', target),
 

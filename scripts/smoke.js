@@ -2902,8 +2902,9 @@ app.whenReady().then(async () => {
           menu.tipText.slice(0, 80));
         check('right-clicking a file offers View, Reveal and Add to selection, with focus in the menu',
           menu.items.join('|') === 'View|Reveal|Add to selection' && menu.focusedInMenu, menu.items.join(', '));
-        check('right-clicking a folder offers Open, Reveal, the move (B2) and the archive (B5)',
-          menu.folderMenu.join('|') === 'Open this folder|Reveal|Move to another drive…|Pack into an archive…',
+        check('right-clicking a folder offers Open, Reveal, and the three things to do with a folder (B2, B5, B4)',
+          menu.folderMenu.join('|') ===
+            'Open this folder|Reveal|Move to another drive…|Pack into an archive…|NTFS compression…',
           menu.folderMenu.join(', '));
         check('adding it ticks the tile and brings up the same bar the largest list uses',
           menu.menuClosed && menu.selected === 'true' && menu.bar && /1 selected/.test(menu.readout), menu.readout);
@@ -3637,6 +3638,63 @@ app.whenReady().then(async () => {
       } finally {
         ipc.setRelocateHarness(null);
         fs.rmSync(aBase, { recursive: true, force: true });
+      }
+    }
+    /* -- NTFS compression (B4) --------------------------------------------- */
+
+    console.log('\nLetting NTFS hold a folder in less room (B4):');
+    {
+      const js = (expr) => win.webContents.executeJavaScript(expr);
+      const cBase = fs.mkdtempSync(path.join(os.tmpdir(), 'cleandrive-smoke-compress-'));
+      const folder = path.join(cBase, 'Dự án cũ');
+      fs.mkdirSync(path.join(folder, 'src'), { recursive: true });
+      const text = Buffer.from('const value = 1; // a line of ordinary source\n'.repeat(9000));
+      for (let n = 0; n < 12; n++) fs.writeFileSync(path.join(folder, 'src', `mod${n}.js`), text);
+      fs.writeFileSync(path.join(folder, 'tên tiếng việt.txt'), text);
+      const onePath = path.join(folder, 'src', 'mod0.js');
+      const oneHash = crypto.createHash('sha256').update(fs.readFileSync(onePath)).digest('hex');
+
+      const ntfs = require('../src/main/lib/ntfs-compress');
+      const tc = require('../src/main/lib/tree-copy');
+      const tree = await tc.walk(folder);
+      const before = await ntfs.measure(tree.files);
+
+      try {
+        const state = await js(`window.cleandrive.compressState(${JSON.stringify(folder)})`);
+        check('the app can say whether a folder is compressed before offering either direction',
+          state.data && state.data.ok === true && state.data.compressed === false,
+          JSON.stringify(state.data));
+
+        const out = await js(`window.cleandrive.compress([${JSON.stringify(folder)}], { confirm: false })`);
+        const done = out.data;
+        check('the folder was compressed through the real pipeline, in the real app',
+          done && done.moved.length === 1, JSON.stringify((done && done.failed) || out));
+
+        const after = await ntfs.measure(tree.files);
+        check('it takes less room on the disk',
+          after.disk < before.disk / 2, `${before.disk} -> ${after.disk}`);
+        check('every file still has the length it always had',
+          after.logical === before.logical, `${before.logical} vs ${after.logical}`);
+        check('and one of them reads back byte for byte',
+          crypto.createHash('sha256').update(fs.readFileSync(onePath)).digest('hex') === oneHash);
+
+        check('this is the one action that frees space with no Recycle Bin in the way',
+          done.freedBytes > 0 && done.freesOnVolume === true, `${done.freedBytes} freed`);
+        check('and the figure is the measured difference, not the estimate',
+          done.freedBytes === before.disk - after.disk, `${done.freedBytes} vs ${before.disk - after.disk}`);
+
+        const now = await js(`window.cleandrive.compressState(${JSON.stringify(folder)})`);
+        check('the app now says the folder is compressed, so the menu offers the way back',
+          now.data && now.data.compressed === true, JSON.stringify(now.data));
+
+        const back = await js(`window.cleandrive.compress([${JSON.stringify(folder)}], {
+          uncompress: true, confirm: false })`);
+        check('and stopping puts it back to its full size on the disk',
+          back.data && back.data.moved.length === 1 &&
+            (await ntfs.measure(tree.files)).disk >= before.disk * 0.95,
+          JSON.stringify((back.data && back.data.failed) || back));
+      } finally {
+        fs.rmSync(cBase, { recursive: true, force: true });
       }
     }
     /* -- installed apps (D1) ----------------------------------------------- */

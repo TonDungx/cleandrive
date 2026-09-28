@@ -506,6 +506,44 @@ one of your files. Files larger than 4 GB are handled (ZIP64), Vietnamese
 names survive, empty folders come back, and a link inside the folder is
 stepped over rather than followed.
 
+### Letting NTFS hold a folder in less room
+
+The third thing you can do with a folder, and the only one anywhere in
+CleanDrive where "this frees space" comes with no conditions attached. Nothing
+moves, nothing is copied, nothing goes to the Recycle Bin. The files stay
+exactly where they are, keep their names and their contents, and every program
+that opens one sees what it always saw — Windows simply stores them in fewer
+clusters. The space is back the moment it finishes.
+
+**It measures your folder before it promises anything.** Not a rule of thumb:
+a dozen of that folder's own files are copied to a scratch directory on the
+same drive and put through NTFS, and the answer is what the confirmation
+quotes. On a 20.7 MB folder of source code that took 361 ms and said 87.6%,
+and the real result was 87.5%. On a folder of photos it samples nothing at
+all — the extensions already answer it — and says so: these files are
+compressed inside already, and NTFS has nothing left to take out. Measured
+here, a source project gives back 87.5% and archived logs 81.2%, while photos
+and video give back 0.0%.
+
+**What it will not do.** The Windows folder — compressing Windows itself is
+CompactOS, which Windows has its own setting for, and this points you at it
+rather than interfering. Anything belonging to an installed program, or to a
+game, which goes to Steam as it does everywhere else. A drive that cannot hold
+compressed files, which is settled by trying rather than by guessing from the
+cluster size. And a folder with files in it that are **only on OneDrive**,
+because compressing one would pull it back down — exactly the space *Keep on
+cloud only* had just given you.
+
+**Stopping again** is the same menu entry: the app asks the disk whether the
+folder is compressed and offers the other direction. Nothing is deleted either
+way; the files simply go back to taking their full room.
+
+One thing worth knowing: the map on the Disk usage screen shows **file sizes**,
+and compression does not change those. A compressed folder still reads as the
+same number of megabytes there, because the files really are that size — what
+changed is how much of the disk they occupy. The receipt after compressing
+tells you that figure.
+
 It is drawn in weights of one colour: the top level at full strength, each
 level inside a step paler. Nothing is coloured by file type — green, amber and
 red mean verdicts in this app, and a palette of types would be nine more

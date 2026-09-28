@@ -68,14 +68,15 @@ function fakeJournal(log, { failAt = -1 } = {}) {
 
   console.log('\nactions: what can run\n');
 
-  check('the kinds with a handler so far: the Recycle Bin, another drive (B1), a whole folder to another drive (B2), OneDrive "free up space" (B3), a folder packed into one file (B5), and handing over to Windows (A1)',
-    ACTION_KINDS.filter((k) => handlerFor(k)).join(',') === 'recycle,quarantine,relocate,dehydrate,archive,handoff',
+  check('the kinds with a handler so far: the Recycle Bin, another drive (B1), a whole folder to another drive (B2), NTFS compression (B4), OneDrive "free up space" (B3), a folder packed into one file (B5), and handing over to Windows (A1)',
+    ACTION_KINDS.filter((k) => handlerFor(k)).join(',') === 'recycle,quarantine,relocate,compress,dehydrate,archive,handoff',
     ACTION_KINDS.filter((k) => handlerFor(k)).join(','));
 
   {
     const shell = fakeShell();
-    // Was 'relocate' until B2 gave it one. 'compress' is B4 and has none yet.
-    const result = await execute({ kind: 'compress', items: files }, { deps: { shell } });
+    // Was 'relocate' until B2 and 'compress' until B4. 'hardlink' is F4 and
+    // is the last kind in the contract with no handler.
+    const result = await execute({ kind: 'hardlink', items: files }, { deps: { shell } });
     check('a kind with no handler is refused, not approximated',
       result.refused === 'unsupported' && shell.calls.length === 0);
   }

@@ -68,6 +68,7 @@ const INVOKE = Object.freeze([
 
   'relocate:choose',
   'archive:choose',
+  'compress:state',
 
   'explorer:status',
   'explorer:set',

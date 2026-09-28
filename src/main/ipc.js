@@ -26,6 +26,8 @@ const systemBreakdown = require('./system/breakdown');
 const { ScanTree, MultiScanTree } = require('./analyzers/scan-tree');
 const scanRoots = require('./analyzers/scan-roots');
 const volumes = require('./lib/volumes');
+const treeCopy = require('./lib/tree-copy');
+const ntfsCompress = require('./lib/ntfs-compress');
 const snapshotDiff = require('./snapshots/diff');
 const reportCollect = require('./report/collect');
 const reportHtml = require('./report/html');
@@ -816,6 +818,8 @@ function register() {
               ...(kind === 'archive'
                 ? { destination: typeof options.destination === 'string' ? options.destination : null }
                 : {}),
+              // B4 takes no destination, only the direction.
+              ...(kind === 'compress' ? { uncompress: options.uncompress === true } : {}),
             },
           },
           {
@@ -827,7 +831,7 @@ function register() {
             deps:
               kind === 'quarantine'
                 ? await quarantineDeps()
-                : kind === 'relocate' || kind === 'archive'
+                : kind === 'relocate' || kind === 'archive' || kind === 'compress'
                   ? relocateHarness || undefined
                   : kind === 'dehydrate' && cloudDeps
                   ? cloudDeps
@@ -1528,6 +1532,38 @@ function register() {
         destination: picked,
         drive: drive ? displayPath(drive.root || picked) : null,
         freeBytes: drive && Number.isFinite(drive.freeBytes) ? drive.freeBytes : null,
+      };
+    })
+  );
+
+  /**
+   * Is this folder already held compressed, and what is it costing (B4)?
+   *
+   * Asked when the map's menu is used rather than carried in the scan, so the
+   * answer is the disk's rather than one taken minutes ago. It reads sizes
+   * and nothing else -- no `compact`, no writing, no elevation.
+   */
+  handle('compress:state', (event, folder) =>
+    guard(async () => {
+      if (typeof folder !== 'string' || !path.isAbsolute(folder)) return { ok: false };
+      const tree = await treeCopy.walk(folder);
+      if (tree.files.length === 0) return { ok: true, files: 0, compressed: false, logical: 0, onDisk: 0 };
+
+      const seen = await ntfsCompress.measure(tree.files);
+      // A folder counts as compressed when most of what is in it is: a
+      // handful of new files in a compressed folder should not flip it back.
+      let compressedFiles = 0;
+      for (const file of tree.files) {
+        if (await ntfsCompress.looksCompressed(file.abs)) compressedFiles += 1;
+      }
+      return {
+        ok: true,
+        files: tree.files.length,
+        compressedFiles,
+        compressed: compressedFiles > tree.files.length / 2,
+        logical: seen.logical,
+        onDisk: seen.disk,
+        saved: seen.saved,
       };
     })
   );
@@ -3235,10 +3271,110 @@ async function confirmArchive(win, description) {
   return response === 0;
 }
 
+/**
+ * The confirmation in front of letting NTFS hold a folder in less room (B4).
+ *
+ * The one place in this app where "this frees space" is simply true: there is
+ * no Recycle Bin in the way, and the figure is back the moment it finishes.
+ * So it says the figure, and it says where the figure came from -- a dozen of
+ * the folder's own files put through NTFS, not a guess.
+ */
+async function confirmCompress(win, description) {
+  const one = description.folders && description.folders.length === 1 ? description.folders[0] : null;
+  const name = one ? path.basename(one.path) : '';
+
+  if (description.uncompress) {
+    const { response } = await dialog.showMessageBox(win, {
+      type: 'question',
+      buttons: [t('dialog.compress.undoGo', 'Stop compressing'), t('app.cancel', 'Cancel')],
+      defaultId: 1,
+      cancelId: 1,
+      title: t('dialog.compress.undoTitle', 'Stop compressing'),
+      message: one
+        ? t('dialog.compress.undoMessageOne', 'Stop compressing “{name}”?', { name })
+        : t('dialog.compress.undoMessage', 'Stop compressing {n} folder(s)?', {
+            n: description.count.toLocaleString(language.current()),
+          }),
+      detail: t(
+        'dialog.compress.undoDetail',
+        'The files do not change — they go back to taking their full {size} on the disk. Nothing is deleted either way.',
+        { size: formatBytes(description.bytes) }
+      ),
+    });
+    return response === 0;
+  }
+
+  const lines = [];
+  const saving = description.onDiskBefore > 0 ? description.estimatedFreedBytes / description.onDiskBefore : 0;
+
+  lines.push(
+    saving < 0.05
+      ? t(
+          'dialog.compress.noSaving',
+          'These files are already compressed inside — photos, video, and the like — so NTFS has almost nothing to take out. Measured on a sample of {n} of them: about {freed} back out of {before}.',
+          {
+            n: (description.sampled || description.alreadyCompressed).toLocaleString(language.current()),
+            freed: formatBytes(description.estimatedFreedBytes),
+            before: formatBytes(description.onDiskBefore),
+          }
+        )
+      : t(
+          'dialog.compress.saving',
+          'About {freed} comes back, from {before} to about {after} — measured by putting {n} of this folder’s own files through NTFS, not guessed.',
+          {
+            freed: formatBytes(description.estimatedFreedBytes),
+            before: formatBytes(description.onDiskBefore),
+            after: formatBytes(description.estimatedBytes),
+            n: (description.sampled || 0).toLocaleString(language.current()),
+          }
+        )
+  );
+
+  lines.push(
+    t(
+      'dialog.compress.freesNow',
+      'This is space back straight away — nothing goes to the Recycle Bin, and there is nothing to empty afterwards.'
+    )
+  );
+
+  lines.push(
+    t(
+      'dialog.compress.whatChanges',
+      'The files keep their names, their contents and the size every program sees. Opening one costs a little processor instead of a little more reading. You can stop compressing the folder at any time from the same menu.'
+    )
+  );
+
+  if (description.alreadyCompressed > 0) {
+    lines.push(
+      t('dialog.compress.alreadyCompressed', '{n} of the {files} file(s) in it are formats that are already compressed and will not shrink.', {
+        n: description.alreadyCompressed.toLocaleString(language.current()),
+        files: description.files.toLocaleString(language.current()),
+      })
+    );
+  }
+
+  const { response } = await dialog.showMessageBox(win, {
+    type: 'question',
+    buttons: [t('dialog.compress.go', 'Compress the folder'), t('app.cancel', 'Cancel')],
+    defaultId: 1,
+    cancelId: 1,
+    title: t('dialog.compress.title', 'Compress with NTFS'),
+    message: one
+      ? t('dialog.compress.messageOne', 'Let Windows compress “{name}”?', { name })
+      : t('dialog.compress.message', 'Let Windows compress {n} folder(s)?', {
+          n: description.count.toLocaleString(language.current()),
+        }),
+    detail: lines.join('\n\n'),
+  });
+
+  return response === 0;
+}
+
 async function confirmAction(win, description, planned, options) {
   if (description.kind === 'quarantine') return confirmQuarantine(win, description, planned);
   if (description.kind === 'relocate') return confirmRelocate(win, description);
   if (description.kind === 'archive') return confirmArchive(win, description);
+  if (description.kind === 'compress') return confirmCompress(win, description);
   if (description.kind === 'dehydrate') return confirmDehydrate(win, description);
   if (description.kind !== 'recycle') return false;
 

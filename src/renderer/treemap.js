@@ -675,6 +675,20 @@
           run: () => archiveFolder(entry.path),
         });
       }
+      // B4, which is the third answer: keep it exactly where it is and let
+      // NTFS hold it in less room. The entry says which way round it goes,
+      // because offering "Compress" on a folder that already is would be a
+      // button that does nothing.
+      // Whether the folder is already compressed is a question for the disk,
+      // and a menu is built too quickly to ask one. So the entry is the same
+      // either way and `compressFolder` asks before it decides which
+      // direction -- rather than the map carrying a fact that goes stale.
+      if (entry.path && typeof compressFolder === 'function') {
+        items.push({
+          label: t('map.menu.compress', 'NTFS compression…'),
+          run: () => compressFolder(entry.path),
+        });
+      }
       return items;
     }
     if (entry.kind === 'file') {

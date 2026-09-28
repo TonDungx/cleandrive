@@ -1159,6 +1159,55 @@
 
     'map.menu.relocate': 'Chuyển sang ổ khác…',
     'map.menu.archive': 'Đóng gói lưu trữ…',
+    'map.menu.compress': 'Nén bằng NTFS…',
+
+    'compress.label': 'Nén NTFS',
+    'compress.checking': 'Đang đo xem nén lại được bao nhiêu',
+    'compress.checking.undo': 'Đang đọc thư mục',
+    'compress.cancelled': 'Đã huỷ — không có gì thay đổi.',
+    'compress.locked': 'Nén NTFS là tính năng của CleanDrive Pro.',
+    'compress.done':
+      '{name} giờ chiếm {after} thay vì {before} — lấy lại {freed}, ngay lập tức, không có gì nằm trong Thùng rác. {files} tệp, không đổi.',
+    'compress.doneNothing':
+      '{name} vẫn là {before} — NTFS không rút được gì từ {files} tệp này, chúng vốn đã nén sẵn bên trong. Không có gì thay đổi.',
+    'compress.undone':
+      '{name} không còn được nén — nó chiếm lại {size} trên đĩa. Không có gì bị xoá.',
+    'compress.nothing': 'Không có gì thay đổi. {reason}',
+
+    'compress.why.notThere': 'Thư mục đó không còn ở đó nữa',
+    'compress.why.notAFolder': 'Cái này nén thư mục, mà đó không phải thư mục',
+    'compress.why.root': 'Gốc ổ đĩa hay thư mục cá nhân không phải thứ để nén',
+    'compress.why.system':
+      'Đây là vị trí hệ thống của Windows — nén chính Windows là CompactOS, và Windows có thiết lập riêng cho việc đó',
+    'compress.why.program': 'Chỗ này thuộc về một chương trình đã cài, nên để yên',
+    'compress.why.network': 'Thư mục trên mạng thì để yên',
+    'compress.why.empty': 'Thư mục đó không có gì để nén',
+    'compress.why.unsupported': 'Ổ này không giữ được tệp nén — NTFS cần cluster từ 4 KB trở xuống',
+    'compress.why.noRoom': 'Không có chỗ nào cạnh thư mục để thử nén',
+    'compress.why.online':
+      'Thư mục này có {n} tệp chỉ nằm trên OneDrive. Nén sẽ kéo tất cả chúng về máy — đúng phần dung lượng mà “Chỉ giữ trên đám mây” vừa giải phóng.',
+    'compress.why.failed': 'Windows không nén được ({error})',
+
+    'dialog.compress.title': 'Nén bằng NTFS',
+    'dialog.compress.go': 'Nén thư mục',
+    'dialog.compress.message': 'Cho Windows nén {n} thư mục?',
+    'dialog.compress.messageOne': 'Cho Windows nén “{name}”?',
+    'dialog.compress.saving':
+      'Lấy lại khoảng {freed}, từ {before} còn chừng {after} — đo bằng cách đưa {n} tệp của chính thư mục này qua NTFS, không phải đoán.',
+    'dialog.compress.noSaving':
+      'Các tệp này vốn đã nén sẵn bên trong — ảnh, video và tương tự — nên NTFS gần như không rút được gì. Đo trên mẫu {n} tệp: lấy lại chừng {freed} trên {before}.',
+    'dialog.compress.freesNow':
+      'Đây là dung lượng về ngay — không có gì vào Thùng rác, và không phải dọn gì sau đó.',
+    'dialog.compress.whatChanges':
+      'Tệp giữ nguyên tên, nguyên nội dung và nguyên kích thước mà mọi chương trình nhìn thấy. Mở một tệp sẽ tốn thêm chút CPU thay vì tốn thêm chút đọc đĩa. Bạn có thể dừng nén thư mục bất cứ lúc nào từ chính menu này.',
+    'dialog.compress.alreadyCompressed':
+      '{n} trong {files} tệp là định dạng vốn đã nén và sẽ không nhỏ lại.',
+    'dialog.compress.undoTitle': 'Dừng nén',
+    'dialog.compress.undoGo': 'Dừng nén',
+    'dialog.compress.undoMessage': 'Dừng nén {n} thư mục?',
+    'dialog.compress.undoMessageOne': 'Dừng nén “{name}”?',
+    'dialog.compress.undoDetail':
+      'Tệp không đổi — chúng chỉ chiếm lại đủ {size} trên đĩa. Dù thế nào cũng không có gì bị xoá.',
 
     'archive.label': 'Đóng gói lưu trữ',
     'archive.checking': 'Đang đọc thư mục',

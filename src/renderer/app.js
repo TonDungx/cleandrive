@@ -2344,6 +2344,78 @@ async function archiveFolder(folderPath, options = {}) {
   if (result.failed.length) console.warn('Not packed:', result.failed);
 }
 
+/**
+ * Let NTFS hold a folder in less room, or stop (B4).
+ *
+ * Which of the two it is comes from the disk, not from the menu: a folder
+ * that is already compressed is offered the way back instead. The receipt is
+ * the only one in this app that can say "freed" without a caveat, because
+ * there is no Recycle Bin between here and the space.
+ */
+async function compressFolder(folderPath, options = {}) {
+  const state = unwrap(await api.compressState(folderPath), t('compress.label', 'NTFS compression'));
+  if (!state) return;
+  const undo = options.uncompress === true || state.compressed === true;
+
+  progressPanel.show(
+    undo ? t('compress.checking.undo', 'Reading the folder') : t('compress.checking', 'Measuring what compressing would give back')
+  );
+  let result;
+  try {
+    result = unwrap(await api.compress([folderPath], { ...options, uncompress: undo }), t('compress.label', 'NTFS compression'));
+  } finally {
+    progressPanel.hide();
+  }
+  if (!result) return;
+
+  if (result.refused === 'locked') {
+    toast(t('compress.locked', 'NTFS compression is part of CleanDrive Pro.'), true);
+    return;
+  }
+
+  const done = result.moved.length;
+  if (done > 0 && window.SpaceMap) window.SpaceMap.refresh();
+
+  if (result.cancelled && done === 0) {
+    toast(t('compress.cancelled', 'Cancelled — nothing was changed.'));
+    return;
+  }
+
+  if (done > 0) {
+    const one = result.moved[0];
+    const name = one.path.split('\\').pop();
+    // "now takes 16.4 MB instead of 16.4 MB — 0 B back" is true and reads
+    // like a fault. A folder NTFS could do nothing with says that instead.
+    const gained = Math.max(0, one.changedBytes);
+    const worthSaying = one.onDiskBefore > 0 && gained > one.onDiskBefore * 0.02;
+    toast(
+      undo
+        ? t('compress.undone', '{name} is no longer compressed — it takes {size} on the disk again. Nothing was deleted.', {
+            name,
+            size: formatBytes(one.onDiskAfter),
+          })
+        : worthSaying
+          ? t('compress.done', '{name} now takes {after} instead of {before} — {freed} back, straight away, with nothing in the Recycle Bin. {files} file(s), unchanged.', {
+              name,
+              after: formatBytes(one.onDiskAfter),
+              before: formatBytes(one.onDiskBefore),
+              freed: formatBytes(gained),
+              files: formatCount(one.files),
+            })
+          : t('compress.doneNothing', '{name} is still {before} — NTFS had nothing to take out of these {files} file(s), which are already compressed inside. Nothing was changed.', {
+              name,
+              before: formatBytes(one.onDiskBefore),
+              files: formatCount(one.files),
+            })
+    );
+    return;
+  }
+
+  const why = result.failed[0];
+  toast(t('compress.nothing', 'Nothing was changed. {reason}', { reason: why ? why.error : '' }), true);
+  if (result.failed.length) console.warn('Not compressed:', result.failed);
+}
+
 /* ------------------------------------------------------- language changes */
 
 /**
