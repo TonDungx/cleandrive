@@ -207,7 +207,7 @@ hoạch đều trỏ về một màn đã có. G3 và F3 là P2 nên để cuố
 | G4 | Nhiều hồ sơ tự động | P1 | ✅ Đã code xong (2026-09-28) — settings lên **v7**, chính sách đơn trở thành `autoClean.profiles`. "Mutex có tên" thay bằng **tệp khoá** (Node không có named mutex). Mẫu *Installer hàng tháng* của đặc tả **không dựng được**: `installer` không nằm trong danh sách trắng chạy ngầm |
 | F1 | Trùng lặp xuyên thư mục / xuyên ổ | P1 | ✅ Đã code xong (2026-09-28) — phần "nhiều gốc nhiều ổ" **A4 đã giao từ trước**; mục này thêm tiêu chí chọn bản giữ theo loại ổ. **Không làm** nhánh hash qua ổ mạng: không đo được tốc độ thật trên máy này |
 | F2 | Thư mục trùng toàn bộ | P1 | ✅ Đã code xong (2026-09-28) — **không có** `archive`/`quarantine` cả thư mục: `archive` chưa có handler nào (là B5), `quarantine` cũng `allowsFolders: false`. Hành động duy nhất là `recycle`/`quarantine` **từng tệp**, đúng quy tắc bất biến. Pha thư mục **đi cây riêng, nhìn cả `node_modules`, `.git`, tên chấm** — nếu không thì "trùng khớp" là lời nói dối |
-| F3 | Phiên bản tài liệu | P2 | |
+| F3 | Phiên bản tài liệu | P2 | ✅ Đã code xong (2026-09-28) — ngày tháng **không** bị bỏ vô điều kiện như đặc tả yêu cầu: đo trên 6.503 tên thật, bỏ ngày tạo ra 38 nhóm mà **cả 38 đều sai**. Thêm một điều kiện đặc tả không có: một bộ phải **tự nói ra là phiên bản** (có hậu tố, hoặc cùng một thư mục) — nếu không thì 216 nhóm trên đĩa thật, 180 trong số đó chỉ là tên trùng |
 
 ### Giai đoạn 4 — Ảnh, chat, di chuyển dữ liệu
 
@@ -1418,6 +1418,43 @@ Thêm trục **"Cuộc trò chuyện"** vào màn Photos & video, dùng thanh t�
 - Độ tin cậy **luôn là `guess`**, nâng lên `likely` nếu cùng thư mục và cùng định dạng.
 - Mở viewer cạnh nhau (dùng viewer Word/Excel/PDF sẵn có) để người dùng tự xem.
 - **Không** có "select all but newest".
+
+**✅ Đã code xong (2026-09-28).** `src/main/lib/doc-versions.js` (thuần, không
+đọc tệp nào), pha 5 của `duplicate.js`, mục `dupes.version` trên màn Trùng lặp,
+và chế độ hai tệp cạnh nhau trong viewer sẵn có. Chạy được:
+`npm run test:docversions` (49 kiểm tra), `npm run shoot:docversions` (10 ảnh),
+và 21 kiểm tra nữa trong `npm run test:e2e`.
+
+Chỗ lệch với đặc tả, và vì sao:
+
+1. **Ngày tháng không bị bỏ vô điều kiện.** Đặc tả xếp ngày chung với `_v2`.
+   Đếm trước khi viết: 1.755 trong 6.503 tên tài liệu trên máy này có ngày, và
+   bỏ ngày đi tạo ra 38 nhóm **chỉ tồn tại vì đã bỏ ngày** — `Log 2026-06-13`
+   với `Log 2026-09-26`, mỗi hoá đơn một ngày. Cả 38 đều sai. Nên mỗi tệp mang
+   **hai khoá** (có ngày và không ngày), và khoá không ngày chỉ được dùng khi
+   trong bộ có thứ khác tự nhận là phiên bản.
+2. **Thêm một điều kiện đặc tả không có.** Cùng tên ở hai thư mục không liên
+   quan thì không phải bản nháp. Quy tắc trần của đặc tả cho **216 nhóm** trên
+   đĩa thật, và **180 trong số đó** chỉ là tên trùng: 143 bản `CHANGELOG.md`
+   trong một cache gói Dart, 135 `README.md`, 25 `LICENSE.txt` — tổng 856 tệp.
+   Sau khi đòi hỏi "phải có hậu tố, hoặc phải cùng một thư mục": **36 nhóm**,
+   19 `likely` / 17 `guess`, gom mất 0,01 giây.
+3. **`(n)` và `v2` bị thu hẹp.** 6 trong 27 tên kết thúc bằng `(n)` là năm xuất
+   bản (`… -Wiley (2018)`), và 2 trong 26 tên có `v2` là `GPLv3`/`LGPLv3`. Nên
+   `(n)` chỉ tính khi n ≤ 99, và `v2` chỉ tính sau một dấu phân cách.
+4. **Sàn 4 KB, và nó không đi theo sàn của màn hình.** Ô "kích thước tối thiểu"
+   của màn Trùng lặp mặc định 100 KB, mà bản nháp Word hiếm khi to thế. Một
+   con số chọn cho câu hỏi "bản sao nào đáng xoá" không được quyết định hộ câu
+   hỏi "có những tài liệu nào" — nên khi bật F3, cây thư mục được đi ở sàn 4 KB
+   và **nửa tệp của màn hình được lọc lại ra** (đúng mẹo pha thư mục của F2).
+5. **Không có `archive`, không có hành động hàng loạt, không tự tích gì.** Mỗi
+   dòng phải tự tay tích. Hành động là `recycle`/`quarantine` từng tệp,
+   `unattendedEligible: false`, và bộ này **không bao giờ** vào dọn dẹp tự động.
+
+Hai lỗi do **nhìn ảnh chụp màn hình** mới thấy, đã sửa và đã có kiểm tra:
+ba bản nháp chép cùng một lúc làm **hai dòng cùng ghi "mới nhất"** (cờ trước đó
+là "mtime bằng mtime lớn nhất"); và **Reveal / Mở** trên đầu khung hai tệp bấm
+không ra gì, vì chúng dựa vào `viewer.file` mà chế độ so sánh không đặt.
 
 #### F4. Hardlink bản trùng
 

@@ -679,6 +679,12 @@ function register() {
       const foldersRefused = wantFolders && !can('pro.dupes.advanced') ? 'locked' : null;
       const folders = wantFolders && !foldersRefused;
 
+      // Documents that look like versions of one another (F3). Same licence,
+      // same refused-out-loud shape, and off for copies-of-one-file.
+      const wantVersions = Boolean(options.versions) && !options.copiesOf;
+      const versionsRefused = wantVersions && !can('pro.dupes.advanced') ? 'locked' : null;
+      const versions = wantVersions && !versionsRefused;
+
       const { candidates, summary } = await analyzers.collect(
         'duplicates',
         {
@@ -688,6 +694,7 @@ function register() {
             prefer,
             keeperRank,
             folders,
+            versions,
             cachePath: path.join(app.getPath('userData'), 'hash-cache.json'),
           },
         },
@@ -710,6 +717,8 @@ function register() {
         preferRefused,
         foldersAsked: wantFolders,
         foldersRefused,
+        versionsAsked: wantVersions,
+        versionsRefused,
         skipped: prepared.roots.filter((r) => r.kind === 'network').map((r) => r.root),
         merged: prepared.merged,
       };
@@ -2508,6 +2517,36 @@ function register() {
       return preview(filePath);
     })
   );
+
+  /**
+   * Two files at once, for the side-by-side comparison (F3).
+   *
+   * Not two `preview:open` calls. That handler revokes the last file's token
+   * before it grants the next one -- one preview at a time is what stops a
+   * window that has moved on from still being able to fetch what it used to
+   * show -- so two of them in flight together would have the second revoke the
+   * first, and one of the two panes would be pointed at a token that no longer
+   * works. The pair is therefore one request: revoked once, granted twice.
+   *
+   * Each file answers for itself. One of the two being unreadable is an
+   * ordinary outcome -- the set is a guess made from filenames, and a name is
+   * no promise the file behind it can be opened -- and it should cost that one
+   * pane, not the comparison.
+   */
+  handle('preview:compare', (event, left, right) =>
+    guard(async () => {
+      const wanted = [left, right];
+      if (wanted.some((p) => typeof p !== 'string' || p.trim() === '')) {
+        throw new Error(t('preview.error.noPath', 'No file was named'));
+      }
+      previewServe.revokeAll();
+      // Serial on purpose: each of these reads the head of a file off one
+      // disk, and two such reads at once are not two reads in the time of one.
+      const out = [];
+      for (const target of wanted) out.push(await guard(() => preview(target)));
+      return out;
+    })
+  ),
 
   /** Closing the preview forgets the token with it. */
   handle('preview:close', () =>

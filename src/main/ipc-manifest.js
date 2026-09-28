@@ -73,6 +73,7 @@ const INVOKE = Object.freeze([
   'shell:open',
 
   'preview:open',
+  'preview:compare',
   'preview:close',
 
   'media:roots',

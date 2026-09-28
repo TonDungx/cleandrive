@@ -44,6 +44,10 @@ declare('dupes.copy', { screen: 'duplicates' });
 declare('dupes.folder', { screen: 'duplicates' });
 declare('dupes.nearFolder', { screen: 'duplicates' });
 declare('dupes.folderFile', { screen: 'duplicates' });
+// One document in a set that looks like versions of one another (F3). Never
+// better than `likely`, never on the automatic whitelist, and never part of a
+// "select all but the newest" -- a name is far too weak a thing to delete on.
+declare('dupes.version', { screen: 'duplicates' });
 
 // "Photos & video".
 declare('media.image', { screen: 'media' });

@@ -2789,6 +2789,110 @@ main {
   }
 }
 
+
+/* --------------------------------------------------------------------------
+   documents that look like drafts of one another (F3)
+   -------------------------------------------------------------------------- */
+
+/*
+ * A set of drafts is a guess made from filenames, and it is drawn as one: a
+ * dashed left edge rather than the solid one every other group has, so the
+ * difference between "these files are identical" and "these files are named
+ * alike" is visible before a word is read.
+ */
+.group-versions {
+  border-left: 2px dashed var(--border);
+}
+
+/* The row of buttons above a set. It sits inside the group, so it loses the
+   margins `.panel-actions` carries when it is the toolbar of a whole panel. */
+.group-versions .panel-actions {
+  margin: 0;
+  padding: 10px 18px 0;
+}
+
+/*
+ * Reveal and "Open in its own program" act on `viewer.file`, and a
+ * comparison has two files and sets none. Rather than pick one of them
+ * behind the user's back, the pair goes: every row on the screen behind
+ * this panel carries its own Reveal and Open already.
+ */
+.viewer.is-comparing #viewer-reveal,
+.viewer.is-comparing #viewer-open {
+  display: none;
+}
+
+/* ---- two files at once ---- */
+
+/*
+ * Side by side, which is the only way to settle whether two drafts are one
+ * document. The panel and its readers are the ones a single file already
+ * uses; this is one extra column, not a second viewer.
+ */
+.viewer-body.is-compare {
+  flex-direction: row;
+  gap: 1px;
+  overflow: hidden;
+  background: var(--border);
+}
+
+.compare-pane {
+  flex: 1 1 50%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+}
+
+.compare-pane-head {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--border-soft);
+  background: var(--bg-elevated);
+}
+
+.compare-pane-head strong {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.compare-pane-head span {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The body inside a pane is the same element a single file gets, so it
+   arrives with the panel's own border and corners. Inside a pane it is not
+   the panel any more. */
+.compare-pane .viewer-body {
+  border: 0;
+  border-radius: 0;
+}
+
+/* Below this the two columns are narrower than a line of a document, and two
+   unreadable columns are worse than one readable one on top of the other. */
+@media (max-width: 860px) {
+  .viewer-body.is-compare {
+    flex-direction: column;
+    overflow: auto;
+  }
+
+  .compare-pane {
+    flex: 1 0 50%;
+    min-height: 45%;
+  }
+}
 /* ==========================================================================
    shared components -- components.js
    ========================================================================== */

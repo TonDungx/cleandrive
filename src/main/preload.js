@@ -82,6 +82,7 @@ const api = {
 
   /* looking at a file without leaving the app */
   preview: (target) => ipcRenderer.invoke('preview:open', target),
+  previewCompare: (left, right) => ipcRenderer.invoke('preview:compare', left, right),
   closePreview: () => ipcRenderer.invoke('preview:close'),
 
   /* photos and video */

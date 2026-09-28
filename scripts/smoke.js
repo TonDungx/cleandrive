@@ -818,6 +818,184 @@ app.whenReady().then(async () => {
       }
     }
 
+    /* -- drafts of one document (F3) ------------------------------------- */
+    //
+    // Its own fixture for the same reason F2 has one: every assertion here is
+    // a count, and a count taken over whatever the tester's Documents folder
+    // holds is not an assertion. Four sets that should be found, two that
+    // should not, and nothing in it is a real document -- the pass reads names
+    // and never opens a file, so the bytes only have to be the right size.
+    //
+    // The minimum size is left at the screen's own default of 100 KB and every
+    // document here is under it. That is the point: a floor chosen for "which
+    // copies are worth deleting" must not decide which documents exist.
+    {
+      const f3Drive = (() => {
+        for (const letter of 'DEFGH') {
+          const root = `${letter}:\\`;
+          try {
+            if (fs.statSync(root).dev !== fs.statSync(path.parse(os.tmpdir()).root).dev) return root;
+          } catch {
+            // not there
+          }
+        }
+        return null;
+      })();
+      const f3Root = f3Drive
+        ? fs.mkdtempSync(path.join(f3Drive, 'cleandrive-smoke-f3-'))
+        : fs.mkdtempSync(path.join(os.tmpdir(), 'cleandrive-smoke-f3-'));
+      const folderBefore = await win.webContents.executeJavaScript(`state.folder`);
+      console.log(`\nDrafts of one document (${f3Root}):`);
+      check('the fixture is off the drive AppData is on',
+        Boolean(f3Drive) && !f3Root.toLowerCase().startsWith(os.tmpdir().toLowerCase()),
+        f3Drive ? f3Root : 'no second drive -- fixture is under AppData, results are weaker');
+
+      const doc = (rel, kb, fill) => {
+        const full = path.join(f3Root, rel);
+        fs.mkdirSync(path.dirname(full), { recursive: true });
+        fs.writeFileSync(full, Buffer.alloc(kb * 1024, fill));
+      };
+      // Found: three drafts, same folder, same format -> likely.
+      doc('Do an\\Do An.docx', 40, 1);
+      doc('Do an\\Do An - Copy.docx', 40, 2);
+      doc('Do an\\Do An_final.docx', 40, 3);
+      // Found: two drafts whose bodies this harness can actually preview.
+      doc('Ghi chu\\Note.txt', 50, 4);
+      doc('Ghi chu\\Note - Copy.txt', 50, 5);
+      // Found: one name, several formats -- one piece of work exported twice.
+      doc('Bai nop\\Group 04 - OS.pptx', 30, 6);
+      doc('Bai nop\\Group 04 - OS.pdf', 30, 7);
+      // Found: same only once a date comes off, and something says version.
+      doc('Hop dong\\Hop dong 2026-01-15.docx', 10, 8);
+      doc('Hop dong\\Hop dong 2026-01-16 - Copy.docx', 10, 9);
+      // Not found: differs by nothing but a date.
+      doc('Nhat ky\\Log 2026-06-13.txt', 20, 10);
+      doc('Nhat ky\\Log 2026-09-26.txt', 20, 11);
+      // Not found: a common name in two unrelated folders.
+      doc('pkg-a\\CHANGELOG.md', 8, 12);
+      doc('pkg-b\\CHANGELOG.md', 8, 13);
+      // Not found: under the 4 KB floor, whatever it is called.
+      doc('vun\\Stub.txt', 1, 14);
+      doc('vun\\Stub - Copy.txt', 1, 15);
+
+      try {
+        await win.webContents.executeJavaScript(`setFolder(${JSON.stringify(f3Root)})`);
+        await until(win, `document.getElementById('run-dupes').disabled === false`);
+        await win.webContents.executeJavaScript(`
+          document.getElementById('dupes-versions').checked = true;
+          document.getElementById('min-size').value = '102400';
+          document.getElementById('run-dupes').click();
+        `);
+        await until(win, `document.getElementById('cancel-dupes').hidden === true`, 120000);
+
+        const f3 = await win.webContents.executeJavaScript(`({
+          status: document.getElementById('dupes-status').textContent,
+          note: document.getElementById('dupe-versions-note').textContent,
+          empty: document.getElementById('dupes-empty').textContent,
+          sectionShown: document.getElementById('dupe-versions-section').hidden === false,
+          groups: document.querySelectorAll('#dupe-versions .group-versions').length,
+          rows: document.querySelectorAll('#dupe-versions .files > li').length,
+          ticks: document.querySelectorAll('#dupe-versions input[type=checkbox]').length,
+          buttons: [...document.querySelectorAll('#dupe-versions .btn')].map((b) => b.textContent),
+          badges: [...document.querySelectorAll('#dupe-versions .badge-button, #dupe-versions .keeper-tag')]
+            .map((b) => b.textContent),
+          heads: [...document.querySelectorAll('#dupe-versions .group-waste')].map((h) => h.textContent),
+          names: [...document.querySelectorAll('#dupe-versions .files > li')]
+            .map((li) => li.textContent).join(' | '),
+        })`);
+        console.log(`    note: ${f3.note}`);
+
+        check('the drafts section appears', f3.sectionShown);
+        check('four sets are found, and the two that are not versions are not',
+          f3.groups === 4, `${f3.groups} sets`);
+        check('every document in them is listed', f3.rows === 9, String(f3.rows));
+        check('a document under the file search\'s own minimum is still found,',
+          f3.names.includes('Do An.docx') && f3.names.includes('Note.txt'),
+          '100 KB minimum, 40 KB and 50 KB documents');
+        check('and one under F3\'s own 4 KB floor is not',
+          !/Stub/.test(f3.names));
+        check('a set that differs by nothing but a date is left out, and counted',
+          /1 set left out/.test(f3.note) && /date/.test(f3.note), f3.note.slice(0, 120));
+        check('so is a common filename in unrelated folders',
+          !/CHANGELOG/.test(f3.names) && /common filename/.test(f3.note));
+        check('a set grouped only because a date came off still needs a marker',
+          /Hop dong 2026-01-15/.test(f3.names));
+        check('one name in several formats is a set of its own',
+          f3.heads.some((h) => /several formats/.test(h)), JSON.stringify(f3.heads));
+        check('every row is ticked by hand, so every row has a tick',
+          f3.ticks === 9, String(f3.ticks));
+        check('and the only button over a set is the one that opens two of them',
+          f3.buttons.length === 4 && f3.buttons.every((b) => /side by side/.test(b)),
+          JSON.stringify(f3.buttons));
+        check('nothing here ever claims to be more than likely',
+          f3.badges.length > 0 && f3.badges.every((b) => /likely|a guess/.test(b)),
+          JSON.stringify(f3.badges.slice(0, 4)));
+        // These four sets were written in one go and share a timestamp, which
+        // is exactly the case that used to label two rows in a set "newest".
+        const newestPerSet = await win.webContents.executeJavaScript(`
+          [...document.querySelectorAll('#dupe-versions .group-versions')].map((set) =>
+            [...set.querySelectorAll('.badge-button, .keeper-tag')]
+              .filter((b) => /^newest/.test(b.textContent)).length)
+        `);
+        check('each set names exactly one newest, even with the timestamps tied',
+          newestPerSet.length === 4 && newestPerSet.every((n) => n === 1),
+          JSON.stringify(newestPerSet));
+        check('and nothing is ticked for you',
+          (await win.webContents.executeJavaScript(
+            `document.querySelectorAll('#dupe-versions input:checked').length`)) === 0);
+        check('with no identical files at all, the empty line says which list is empty',
+          /drafts above/.test(f3.empty), f3.empty);
+
+        /* -- two of them, side by side --------------------------------- */
+        await win.webContents.executeJavaScript(`
+          (() => {
+            const sets = [...document.querySelectorAll('#dupe-versions .group-versions')];
+            const withText = sets.find((s) => s.textContent.includes('Note.txt'));
+            withText.querySelector('.btn').click();
+          })()
+        `);
+        await until(win, `document.querySelectorAll('#viewer .compare-pane .viewer-text').length === 2`, 30000);
+        const side = await win.webContents.executeJavaScript(`({
+          panes: document.querySelectorAll('#viewer .compare-pane').length,
+          names: [...document.querySelectorAll('#viewer .compare-pane-head strong')].map((s) => s.textContent),
+          facts: [...document.querySelectorAll('#viewer .compare-pane-head span')].map((s) => s.textContent),
+          total: document.getElementById('viewer-facts').textContent,
+        })`);
+        check('both files open, in one panel', side.panes === 2, JSON.stringify(side.names));
+        check('each pane says what it is showing',
+          side.facts.every((f) => f.length > 0), JSON.stringify(side.facts));
+        check('and nothing is added up across the two, because they are two files',
+          side.total === '', JSON.stringify(side.total));
+        const heads = await win.webContents.executeJavaScript(`({
+          reveal: document.getElementById('viewer-reveal').offsetParent !== null,
+          open: document.getElementById('viewer-open').offsetParent !== null,
+          close: document.getElementById('viewer-close').offsetParent !== null,
+        })`);
+        check('Reveal and Open are not offered over two files, since they act on one',
+          !heads.reveal && !heads.open && heads.close, JSON.stringify(heads));
+        await win.webContents.executeJavaScript(`document.getElementById('viewer-close').click()`);
+        await until(win, `document.getElementById('viewer').hidden === true`);
+
+        /* -- refused out loud on Free ---------------------------------- */
+        process.env.CLEANDRIVE_ENTITLEMENTS = 'free';
+        await win.webContents.executeJavaScript(`document.getElementById('run-dupes').click()`);
+        await until(win, `document.getElementById('cancel-dupes').hidden === true`, 120000);
+        const onFree = await win.webContents.executeJavaScript(`({
+          status: document.getElementById('dupes-status').textContent,
+          sectionShown: document.getElementById('dupe-versions-section').hidden === false,
+        })`);
+        process.env.CLEANDRIVE_ENTITLEMENTS = 'all';
+        check('on Free the search for drafts is refused, and the line says so',
+          /drafts of one document is part of CleanDrive Pro/.test(onFree.status) && !onFree.sectionShown,
+          onFree.status.slice(0, 160));
+      } finally {
+        await win.webContents.executeJavaScript(`
+          document.getElementById('dupes-versions').checked = false;
+          ${folderBefore ? `setFolder(${JSON.stringify(folderBefore)})` : ''};
+        `);
+        fs.rmSync(f3Root, { recursive: true, force: true });
+      }
+    }
     /* -- photos and video ------------------------------------------------ */
     //
     // Driven against a tree this harness builds, not against whatever the

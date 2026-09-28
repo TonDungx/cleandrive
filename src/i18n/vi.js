@@ -329,6 +329,16 @@
     'evidence.dupes.near':
       'Giống {pct}% so với {other}: {same} tệp giống hệt, {differ} tệp khác nhau, {only} tệp chỉ có ở đây',
     'evidence.dupes.nearFile': 'Giống hệt tệp ở đúng vị trí đó trong {folder}, thư mục đang được giữ',
+    // F3 — tài liệu trông như các bản nháp của nhau. Chỉ đọc tên, nên câu chữ
+    // ở đây luôn để ngỏ khả năng đoán sai.
+    'evidence.dupes.version.marked':
+      'Một trong {n} tệp có tên chỉ khác nhau ở {markers} — thường là các bản nháp của cùng một tài liệu, nhưng không phải lúc nào cũng vậy',
+    'evidence.dupes.version.formats':
+      'Một trong {n} tệp cùng tên trong một thư mục, lưu ở các định dạng khác nhau — thường là một bài làm được xuất ra nhiều lần',
+    'evidence.dupes.version.newest': 'Bản được sửa gần đây nhất trong nhóm',
+    'evidence.dupes.version.older': 'Được sửa lâu hơn so với một bản khác trong nhóm',
+    'evidence.dupes.version.sameTime':
+      'Được sửa đúng cùng lúc với bản mới nhất trong nhóm, thường là do sao chép chứ không phải soạn lại',
 
     // The unit picks the key, so the number can sit where Vietnamese puts it.
     'reason.stale.years': 'Không mở trong {n} năm',
@@ -486,6 +496,30 @@
     'dupes.near.nothingChanged': 'Mọi tệp dùng chung đều giữ đúng cùng một nội dung.',
     'dupes.near.truncated': 'Chỉ liệt kê 200 khác biệt đầu tiên của mỗi loại.',
     'dupes.empty.filesOnly': 'Không có tệp trùng nào ngoài các thư mục ở trên.',
+
+    // F3 — các bản nháp của cùng một tài liệu.
+    'dupes.versions.toggle': 'Tìm cả các bản nháp của một tài liệu',
+    'dupes.versions.locked':
+      'Tìm các bản nháp của một tài liệu thuộc CleanDrive Pro, nên chỉ có các tệp giống hệt nhau được đối chiếu.',
+    'dupes.versions.heading': 'Tài liệu trông như các bản nháp của nhau',
+    'dupes.versions.note':
+      'Nhóm theo phần giống nhau trong tên, và không đọc gì thêm. Đó là căn cứ yếu, nên ở đây không có gì được tích sẵn và cũng không có “chỉ giữ bản mới nhất”.',
+    'dupes.versions.skippedDates':
+      'Đã bỏ qua {n} {sets} chỉ khác nhau ở ngày tháng trong tên — ngày tháng thường cho biết đây là tài liệu nào, chứ không phải bản nháp nào.',
+    'dupes.versions.skippedCommon':
+      'Đã bỏ qua {n} {sets} chỉ trùng một cái tên phổ biến ở những thư mục chẳng liên quan gì đến nhau.',
+    'dupes.versions.groupTitle': '{n} tệp đặt tên như cùng một tài liệu · tổng cộng {size}',
+    'dupes.versions.by': 'khác nhau ở {markers}',
+    'dupes.versions.byFormat': 'một cái tên, nhiều định dạng',
+    'dupes.versions.compare': 'Mở hai bản mới nhất cạnh nhau',
+    'dupes.versions.newest': 'mới nhất',
+    // Tiếng Việt không đổi dạng số nhiều, nên cả hai giống nhau.
+    'dupes.versions.setWord.one': 'nhóm',
+    'dupes.versions.setWord.other': 'nhóm',
+    'dupes.versions.older': 'cũ hơn',
+    'dupes.versions.sameTime': 'cùng lúc',
+    'dupes.empty.versionsOnly':
+      'Không có tệp nào ở đây giống hệt từng byte với tệp khác — chỉ có các nhóm bản nháp ở trên.',
     'dupes.phase.shape': 'Đang so thư mục theo tên và kích thước',
     'dupes.phase.folders': 'Đang đối chiếu nội dung thư mục',
     'dupes.phase.near': 'Đang so các thư mục gần trùng',
@@ -1497,6 +1531,9 @@
     'viewer.label': 'Xem trước',
     'viewer.openWith': 'Mở bằng ứng dụng gốc',
     'viewer.reading': 'Đang đọc…',
+    // F3 — hai tệp mở cùng lúc.
+    'viewer.compare.title': 'Hai bản, đặt cạnh nhau',
+    'viewer.compare.unreadable': 'Không đọc được',
     'viewer.lines': '{n} dòng',
     'viewer.truncated': 'mới hiện {size} đầu tiên',
     'viewer.noExtension': 'không có đuôi',

@@ -285,11 +285,87 @@ function* folderCandidates(folders) {
   return { ...folders, exact, near };
 }
 
+/* -------------------------------------------------------------------------- */
+/* documents that look like versions of one another (F3)                       */
+/* -------------------------------------------------------------------------- */
+
+const VERSION_ID = `${ID}:version`;
+
+/**
+ * One document in a set of apparent versions.
+ *
+ * `review` and never better than `likely`, because the evidence is a filename.
+ * The actions are the ordinary two, but there is no bulk selection anywhere
+ * that reaches these -- the spec forbids "select all but the newest" and it is
+ * right to: a one-click delete on top of a guess is exactly the false
+ * confidence this app is written against.
+ */
+function versionCandidate(file, group) {
+  const why = group.markers.length > 0
+    ? m(
+        'evidence.dupes.version.marked',
+        'One of {n} files whose names differ only by {markers} — which usually means drafts of one document, and sometimes does not',
+        { n: group.count, markers: group.markers.join(', ') }
+      )
+    : m(
+        'evidence.dupes.version.formats',
+        'One of {n} files with the same name in one folder, saved in different formats — usually one piece of work exported more than once',
+        { n: group.count }
+      );
+
+  // Three states rather than two: a file whose timestamp ties with the
+  // newest is not older than it, and saying so would be the app being
+  // wrong about the one thing here it actually measured.
+  const extra = file.newest
+    ? m('evidence.dupes.version.newest', 'The most recently changed of them')
+    : file.sameTimeAsNewest
+      ? m('evidence.dupes.version.sameTime', 'Changed at the same moment as the newest of them, which usually means copied rather than drafted')
+      : m('evidence.dupes.version.older', 'Changed less recently than another in the set');
+
+  return {
+    id: candidateId(VERSION_ID, file.path),
+    path: file.path,
+    kind: 'file',
+    bytes: file.size,
+    category: 'dupes.version',
+    verdict: 'review',
+    // Never `certain` or `strong`: nothing here was read, only named.
+    confidence: group.confidence,
+    evidence: [evidence(1, why), evidence(2, extra)],
+    actions: ['recycle', 'quarantine'],
+    unattendedEligible: false,
+    meta: {
+      group: group.key,
+      newest: file.newest,
+      sameTimeAsNewest: file.sameTimeAsNewest,
+      markers: file.markers,
+      ext: file.ext,
+      mtimeMs: file.mtimeMs,
+      versionRow: true,
+    },
+  };
+}
+
+function* versionCandidates(versions) {
+  const groups = [];
+  for (const group of versions.groups) {
+    const ids = [];
+    for (const file of group.files) {
+      const candidate = versionCandidate(file, group);
+      ids.push(candidate.id);
+      yield { type: 'candidate', candidate };
+    }
+    const { files, ...rest } = group;
+    groups.push({ ...rest, ids });
+  }
+  return { ...versions, groups };
+}
+
 const analyzer = {
   id: ID,
   feature: 'free',
   requiresElevation: false,
-  categories: ['dupes.copy', 'dupes.folder', 'dupes.nearFolder', 'dupes.folderFile'],
+  categories: ['dupes.copy', 'dupes.folder', 'dupes.nearFolder', 'dupes.folderFile', 'dupes.version'],
 
   /**
    * @param {object} ctx  { roots, options, deps: { findDuplicates } }
@@ -315,10 +391,12 @@ const analyzer = {
       groups.push({ ...rest, ids });
     }
 
-    // Whole folders (F2), when the run asked for them.
+    // Whole folders (F2), and documents that look like versions (F3), when
+    // the run asked for them.
     const folders = result.folders ? yield* folderCandidates(result.folders) : null;
+    const versions = result.versions ? yield* versionCandidates(result.versions) : null;
 
-    yield { type: 'summary', summary: { ...result, groups, folders } };
+    yield { type: 'summary', summary: { ...result, groups, folders, versions } };
   },
 };
 

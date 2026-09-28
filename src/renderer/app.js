@@ -1082,6 +1082,7 @@ $('run-dupes').addEventListener('click', async () => {
   $('dupes-empty').hidden = true;
   $('dupe-groups').replaceChildren();
   $('dupe-folders').replaceChildren();
+  $('dupe-versions').replaceChildren();
   state.selectedDupes.clear();
 
   const minSize = Number($('min-size').value);
@@ -1092,8 +1093,10 @@ $('run-dupes').addEventListener('click', async () => {
   const prefer = $('dupes-prefer').value;
   // Whole folders (F2). Asked for here, allowed or refused there.
   const folders = $('dupes-folders').checked;
+  // Drafts of one document (F3). Names only, so it adds nothing to the walk.
+  const versions = $('dupes-versions').checked;
   const result = unwrap(
-    await api.findDuplicates(state.roots, { minSize, prefer, folders }),
+    await api.findDuplicates(state.roots, { minSize, prefer, folders, versions }),
     t('app.label.dupes', 'Duplicate search')
   );
   setDupesRunning(false);
@@ -1183,6 +1186,12 @@ function hydrateDupes(result) {
       })),
     })),
     folders: result.folders ? hydrateFolders(result.folders, byId) : null,
+    versions: result.versions
+      ? {
+          ...result.versions,
+          groups: result.versions.groups.map(({ ids, ...group }) => ({ ...group, files: viewsOf(ids, byId) })),
+        }
+      : null,
   };
 }
 
@@ -1285,6 +1294,12 @@ function renderDupes(result) {
       );
     }
   }
+  // Drafts of one document (F3). Refused out loud for the third time on this
+  // screen and for the same reason: being handed a shorter list than the one
+  // asked for, with nothing said, teaches the wrong thing about the disk.
+  if (result.versionsRefused === 'locked') {
+    notes.push(t('dupes.versions.locked', 'Looking for drafts of one document is part of CleanDrive Pro, so only identical files were compared.'));
+  }
   if (result.cacheHits) {
     notes.push(t('dupes.cacheHits', '{n} hashes reused from cache.', { n: formatCount(result.cacheHits) }));
   }
@@ -1300,8 +1315,13 @@ function renderDupes(result) {
 
   // Folders first: one row there stands for hundreds here.
   renderFolders(result.folders);
+  renderVersions(result.versions);
   const anyFolders = Boolean(result.folders && (result.folders.exact.length || result.folders.near.length));
-  $('dupe-files-heading').hidden = !anyFolders;
+  const anyVersions = Boolean(result.versions && result.versions.groups.length);
+  // Both sections sit above the file groups and both put rows into the same
+  // selection, so the heading and the toolbar answer to either of them.
+  const anyAbove = anyFolders || anyVersions;
+  $('dupe-files-heading').hidden = !anyAbove;
 
   // "Select all but the oldest copy" is about file groups. With folders found
   // and no file groups it would clear a folder selection and tick nothing, so
@@ -1309,15 +1329,17 @@ function renderDupes(result) {
   $('select-extra').hidden = result.totalGroups === 0;
 
   if (result.totalGroups === 0) {
-    $('dupes-toolbar').hidden = !anyFolders;
+    $('dupes-toolbar').hidden = !anyAbove;
     $('dupe-files-heading').hidden = true;
     $('dupes-empty').textContent = result.copiesOf
       ? t('dupes.copies.empty', 'No other copy of this file, byte for byte, in {scope}.', { scope: result.scope })
       : anyFolders
         ? t('dupes.empty.filesOnly', 'No duplicate files outside the folders above.')
-        : t('dupes.empty', 'No duplicate files found in this folder.');
+        : anyVersions
+          ? t('dupes.empty.versionsOnly', 'Nothing here is a byte-for-byte copy of anything else — only the sets of drafts above.')
+          : t('dupes.empty', 'No duplicate files found in this folder.');
     $('dupes-empty').hidden = false;
-    if (anyFolders) updateSelectionStatus();
+    if (anyAbove) updateSelectionStatus();
     return;
   }
 
@@ -1502,6 +1524,112 @@ function renderNearPair(pair) {
   body.appendChild(compareTree(pair, keepRow, otherRow));
   if (otherRow) body.appendChild(filesOfCopy(pair.files, otherRow));
 
+  section.append(head, body);
+  return section;
+}
+
+/* ---- documents that look like drafts of one another (F3) ----------------- */
+
+/**
+ * Sets of documents whose names look like versions of one another.
+ *
+ * There is no "select all but the newest" and there will not be one: the whole
+ * set is a guess made from filenames, and a single click that acts on a guess
+ * is the thing this app exists not to do. Each row is ticked by hand, and the
+ * pair of buttons above a set opens two of them side by side so the decision
+ * is made by looking rather than by trusting a name.
+ */
+function renderVersions(versions) {
+  const section = $('dupe-versions-section');
+  const container = $('dupe-versions');
+  container.replaceChildren();
+
+  if (!versions || versions.groups.length === 0) {
+    section.hidden = true;
+    return;
+  }
+  section.hidden = false;
+
+  const notes = [
+    t('dupes.versions.note', 'Grouped by what their names have in common, and nothing else was read. That is a weak signal, so nothing here is ticked for you and there is no “keep only the newest”.'),
+  ];
+  if (versions.skippedDateOnly) {
+    notes.push(t(
+      'dupes.versions.skippedDates',
+      '{n} {sets} left out for differing by nothing but a date in the name — a date usually says which document this is, not which draft.',
+      { n: formatCount(versions.skippedDateOnly), sets: setWord(versions.skippedDateOnly) }
+    ));
+  }
+  if (versions.skippedCommonName) {
+    notes.push(t(
+      'dupes.versions.skippedCommon',
+      '{n} {sets} left out for sharing a common filename across folders that have nothing to do with each other.',
+      { n: formatCount(versions.skippedCommonName), sets: setWord(versions.skippedCommonName) }
+    ));
+  }
+  setText($('dupe-versions-note'), notes.join(' '));
+
+  for (const group of versions.groups.slice(0, 200)) container.appendChild(renderVersionGroup(group));
+}
+
+/** Where a row sits in time: the newest, tied with it, or behind it. */
+function versionWhen(file) {
+  if (file.newest) return t('dupes.versions.newest', 'newest');
+  if (file.sameTimeAsNewest) return t('dupes.versions.sameTime', 'same time');
+  return t('dupes.versions.older', 'older');
+}
+
+/** One set, or several. Vietnamese does not inflect it; English does. */
+const setWord = (n) => word(n, 'dupes.versions.setWord', 'set', 'sets');
+
+function renderVersionGroup(group) {
+  const section = document.createElement('section');
+  section.className = 'group group-versions';
+
+  const head = document.createElement('div');
+  head.className = 'group-head';
+  const title = document.createElement('strong');
+  title.textContent = t('dupes.versions.groupTitle', '{n} files named like one document · {size} together', {
+    n: group.count,
+    size: formatBytes(group.bytes),
+  });
+  const how = document.createElement('span');
+  how.className = 'group-waste';
+  how.textContent = group.markers.length
+    ? t('dupes.versions.by', 'differing by {markers}', { markers: group.markers.join(', ') })
+    : t('dupes.versions.byFormat', 'one name, several formats');
+  head.append(title, how);
+
+  const body = document.createElement('div');
+  body.className = 'group-body';
+
+  // Side by side, which is the only way to tell two drafts apart.
+  const bar = document.createElement('div');
+  bar.className = 'panel-actions';
+  const compare = document.createElement('button');
+  compare.className = 'btn btn-sm';
+  compare.textContent = t('dupes.versions.compare', 'Open the two newest side by side');
+  compare.disabled = group.files.length < 2;
+  compare.addEventListener('click', () => openCompare(group.files[0].path, group.files[1].path));
+  bar.appendChild(compare);
+
+  const list = document.createElement('ul');
+  list.className = 'files';
+  lists.dupes.push(
+    CandidateList(list, {
+      rows: group.files,
+      selection: state.selectedDupes,
+      onChange: updateSelectionStatus,
+      meta: (file) => `${file.ext.toUpperCase()} · ${timeLabel(file)}`,
+      badge: (file) =>
+        evidencePill(file, {
+          className: file.newest ? 'keeper-tag badge-button' : 'badge badge-confidence badge-button',
+          text: `${versionWhen(file)} · ${confidenceWord(file.confidence)}`,
+        }),
+    })
+  );
+
+  body.append(bar, list);
   section.append(head, body);
   return section;
 }

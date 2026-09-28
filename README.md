@@ -100,7 +100,7 @@ while skimming.
 | **System** | Where did the rest of the drive go? | The whole system drive |
 | **What to delete** | Which of it is safe to remove, and why? | The same scan |
 | **Photos & video** | What is in my picture library, and where did it come from? | Curated photo folders |
-| **Duplicates** | What do I have more than one copy of — file by file, or a whole folder at a time? | One folder you choose |
+| **Duplicates** | What do I have more than one copy of — file by file, a whole folder at a time, or drafts of one document? | One folder you choose |
 | **Apps** | What is installed, how big is it, when did I last start it? | The installed-apps list, and the folders it names |
 | **Games** | Which games am I keeping and not playing? | The Steam library |
 | **Developer** | What have my development tools filled the disk with? | Package caches, SDKs, editor caches, WSL and Docker, and your own projects |
@@ -915,14 +915,18 @@ a fixed list of categories, and nothing here produces one.
 
 ## Screen 6 — Duplicates
 
-Byte-identical files inside the chosen folder — and, if you ask for it, whole
-folders that hold the same thing.
+Byte-identical files inside the chosen folder — and, if you ask for them,
+whole folders that hold the same thing, and documents whose names look like
+drafts of one another.
 
 ### Controls
 
 **Ignore files under** — 1 KB, 100 KB (default), 1 MB or 10 MB.
 
 **Also compare whole folders** — off by default. See *Whole folders* below.
+
+**Also look for drafts of one document** — off by default. See *Drafts of one
+document* below.
 
 **Suggest keeping** — which copy of a group carries the *keep* tag:
 
@@ -961,6 +965,9 @@ than a spinner: **Indexing files → Grouping by size → Comparing file heads
 → Verifying full contents**, and with whole folders on, **Comparing folders by
 name and size → Verifying folder contents → Comparing folders that nearly
 match**.
+
+Looking for drafts adds no phase, because it adds no reading — it happens once
+the walk is done, on the list the walk produced.
 
 It can be stopped at any phase boundary and returns what it found so far.
 
@@ -1033,6 +1040,67 @@ the comparison and nowhere else — those are the ones you would actually lose.
 
 A folder holding a file that could not be read is never claimed as a copy of
 anything, and the status line counts those separately.
+
+### Drafts of one document
+
+Tick **Also look for drafts of one document** and the screen gains a second
+section above the file groups: sets of documents whose *names* say they are
+versions of one another. `Report.docx`, `Report - Copy.docx`, `Report_v2.docx`,
+`Report_final.docx` — four different files, one piece of work. The duplicate
+finder cannot see them, because their bytes differ, which is the whole point.
+
+This is Pro (`pro.dupes.advanced`). Asked for without it, the search still runs
+over files and the status line says so, the same way the other two do.
+
+**It reads names and nothing else.** No document is opened. It rides on the
+walk the duplicate search already did, and on this machine grouping 3,833
+documents took 0.01 s. Word, Excel, PowerPoint, PDF, OpenDocument, `.txt`, `.md`,
+`.rst` and `.tex`, down to 4 KB — under that a "document" is a stub.
+
+Its own 4 KB floor is deliberately below **Ignore files under**. That control
+answers "which copies are worth deleting" and defaults to 100 KB, which most
+Word drafts are under; it does not get to decide which documents exist. With
+this on, the walk goes down to 4 KB and the file half of the screen is filtered
+back to whatever you chose.
+
+**Nothing here is ever more than a guess.** A name is a very weak signal:
+`Report_v2.docx` may be the second draft of `Report.docx` or a different report
+somebody named badly, and nothing short of reading both can tell. So every row
+is *a guess*, raised to *likely* only when the files are in one folder and one
+format — and **nothing is ticked for you**. There is no *keep only the newest*
+and there will not be one.
+
+What there is instead is **Open the two newest side by side**: both files in
+one panel, in the same reader the View button uses, so the question is settled
+by looking. Reveal and Open are not offered there — they act on one file, and
+there are two.
+
+**Two kinds of set are deliberately left out**, and the note above the list
+counts both.
+
+- **Names that differ by nothing but a date.** The obvious rule is to strip the
+  date along with `_v2` and `- Copy`. Counted on this machine, 1,755 of 6,503
+  document names carry a date, and stripping it created 38 sets that existed
+  *only* because it had been stripped — `Log 2026-06-13` beside
+  `Log 2026-09-26`, a different invoice each time. All 38 were wrong. A date in
+  a document name usually says *which* document, not *which draft*, so a date
+  comes off only when something else in the set actually says "version".
+- **A common filename in unrelated folders.** Same name, different folders,
+  nothing else to go on. Without this rule the real disk gave 216 sets, and 180
+  of them were not versions of anything: 143 copies of `CHANGELOG.md`, one per
+  package in a Dart cache; 135 `README.md`; 25 `LICENSE.txt` — 856 files in all.
+  With it: 36 sets. Where those
+  files really are the same, the duplicate finder already has them, and it
+  *knows* rather than guesses.
+
+Two more rules came from the same counting. `(2)` is Windows' copy suffix, but 6
+of the 27 names ending that way were a publication year (`… -Wiley (2018)`), so
+only small numbers count. `v2` is a version, but 2 of the 26 ending that way were
+`GPLv3` and `LGPLv3`, so it counts only after a separator.
+
+**What you can do with one.** Tick the rows you want, by hand, one at a time,
+and send them to the Recycle Bin or to Quarantine like anything else. These
+never enter an automatic cleanup.
 
 ### Files in use stay visible and are never bulk-selected
 

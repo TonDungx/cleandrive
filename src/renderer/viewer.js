@@ -28,6 +28,14 @@ const viewer = {
   returnFocus: null,
   /** Which tab of a workbook is showing. Reset for each file, not each redraw. */
   sheetIndex: 0,
+  /**
+   * Two files at once (F3).
+   *
+   * Kept as state rather than read off the DOM because a single-file reply
+   * still in flight would otherwise draw itself over a comparison that opened
+   * after it.
+   */
+  comparing: false,
 };
 
 /* ------------------------------------------------------------------ opening */
@@ -44,6 +52,8 @@ async function openViewer(filePath) {
   // A new file starts on its first tab. Carrying the last workbook's tab index
   // over opens the next one on sheet four for no reason anybody could see.
   viewer.sheetIndex = 0;
+  viewer.comparing = false;
+  $('viewer').classList.remove('is-comparing');
   $('viewer').hidden = false;
   setBehind(true);
   $('viewer-name').textContent = filePath.split(/[\\/]/).pop();
@@ -57,10 +67,84 @@ async function openViewer(filePath) {
   // flight. Drawing the answer to a question nobody is asking any more would
   // replace what is on screen with something the user did not ask for.
   if (!result || $('viewer').hidden) return;
+  // A comparison opened while this was in flight owns the panel now.
+  if (viewer.comparing) return;
   if (viewer.file && viewer.file.path !== filePath && result.path !== filePath) return;
 
   viewer.file = result;
   render(result);
+}
+
+/**
+ * Two files at once, side by side (F3).
+ *
+ * The sets on the Duplicates screen are a guess made from filenames, and the
+ * only way to settle it is to look at both. So the same panel, the same
+ * readers, and the same refusals -- it is one extra column, not a second
+ * viewer with its own idea of what a `.docx` is.
+ *
+ * Both are fetched together: each is a read of a file on disk and waiting for
+ * one before asking for the other doubles a wait that has no reason to be
+ * serial.
+ */
+async function openCompare(leftPath, rightPath) {
+  if (!leftPath || !rightPath) return;
+
+  viewer.returnFocus = document.activeElement;
+  viewer.sheetIndex = 0;
+  viewer.comparing = true;
+  $('viewer').hidden = false;
+  $('viewer').classList.add('is-comparing');
+  setBehind(true);
+  $('viewer-name').textContent = t('viewer.compare.title', 'Two of them, side by side');
+  $('viewer-name').title = `${leftPath}\n${rightPath}`;
+  $('viewer-facts').textContent = t('viewer.reading', 'Reading…');
+  $('viewer-body').replaceChildren();
+  $('viewer-close').focus();
+
+  const pair = unwrap(await api.previewCompare(leftPath, rightPath), t('viewer.label', 'Preview')) || [];
+  const [left, right] = pair.map((one) => unwrap(one, t('viewer.label', 'Preview')));
+  if ($('viewer').hidden || !viewer.comparing) return;
+
+  const body = $('viewer-body');
+  body.className = 'viewer-body is-compare';
+  body.replaceChildren();
+  for (const file of [left, right]) {
+    const pane = document.createElement('div');
+    pane.className = 'compare-pane';
+
+    const head = document.createElement('div');
+    head.className = 'compare-pane-head';
+    const name = document.createElement('strong');
+    name.textContent = file ? file.name : t('viewer.compare.unreadable', 'Could not be read');
+    if (file) name.title = file.path;
+    const facts = document.createElement('span');
+    facts.textContent = file ? factsLine(file) : '';
+    head.append(name, facts);
+
+    const inner = document.createElement('div');
+    inner.className = file ? `viewer-body is-${file.kind}` : 'viewer-body';
+    if (file) inner.appendChild(viewFor(file));
+    pane.append(head, inner);
+    body.appendChild(pane);
+  }
+  // Nothing is added up across the two: they are different files, and a total
+  // would read as "this much could go".
+  $('viewer-facts').textContent = '';
+}
+
+/** The body for one file, without touching the panel around it. */
+function viewFor(file) {
+  switch (file.kind) {
+    case 'text': return textView(file);
+    case 'image': return imageView(file);
+    case 'pdf': return frameView(file);
+    case 'video': return videoView(file);
+    case 'audio': return audioView(file);
+    case 'office': return documentView(file);
+    case 'archive': return archiveView(file);
+    default: return noteView(file);
+  }
 }
 
 /**
@@ -79,6 +163,8 @@ function setBehind(on) {
 function closeViewer() {
   if ($('viewer').hidden) return;
   $('viewer').hidden = true;
+  $('viewer').classList.remove('is-comparing');
+  viewer.comparing = false;
   setBehind(false);
   // Emptying it stops a video carrying on playing behind a closed panel, and
   // drops the reference that keeps a large picture in memory.

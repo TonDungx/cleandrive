@@ -614,6 +614,12 @@
             <input type="checkbox" id="dupes-folders">
             <span data-i18n="dupes.folders.toggle">Also compare whole folders</span>
           </label>
+          <!-- F3: documents whose names look like versions of one another.
+               Reads names only, so it costs nothing on top of the walk. -->
+          <label class="field dupes-folders-box" id="dupes-versions-field">
+            <input type="checkbox" id="dupes-versions">
+            <span data-i18n="dupes.versions.toggle">Also look for drafts of one document</span>
+          </label>
           <span class="status" id="dupes-status" data-i18n="app.pickToBegin">Pick a folder to begin.</span>
         </div>
 
@@ -638,6 +644,14 @@
         <section id="dupe-folders-section" hidden>
           <h3 class="section-heading" id="dupe-folders-heading" data-i18n="dupes.folders.heading">Folders that hold the same thing</h3>
           <div id="dupe-folders" class="groups"></div>
+        </section>
+
+        <!-- F3. Above the file groups, because a set of drafts is a decision
+             and a set of byte-identical copies is mostly not. -->
+        <section id="dupe-versions-section" hidden>
+          <h3 class="section-heading" data-i18n="dupes.versions.heading">Documents that look like drafts of one another</h3>
+          <p class="card-note" id="dupe-versions-note"></p>
+          <div id="dupe-versions" class="groups"></div>
         </section>
 
         <h3 class="section-heading" id="dupe-files-heading" hidden data-i18n="dupes.files.heading">Individual files</h3>

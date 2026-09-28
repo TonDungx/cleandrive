@@ -48,6 +48,8 @@ const DYNAMIC_PREFIXES = [
   'dupes.phase.',
   // "n other copies" of one file (I3) goes through `word()`.
   'dupes.copyWord.',
+  // "1 set" / "2 sets" left out of the drafts section (F3).
+  'dupes.versions.setWord.',
   'monitor.level.',
   'trends.measurement.',
   'trends.scan.',
