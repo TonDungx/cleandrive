@@ -1017,6 +1017,164 @@ main {
   margin: 14px 0 0;
 }
 
+/* -------------------------------------------------- the Space Planner (G1) */
+
+.plan-goal {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.plan-goal input[type="number"] {
+  width: 74px;
+  text-align: right;
+}
+
+.plan-system {
+  font-size: 13px;
+}
+
+/* The bar at the top: how far the plan gets toward what was asked for. */
+.plan-bar {
+  margin: 0 0 18px;
+}
+
+.plan-bar-track {
+  position: relative;
+  height: 10px;
+  border-radius: 5px;
+  background: var(--surface-2, var(--surface));
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.plan-bar-fill {
+  display: block;
+  height: 100%;
+  background: var(--good);
+  transition: width var(--slow, 240ms) ease;
+}
+
+/* Short of the goal is stated, not coloured like a failure: the plan is still
+   the best there is, and the note underneath says how far it gets. */
+.plan-bar-fill.is-short {
+  background: var(--warn);
+}
+
+.plan-bar-note {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+
+.plan-steps {
+  list-style: none;
+  margin: 0 0 18px;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+  counter-reset: plan-step;
+}
+
+.plan-step {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  background: var(--surface);
+}
+
+.plan-step::before {
+  counter-increment: plan-step;
+  content: counter(plan-step);
+  float: left;
+  margin: 0 12px 6px 0;
+  min-width: 22px;
+  height: 22px;
+  border-radius: 11px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 22px;
+  text-align: center;
+}
+
+/* Emptying the bin is not a source of its own -- it is where what the steps
+   above moved actually leaves the drive. */
+.plan-step.is-derived {
+  border-style: dashed;
+}
+
+/* Past the point where the goal is met. Still readable: the spec asks for
+   them to be dimmed, not hidden. */
+.plan-step.is-beyond {
+  opacity: 0.55;
+}
+
+.plan-step-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+}
+
+.plan-step-head strong {
+  font-size: 14px;
+}
+
+.plan-step-size {
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.plan-step-count,
+.plan-step-note {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+
+.plan-step-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.plan-step-running {
+  font-size: 12px;
+  color: var(--text-3, var(--text-dim));
+}
+
+.plan-missing {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 18px;
+}
+
+.plan-missing-row {
+  margin: 0;
+  padding: 10px 12px;
+  border-left: 3px solid var(--border);
+  font-size: 13px;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+
+/* A step's link brings its group into view on the screen that owns it. */
+.is-pointed {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 8px;
+}
+
 /*
  * "Fast scan (needs administrator)" (A2), beside the Scan button.
  *

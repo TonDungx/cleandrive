@@ -1427,9 +1427,13 @@ app.whenReady().then(async () => {
         total: document.getElementById('sstat-total').textContent,
         bar: document.getElementById('system-bar-card').hidden,
         status: document.getElementById('system-status').textContent,
-        order: [...document.querySelectorAll('.tab[data-tab]')].map((b) => b.dataset.tab).slice(0, 3).join(','),
+        order: [...document.querySelectorAll('.tab[data-tab]')].map((b) => b.dataset.tab).slice(0, 4).join(','),
       })`);
-      check('the System tab sits between Disk usage and What to delete', before.order === 'usage,system,cleanup', before.order);
+      // The order is the order somebody reads the app in: see what is there
+      // (Disk usage, System), decide what to do about it (Plan, G1), then do
+      // it (What to delete). Asserted because it is a decision, not an
+      // accident of the markup.
+      check('seeing comes before deciding, and deciding before doing', before.order === 'usage,system,planner,cleanup', before.order);
       check('it shows the drive\'s size at once, and waits for a click before reading every folder',
         /\d/.test(before.total) && before.bar === true && /can be stopped/.test(before.status), before.status);
 

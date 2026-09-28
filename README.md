@@ -22,16 +22,17 @@ and the notifications.
 - [Choosing what to look at](#choosing-what-to-look-at)
 - [Screen 1 — Disk usage](#screen-1--disk-usage)
 - [Screen 2 — System](#screen-2--system)
-- [Screen 3 — What to delete](#screen-3--what-to-delete)
-- [Screen 4 — Photos & video](#screen-4--photos--video)
-- [Screen 5 — Duplicates](#screen-5--duplicates)
-- [Screen 6 — Apps](#screen-6--apps)
-- [Screen 7 — Games](#screen-7--games)
-- [Screen 8 — Developer](#screen-8--developer)
-- [Screen 9 — Trends](#screen-9--trends)
-- [Screen 10 — Restore](#screen-10--restore)
-- [Screen 11 — Automatic](#screen-11--automatic)
-- [Screen 12 — Settings](#screen-12--settings)
+- [Screen 3 — Plan](#screen-3--plan)
+- [Screen 4 — What to delete](#screen-4--what-to-delete)
+- [Screen 5 — Photos & video](#screen-5--photos--video)
+- [Screen 6 — Duplicates](#screen-6--duplicates)
+- [Screen 7 — Apps](#screen-7--apps)
+- [Screen 8 — Games](#screen-8--games)
+- [Screen 9 — Developer](#screen-9--developer)
+- [Screen 10 — Trends](#screen-10--trends)
+- [Screen 11 — Restore](#screen-11--restore)
+- [Screen 12 — Automatic](#screen-12--automatic)
+- [Screen 13 — Settings](#screen-13--settings)
 - [The file viewer](#the-file-viewer)
 - [Deleting](#deleting)
 - [Disk alerts and the tray](#disk-alerts-and-the-tray)
@@ -590,7 +591,70 @@ an automatic cleanup.
 
 ---
 
-## Screen 3 — What to delete
+---
+
+## Screen 3 — Plan
+
+Every other screen answers *what is here*. This one answers *what do I do*.
+
+Say how much room you need — **I need 30 GB on C:** — and press **Work out a
+plan**. It measures the other screens, then sorts what they found into steps
+in rising order of risk: temporary files and caches first, then OneDrive
+files that can go back online, build folders your `.gitignore` declares,
+developer caches, the system areas Windows can reclaim, old installers and
+big archives, and finally programs and games you have not opened in months.
+
+**There is no "carry out the plan" button, and there will not be one.** Each
+step is a link to the screen that already offers that work, where you tick
+the rows and confirm them yourself, exactly as you would have. A button here
+that deleted nine categories of file across six screens on one click is the
+one thing this app has never done.
+
+### The number that is not the size of the files
+
+A step says two things, because they are different: **how much it moves**,
+and **how much that gives back**. Three things can happen to the space:
+
+| | What the step says |
+| --- | --- |
+| Moved to the Recycle Bin | *"Moves 10.1 GB to the Recycle Bin — not freed until it is emptied"*. The running total does not move. |
+| Freed on the spot | *"Frees 6.8 GB straight away"* — a OneDrive file going back online only. |
+| Windows frees it | *"Windows frees 18.6 GB when you go through with it"* — hiberfil, Windows.old, restore points, an uninstaller. CleanDrive opens the tool and counts nothing itself. |
+
+So the plan contains a step of its own: **empty what CleanDrive put in the
+Recycle Bin**. Everything above it that went to the bin is still on the drive
+until that step, and the running total climbs there rather than earlier. This
+is the same rule the rest of the app follows — the bin is on the same volume,
+so moving a file into it frees nothing — applied to a screen whose whole job
+is adding up what you would get back.
+
+The bar at the top is how far the plan gets toward what you asked for. Steps
+past the point where the goal is met are dimmed but still readable: they are
+the ones you do not have to do.
+
+### What it will not count
+
+When the sources it knows about do not reach your goal, it says so and does
+not pad the numbers: *"The sources CleanDrive knows about come to 36.5 GB of
+the 120 GB you asked for. The rest would have to be your own files — see Disk
+usage."*
+
+Two sources are left out on purpose, and each says why on the screen:
+
+- **Duplicates.** Finding them means reading the contents of nearly every
+  file on the drive rather than just its size — the floor is 1 KB. Every
+  other source here reads metadata. Run the Duplicates screen if you want
+  them counted.
+- **The system areas**, unless you tick the box. Measuring them properly
+  needs administrator, and a prompt you did not ask for is not something this
+  app does.
+
+A source that fails to measure is named too, and the plan is built from the
+rest rather than abandoned.
+
+The Space Planner is a Pro feature (`pro.planner`); until licences exist it is
+open to everyone.
+## Screen 4 — What to delete
 
 The same scan, read a different way: not "what is big" but "what is disposable".
 
@@ -727,7 +791,7 @@ that they behave the same way.
 
 ---
 
-## Screen 4 — Photos & video
+## Screen 5 — Photos & video
 
 Its own screen, because its files are the only ones in the app that cannot be got
 back. Everything here is arranged around that.
@@ -848,7 +912,7 @@ a fixed list of categories, and nothing here produces one.
 
 ---
 
-## Screen 5 — Duplicates
+## Screen 6 — Duplicates
 
 Byte-identical files inside the chosen folder.
 
@@ -901,7 +965,7 @@ you are allowed to do.
 
 ---
 
-## Screen 6 — Apps
+## Screen 7 — Apps
 
 What is installed, what each one occupies, and when each was last started. The
 app never uninstalls anything here: a row's button opens Windows' own list of
@@ -969,7 +1033,7 @@ it is installed inside the Windows folder, or it registered no uninstaller.
 
 ---
 
-## Screen 7 — Games
+## Screen 8 — Games
 
 The Steam library: what is installed, how big each game is, and when it was
 last played. **The app never removes a game.** Deleting a game's folder leaves
@@ -1028,7 +1092,7 @@ said out loud rather than listed as if they were worth removing.
 
 ---
 
-## Screen 8 — Developer
+## Screen 9 — Developer
 
 What a developer's tools have quietly filled the disk with: the packages they
 downloaded, the toolchains they installed, the caches the editors write, and the
@@ -1164,7 +1228,7 @@ you to assume it was checked.
 
 ---
 
-## Screen 9 — Trends
+## Screen 10 — Trends
 
 Whether the problem is getting worse, and how fast.
 
@@ -1254,7 +1318,7 @@ because the two numbers measure different things.
 
 ---
 
-## Screen 10 — Restore
+## Screen 11 — Restore
 
 Everything the app has done to a file, newest first, and the way back from each
 of it. It is free on every tier and it is never behind a licence: whatever the
@@ -1313,7 +1377,7 @@ can ask for something the app did to be undone and for nothing else.
 
 ---
 
-## Screen 11 — Automatic
+## Screen 12 — Automatic
 
 Cleanup on a timetable, with no window open. Off by default, and designed so that
 every ambiguity resolves towards doing nothing — there is no dialog in front of
@@ -1397,7 +1461,7 @@ the cleanup.
 
 ---
 
-## Screen 12 — Settings
+## Screen 13 — Settings
 
 Small on purpose. **Nothing in Settings changes what the app deletes**, with one
 exception, off until you switch it on: *Delete the original*, on the card for
@@ -1695,7 +1759,7 @@ Month files older than thirteen months are dropped at launch — except a month
 that moved files to another drive: those copies stay as long as somebody leaves
 them, and the journal is how Restore knows where each came from.
 
-It is also what the [Restore](#screen-10--restore) screen reads, and a restore is
+It is also what the [Restore](#screen-11--restore) screen reads, and a restore is
 recorded in it like any other action — which is how the purge knows a file that
 was put back is no longer the app's to remove.
 

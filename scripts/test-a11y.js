@@ -569,7 +569,9 @@ app.whenReady().then(async () => {
   let nodes = await axTree();
   const tabs = nodes.filter((n) => n.role && n.role.value === 'tab' && !n.ignored);
   const selected = tabs.filter((n) => prop(n, 'selected') === true);
-  check('twelve tabs, and exactly one says it is selected', tabs.length === 12 && selected.length === 1,
+  // Thirteen since the Space Planner (G1). The count is asserted rather than
+  // counted from the page so that a tab lost to a bad edit is a failure here.
+  check('thirteen tabs, and exactly one says it is selected', tabs.length === 13 && selected.length === 1,
     `${tabs.length} tabs, selected: ${selected.map((n) => n.name && n.name.value).join(', ')}`);
   check('the selected one is the screen on show', selected[0] && /Trends/.test(selected[0].name.value), selected[0] && selected[0].name.value);
 

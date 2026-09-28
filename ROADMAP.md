@@ -195,15 +195,19 @@ Thứ tự làm (người dùng chốt 2026-09-26): A4 → D1 → D2 → C1–C5
 
 ### Giai đoạn 3 — Lập kế hoạch & trùng lặp nâng cao
 
-| Mã | Tính năng | Ưu tiên |
-| --- | --- | --- |
-| G1 | Space Planner | P1 |
-| G2 | Báo cáo HTML | P1 |
-| G3 | Tóm tắt định kỳ | P2 |
-| G4 | Nhiều hồ sơ tự động | P1 |
-| F1 | Trùng lặp xuyên thư mục / xuyên ổ | P1 |
-| F2 | Thư mục trùng toàn bộ | P1 |
-| F3 | Phiên bản tài liệu | P2 |
+Thứ tự làm (người dùng chốt 2026-09-28): **G1 → F1 → F2 → G4 → G2 → G3 → F3**.
+G1 đi trước vì nó là mục **tiêu thụ** toàn bộ Giai đoạn 0–2: mọi bước của kế
+hoạch đều trỏ về một màn đã có. G3 và F3 là P2 nên để cuối.
+
+| Mã | Tính năng | Ưu tiên | Trạng thái |
+| --- | --- | --- | --- |
+| G1 | Space Planner | P1 | ✅ Đã code xong (2026-09-28) — không có nút "thực hiện kế hoạch"; mỗi bước mang **ba** con số thay vì một, và có thêm bước dọn Thùng rác vì nếu không thì 5/8 bước của đặc tả giải phóng đúng 0 byte |
+| G2 | Báo cáo HTML | P1 | |
+| G3 | Tóm tắt định kỳ | P2 | |
+| G4 | Nhiều hồ sơ tự động | P1 | |
+| F1 | Trùng lặp xuyên thư mục / xuyên ổ | P1 | |
+| F2 | Thư mục trùng toàn bộ | P1 | |
+| F3 | Phiên bản tài liệu | P2 | |
 
 ### Giai đoạn 4 — Ảnh, chat, di chuyển dữ liệu
 
@@ -1412,6 +1416,33 @@ Thêm trục **"Cuộc trò chuyện"** vào màn Photos & video, dùng thanh t�
 5. Nếu không đạt được mục tiêu: *"Các nguồn đã biết chỉ giải phóng được 18 GB trong 30 GB. Phần còn lại cần xoá dữ liệu cá nhân — xem Disk usage."*
 
 **Tiến độ:** thanh trên cùng của Planner cập nhật theo dung lượng volume thật sau mỗi hành động (đo lại, không cộng dồn ước tính).
+
+> **✅ Đã code xong (2026-09-28).** Code nằm ở:
+> - `src/main/planner/plan.js` — **thuần, không I/O**: nhận candidate của mọi analyzer, trả ra các bước theo rủi ro tăng dần, cộng dồn, và nói kế hoạch chạm mục tiêu ở bước nào.
+> - `src/main/ipc.js` — `planner:run` đo từng nguồn rồi **gửi kế hoạch một phần sau mỗi nguồn**; `planner:cancel`, `planner:volume`. Ba kênh invoke mới (66 kênh) và một kênh sự kiện.
+> - `src/renderer/planner.js` + tab **Kế hoạch** + `styles.css` + 45 key trong `src/i18n/vi.js`.
+>
+> Harness: `scripts/test-planner.js` (**30 kiểm tra**, nằm trong `npm test`), `npm run shoot:planner` (8 ảnh, hai theme + tiếng Việt + cửa sổ hẹp).
+>
+> **Chỗ đặc tả sai, và đây là chỗ quan trọng nhất của mục này.** Đặc tả viết: *"Mỗi bước hiện số dung lượng thực sự giải phóng trên volume (dựa vào `freesOnVolume`)"*. Nhưng `actions/recycle.js` trả `freesOnVolume() === false` — và comment ngay trên nó gọi đó là *"the most important line in the file"*: Thùng rác nằm cùng volume. `actions/handoff.js` cũng `false`. Trong 8 bước đặc tả liệt kê, **5 bước dùng hai action đó**, nên hiểu đúng từng chữ thì Planner hiện **0 GB cho 5/8 bước và không bao giờ đạt mục tiêu**.
+>
+> Cách sửa: mỗi bước mang **ba** con số thay vì một, và mỗi con số nói rõ dung lượng quay về **bằng đường nào** — `freesNow` (ngay: dehydrate), `afterBin` (vào Thùng rác, thật khi dọn bin), `viaWindows` (Windows làm: hiberfil, Windows.old, restore point, gỡ cài đặt). Và kế hoạch có thêm **một bước của riêng nó: "dọn phần CleanDrive đã bỏ vào Thùng rác"**, đặt ngay sau bước cuối cùng còn bỏ gì vào bin. Tổng cộng dồn **không** tăng ở các bước recycle mà nhảy đúng ở bước đó — vì đó là lúc dung lượng thật sự rời ổ đĩa. Ảnh chụp cho thấy điều này: bước 1 "chuyển 10,1 GB vào Thùng rác", cộng dồn vẫn "0 B trên 30,0 GB".
+>
+> Khác với đặc tả ở những chỗ còn lại:
+> - **Bước 5 của đặc tả (nén, B4) và nửa relocate của bước 4 (B2) không có**, vì cả hai thuộc Giai đoạn 4. Bỏ hẳn chứ không hiện mờ (nguyên tắc D4).
+> - **Quarantine không có bước riêng.** Nó là một *action* trên chính những tệp mà bước "lâu không đụng" đã liệt kê, nên cho nó một bước nữa là đếm hai lần cùng một byte.
+> - **Duplicates không được đo trong lượt của Planner.** Sàn của nó là 1 KB (`lib/duplicate.js`), nên chạy trên cả ổ nghĩa là **đọc nội dung gần như mọi tệp**; mọi nguồn khác chỉ đọc metadata. Nó nằm trong danh sách "chưa đo" kèm lý do và một đường dẫn sang màn Trùng lặp.
+> - **Vùng hệ thống là một ô tick, mặc định tắt.** Người dùng chốt "tự đo hết khi mở Planner" (2026-09-28), nhưng `helper/client.js` ghi rõ *"a UAC prompt the user did not ask for is exactly the kind of thing this app does not do"*. Ô tick chính là cú bấm xin phép, giống hệt công tắc quét nhanh của A2.
+> - **Kế hoạch hiện dần.** Đo cả ổ cộng công cụ, chương trình và game là vài phút; main gửi một kế hoạch một phần sau mỗi nguồn, nên màn hình có gì để xem ngay từ nguồn đầu tiên. Dừng giữa chừng vẫn còn kế hoạch của phần đã đo.
+> - **Một candidate chỉ thuộc một bước.** Bước có rủi ro thấp hơn lấy trước. Không có luật này thì một tệp vừa `review` vừa trùng lặp sẽ được hứa hẹn hai lần.
+> - **Dùng `bytesOnDisk` khi analyzer biết**, không dùng `bytes`. Một placeholder OneDrive 4 GB không nằm trên đĩa này thì giải phóng 0 — có kiểm tra.
+> - Nút của mỗi bước cuộn tới đúng nhóm trên màn đích và **không tick gì cả**; việc chọn vẫn là của người dùng.
+> - **Thứ tự tab đổi:** Kế hoạch nằm giữa Hệ thống và Danh sách cần xoá — nhìn (Dung lượng, Hệ thống) → quyết (Kế hoạch) → làm (Danh sách cần xoá). `smoke.js` có kiểm tra thứ tự này và nó đã được sửa lại cho đúng chủ ý mới, không phải nới ra.
+>
+> **Một phép kiểm chống trôi đáng nói:** `test-planner.js` đọc chính các handler trong `actions/*.js` và fail nếu bảng `WHEN` của planner nói khác chúng về việc action nào giải phóng ngay. Planner không thể âm thầm lệch khỏi thứ mà pipeline thật sự làm.
+>
+> **Chưa làm:** đặc tả nói thanh tiến độ "đo lại dung lượng volume thật sau mỗi hành động". Hiện `planner:volume` đo lại khi có `app:data-changed`, nhưng **chưa ai chạy một lượt xoá thật từ màn khác rồi quay lại xem thanh đó nhúc nhích** — [Unverified].
+
 
 ---
 

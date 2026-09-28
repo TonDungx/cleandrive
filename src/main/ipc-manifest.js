@@ -27,6 +27,10 @@ const INVOKE = Object.freeze([
   'dupes:cancel',
   'dupes:copiesOf',
 
+  'planner:run',
+  'planner:cancel',
+  'planner:volume',
+
   'action:execute',
   'action:stop',
 
@@ -123,6 +127,7 @@ const EVENTS = Object.freeze([
   'games:progress',
   'dev:progress',
   'dev:projectProgress',
+  'planner:progress',
   'autoclean:progress',
   'media:progress',
   'media:batch',

@@ -28,6 +28,7 @@ const scanRoots = require('./analyzers/scan-roots');
 const volumes = require('./lib/volumes');
 const snapshotDiff = require('./snapshots/diff');
 const mftRead = require('./system/mft-read');
+const planner = require('./planner/plan');
 const { HelperClient, appLauncher } = require('./helper/client');
 const licenseState = require('./license/state');
 const entitlements = require('./license/entitlements');
@@ -35,7 +36,7 @@ const { CancelToken, formatBytes, formatDuration, pathKey } = require('./lib/uti
 const { services } = require('./services');
 const scheduler = require('./lib/scheduler');
 const { runAutoClean } = require('./lib/autoclean');
-const { diskUsage, usageByVolume } = require('./lib/disk');
+const { diskUsage, usageByVolume, volumeRoot } = require('./lib/disk');
 const { findUserBins, purgeRecorded } = require('./lib/recyclebin');
 const historyLib = require('./lib/history');
 const { sample, volumeTargets } = require('./lib/sampler');
@@ -54,7 +55,7 @@ const contextMenu = require('./lib/context-menu');
 const launchTarget = require('./launch-target');
 
 // One in-flight job of each kind at a time; a new run supersedes the old one.
-const tokens = { scan: null, dupes: null, trash: null, auto: null, media: null, thumbs: null, system: null, apps: null, games: null, dev: null, devProjects: null };
+const tokens = { scan: null, dupes: null, trash: null, auto: null, media: null, thumbs: null, system: null, apps: null, games: null, dev: null, devProjects: null, planner: null };
 
 /* ---- the Disk usage map's state -------------------------------------------- */
 
@@ -975,6 +976,174 @@ function register() {
     if (tokens.games) tokens.games.cancel();
     return { ok: true };
   });
+
+  /* ---- the Space Planner (G1) -------------------------------------------- */
+
+  /*
+   * "I need 30 GB on C:" -- measured, then turned into steps.
+   *
+   * Every other screen answers "what is here". This one answers "what do I
+   * do", and to do that it needs every other screen's numbers. The user chose
+   * (2026-09-28) that pressing the button measures them all rather than
+   * planning from whatever happens to have been looked at already, so this
+   * runs each source in turn and sends a plan after every one -- a whole-drive
+   * scan plus the tools, the applications and the games is minutes, and a
+   * screen that showed nothing until the last of them finished would be a
+   * screen nobody waits for.
+   *
+   * Two sources are deliberately not in the list:
+   *
+   *   Duplicates  its floor is 1 KB (`lib/duplicate.js`), so running it over
+   *               a whole drive means reading the contents of nearly every
+   *               file on it. Every other source here reads metadata. It is
+   *               reported as not measured, with a link, rather than making
+   *               the button take an hour.
+   *   The system  it needs a UAC prompt to be complete, and a prompt nobody
+   *               asked for is the thing `helper/client.js` exists to
+   *               prevent. It is a tick-box beside the button, off by default.
+   */
+  const PLANNER_SOURCES = [
+    { id: 'scan', needs: 'roots' },
+    { id: 'dev' },
+    { id: 'apps' },
+    { id: 'games' },
+  ];
+
+  function plannerMissing(ids) {
+    return ids.map((id) => ({ id, reason: id === 'dupes' ? 'tooExpensive' : 'notMeasured' }));
+  }
+
+  handle('planner:run', (event, request = {}) =>
+    guard(async () => {
+      const can = licenseState.canNow();
+      if (!can('pro.planner')) {
+        throw Object.assign(new Error('The Space Planner is part of CleanDrive Pro'), { code: 'ELOCKED', quiet: true });
+      }
+      if (tokens.planner) tokens.planner.cancel();
+      const token = new CancelToken();
+      tokens.planner = token;
+
+      const drive = String(request.drive || '').trim() || volumeRoot(app.getPath('home'));
+      const goal = request.goal || null;
+      const includeSystem = request.includeSystem === true;
+
+      const send = (payload) => {
+        if (!event.sender.isDestroyed()) event.sender.send('planner:progress', payload);
+      };
+
+      const sources = [...PLANNER_SOURCES, ...(includeSystem ? [{ id: 'system' }] : [])];
+      const missing = ['dupes', ...(includeSystem ? [] : ['system'])];
+      const candidates = [];
+      const measured = [];
+
+      const emit = async (phase) => {
+        const volume = await diskUsage(drive);
+        send({
+          phase,
+          plan: planner.buildPlan({
+            goal,
+            volume,
+            candidates,
+            measured: [...measured],
+            missing: plannerMissing(missing),
+          }),
+          done: measured.length,
+          total: sources.length,
+        });
+      };
+
+      try {
+        for (const [index, source] of sources.entries()) {
+          if (token.cancelled) break;
+          send({ phase: 'measuring', source: source.id, done: index, total: sources.length });
+          try {
+            const got = await plannerMeasure(source.id, { token, drive, event });
+            candidates.push(...got);
+            measured.push(source.id);
+          } catch (err) {
+            // One source failing is a source the plan has to do without, not
+            // a plan that fails. The screen says which, and why.
+            missing.push(source.id);
+            console.error('[planner]', source.id, err && err.message);
+          }
+          await emit('partial');
+        }
+
+        const volume = await diskUsage(drive);
+        return {
+          drive,
+          cancelled: token.cancelled,
+          ...planner.buildPlan({
+            goal,
+            volume,
+            candidates,
+            measured,
+            missing: plannerMissing(missing),
+          }),
+        };
+      } finally {
+        if (tokens.planner === token) tokens.planner = null;
+      }
+    })
+  );
+
+  /**
+   * One source, measured the way its own screen measures it.
+   *
+   * Reusing each screen's measurement rather than reaching into the analyzers
+   * keeps one implementation of "what the Apps screen knows": the planner
+   * cannot drift from the screen it links to.
+   */
+  async function plannerMeasure(id, { token, drive, event }) {
+    const can = licenseState.canNow();
+    if (id === 'scan') {
+      const listing = await (scanHarness && scanHarness.volumes ? scanHarness.volumes() : volumes.list());
+      const prepared = await scanRoots.prepareRoots([drive], { drives: listing.drives });
+      if (prepared.roots.length === 0) return [];
+      const info = prepared.roots[0];
+      const collected = await analyzers.collect(
+        'scan',
+        {
+          root: info.root,
+          options: { cloudFiles: info.readOnly === null, ...(appCacheHarness && appCacheHarness.env ? { appCacheEnv: appCacheHarness.env } : {}) },
+          deps: { ...(cloudDeps ? { cloud: cloudDeps } : {}) },
+        },
+        { token, can }
+      );
+      return collected.candidates;
+    }
+    if (id === 'dev') {
+      devState = await devMeasure.scan({ token });
+      return (await presentDev()).candidates || [];
+    }
+    if (id === 'apps') {
+      appsState = await appsMeasure.scan({ token });
+      return (await presentApps()).candidates || [];
+    }
+    if (id === 'games') {
+      gamesState = await gamesMeasure.scan({ token });
+      return (await presentGames()).candidates || [];
+    }
+    if (id === 'system') {
+      const target = systemTarget();
+      const walk = await systemMeasure.walk({ drive: target.drive, home: target.home, token });
+      systemState = { walk, elevated: null };
+      const elevated = await systemMeasure.elevate(walk, { client: helperClientFor() });
+      if (!elevated.declined) systemState.elevated = elevated;
+      return (await presentSystem()).candidates || [];
+    }
+    return [];
+  }
+
+  handle('planner:cancel', () => {
+    if (tokens.planner) tokens.planner.cancel();
+    return { ok: true };
+  });
+
+  /** The volume as it is right now, for the bar at the top of the screen. */
+  handle('planner:volume', (event, drive) =>
+    guard(async () => diskUsage(String(drive || '').trim() || volumeRoot(app.getPath('home'))))
+  );
 
   /* ---- the Developer screen (C2, C4) ------------------------------------- */
 

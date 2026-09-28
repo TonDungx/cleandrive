@@ -17,6 +17,13 @@ const api = {
      configuration through and never did. */
   scan: (folders, fast) => ipcRenderer.invoke('scan:run', folders, fast === true),
   scanDrives: () => ipcRenderer.invoke('scan:drives'),
+
+  /* the Space Planner (G1): a goal in, a list of steps out. Nothing here
+     carries out anything -- every step is a link to the screen that already
+     offers it. */
+  planSpace: (request) => ipcRenderer.invoke('planner:run', request),
+  cancelPlan: () => ipcRenderer.invoke('planner:cancel'),
+  plannerVolume: (drive) => ipcRenderer.invoke('planner:volume', drive),
   cancelScan: () => ipcRenderer.invoke('scan:cancel'),
   /* one folder of the last scan's tree, a few levels deep -- never all of it */
   scanChildren: (treeId, rel) => ipcRenderer.invoke('scan:children', treeId, rel),
@@ -131,6 +138,7 @@ const api = {
 
   /** Subscribe to progress. Returns an unsubscribe function. */
   onScanProgress: (cb) => subscribe('scan:progress', cb),
+  onPlannerProgress: (cb) => subscribe('planner:progress', cb),
   onDuplicateProgress: (cb) => subscribe('dupes:progress', cb),
   onTrashProgress: (cb) => subscribe('action:progress', cb),
   onSystemProgress: (cb) => subscribe('system:progress', cb),
