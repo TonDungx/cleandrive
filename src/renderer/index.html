@@ -596,6 +596,16 @@
               <option value="10485760">10 MB</option>
             </select>
           </label>
+          <!-- F1: which copy to suggest keeping. Pro; Free keeps the oldest,
+               which is what it has always done. -->
+          <label class="field" id="dupes-prefer-field">
+            <span data-i18n="dupes.keep">Suggest keeping</span>
+            <select id="dupes-prefer">
+              <option value="oldest" selected data-i18n="dupes.keep.oldest">the oldest copy</option>
+              <option value="internal" data-i18n="dupes.keep.internal">the copy on this computer</option>
+              <option value="backup" data-i18n="dupes.keep.backup">the copy on an external or network drive</option>
+            </select>
+          </label>
           <span class="status" id="dupes-status" data-i18n="app.pickToBegin">Pick a folder to begin.</span>
         </div>
 

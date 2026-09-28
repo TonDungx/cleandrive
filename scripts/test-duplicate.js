@@ -84,6 +84,35 @@ function assert(label, actual, expected) {
     ok &= assert('duplicate file count', result.totalDuplicateFiles, 2);
     ok &= assert('reclaimable bytes', result.reclaimableBytes, 2048 + 200 * 1024);
     ok &= assert('tiny.txt excluded by minSize', result.indexedFiles, 6);
+
+    /* -- which copy is suggested as the keeper (F1) -- */
+
+    console.log('\nThe keeper:');
+    const keeperOf = (groups, names) => {
+      const group = groups.find((g) => g.files.some((f) => names.includes(path.basename(f.path))));
+      return path.basename(group.files.find((f) => f.keeper).path);
+    };
+    // a.txt and nested\b.txt hold the same bytes. a.txt is written first, so
+    // by the rule that has always applied -- the oldest is the original -- it
+    // is the keeper.
+    ok &= assert('by default the oldest copy is kept', keeperOf(result.groups, ['a.txt', 'b.txt']), 'a.txt');
+
+    // Now rank the nested folder ahead of the top one, the way "keep the copy
+    // on the backup drive" ranks a drive. The keeper has to move, and the
+    // group must otherwise be the same group.
+    const ranked = await findDuplicates([target], {
+      useCache: false,
+      keeperRank: (file) => (file.path.includes(`${path.sep}nested${path.sep}`) ? 0 : 1),
+    }, {});
+    ok &= assert('a ranking the caller supplies moves it', keeperOf(ranked.groups, ['a.txt', 'b.txt']), 'b.txt');
+    ok &= assert('and changes nothing else about the group', ranked.totalGroups, 2);
+    ok &= assert('nor what could be reclaimed', ranked.reclaimableBytes, result.reclaimableBytes);
+
+    // A rank that ties falls back to the oldest, so the rule is a tie-break
+    // on top of the old one rather than a replacement for it.
+    const tied = await findDuplicates([target], { useCache: false, keeperRank: () => 7 }, {});
+    ok &= assert('a rank that ties leaves the oldest as the keeper', keeperOf(tied.groups, ['a.txt', 'b.txt']), 'a.txt');
+
     console.log(ok ? '\nALL PASS' : '\nFAILURES PRESENT');
     process.exit(ok ? 0 : 1);
   }

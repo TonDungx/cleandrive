@@ -637,6 +637,37 @@ app.whenReady().then(async () => {
       check('one keeper tag per group', dupeUi.keepers === dupeUi.groupCards, `${dupeUi.keepers} tags / ${dupeUi.groupCards} groups`);
       check('toolbar visible', dupeUi.toolbarVisible);
 
+      /* -- which copy is suggested as the keeper (F1) ------------------ */
+      //
+      // Every copy in this fixture is on the same drive, so the choice
+      // cannot move a keeper here -- what is checked is that the rule the
+      // window asks for is the rule that was applied, and that the licence
+      // refusal is said out loud rather than quietly downgraded.
+      console.log('\nWhich copy to keep:');
+      const runWithPrefer = async (prefer) => {
+        await win.webContents.executeJavaScript(`
+          document.getElementById('dupes-prefer').value = ${JSON.stringify(prefer)};
+          document.getElementById('run-dupes').click();
+        `);
+        await until(win, `document.getElementById('cancel-dupes').hidden === true`, 60000);
+        return win.webContents.executeJavaScript(`document.getElementById('dupes-status').textContent`);
+      };
+
+      const asBackup = await runWithPrefer('backup');
+      check('asking to keep the copy on a backup drive says so on the line',
+        /external or network drive is the one suggested/.test(asBackup), asBackup.slice(0, 120));
+
+      process.env.CLEANDRIVE_ENTITLEMENTS = 'free';
+      const onFree = await runWithPrefer('backup');
+      process.env.CLEANDRIVE_ENTITLEMENTS = 'all';
+      check('on Free it is refused, and the line says why instead of going quiet',
+        /part of CleanDrive Pro/.test(onFree) && !/external or network drive is the one suggested/.test(onFree),
+        onFree.slice(0, 140));
+
+      const backToOldest = await runWithPrefer('oldest');
+      check('and the oldest-copy rule says nothing at all, as it always did',
+        !/suggested for keeping|part of CleanDrive Pro/.test(backToOldest), backToOldest.slice(0, 120));
+
       /* -- selection ---------------------------------------------------- */
       console.log('\nSelection:');
       const selected = await win.webContents.executeJavaScript(`

@@ -653,9 +653,25 @@ function register() {
       if (local.length > 1 && !can('pro.scan.multiroot')) {
         throw Object.assign(new Error('Looking in several folders at once is part of CleanDrive Pro'), { code: 'ELOCKED', quiet: true });
       }
+      // Which copy to suggest keeping (F1). The default is the oldest, which
+      // is what it has always been; the other two are Pro, and asked for by
+      // the window. A folder the request names that is not one of the roots
+      // ranks last, so nothing outside the search can become the keeper.
+      const asked = ['internal', 'backup'].includes(options.prefer) ? options.prefer : 'oldest';
+      // Refused rather than silently downgraded: somebody who picks "keep the
+      // copy on the backup drive" and is given the oldest instead has been
+      // told nothing, and the keepers on screen are not the ones they asked
+      // for. Same shape as the fast scan's refusal (A2).
+      const preferRefused = asked !== 'oldest' && !can('pro.dupes.advanced') ? 'locked' : null;
+      const prefer = preferRefused ? 'oldest' : asked;
+      const keeperRank = scanRoots.keeperRankFor(local, prefer) || undefined;
+
       const { candidates, summary } = await analyzers.collect(
         'duplicates',
-        { roots: local.map((r) => r.root), options: { ...options, cachePath: path.join(app.getPath('userData'), 'hash-cache.json') } },
+        {
+          roots: local.map((r) => r.root),
+          options: { ...options, prefer, keeperRank, cachePath: path.join(app.getPath('userData'), 'hash-cache.json') },
+        },
         { token, onProgress: send, can }
       );
       const readOnly = local.filter((r) => r.readOnly);
@@ -669,6 +685,10 @@ function register() {
         ...summary,
         candidates: guarded,
         roots: local,
+        // Which rule actually chose the keepers, so the screen can say so
+        // rather than the window assuming its own setting was honoured.
+        prefer,
+        preferRefused,
         skipped: prepared.roots.filter((r) => r.kind === 'network').map((r) => r.root),
         merged: prepared.merged,
       };

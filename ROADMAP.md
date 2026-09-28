@@ -205,7 +205,7 @@ hoạch đều trỏ về một màn đã có. G3 và F3 là P2 nên để cuố
 | G2 | Báo cáo HTML | P1 | |
 | G3 | Tóm tắt định kỳ | P2 | |
 | G4 | Nhiều hồ sơ tự động | P1 | |
-| F1 | Trùng lặp xuyên thư mục / xuyên ổ | P1 | |
+| F1 | Trùng lặp xuyên thư mục / xuyên ổ | P1 | ✅ Đã code xong (2026-09-28) — phần "nhiều gốc nhiều ổ" **A4 đã giao từ trước**; mục này thêm tiêu chí chọn bản giữ theo loại ổ. **Không làm** nhánh hash qua ổ mạng: không đo được tốc độ thật trên máy này |
 | F2 | Thư mục trùng toàn bộ | P1 | |
 | F3 | Phiên bản tài liệu | P2 | |
 
@@ -1350,6 +1350,28 @@ Thêm trục **"Cuộc trò chuyện"** vào màn Photos & video, dùng thanh t�
 - **Gợi ý bản giữ lại** có thêm tiêu chí: *ưu tiên bản trên ổ nội bộ* hoặc *ưu tiên bản trên ổ sao lưu*, do người dùng chọn. Mặc định vẫn là bản cũ nhất.
 - Nhóm có bản trên ổ mạng thì hash qua mạng. Có cảnh báo về tốc độ, và dừng được ở mọi pha.
 
+> **✅ Đã code xong (2026-09-28).**
+>
+> **Hai phần ba mục này A4 đã giao rồi**, và nói thẳng ra thì đó là điều đáng ghi nhất: chọn nhiều gốc trên nhiều volume, pipeline 4 pha giữ nguyên, hash cache dùng chung — tất cả đã chạy từ `3f13ff9`. Mục F1 chỉ còn lại tiêu chí chọn bản giữ.
+>
+> Code:
+> - `src/main/lib/duplicate.js` — nhận `opts.keeperRank(file)`, số nhỏ thắng, **bản cũ nhất vẫn phá hoà**. Mặc định mọi bản cùng hạng, nên luật cũ ("bản cũ nhất là bản gốc") không đổi một ly.
+> - `src/main/analyzers/scan-roots.js` — `keeperRankFor(roots, prefer)` dịch loại ổ thành thứ hạng. Đặt ở đây chứ không trong closure của `ipc.js` vì **bài học từ A2**: cái gì nằm trong closure thì không test được.
+> - `src/main/ipc.js` — `dupes:run` nhận `options.prefer`, trả về `prefer` và `preferRefused`.
+> - `src/renderer/index.html` + `app.js` — hộp chọn "Đề xuất giữ", và một dòng trạng thái nói **luật nào đã thật sự áp dụng**.
+>
+> Harness: 6 kiểm tra trong `test-roots.js` (bảng thứ hạng), 4 trong `test-duplicate.js` (thư viện có nghe không, trên tệp thật), 3 trong `smoke.js` (cửa sổ thật, cả Free lẫn Pro). `npm test` **2.133 / 0**, 47 bộ; `test:e2e` ALL PASS.
+>
+> Khác với đặc tả:
+> - **Từ chối, không âm thầm hạ cấp.** Free chọn "giữ bản trên ổ sao lưu" thì main trả `preferRefused: 'locked'` và dòng trạng thái nói rõ, thay vì lặng lẽ giữ bản cũ nhất rồi để người dùng nhìn một danh sách keeper không phải cái họ yêu cầu. Cùng hình dạng với `fastRefused` của A2. Đặc tả không nói gì về chuyện này.
+> - **"Ổ nội bộ" nghĩa là đĩa của chính máy này**, còn "ổ sao lưu" là mọi thứ mang đi được: `external` theo bus (USB), hoặc `readOnly` vì bất kỳ lý do gì (ổ mạng, ổ rời). Tệp không nằm dưới gốc nào đang tìm thì xếp hạng bét — không có đường nào để một thứ ngoài phạm vi tìm kiếm trở thành bản được giữ.
+> - **Không làm nhánh hash qua ổ mạng** (mục 3 của đặc tả). Hai lý do:
+>   1. A4 đã chốt **bỏ qua gốc trên ổ mạng** trong Duplicates, và lý do vẫn đúng: ổ mạng chỉ đọc (đo được — `shell.trashItem` trên UNC bị từ chối), nên một bản trùng tìm thấy ở đó không có hành động nào đi kèm.
+>   2. Đặc tả đòi "có cảnh báo về tốc độ". **Tôi không đo được tốc độ đó trên máy này.** Đã thử hash qua `\\<địa chỉ LAN>\D$\…` như `test-multiroot.js` làm, kết quả: 363–795 MB/s, *không chậm hơn đọc cục bộ chút nào* — vì địa chỉ đó là link-local `169.254.x.x` và byte không hề rời khỏi máy. Phép đo ấy **vô dụng** làm đại diện cho mạng thật. Theo nguyên tắc D4 (chỉ phát hành phần kiểm chứng được trên máy này), không ship một cảnh báo tốc độ mà mình không có số để đỡ.
+>
+> **Còn mở:** cần một NAS hoặc một máy thứ hai thật để đo, rồi mới quyết có mở nhánh ổ mạng hay không. Đã ghi vào mục 11.
+
+
 #### F2. Thư mục trùng toàn bộ
 
 | | |
@@ -2141,6 +2163,7 @@ cứng, cần tai người nghe, hoặc cần một quyết định. **Trợ lý
 | 9 | Một lượt `test:a11y` cho 22 lỗi | **Trợ lý** | Chạy lại và **giữ toàn bộ output** | Không tái hiện được trong 4 lượt sau, kể cả một lượt trên cây sạch `2e9a4eb`. Nguyên nhân mất dấu là output bị cắt bằng `tail`. Harness nay **in lại toàn bộ danh sách lỗi ở cuối**, nên lần sau `tail` cũng thấy. Chưa có chẩn đoán. |
 | 10 | ~~Ảnh chụp màn hình nằm trong thư mục tên `logs\`~~ **Đã quyết và làm xong 2026-09-27** | — | — | Người dùng chọn **phương án A**: trong thư mục mang nhãn `log`, chỉ tính là log khi **đuôi của chính tệp** cũng nói vậy (`log`, `txt`, `etl`, `out`, `err`, `trace`, `dbg`, đuôi số kiểu `.log.1`, hoặc không có đuôi). Mọi thứ khác rơi xuống các luật sau và được xử như ở bất kỳ đâu. Đo lại trên `D:\work\tow_tool\logs`: **82 ảnh / 78,9 MB trước đây là `safe`, nay còn 0**; 108 tệp `.log` vẫn dọn được như cũ. 8 kiểm tra trong `test-advisor.js`. |
 | 11 | Chỉ có **một** máy test | **Người dùng** | Máy thứ hai, hoặc chấp nhận giới hạn | A1 ghi là ba máy. Mọi phép đo trong tài liệu này đều từ một máy Windows 11 duy nhất. |
+| 12 | Tốc độ hash qua ổ mạng thật (F1) | **Người dùng** | Một NAS, hoặc một máy thứ hai trên cùng mạng, rồi hash một tệp vài trăm MB từ đó | Đã thử đo qua `\\<địa chỉ LAN>\D$\…` của chính máy này: **không chậm hơn đọc cục bộ** (363–795 MB/s), vì địa chỉ đó là link-local `169.254.x.x` và byte không hề rời khỏi máy — phép đo vô dụng. Chưa có số thật thì không mở nhánh hash ổ mạng trong Duplicates (nguyên tắc D4). |
 
 ### 11.1. Mục 10 đã quyết: phương án A
 

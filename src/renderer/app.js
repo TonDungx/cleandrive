@@ -1068,8 +1068,13 @@ $('run-dupes').addEventListener('click', async () => {
   state.selectedDupes.clear();
 
   const minSize = Number($('min-size').value);
+  // Which copy to suggest keeping (F1). Main decides whether the licence
+  // allows anything but the oldest, and says in the reply which rule it
+  // actually applied -- so the line below reports what happened rather than
+  // what was asked for.
+  const prefer = $('dupes-prefer').value;
   const result = unwrap(
-    await api.findDuplicates(state.roots, { minSize }),
+    await api.findDuplicates(state.roots, { minSize, prefer }),
     t('app.label.dupes', 'Duplicate search')
   );
   setDupesRunning(false);
@@ -1196,6 +1201,16 @@ function renderDupes(result) {
         }
       )
     );
+  }
+  // Which rule chose the keepers (F1), from the reply rather than from the
+  // control: on Free the request for a drive-based rule is refused and the
+  // oldest copy is kept, and the line has to say what happened.
+  if (result.preferRefused === 'locked') {
+    notes.push(t('dupes.kept.locked', 'Choosing which copy to keep by drive is part of CleanDrive Pro, so the oldest copy is the one suggested.'));
+  } else if (result.prefer === 'internal') {
+    notes.push(t('dupes.kept.internal', 'The copy on this computer is the one suggested for keeping.'));
+  } else if (result.prefer === 'backup') {
+    notes.push(t('dupes.kept.backup', 'The copy on an external or network drive is the one suggested for keeping.'));
   }
   if (result.cacheHits) {
     notes.push(t('dupes.cacheHits', '{n} hashes reused from cache.', { n: formatCount(result.cacheHits) }));

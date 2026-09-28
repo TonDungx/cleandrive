@@ -419,6 +419,14 @@
     'dupes.detail.indexing': '{n} tệp',
     'dupes.detail.hashing': 'đã băm {done} trong {total} ứng viên',
     'dupes.checked': 'Đã kiểm tra {n} tệp.',
+    // Chọn bản giữ lại theo loại ổ (F1).
+    'dupes.keep': 'Đề xuất giữ',
+    'dupes.keep.oldest': 'bản cũ nhất',
+    'dupes.keep.internal': 'bản nằm trên máy này',
+    'dupes.keep.backup': 'bản nằm trên ổ ngoài hoặc ổ mạng',
+    'dupes.kept.internal': 'Bản nằm trên máy này là bản được đề xuất giữ lại.',
+    'dupes.kept.backup': 'Bản nằm trên ổ ngoài hoặc ổ mạng là bản được đề xuất giữ lại.',
+    'dupes.kept.locked': 'Chọn bản giữ lại theo loại ổ thuộc CleanDrive Pro, nên bản cũ nhất là bản được đề xuất.',
     'dupes.cacheHits': 'Dùng lại {n} giá trị băm từ bộ đệm.',
     'dupes.unreadable': 'Không đọc được {n} tệp.',
     'dupes.withheld':

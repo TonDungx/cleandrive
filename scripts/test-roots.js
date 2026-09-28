@@ -159,6 +159,42 @@ async function make(file, bytes, ageDays = 0) {
   check('(constructed) a removable FAT32 stick says read-only, not "no catalogue"',
     scanRoots.whyNotFast(volumes.describe('U:\\', odd)) === 'readOnly');
 
+  /* ---- which copy of a duplicate to keep (F1) ---- */
+
+  console.log('\nWhich copy of a duplicate is the one to keep:');
+
+  {
+    // An internal disk, a USB disk Windows calls fixed, and a mapped share.
+    const inside = volumes.describe('C:\\Users\\me\\Photos', drives);
+    const usb = volumes.describe('F:\\Photos', constructed);
+    const share = volumes.describe('Z:\\Photos', constructed);
+    const roots = [inside, usb, share];
+
+    check('by default the drive does not come into it, and the oldest wins',
+      scanRoots.keeperRankFor(roots, 'oldest') === null
+        && scanRoots.keeperRankFor(roots, undefined) === null
+        && scanRoots.keeperRankFor(roots, 'nonsense') === null);
+
+    const internal = scanRoots.keeperRankFor(roots, 'internal');
+    check('"keep the internal copy" ranks this computer\u2019s own disk first',
+      internal({ path: 'C:\\Users\\me\\Photos\\a.jpg' }) < internal({ path: 'F:\\Photos\\a.jpg' }),
+      `C: ${internal({ path: 'C:\\Users\\me\\Photos\\a.jpg' })} vs F: ${internal({ path: 'F:\\Photos\\a.jpg' })}`);
+    check('and a share is no better than a USB disk for that',
+      internal({ path: 'Z:\\Photos\\a.jpg' }) === internal({ path: 'F:\\Photos\\a.jpg' }));
+
+    const backup = scanRoots.keeperRankFor(roots, 'backup');
+    check('"keep the backup copy" is exactly the other way round',
+      backup({ path: 'F:\\Photos\\a.jpg' }) < backup({ path: 'C:\\Users\\me\\Photos\\a.jpg' }),
+      `F: ${backup({ path: 'F:\\Photos\\a.jpg' })} vs C: ${backup({ path: 'C:\\Users\\me\\Photos\\a.jpg' })}`);
+
+    check('a file under none of the searched folders can never be the keeper',
+      internal({ path: 'Q:\\elsewhere\\a.jpg' }) === 2 && backup({ path: 'Q:\\elsewhere\\a.jpg' }) === 2,
+      'it ranks below every copy that is actually in the search');
+    check('and no roots at all does not throw',
+      scanRoots.keeperRankFor([], 'internal')({ path: 'C:\\x' }) === 2
+        && scanRoots.keeperRankFor(null, 'backup')({ path: 'C:\\x' }) === 2);
+  }
+
   /* ---- the folders asked for ---- */
 
   const base = await fsp.mkdtemp(path.join(os.tmpdir(), 'cleandrive-roots-'));

@@ -160,6 +160,9 @@ const samePath = (a, b) => path.resolve(a).toLowerCase() === path.resolve(b).toL
  */
 async function findDuplicates(roots, options = {}, handlers = {}) {
   const opts = { ...DEFAULTS, ...options };
+  // Every copy ranks the same unless the caller says otherwise, which
+  // leaves the oldest-wins rule exactly as it was.
+  const keeperRank = typeof opts.keeperRank === 'function' ? opts.keeperRank : () => 0;
   const token = handlers.token || new CancelToken();
   const started = Date.now();
 
@@ -310,8 +313,15 @@ async function findDuplicates(roots, options = {}, handlers = {}) {
       // Copies of one file: the group it is in, and no other group of files
       // that merely happen to share its size with each other.
       if (target && !bucket.some((f) => samePath(f.path, target.path))) continue;
-      // Oldest copy first -- that is the one suggested as the keeper.
-      bucket.sort((a, b) => a.mtimeMs - b.mtimeMs || a.path.localeCompare(b.path));
+      // Which copy to suggest keeping (F1).
+      //
+      // The oldest, unless the caller ranks them -- it is the original, and
+      // the copies are what somebody made of it. A caller that knows what
+      // kind of drive each path is on can override that with `keeperRank`:
+      // lower wins, and the oldest still breaks a tie. The rank comes from
+      // outside because this file knows nothing about drives and should not
+      // start to; `ipc.js` builds it from `lib/volumes.js`.
+      bucket.sort((a, b) => keeperRank(a) - keeperRank(b) || a.mtimeMs - b.mtimeMs || a.path.localeCompare(b.path));
 
       const groupFiles = bucket.map((f, i) => {
         // "Identical" does not mean "redundant". Two virtualenvs each holding

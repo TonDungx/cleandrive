@@ -227,6 +227,36 @@ function mergeScans(parts) {
 }
 
 /**
+ * Which copy of a duplicate to suggest keeping, by the drive it is on (F1).
+ *
+ * Returns a ranking function for `lib/duplicate.js` -- lower wins, and the
+ * oldest copy still breaks a tie -- or null for the default, which is that
+ * the drive does not come into it and the oldest copy is the keeper.
+ *
+ *   'internal'  keep the copy on this computer's own disk, so the copies on
+ *               a drive you carry around are the ones offered up
+ *   'backup'    keep the copy on the drive you carry around, so the space
+ *               comes back on the disk that is short of it
+ *
+ * "Away" is external by bus, or read-only for any reason: a USB disk, a card,
+ * a share. A file under none of the searched roots ranks last, so nothing
+ * outside the search can be chosen as the thing to keep.
+ *
+ * @param {Array} roots    prepared roots, from `prepareRoots`
+ * @param {string} prefer  'oldest' | 'internal' | 'backup'
+ */
+function keeperRankFor(roots, prefer) {
+  if (prefer !== 'internal' && prefer !== 'backup') return null;
+  const list = Array.isArray(roots) ? roots : [];
+  return (file) => {
+    const root = list.find((r) => inside(file.path, r.root));
+    if (!root) return 2;
+    const away = Boolean(root.external) || root.readOnly !== null;
+    return prefer === 'backup' ? (away ? 0 : 1) : (away ? 1 : 0);
+  };
+}
+
+/**
  * Why a folder cannot be scanned from the volume’s own catalogue (A2),
  * or null when it can.
  *
@@ -256,4 +286,4 @@ function whyNotFast(info) {
   return null;
 }
 
-module.exports = { prepareRoots, mergeScans, readOnlyCandidate, unscannedOnDrive, whyNotFast, READ_ONLY, MAX_ROOTS, inside };
+module.exports = { prepareRoots, mergeScans, readOnlyCandidate, unscannedOnDrive, whyNotFast, keeperRankFor, READ_ONLY, MAX_ROOTS, inside };

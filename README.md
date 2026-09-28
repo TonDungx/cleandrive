@@ -920,8 +920,26 @@ Byte-identical files inside the chosen folder.
 
 **Ignore files under** — 1 KB, 100 KB (default), 1 MB or 10 MB.
 
+**Suggest keeping** — which copy of a group carries the *keep* tag:
+
+| | |
+| --- | --- |
+| the oldest copy | The default, and what it has always been: the oldest is the original and the rest are copies somebody made of it. |
+| the copy on this computer | Keeps the one on an internal disk, so the copies on a drive you carry around are the ones offered up. |
+| the copy on an external or network drive | The other way round: keeps the one that is away, so the space comes back on the disk that is short of it. |
+
+The drive rules are Pro (`pro.dupes.advanced`). Asked for without it, the
+search still runs and the status line says the oldest copy was kept instead —
+it is not quietly downgraded, because a list of keepers that is not the one
+you asked for is worse than being told no. The oldest copy always breaks a
+tie, so the drive rule narrows the old rule rather than replacing it.
+
 With several folders chosen it looks across all of them, on this computer's
 drives: a folder on a network drive is left out, and the status line names it.
+Hashing files over a network is not offered, and the reason is that nobody has
+been able to measure how slow it would be here — the only share this machine
+can reach is its own disk through its own address, where the bytes never
+actually cross a network.
 
 ### Copies of one file
 
