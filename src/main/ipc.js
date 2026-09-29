@@ -37,7 +37,7 @@ const planner = require('./planner/plan');
 const { HelperClient, appLauncher } = require('./helper/client');
 const licenseState = require('./license/state');
 const entitlements = require('./license/entitlements');
-const { CancelToken, formatBytes, formatDuration, pathKey, displayPath } = require('./lib/util');
+const { CancelToken, formatBytes, formatDuration, pathKey, displayPath, throttle } = require('./lib/util');
 const { services } = require('./services');
 const scheduler = require('./lib/scheduler');
 const { runAutoClean } = require('./lib/autoclean');
@@ -62,7 +62,7 @@ const contextMenu = require('./lib/context-menu');
 const launchTarget = require('./launch-target');
 
 // One in-flight job of each kind at a time; a new run supersedes the old one.
-const tokens = { scan: null, dupes: null, trash: null, auto: null, media: null, thumbs: null, system: null, apps: null, games: null, dev: null, devProjects: null, planner: null };
+const tokens = { scan: null, dupes: null, trash: null, auto: null, media: null, thumbs: null, measureAll: null, system: null, apps: null, games: null, dev: null, devProjects: null, planner: null };
 
 /* ---- the Disk usage map's state -------------------------------------------- */
 
@@ -85,6 +85,16 @@ let scanTreeSerial = 0;
  * `removeFolders`.
  */
 const LEAVES_ITS_FOLDER = new Set(['recycle', 'quarantine']);
+
+/**
+ * How many pictures the side-by-side comparison holds at once (E1).
+ *
+ * Four, from the roadmap, and the number is a screen constraint rather than a
+ * technical one: four panes on the app's minimum width give each picture about
+ * 200 pixels across, which is already less than the thumbnail it was opened
+ * from. Anything past that is a contact sheet, not a comparison.
+ */
+const MAX_COMPARED = 4;
 
 /**
  * What "free up space" (B3) asks Windows and OneDrive with. A harness supplies
@@ -335,6 +345,13 @@ function rememberMedia(candidate) {
     size: candidate.bytes,
     mtimeMs: candidate.meta.mtimeMs,
     aspect: candidate.meta.aspect || 0,
+    // E1: a file that exists only in the cloud cannot be measured without
+    // downloading it, and the bulk pass that finds similar pictures must be
+    // able to leave those alone. Measured on this machine: 2,534 of 6,687
+    // photographs in the default roots are online-only, so a pass that did
+    // not check this would quietly pull several gigabytes back onto the disk
+    // -- undoing exactly what "free up space" (B3) had just done.
+    dehydrated: Boolean(candidate.meta.dehydrated),
   });
 }
 
@@ -2683,13 +2700,26 @@ function register() {
    * Runs over whatever has been measured so far rather than forcing the rest to
    * be measured: the answer improves as the user scrolls, and the alternative
    * is a progress bar in front of a feature nobody asked to wait for.
+   *
+   * E1 kept that, and added the button (`media:measureAll`) for somebody who
+   * *does* want to wait. The counts below are what lets the screen say which
+   * of the two it is showing, so a short list reads as "we have only looked at
+   * 214 of these" rather than as "there are no duplicates".
    */
   handle('media:similar', () =>
     guard(async () => {
       const cache = await mediaAnalysisCache();
       const items = [];
+      let measurable = 0;
+      let dehydrated = 0;
 
       for (const [filePath, record] of mediaStats) {
+        // Counted, never queued. Reading one downloads it.
+        if (record.dehydrated) {
+          dehydrated += 1;
+          continue;
+        }
+        measurable += 1;
         const measured = cache.map.get(MediaCache.keyOf(record));
         if (!measured || !measured.hash) continue;
         items.push({
@@ -2707,7 +2737,106 @@ function register() {
         measured: items.length,
         // The honest denominator: how much of the library has been looked at.
         known: mediaStats.size,
+        // And the one that the button acts on: everything but the cloud-only
+        // files, which are never in the total it counts towards.
+        measurable,
+        dehydrated,
       };
+    })
+  );
+
+  /**
+   * Look at every picture, not just the ones that have been on screen (E1).
+   *
+   * ## Why this is a button and not something that just happens
+   *
+   * Measured on this machine with `npm run bench:media`: decoding a file to
+   * the point where it can be compared costs **70.6 ms**, and no amount of
+   * concurrency changes that -- it is the decode, not the waiting. Over the
+   * 4,124 readable photographs in the default roots that is **about five
+   * minutes**. Grouping them afterwards is 2 ms. So the whole cost of this
+   * feature is a decode the grid was deliberately built never to do in bulk,
+   * and a five-minute job that nobody asked for is not something to start on
+   * somebody's behalf.
+   *
+   * It is paid once. The numbers taken from the pixels are cached by
+   * `lib/media/cache.js` and keyed on path, size and time, so a second run
+   * over the same library is the 91 ms the benchmark measured rather than
+   * another five minutes.
+   *
+   * `display: false` asks for the measurements without the JPEG data URI: the
+   * pictures are not wanted here, only the hashes, and not encoding them is
+   * most of what makes this bearable.
+   */
+  handle('media:measureAll', (event) =>
+    guard(async () => {
+      if (tokens.measureAll) tokens.measureAll.cancel();
+      const token = new CancelToken();
+      tokens.measureAll = token;
+
+      const cache = await mediaAnalysisCache();
+      const keyOf = (filePath) => {
+        const known = mediaStats.get(filePath);
+        return known ? MediaCache.keyOf(known) : null;
+      };
+
+      const wanted = [];
+      let dehydrated = 0;
+      for (const [filePath, record] of mediaStats) {
+        if (record.dehydrated) {
+          dehydrated += 1;
+          continue;
+        }
+        const known = cache.map.get(MediaCache.keyOf(record));
+        // Already measured: left out of the list entirely rather than passed
+        // through for the cache to answer, so the progress bar counts the work
+        // that is actually left.
+        if (known && known.hash) continue;
+        wanted.push(filePath);
+      }
+
+      const started = Date.now();
+      let done = 0;
+      const total = wanted.length;
+      const tick = throttle(() => {
+        if (!event.sender.isDestroyed()) {
+          event.sender.send('media:measureProgress', {
+            done,
+            total,
+            dehydrated,
+            elapsedMs: Date.now() - started,
+          });
+        }
+      }, 200);
+
+      try {
+        if (!event.sender.isDestroyed()) {
+          event.sender.send('media:measureProgress', { done: 0, total, dehydrated, elapsedMs: 0 });
+        }
+        await thumbs.thumbnails(
+          wanted,
+          { cache, keyOf, display: false },
+          {
+            token,
+            onOne: () => {
+              done += 1;
+              tick();
+            },
+          }
+        );
+        await cache.save();
+        return { measured: done, total, dehydrated, cancelled: token.cancelled, elapsedMs: Date.now() - started };
+      } finally {
+        if (tokens.measureAll === token) tokens.measureAll = null;
+      }
+    })
+  );
+
+  /** Stop the pass. What it measured before stopping is kept. */
+  handle('media:measureCancel', () =>
+    guard(async () => {
+      if (tokens.measureAll) tokens.measureAll.cancel();
+      return true;
     })
   );
 
@@ -2756,7 +2885,15 @@ function register() {
    */
   handle('preview:compare', (event, left, right) =>
     guard(async () => {
-      const wanted = [left, right];
+      // Two paths, or a list of them. F3 compares exactly two drafts of a
+      // document; E1 compares two to four photographs, and both want the same
+      // thing from this handler -- one revoke, then a token each -- so the
+      // list form was added rather than a second handler that would have to
+      // stay in step with this one about what "one preview at a time" means.
+      const wanted = Array.isArray(left) ? left : [left, right];
+      if (wanted.length < 2 || wanted.length > MAX_COMPARED) {
+        throw new Error(t('preview.error.compareCount', 'Between 2 and {n} files can be compared at once', { n: MAX_COMPARED }));
+      }
       if (wanted.some((p) => typeof p !== 'string' || p.trim() === '')) {
         throw new Error(t('preview.error.noPath', 'No file was named'));
       }

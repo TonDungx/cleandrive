@@ -1873,6 +1873,30 @@ function formatDuration(ms) {
     : t('app.eta.hours', '{h}h left', { h: hours });
 }
 
+/**
+ * A length of time, as a length of time.
+ *
+ * `formatDuration` above is an *estimate* formatter and every one of its
+ * branches ends in "left". Reaching for it to say how long something took
+ * printed "Looked at 8 photos in almost done", which a screenshot caught; and
+ * in front of a job that has not started it promises "5 min left" before there
+ * is anything left. This is the plain one.
+ */
+function formatSpan(ms) {
+  if (!Number.isFinite(ms) || ms < 0) return '';
+  const seconds = Math.round(ms / 1000);
+  if (seconds < 60) return t('app.span.seconds', '{n} seconds', { n: Math.max(1, seconds) });
+
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return t('app.span.minutes', '{n} minutes', { n: minutes });
+
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return rest
+    ? t('app.span.hoursMinutes', '{h}h {m}m', { h: hours, m: rest })
+    : t('app.span.hours', '{h}h', { h: hours });
+}
+
 /* ---- the shared progress panel, used by every delete path ---- */
 
 const DELETE_BUTTONS = [

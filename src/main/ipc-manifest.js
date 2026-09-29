@@ -88,6 +88,8 @@ const INVOKE = Object.freeze([
   'media:cancel',
   'media:thumbs',
   'media:similar',
+  'media:measureAll',
+  'media:measureCancel',
 
   'settings:get',
   'settings:save',
@@ -149,6 +151,7 @@ const EVENTS = Object.freeze([
   'autoclean:progress',
   'media:progress',
   'media:batch',
+  'media:measureProgress',
   'update:state',
   'app:data-changed',
   'app:target',

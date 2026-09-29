@@ -62,6 +62,13 @@ function toCandidate(record, context) {
       camera: record.camera || null,
       lens: record.lens || null,
       software: record.software || null,
+      // Read by `lib/media/probe.js` since the subsystem was written, and
+      // dropped here until E1 needed them: the side-by-side comparison is a
+      // table of the facts that tell two nearly identical photographs apart,
+      // and on a burst from one camera the exposure and the ISO are often the
+      // only two that differ at all.
+      iso: record.iso ?? null,
+      exposureTime: record.exposureTime ?? null,
       durationSec: record.durationSec ?? null,
       bitrateKbps: record.bitrateKbps ?? null,
       title: record.title || null,

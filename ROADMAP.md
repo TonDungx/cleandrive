@@ -222,7 +222,7 @@ mà B5 và E2 dùng lại nguyên. Ba mục P2 rủi ro cao đi cuối.
 | B5 | Đóng gói lưu trữ | P1 | ✅ Đã code xong (2026-09-28) — **nén có chọn lọc theo từng tệp**, quyết trên mẫu 64 KB: đo thật cho thấy mã nguồn tiết kiệm 68% còn `.docx` 1%, `.png` 1,5%, `.mp4` **−0%**, nên tệp không co lại thì ghi `STORED`. Manifest đi **bên trong archive**, không vào journal (journal có schema cố định — xem `journal/journal.js`). Xác minh là **bắt buộc**: mở lại archive, đối chiếu CRC + độ dài + sha256 từng tệp trước khi đụng bản gốc. Hoàn tác qua **Khôi phục**: giải nén về đúng chỗ, giữ timestamp. **ZIP64 đo được trên máy này** với thành viên 5,37 GB — Windows đọc lại đúng độ dài 64-bit. **Không làm `.7z`** (xem §11 mục 14). **Sửa kèm:** `WHEN.archive` trong planner cũng viết sẵn `now`, thật ra là `bin`; Restore Center liệt kê session archive nhưng báo "0 items can be put back" cho tới khi `inArchive` được thêm vào `RESTORABLE` — ảnh chụp bắt được |
 | B4 | Nén NTFS có chọn lọc | P1 | ✅ Đã code xong (2026-09-28) — **hành động duy nhất của giai đoạn này giải phóng dung lượng ngay**, không qua Thùng rác. **Chỉ LZNT1** (đã chốt): đo được LZX cho 96,4% so với 87,5%, nhưng **một lệnh ghi 40 byte tại chỗ làm mất nén cả tệp** — nặng hơn điều đặc tả ngờ (§11 mục 15). Con số "30–45%" của đặc tả **sai trên máy này**: mã nguồn **87,5%**, log **81,2%**, ảnh/video **0,0%** — nên ước lượng lấy bằng cách đưa 12 tệp thật của chính thư mục qua NTFS (lệch **0,1 điểm** so với thực tế). **Không parse output của `compact`** (bản địa hoá: "1,9 to 1"); kích thước lấy từ `stat().blocks * 512`. Từ chối thêm hai thứ đặc tả không nhắc: ổ không nén được (**hỏi bằng cách thử**, không suy từ cluster) và thư mục có tệp **chỉ nằm trên OneDrive** (nén sẽ kéo về, đúng phần B3 vừa giải phóng). **G1 vẫn không có bước nén** — lý do ở `planner/plan.js` |
 | E2 | Sao lưu trước khi xoá | P1 | ✅ Đã code xong (2026-09-29) — **không phải một handler mới**: là một tuỳ chọn của `recycle`, vì đặc tả đặt nó trong hộp thoại xác nhận. Nhưng hộp thoại đó là `dialog.showMessageBox` **native**, mà message box native chỉ chứa được **một checkbox**, không chứa được nút chọn thư mục — nên đích được chọn trên thanh hành động của màn Photos (giống B2/B5), còn hộp thoại giữ đúng phần người ta thật sự đổi ý vào phút chót: **bỏ tick là xoá mà không chép**. **Đề bài "dùng lại `tree-copy.js`" sai**: `copyTree` đòi đích **chưa tồn tại** và đi từ **một gốc**, còn E2 nhận một danh sách tệp rời từ nhiều thư mục, có thể nhiều ổ, vào một thư mục dùng đi dùng lại — phần dùng chung thật là `verified-copy.js`. Bố cục đích lấy **ổ làm thư mục đầu** (`<đích>\C\Users\…`), vì nếu không thì `C:\photos\a.jpg` và `D:\photos\a.jpg` là **cùng một chỗ**. **Không bao giờ ghi đè**: trùng tên mà khác nội dung thì thành ` (2)`; trùng cả hash thì tính là đã sao lưu và không chép lại. Manifest **cộng dồn**, không thay thế. **UNC được phép** — `lib/trash.js` chỉ từ chối **nguồn** trên mạng (`vet()`), còn đây chép **tới** mạng rồi xoá bản gốc cục bộ; nhưng máy này không có NAS nên tốc độ là `[Unverified]` (§11 mục 12). Giữ ADS (đã chốt). **Ảnh chụp bắt được ba lỗi**: đổi ngôn ngữ làm `translateDom` ghi đè nhãn nút và **mất tên thư mục đích**; hai nút mới đẩy **"Chuyển mục đã chọn vào Thùng rác" ra hẳn ngoài khung ở 1180px**; và toast nằm đè lên chính thanh đó |
-| E1 | Màn so sánh cạnh nhau | P1 | |
+| E1 | Màn so sánh cạnh nhau | P1 | ✅ Đã code xong (2026-09-29) — **hai phần, không phải một**: đặc tả nói "mở từ một nhóm near-duplicate", mà **nhóm đó chưa có mặt nào trên giao diện**. `perceptual.groupSimilar`, IPC `media:similar` và `api.mediaSimilar` đã nối đủ từ đầu và **không renderer nào từng gọi**; engine còn tính sẵn `spread` kèm comment "so the UI can say how alike these actually are". Nên mục này dựng cả dải nhóm lẫn màn so sánh. **Đo được**: băm một ảnh tốn **70,6 ms**, gom nhóm chỉ 2 ms — nên chi phí toàn bộ nằm ở phép giải mã mà lưới ảnh **cố ý không bao giờ làm hàng loạt**. Do đó có **nút riêng** kèm tiến độ và nút dừng (~4,9 phút cho 4.124 ảnh, trả một lần vì kết quả được cache), và thẻ luôn nói mẫu số thật. **2.534 ảnh chỉ nằm trên OneDrive bị loại khỏi lượt băm** và được nói ra — đọc một tấm là tải nó về, đảo ngược đúng thứ B3 vừa giải phóng. `preview:compare` từ 2 lên 2–4. `iso`/`exposureTime` đọc được từ lâu nhưng **bị bỏ rơi** khi dựng payload — nay có. **Ảnh chụp bắt được 4 lỗi**: ba ảnh hiện ở ba kích thước nên không so sánh được; `formatDuration` là bộ định dạng ETA nên toast ghi "in almost done"; ô Megapixel của ảnh nhỏ hiện `—` như thể không biết; và thẻ nhóm **không dịch phần do JS dựng** |
 | D3 | Dữ liệu Zalo / Telegram theo cuộc trò chuyện | P1 | |
 | E5 | Ảnh theo cuộc trò chuyện | P1 (phụ thuộc D3) | |
 | F4 | Hardlink bản trùng (Dev Pack, có cảnh báo mạnh) | P2 | |
@@ -1316,6 +1316,67 @@ Mọi tính năng trong nhóm này giữ nguyên quy tắc gốc của màn Phot
 - Bảng so sánh gồm kích thước, megapixel, dung lượng, ngày chụp, máy ảnh, ISO, tốc độ, và chỉ số *least detail* (đã có). Ô có giá trị "tốt hơn" được tô nhẹ, **không** được đánh dấu là "nên giữ".
 - Thứ tự sắp xếp gợi ý: độ phân giải → chi tiết → dung lượng. Đây chỉ là **thứ tự**, không có tick sẵn.
 - Phím tắt: `1`–`4` để tick hoặc bỏ tick ảnh tương ứng, `←`/`→` để sang nhóm tiếp theo.
+
+> **✅ Đã code xong (2026-09-29).**
+>
+> Code: `src/renderer/compare.js` (mới), thẻ "Ảnh trông giống nhau" trong
+> `renderer/media.js`, `media:measureAll` / `media:measureCancel` và
+> `preview:compare` mở rộng trong `ipc.js`, `iso`/`exposureTime` thêm vào
+> payload ở `analyzers/media.js`, `formatSpan` trong `renderer/app.js`.
+> Harness: `scripts/test-compare.js` (**60 kiểm tra**), ảnh chụp
+> `npm run shoot:compare`. Khác với đặc tả ở trên:
+>
+> - **"Mở từ một nhóm near-duplicate" giả định một màn hình không tồn tại.**
+>   Engine gom nhóm đã có từ khi dựng hệ ảnh: `lib/media/perceptual.js`,
+>   IPC `media:similar`, `api.mediaSimilar` trong preload — **nối đủ đầu tới
+>   cuối và không một dòng renderer nào gọi tới**. `perceptual.js` thậm chí
+>   tính sẵn `spread` với comment *"so the UI can say how alike these actually
+>   are"*, viết cho một giao diện chưa từng có. Nên mục này là **hai việc**:
+>   dải nhóm trên màn Photos, rồi màn so sánh mở ra từ đó. "Burst" **không
+>   làm**: không có khái niệm nào trong code, và nhóm theo thời gian chụp là
+>   một tiêu chí khác hẳn tiêu chí đang dùng.
+> - **Vì sao có một cái nút, và nó tốn bao nhiêu.** Một ảnh chỉ gom nhóm được
+>   sau khi đã giải mã để đo pixel, và `npm run bench:media` đo trên máy này:
+>   **70,6 ms/tệp**, còn gom nhóm chỉ **2 ms cho 398 hash**. Lưới ảnh cố ý chỉ
+>   đo từng màn hình một — đó là lý do thư viện vài nghìn tấm mở được — nên
+>   ngay sau khi quét, danh sách này gần như rỗng. Thay vì giả vờ, thẻ nói
+>   mẫu số thật ("đã xem 214 / 4.124") và mời quét nốt bằng **một nút có ước
+>   lượng đo được, có tiến độ, dừng được**: ~**4,9 phút** cho 4.124 ảnh đọc
+>   được ở đây, trả **một lần** vì số đo được cache theo đường dẫn, kích thước
+>   và thời gian (lần hai là 91 ms).
+> - **Ảnh chỉ nằm trên mây không bao giờ được băm.** Đo được: **2.534 trong
+>   6.687** ảnh ở các gốc mặc định là placeholder OneDrive, và đọc một tấm là
+>   tải nó về. Một lượt quét hàng loạt sẽ kéo vài GB trở lại đúng cái đĩa mà
+>   B3 vừa dọn. Chúng được **đếm và nói ra trên màn**, không nằm trong mẫu số
+>   mà nút kia tác động. `mediaStats` phải mang thêm cờ `dehydrated` cho việc
+>   này.
+> - **`preview:compare` từ đúng-hai thành 2–4**, cùng một handler chứ không
+>   phải handler thứ hai: quy tắc "mỗi lần chỉ một preview" nằm ở đó, và hai
+>   bản sao của quy tắc đó sẽ lệch nhau.
+> - **Hai cột đặc tả đòi vốn không tới được cửa sổ.** `iso` và `exposureTime`
+>   được `lib/media/probe.js` đọc từ đầu rồi **bị bỏ rơi** khi
+>   `analyzers/media.js` dựng payload. Trên một loạt ảnh chụp liên tiếp từ
+>   cùng một máy, đó thường là **hai thứ duy nhất khác nhau**.
+> - **Tô màu không được mượn màu verdict.** Xanh/hổ phách/đỏ dành riêng cho
+>   "an toàn / tuỳ bạn / giữ lại"; một bảng tô xanh ở đây là đang nói "giữ tấm
+>   này", đúng lời khuyên mà đặc tả cấm. Dùng một sắc độ của accent, kèm câu
+>   dưới bảng nói tô = **nổi bật**, không phải **tốt hơn**. ISO là hàng duy
+>   nhất tô ô **nhỏ hơn**.
+> - **Ảnh chụp bắt được bốn lỗi.** (a) Ba ảnh trong một nhóm hiện ở **ba kích
+>   thước khác nhau** vì `max-width` — mà một nhóm trùng lặp thường là một
+>   tấm ảnh ở nhiều cỡ, nên bản gốc 520px chiếm hết khung còn bản thu nhỏ
+>   160px là con tem giữa khung thứ ba; ba độ phóng đại thì **không phải là so
+>   sánh**. (b) `formatDuration` là bộ định dạng **ước lượng còn lại** — mọi
+>   nhánh của nó kết thúc bằng "còn" — nên toast in **"Looked at 8 photos in
+>   almost done"**; phải thêm `formatSpan`. (c) Ô Megapixel của ảnh 160×120
+>   hiện `—`, tức "không biết", ngay dưới dòng vừa in kích thước của chính nó.
+>   (d) Thẻ nhóm dịch được **mỗi cái tiêu đề**: phần còn lại do JS dựng và
+>   `translateDom` không với tới, nên tiếng Việt nằm trên năm dòng tiếng Anh.
+> - **§11 mục 9 tái diễn một lần** trong lượt kiểm này: `test:a11y` báo
+>   `.brand-name` tương phản **1,18** — mực `#e9ecf3` trên nền `#ffffff`, lại
+>   là hai bảng màu chồng nhau, cùng chữ ký đã chẩn đoán. Chạy lại: **177/0**.
+>   Log đã giữ ở `%TEMP%\cleandrive-a11y-failures-1790646897831.txt`. Không
+>   phải do mục này (E1 không đụng palette), và **mục 9 vẫn để mở**.
 
 ---
 

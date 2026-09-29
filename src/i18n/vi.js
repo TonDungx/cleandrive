@@ -114,6 +114,12 @@
     'app.eta.seconds': 'còn {n} giây',
     'app.eta.minutes': 'còn {n} phút',
     'app.eta.hours': 'còn {h} giờ',
+    // Một khoảng thời gian, không phải ước lượng còn lại: các khoá `eta` ở
+    // trên đều mang chữ "còn".
+    'app.span.seconds': '{n} giây',
+    'app.span.minutes': '{n} phút',
+    'app.span.hoursMinutes': '{h} giờ {m} phút',
+    'app.span.hours': '{h} giờ',
     'app.eta.hoursMinutes': 'còn {h} giờ {m} phút',
 
     // Labels that only ever appear in front of an error message.
@@ -2486,6 +2492,57 @@
     'dialog.restore.fromQuarantine':
       '{n} mục trong số đó trở về từ thư mục cách ly: từng tệp được chép ngược lại, đối chiếu với bản đã chép ' +
       'lúc cách ly, rồi mới được gỡ khỏi thư mục đó. Chúng cần có chỗ trống trên ổ mà chúng trở về.',
+
+    /* ---- ảnh giống nhau, và màn so sánh (E1) ---------------------------- */
+    'similar.title': 'Ảnh trông giống nhau',
+    'similar.total': '{n} nhóm · {size} nếu chỉ giữ một ảnh mỗi nhóm',
+    'similar.none': 'chưa tìm thấy nhóm nào',
+    'similar.looked': 'Đã xem {done} trong {total} ảnh.',
+    'similar.cloud': '{n} ảnh chỉ có trên mây nên không được xét — mở một tấm là tải nó về.',
+    'similar.measure': 'Xem nốt {n} ảnh còn lại',
+    'similar.measureHint': 'Khoảng {duration}. Chỉ tốn một lần — kết quả đo được giữ lại.',
+    'similar.progress': '{done} / {total}',
+    'similar.finished': 'Đã xem {n} ảnh trong {duration}.',
+    'similar.already': 'Mọi ảnh đều đã được xem rồi — không còn gì để làm.',
+    'similar.stopped': 'Đã dừng sau khi xem {n} ảnh — phần đã đo vẫn được giữ.',
+    'similar.group': '{n} ảnh · {size} nằm ở các bản trùng',
+    'similar.identical': 'giống nhau tới mức không phân biệt được',
+    'similar.close': 'lệch nhau {n} trên 64',
+    'similar.open': 'So sánh',
+    'similar.gone': 'Những tệp đó không còn trong danh sách.',
+    'similar.showAll': 'Xem cả {n} nhóm',
+    'similar.showFewer': 'Thu gọn',
+    'similar.emptyDone': 'Đã xem hết ảnh, và không có hai tấm nào là cùng một ảnh.',
+    'similar.emptyYet': 'Chưa có gì. Cuộn lưới ảnh, hoặc xem nốt phần còn lại, tấm nào trùng sẽ hiện ở đây.',
+
+    'compare.title': 'Ảnh đặt cạnh nhau',
+    'compare.label': 'So sánh',
+    'compare.heading': '{n} ảnh đặt cạnh nhau',
+    'compare.ofGroups': 'Nhóm {i} / {total} · lệch nhau {spread} trên 64',
+    'compare.ownPick': 'Những tấm bạn đã tick',
+    'compare.flicker': 'Lật qua lại hai ảnh',
+    'compare.flicking': 'Đang lật giữa 1 và 2 — đang hiện {name}',
+    'compare.reset': 'Vừa khung',
+    'compare.prev': 'Nhóm trước',
+    'compare.next': 'Nhóm sau',
+    'compare.needTwo': 'Hãy chọn ít nhất hai ảnh để so sánh.',
+    'compare.groupGone': 'Nhóm đó không còn trong danh sách.',
+    'compare.unreadable': 'Không đọc được',
+    'compare.hint':
+      'Lăn chuột để phóng to, kéo để di chuyển — mọi ảnh cùng phóng và cùng di. Phím 1–4 tick một ảnh, ← và → đổi nhóm.',
+    'compare.note':
+      'Ô được tô là giá trị nổi bật — lớn nhất, riêng ISO là nhỏ nhất. Đó không phải lời khuyên, ' +
+      'và thứ tự các ảnh chỉ là gợi ý chứ không phải lựa chọn thay bạn.',
+    'compare.row.dimensions': 'Kích thước',
+    'compare.row.megapixels': 'Megapixel',
+    'compare.underTenth': 'dưới 0,1',
+    'compare.row.size': 'Dung lượng',
+    'compare.row.detail': 'Chi tiết',
+    'compare.row.taken': 'Chụp lúc',
+    'compare.row.camera': 'Máy ảnh',
+    'compare.row.iso': 'ISO',
+    'compare.row.shutter': 'Tốc độ',
+    'preview.error.compareCount': 'Chỉ so sánh được từ 2 tới {n} tệp một lúc',
 
     /* ---- sao lưu trước khi xoá (E2) ------------------------------------- */
     'media.backup.label': 'Sao lưu trước khi xoá',

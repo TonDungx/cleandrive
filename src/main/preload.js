@@ -103,6 +103,7 @@ const api = {
 
   /* looking at a file without leaving the app */
   preview: (target) => ipcRenderer.invoke('preview:open', target),
+  // Two paths (F3, two drafts) or a list of two to four (E1, photographs).
   previewCompare: (left, right) => ipcRenderer.invoke('preview:compare', left, right),
   closePreview: () => ipcRenderer.invoke('preview:close'),
 
@@ -112,6 +113,10 @@ const api = {
   cancelMediaScan: () => ipcRenderer.invoke('media:cancel'),
   mediaThumbs: (paths, options) => ipcRenderer.invoke('media:thumbs', paths, options),
   mediaSimilar: () => ipcRenderer.invoke('media:similar'),
+  // E1: look at every picture rather than only the ones that have been on
+  // screen. Costly and explicit — see the handler for the measured figures.
+  mediaMeasureAll: () => ipcRenderer.invoke('media:measureAll'),
+  mediaMeasureCancel: () => ipcRenderer.invoke('media:measureCancel'),
 
   /* automatic cleanup */
   getSettings: () => ipcRenderer.invoke('settings:get'),
@@ -179,6 +184,8 @@ const api = {
   onMediaProgress: (cb) => subscribe('media:progress', cb),
   /** Files as they are read, so the grid fills while the scan is still running. */
   onMediaBatch: (cb) => subscribe('media:batch', cb),
+  /** How far the look-at-everything pass has got (E1). */
+  onMediaMeasureProgress: (cb) => subscribe('media:measureProgress', cb),
   onUpdateState: (cb) => subscribe('update:state', cb),
 
   /** Fires when a background run rewrites settings, the log or the history. */

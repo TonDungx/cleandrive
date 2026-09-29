@@ -790,6 +790,12 @@ function requestThumbs(paths) {
       sortShown();
       renderGrid();
     }
+
+    // E1: every screenful that arrives is more pictures that can be grouped,
+    // so the list of look-alikes grows as somebody scrolls. Cheap to ask --
+    // the grouping itself was 2 ms over 398 hashes on this machine -- and it
+    // is what makes the card fill in without anybody pressing anything.
+    refreshSimilar();
   }, 60);
 }
 
@@ -1181,9 +1187,13 @@ $('media-scan').addEventListener('click', async () => {
   media.files = result.files.map(candidateView);
   media.displays = result.displays || [];
   media.excluded = result.excluded || [];
+  similar.expanded = false;
   renderExcluded();
   applyFilters();
   reportScan(result);
+  // E1: whatever was measured on an earlier run of this library is already in
+  // the cache, so this is often not empty even straight after a scan.
+  refreshSimilar();
 });
 
 function reportScan(result) {
@@ -1427,6 +1437,256 @@ $('media-quarantine').addEventListener('click', onMediaAction('quarantine'));
 $('ov-traits-more').addEventListener('click', () => {
   media.traitsExpanded = !media.traitsExpanded;
   renderOverview();
+});
+
+/* ------------------------------------------------ photos that look alike -- */
+
+/**
+ * Groups of near-identical pictures (E1).
+ *
+ * The grouping itself has been in the main process since the subsystem was
+ * built -- `lib/media/perceptual.js`, reached through `media:similar` -- and
+ * until now nothing in the window ever called it. This is that call, and the
+ * list it draws.
+ *
+ * ## Why there is a button, and what it costs
+ *
+ * A picture can only be grouped once its pixels have been measured, and
+ * measuring one means decoding it: **70.6 ms a file**, measured on this
+ * machine with `npm run bench:media`. The grid does that lazily, a screenful
+ * at a time, which is the only reason a library of thousands opens at all --
+ * so straight after a scan almost nothing has been measured and this list is
+ * nearly empty.
+ *
+ * Rather than pretend otherwise, the card says which of the two it is showing
+ * ("looked at 214 of 4,124"), and offers the rest as an explicit job with a
+ * progress bar and a stop button. Over the 4,124 readable photographs in the
+ * default roots here that is about five minutes, paid once: the numbers are
+ * cached against path, size and time, and a second run is 91 ms.
+ *
+ * Files that exist only in the cloud are never in it. Reading one downloads
+ * it, and on this machine that is 2,534 pictures -- several gigabytes pulled
+ * back onto a disk the user may have just freed with B3. They are counted and
+ * named on screen instead.
+ */
+const similar = {
+  groups: [],
+  measured: 0,
+  measurable: 0,
+  dehydrated: 0,
+  expanded: false,
+  measuring: false,
+  /** How many rows before "show more", which is what the other cards use. */
+  shown: 5,
+};
+
+/** Thumbnails per row. More than this and the row is a contact sheet. */
+const SIMILAR_STRIP = 4;
+
+async function refreshSimilar() {
+  if (media.files.length === 0) {
+    similar.groups = [];
+    renderSimilar();
+    return;
+  }
+  const reply = await api.mediaSimilar();
+  if (!reply || !reply.ok) return;
+  similar.groups = reply.data.groups || [];
+  similar.measured = reply.data.measured || 0;
+  similar.measurable = reply.data.measurable || 0;
+  similar.dehydrated = reply.data.dehydrated || 0;
+  renderSimilar();
+}
+
+function renderSimilar() {
+  const card = $('media-similar-card');
+  // No library, no card. An empty one after a scan that found nothing would be
+  // a box explaining a feature nobody had reached yet.
+  if (media.files.length === 0) {
+    card.hidden = true;
+    return;
+  }
+  card.hidden = false;
+
+  const groups = similar.groups;
+  const wasted = groups.reduce((n, g) => n + (g.wastedBytes || 0), 0);
+  setText(
+    $('similar-total'),
+    groups.length === 0
+      ? t('similar.none', 'none found yet')
+      : t('similar.total', '{n} groups · {size} if you kept one of each', {
+          n: formatCount(groups.length),
+          size: formatBytes(wasted),
+        })
+  );
+
+  /* -- the honest denominator, and what is deliberately not in it --------- */
+  const scope = [
+    t('similar.looked', 'Looked at {done} of {total} photos so far.', {
+      done: formatCount(similar.measured),
+      total: formatCount(similar.measurable),
+    }),
+  ];
+  if (similar.dehydrated > 0) {
+    scope.push(
+      t('similar.cloud', '{n} are stored online only and are left out — opening one would download it.', {
+        n: formatCount(similar.dehydrated),
+      })
+    );
+  }
+  setText($('similar-scope'), scope.join(' '));
+
+  const left = Math.max(0, similar.measurable - similar.measured);
+  const measure = $('similar-measure');
+  measure.hidden = similar.measuring || left === 0;
+  measure.textContent = t('similar.measure', 'Look at the other {n}', { n: formatCount(left) });
+  // Measured, so the estimate is a measurement rather than a guess: 70.6 ms a
+  // file on this machine, and the button says so before it is pressed.
+  measure.title = t('similar.measureHint', 'About {duration}. It is done once — the measurements are kept.', {
+    duration: formatSpan(left * 71),
+  });
+  $('similar-stop').hidden = !similar.measuring;
+  $('similar-progress').hidden = !similar.measuring;
+
+  renderSimilarRows();
+}
+
+function renderSimilarRows() {
+  const host = $('similar-list');
+  const groups = similar.expanded ? similar.groups : similar.groups.slice(0, similar.shown);
+  const rows = [];
+
+  groups.forEach((group, index) => {
+    const li = document.createElement('li');
+    li.className = 'similar-row';
+
+    const strip = document.createElement('div');
+    strip.className = 'similar-strip';
+    for (const file of group.files.slice(0, SIMILAR_STRIP)) {
+      const thumb = media.thumbs.get(file.path);
+      const cell = document.createElement('span');
+      cell.className = 'similar-thumb';
+      if (thumb && thumb.dataUri) {
+        const img = document.createElement('img');
+        img.src = thumb.dataUri;
+        img.alt = '';
+        cell.appendChild(img);
+      }
+      cell.title = file.path;
+      strip.appendChild(cell);
+    }
+    if (group.files.length > SIMILAR_STRIP) {
+      const more = document.createElement('span');
+      more.className = 'similar-thumb is-more';
+      more.textContent = `+${group.files.length - SIMILAR_STRIP}`;
+      strip.appendChild(more);
+    }
+
+    const facts = document.createElement('div');
+    facts.className = 'similar-facts';
+    const line = document.createElement('strong');
+    line.textContent = t('similar.group', '{n} photos · {size} in the copies', {
+      n: formatCount(group.count),
+      size: formatBytes(group.wastedBytes || 0),
+    });
+    const how = document.createElement('span');
+    // `spread` has been computed by `perceptual.js` since it was written,
+    // with a comment saying it is there "so the UI can say how alike these
+    // actually are". This is that sentence, finally on a screen.
+    how.textContent =
+      group.spread === 0
+        ? t('similar.identical', 'the same picture as far as this can tell')
+        : t('similar.close', 'they differ by {n} of 64', { n: formatCount(group.spread) });
+    facts.append(line, how);
+
+    const go = document.createElement('button');
+    go.className = 'btn btn-sm';
+    go.textContent = t('similar.open', 'Compare');
+    go.addEventListener('click', () => openSimilarGroup(index));
+
+    li.append(strip, facts, go);
+    rows.push(li);
+  });
+
+  if (similar.groups.length === 0) {
+    const li = document.createElement('li');
+    li.className = 'similar-empty';
+    li.textContent =
+      similar.measured >= similar.measurable && similar.measurable > 0
+        ? t('similar.emptyDone', 'Every photo has been looked at, and no two of them are the same picture.')
+        : t('similar.emptyYet', 'Nothing yet. Scroll the grid, or look at the rest, and any that match will appear here.');
+    rows.push(li);
+  }
+
+  replaceChildrenIfChanged(host, rows);
+
+  const more = $('similar-more');
+  more.hidden = similar.groups.length <= similar.shown;
+  more.textContent = similar.expanded
+    ? t('similar.showFewer', 'Show fewer')
+    : t('similar.showAll', 'Show all {n}', { n: formatCount(similar.groups.length) });
+}
+
+/** Open one group in the comparison panel, at most four of it. */
+function openSimilarGroup(index) {
+  const group = similar.groups[index];
+  if (!group) return;
+  const files = group.files
+    .map((one) => media.files.find((f) => f.path === one.path))
+    .filter(Boolean)
+    .slice(0, window.PhotoCompare ? window.PhotoCompare.MAX_PANES : 4);
+  if (files.length < 2) {
+    toast(t('similar.gone', 'Those files are no longer in the list.'), true);
+    return;
+  }
+  window.PhotoCompare.open(files, { groups: similar.groups, index });
+}
+
+$('similar-more').addEventListener('click', () => {
+  similar.expanded = !similar.expanded;
+  renderSimilarRows();
+});
+
+$('similar-measure').addEventListener('click', async () => {
+  similar.measuring = true;
+  renderSimilar();
+  const reply = await api.mediaMeasureAll();
+  similar.measuring = false;
+  if (reply && reply.ok) {
+    const d = reply.data;
+    toast(
+      d.cancelled
+        ? t('similar.stopped', 'Stopped after looking at {n} — what was measured is kept.', {
+            n: formatCount(d.measured),
+          })
+        : d.total === 0
+          ? t('similar.already', 'Every photo had already been looked at — nothing left to do.')
+          : t('similar.finished', 'Looked at {n} photos in {duration}.', {
+              n: formatCount(d.measured),
+              duration: formatSpan(d.elapsedMs),
+            })
+    );
+  }
+  await refreshSimilar();
+});
+
+$('similar-stop').addEventListener('click', () => {
+  api.mediaMeasureCancel();
+});
+
+// Everything in this card except its heading is built from a result, and
+// `translateDom` only reaches text that is in the markup as written -- so a
+// switch to Vietnamese left "ẢNH TRÔNG GIỐNG NHAU" above five English lines.
+// The Vietnamese screenshot caught it, which is the third time that pair of
+// screenshots has earned its place.
+onLanguageChange(renderSimilar);
+
+api.onMediaMeasureProgress((p) => {
+  if (!similar.measuring) return;
+  setText(
+    $('similar-progress'),
+    t('similar.progress', '{done} of {total}', { done: formatCount(p.done), total: formatCount(p.total) })
+  );
 });
 
 // The page is the grid's scroller now, so this is where the virtualisation

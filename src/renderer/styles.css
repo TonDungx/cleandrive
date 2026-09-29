@@ -6635,3 +6635,358 @@ kbd {
     }
   }
 }
+
+/* ==========================================================================
+   photographs side by side (E1)
+   ==========================================================================
+
+   Its own panel rather than a mode of the viewer: see the markup for why.
+   The shape is the viewer's, so the two read as the same kind of thing, but
+   what is inside them is not the same and the classes are not shared. In
+   particular `.cmp-pane` is deliberately not `.compare-pane`, which belongs
+   to the viewer's two-draft comparison (F3).
+   ========================================================================== */
+
+.compare {
+  position: fixed;
+  inset: 0;
+  z-index: 41;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 28px clamp(16px, 5vw, 64px) clamp(16px, 4vh, 48px);
+  background: light-dark(rgba(16, 20, 28, 0.42), rgba(0, 0, 0, 0.62));
+  backdrop-filter: blur(2px);
+  animation: viewer-in 140ms var(--ease);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .compare { animation: none; }
+}
+
+.compare-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-bottom: 0;
+  border-radius: var(--radius) var(--radius) 0 0;
+  background: var(--bg-elevated);
+}
+
+.compare-heading {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.compare-where {
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-3);
+}
+
+/* The pictures take what is left after the head, the hint and the table, and
+   they take it in equal columns however many there are. */
+.compare-panes {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 1px;
+  border-left: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  background: var(--border);
+  overflow: hidden;
+}
+
+.cmp-pane {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+}
+
+.cmp-pane-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-soft);
+  background: var(--bg-elevated);
+}
+
+/* The shortcut, shown rather than documented somewhere else. */
+.compare-key {
+  flex: none;
+  min-width: 18px;
+  padding: 1px 5px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-3);
+  font-family: inherit;
+  font-size: 11px;
+  text-align: center;
+}
+
+.cmp-pane-name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.compare-frame {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  /* A checker would fight the photographs; a flat neutral does not, and it is
+     the same in both themes so two panes never differ because of their
+     backdrop. */
+  background: light-dark(#e8eaee, #15181e);
+  touch-action: none;
+}
+
+/*
+ * Every picture fills its frame, whatever size the file is.
+ *
+ * Not `max-width` — that was the first version, and a screenshot showed why it
+ * is wrong here. A group of near-duplicates is usually one photograph at
+ * several sizes, so at fit the 520px original filled its pane, the 320px copy
+ * sat smaller beside it and the 160px thumbnail was a stamp in the middle of
+ * the third. Three pictures at three magnifications is not a comparison: the
+ * whole point of locking the zoom together is that the same part of the same
+ * scene is the same size in every pane, and the file's pixel dimensions are in
+ * the table underneath where they belong.
+ *
+ * `contain` keeps the aspect ratio, so a portrait next to a landscape still
+ * reads as a portrait.
+ */
+.compare-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  /* The transform origin is the centre because the shared pan is measured in
+     percentages of the frame from its centre. */
+  transform-origin: center center;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.compare.is-dragging .compare-frame { cursor: grabbing; }
+
+.compare-waiting {
+  padding: 18px;
+  color: var(--text-3);
+  font-size: 12px;
+  text-align: center;
+}
+
+/* Flicking: both pictures occupy the same column, one at a time. */
+.compare.is-flicking .compare-panes {
+  grid-auto-flow: row;
+  grid-auto-rows: 1fr;
+  grid-auto-columns: auto;
+}
+
+.compare.is-flicking .cmp-pane.is-hidden-frame {
+  display: none;
+}
+
+.compare-hint {
+  margin: 0;
+  padding: 7px 14px;
+  border-left: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text-3);
+  font-size: 11.5px;
+}
+
+.compare-facts {
+  flex: none;
+  max-height: 34vh;
+  overflow: auto;
+  padding: 10px 14px 12px;
+  border: 1px solid var(--border);
+  border-top: 0;
+  border-radius: 0 0 var(--radius) var(--radius);
+  background: var(--surface);
+}
+
+.compare-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.compare-table th,
+.compare-table td {
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border-soft);
+  text-align: left;
+}
+
+.compare-table tr:last-child th,
+.compare-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.compare-table th[scope="row"] {
+  width: 30%;
+  color: var(--text-3);
+  font-weight: 500;
+}
+
+.compare-table td { color: var(--text); }
+
+/*
+   The value that stands out, and nothing more.
+
+   Not green, and not any of the verdict colours: this app keeps green, amber
+   and red for "safe / your call / keep", and a table that borrowed green here
+   would be saying "this is the one to keep" -- the exact recommendation the
+   roadmap says this screen must not make. A weight of the accent instead, with
+   a line under the table saying what the shading means.
+*/
+.compare-table td.is-standout {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  font-weight: 600;
+}
+
+.compare-note {
+  margin: 8px 0 0;
+  color: var(--text-3);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+/* Four columns below this width give each picture less than the thumbnail it
+   was opened from, so they stack and the panel scrolls. */
+@media (max-width: 900px) {
+  .compare-panes {
+    grid-auto-flow: row;
+    grid-auto-columns: auto;
+    grid-auto-rows: minmax(160px, 1fr);
+    overflow: auto;
+  }
+
+  .compare-facts { max-height: 30vh; }
+}
+
+/* ==========================================================================
+   photos that look the same (E1)
+   ========================================================================== */
+
+.similar-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.similar-scope {
+  margin: 0;
+  color: var(--text-3);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+.similar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.similar-progress {
+  color: var(--text-3);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.similar-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: var(--border-soft);
+}
+
+.similar-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  background: var(--surface);
+}
+
+.similar-strip {
+  flex: none;
+  display: flex;
+  gap: 3px;
+}
+
+.similar-thumb {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: var(--radius-sm);
+  background: var(--bg-sunken, var(--bg-elevated));
+  color: var(--text-3);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.similar-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.similar-facts {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.similar-facts strong {
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.similar-facts span {
+  color: var(--text-3);
+  font-size: 11.5px;
+}
+
+.similar-empty {
+  padding: 10px;
+  background: var(--surface);
+  color: var(--text-3);
+  font-size: 12px;
+}
+
+@media (max-width: 760px) {
+  .similar-row { flex-wrap: wrap; }
+  .similar-facts { flex-basis: 100%; order: 3; }
+}

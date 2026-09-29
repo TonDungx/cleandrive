@@ -1002,6 +1002,55 @@ first*, which is an honest description of what it ranks.
 somebody might delete all but one copy, a group is a claim that these are the
 same picture. Missing a burst costs nothing; a wrong group costs a photograph.
 
+### Photos that look the same
+
+Below the three overview cards, a list of groups: the same photograph at several
+sizes, the copy a chat app re-encoded, the frame taken twice. Each row says how
+many, how much sits in the copies, and how alike they actually are — *the same
+picture as far as this can tell*, or *they differ by 3 of 64*.
+
+**It only groups photos it has looked at, and it says how many that is.**
+Comparing two pictures means decoding both, which costs **70.6 ms a file** on the
+machine this was built on. The grid does that a screenful at a time — that is why
+a library of thousands opens at all — so straight after a scan this list is
+nearly empty and the card says so: *Looked at 214 of 4,124 photos so far.*
+
+**Look at the rest** does the whole library, with a progress count and a stop
+button, and the button says roughly how long before you press it. On the default
+folders here that is about five minutes. It is paid once: what is measured from
+the pixels is kept, and a second run takes under a second.
+
+**Photos stored online only are left out**, and the card names how many. Opening
+one would download it — on this machine that is 2,534 pictures — which is the
+opposite of what *Free up space* just did.
+
+### Side by side
+
+**Compare** on any group, or two to four photos you ticked yourself, opens them
+next to each other.
+
+- **Zoom and pan are locked together.** Scroll to zoom, drag to pan, and every
+  photo moves with it. Comparing sharpness means looking at the same corner of
+  each picture at the same magnification; panes that moved independently would
+  be showing different things.
+- **Flick between two** puts the first two in the same rectangle, one after the
+  other. A difference of a few pixels does not survive the journey your eyes make
+  between two pictures side by side. In the same place, one after the other, it
+  jumps out.
+- **A table of the facts that differ**: dimensions, megapixels, size, detail,
+  when it was taken, camera, ISO and shutter. A row no photo carries is left out
+  rather than filled with dashes.
+- `1`–`4` ticks a photo, `←` and `→` move between groups, `Esc` closes.
+
+**Nothing here decides for you.** The photos are *ordered* by resolution, then
+detail, then size, and the screen says that is an order and not a recommendation.
+The cell holding the value that stands out is shaded — largest, or lowest for ISO
+— and the line under the table says shading means *stands out*, not *keep this*.
+The shading deliberately is not green: in this app green, amber and red mean
+*safe to delete*, *your call* and *keep*, and borrowing one here would be picking
+the photograph for you. Nothing arrives ticked, and closing the panel ticks
+nothing.
+
 ### Deleting from here
 
 Through the same guarded path as everything else, with one extra sentence in the

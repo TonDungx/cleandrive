@@ -547,6 +547,31 @@
           </div>
         </section>
 
+        <!--
+          Pictures that are the same picture (E1).
+
+          A section of its own below the overview rather than a fourth card in
+          it. The three above are facets — each one splits the whole library,
+          and a control's shape follows its data's shape. This is not a facet:
+          it is a list of sets, most photos are in none of them, and it acts
+          (it opens a comparison) instead of filtering. It scrolls with the
+          content because only actions get pinned.
+        -->
+        <section class="card similar-card" id="media-similar-card" hidden>
+          <div class="ov-head">
+            <h2 data-i18n="similar.title">Photos that look the same</h2>
+            <span class="ov-total" id="similar-total"></span>
+          </div>
+          <p class="similar-scope" id="similar-scope"></p>
+          <div class="similar-actions">
+            <button class="btn btn-sm" id="similar-measure" data-i18n="similar.measure">Look at the rest</button>
+            <button class="btn btn-sm" id="similar-stop" hidden data-i18n="app.stop">Stop</button>
+            <span class="similar-progress" id="similar-progress" hidden></span>
+          </div>
+          <ul class="similar-list" id="similar-list"></ul>
+          <button class="ov-more" id="similar-more" hidden></button>
+        </section>
+
         <div class="media-layout" id="media-layout" hidden>
           <!-- Virtualised against the page, not against a box of its own.
                An inner scroller meant two scrollbars and a grid that could
@@ -1610,6 +1635,38 @@
       <div class="viewer-body" id="viewer-body"></div>
     </div>
 
+    <!--
+      Two to four photographs, side by side (E1).
+
+      A panel of its own rather than a mode of the viewer above. That one
+      answers "what is in this file" for every kind of file in the app, and its
+      two-pane comparison (F3) is for drafts of a document. This answers a
+      narrower question — which of these near-identical pictures to keep — and
+      the things it needs to do it (zoom and pan locked together, flicking
+      between two, a table of the facts that differ) would be dead weight in
+      front of a .log.
+
+      Nothing here ticks anything for the person. The order is a suggestion,
+      the tinted cells say which value is larger, and both are stated as such
+      on the screen.
+    -->
+    <div class="compare" id="compare" hidden role="dialog" aria-modal="true"
+      data-i18n-aria="compare.title" aria-label="Photographs side by side">
+      <div class="compare-head">
+        <span class="compare-heading" id="compare-heading"></span>
+        <span class="compare-where" id="compare-where"></span>
+        <span class="spacer"></span>
+        <button class="btn btn-sm" id="compare-flicker" aria-pressed="false" data-i18n="compare.flicker">Flick between two</button>
+        <button class="btn btn-sm" id="compare-reset" data-i18n="compare.reset">Fit</button>
+        <button class="btn btn-sm" id="compare-prev" data-i18n="compare.prev">Previous group</button>
+        <button class="btn btn-sm" id="compare-next" data-i18n="compare.next">Next group</button>
+        <button class="btn btn-sm" id="compare-close" data-i18n="app.close">Close</button>
+      </div>
+      <div class="compare-panes" id="compare-panes"></div>
+      <p class="compare-hint" id="compare-hint"></p>
+      <div class="compare-facts" id="compare-facts"></div>
+    </div>
+
     <div class="toast" id="toast" hidden></div>
 
     <!--
@@ -1790,6 +1847,7 @@
     <script src="cloud.js"></script>
     <!-- All four share app.js's globals; must load after it. -->
     <script src="media.js"></script>
+    <script src="compare.js"></script>
     <script src="automatic.js"></script>
     <script src="trends.js"></script>
     <script src="changes.js"></script>
