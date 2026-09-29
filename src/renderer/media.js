@@ -1307,6 +1307,100 @@ $('media-select-none').addEventListener('click', () => {
   renderGrid();
 });
 
+/* --------------------------------------------------- back up first (E2) -- */
+
+/**
+ * Where a copy goes before these photographs are deleted, and whether it does.
+ *
+ * Two separate facts, deliberately. The folder is remembered in settings, so
+ * an external drive picked once is still named next month; whether a copy is
+ * actually made is a switch that can be turned off without forgetting the
+ * folder, because "not this time" and "not any more" are different answers.
+ *
+ * The real yes-or-no is asked again in the confirmation dialog, which is where
+ * the roadmap puts it. This decides what that dialog is asked about.
+ */
+const backup = { destination: null, on: false };
+
+function drawBackup() {
+  const button = $('media-backup');
+  const change = $('media-backup-choose');
+  if (!button) return;
+
+  if (!backup.destination) {
+    button.textContent = t('media.backup.off', 'Back up before deleting…');
+    button.title = t('media.backup.offHint', 'Copy each file somewhere else, and check the copy, before it goes to the bin');
+    button.setAttribute('aria-pressed', 'false');
+    change.hidden = true;
+    return;
+  }
+
+  // Short on purpose, with the whole path in the tooltip. The first
+  // screenshot of this bar put the full destination in the label, and at
+  // 1180px that pushed "Move selected to Recycle Bin" clean off the right-hand
+  // edge -- the same failure the wrap rule in `styles.css` was written for at
+  // 700px, brought back by making one button wide enough to cause it again.
+  const where = elide(backup.destination, 20);
+  button.textContent = backup.on
+    ? t('media.backup.on', 'Backing up to {dest}', { dest: where })
+    : t('media.backup.paused', 'Not backing up to {dest}', { dest: where });
+  button.title = backup.destination;
+  button.setAttribute('aria-pressed', backup.on ? 'true' : 'false');
+  change.hidden = false;
+}
+
+async function chooseBackup() {
+  const result = unwrap(await api.backupChoose(), t('media.backup.label', 'Back up before deleting'));
+  if (!result) return;
+  if (!result.chosen) {
+    if (result.refusal) toast(result.refusal, true);
+    return;
+  }
+  backup.destination = result.destination;
+  backup.on = true;
+  drawBackup();
+  toast(
+    t('media.backup.set', 'Copies will go to {dest}, and each one is checked before the original is deleted.', {
+      dest: result.destination,
+    })
+  );
+}
+
+$('media-backup').addEventListener('click', () => {
+  if (!backup.destination) return chooseBackup();
+  backup.on = !backup.on;
+  drawBackup();
+  return undefined;
+});
+
+$('media-backup-choose').addEventListener('click', chooseBackup);
+
+// The markup carries `data-i18n` for the state where no folder is chosen,
+// which is what the button says before this file has run. `translateDom`
+// rewrites it from that key on every language change, so once a folder *is*
+// chosen the switch would put "Back up before deleting…" back over the top of
+// "Backing up to D:\…" and lose the destination from the screen. The
+// Vietnamese screenshot caught exactly that. Listeners run after the DOM pass,
+// so drawing again here is the last word.
+onLanguageChange(drawBackup);
+
+// The setting is read once, when the screen is first built, the same way the
+// quarantine card reads its own.
+(async () => {
+  const settings = unwrap(await api.getSettings(), t('media.backup.label', 'Back up before deleting'));
+  const chosen = settings && settings.settings && settings.settings.backup
+    ? settings.settings.backup.destination
+    : null;
+  if (chosen) {
+    backup.destination = chosen;
+    // A folder remembered from last time does not switch itself on. Deleting
+    // is the thing this screen does most, and a copy the user did not ask for
+    // this session is a surprise write to somebody's external drive.
+    backup.on = false;
+  }
+  drawBackup();
+})();
+
 // The same grid after either action: to the bin, or to another drive (B1).
 const onMediaAction = (kind) => async () => {
   await deleteSelected([...media.selected], (moved) => {
@@ -1319,7 +1413,13 @@ const onMediaAction = (kind) => async () => {
     media.focused = null;
     renderDetail(null);
     applyFilters();
-  }, { context: 'media', kind });
+  }, {
+    context: 'media',
+    kind,
+    // E2, and only for the bin: the quarantine already copies and verifies to
+    // another drive, so backing that up would be a copy of a copy.
+    ...(kind === 'recycle' && backup.on && backup.destination ? { backupTo: backup.destination } : {}),
+  });
 };
 $('media-delete').addEventListener('click', onMediaAction('recycle'));
 $('media-quarantine').addEventListener('click', onMediaAction('quarantine'));

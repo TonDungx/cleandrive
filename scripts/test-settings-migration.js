@@ -48,12 +48,18 @@ const V1 = {
 (async () => {
   const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'cleandrive-settings-v2-'));
 
-  console.log('\nsettings: version 1 to 8\n');
+  // Written against `SCHEMA_VERSION` rather than against a number typed in.
+  // Every one of these read `8` until E2 added a section, and the whole file
+  // then failed for saying the version it used to be -- which is noise in
+  // front of the one question that matters, whether an old file still
+  // migrates.
+  console.log(`\nsettings: version 1 to ${SCHEMA_VERSION}\n`);
 
-  check('this build writes version 8', SCHEMA_VERSION === 8);
+  check(`this build writes version ${SCHEMA_VERSION}`, Number.isInteger(SCHEMA_VERSION) && SCHEMA_VERSION >= 9);
   {
     const { raw, from, steps } = migrate(V1);
-    check('a version 1 file is migrated a step at a time, to 8', from === 1 && steps === 7 && raw.version === 8);
+    check(`a version 1 file is migrated a step at a time, to ${SCHEMA_VERSION}`,
+      from === 1 && steps === SCHEMA_VERSION - 1 && raw.version === SCHEMA_VERSION);
     check('it gains the snapshot section, at the defaults', raw.snapshots.keepRecent === 12 && raw.snapshots.keepMonthly === 12);
     // The one policy is now the first profile, field for field, and it keeps
     // the id `main` so the Windows task the user already had still belongs to
@@ -66,7 +72,7 @@ const V1 = {
       JSON.stringify(moved));
     check('and the profile keeps the id the registered task is named from', moved.id === 'main', moved.id);
     const unversioned = migrate({ appearance: { theme: 'light' } });
-    check('a file with no version is read as version 1', unversioned.from === 1 && unversioned.raw.version === 8);
+    check('a file with no version is read as version 1', unversioned.from === 1 && unversioned.raw.version === SCHEMA_VERSION);
     check('migration does not change the object it was given', V1.version === 1 && V1.snapshots === undefined);
   }
 
@@ -99,7 +105,7 @@ const V1 = {
 
   {
     // In the shape this build writes, with a version from the future.
-    const ahead = { ...V1, version: 9, autoClean: { profiles: [{ id: 'main', ...V1.autoClean }] }, futureThing: { x: 1 } };
+    const ahead = { ...V1, version: SCHEMA_VERSION + 1, autoClean: { profiles: [{ id: 'main', ...V1.autoClean }] }, futureThing: { x: 1 } };
     const { settings, warnings } = coerceSettings(ahead);
     check('a file from a newer build is read as far as this one understands it',
       first(settings).minAgeDays === 30 && warnings.some((w) => /newer CleanDrive/.test(w)), warnings.join('; '));
@@ -110,7 +116,7 @@ const V1 = {
   {
     const { raw } = migrate({ version: 3, autoClean: { categories: ['temp'] } });
     check('a version 3 file gains the quarantine section, with no folder and originals kept',
-      raw.version === 8 && raw.quarantine.zone === null && raw.quarantine.deleteOriginal === false &&
+      raw.version === SCHEMA_VERSION && raw.quarantine.zone === null && raw.quarantine.deleteOriginal === false &&
         raw.quarantine.retentionDays === 30 && raw.quarantine.maxGB === 0);
     const read = coerceSettings({ version: 4, quarantine: { zone: 'relative\\place', retentionDays: 9000, maxGB: -4, deleteOriginal: 'yes' } });
     check('a zone that is not absolute is dropped, and the numbers are clamped',
@@ -126,7 +132,7 @@ const V1 = {
   {
     const { raw } = migrate({ version: 4, appearance: { theme: 'dark', language: 'vi' } });
     check('a version 4 file gains no colours of its own, and keeps its theme',
-      raw.version === 8 && raw.appearance.custom === null && raw.appearance.theme === 'dark' && raw.appearance.language === 'vi');
+      raw.version === SCHEMA_VERSION && raw.appearance.custom === null && raw.appearance.theme === 'dark' && raw.appearance.language === 'vi');
     const palette = require('../src/shared/theme-palette');
     const good = { enabled: true, name: 'Mine', base: 'dark', colors: { ...palette.BASES.dark, accent: '#b48cff' } };
     const kept = coerceSettings({ version: 5, appearance: { theme: 'light', custom: good } });
@@ -149,7 +155,7 @@ const V1 = {
 
   {
     const { raw } = migrate({ version: 5, appearance: { theme: 'dark' } });
-    check('a version 5 file gains the menu setting, off', raw.version === 8 && raw.explorer && raw.explorer.contextMenu === false);
+    check('a version 5 file gains the menu setting, off', raw.version === SCHEMA_VERSION && raw.explorer && raw.explorer.contextMenu === false);
     const on = coerceSettings({ version: 6, explorer: { contextMenu: true } }).settings.explorer;
     check('on stays on', on.contextMenu === true);
     const odd = coerceSettings({ version: 6, explorer: { contextMenu: 'yes' } }).settings.explorer;
@@ -179,11 +185,11 @@ const V1 = {
     const loaded = await store.load();
     check('loading an old file does not write anything', (await fsp.readFile(file, 'utf8')) === original &&
       !fs.existsSync(path.join(dir, 'settings.v1.json')));
-    check('but hands back version 8 settings', loaded.version === 8 && loaded.snapshots.keepMonthly === 12);
+    check(`but hands back version ${SCHEMA_VERSION} settings`, loaded.version === SCHEMA_VERSION && loaded.snapshots.keepMonthly === 12);
 
     await store.patch({ snapshots: { keepRecent: 3 } });
     const written = JSON.parse(await fsp.readFile(file, 'utf8'));
-    check('the first save writes version 8', written.version === 8 && written.snapshots.keepRecent === 3);
+    check(`the first save writes version ${SCHEMA_VERSION}`, written.version === SCHEMA_VERSION && written.snapshots.keepRecent === 3);
     check('patching one snapshot field keeps the other', written.snapshots.keepMonthly === 12);
     check('and keeps the old file, byte for byte, as settings.v1.json',
       (await fsp.readFile(path.join(dir, 'settings.v1.json'), 'utf8')) === original);
@@ -231,8 +237,8 @@ const V1 = {
       JSON.stringify(kept.autoClean));
 
     const now = JSON.parse(await fsp.readFile(file, 'utf8'));
-    check('while the file in use is version 8, with the same policy as its first profile',
-      now.version === 8 && now.autoClean.profiles.length === 1 &&
+    check(`while the file in use is version ${SCHEMA_VERSION}, with the same policy as its first profile`,
+      now.version === SCHEMA_VERSION && now.autoClean.profiles.length === 1 &&
         now.autoClean.profiles[0].enabled === true && now.autoClean.profiles[0].minAgeDays === 30 &&
         now.autoClean.profiles[0].id === 'main',
       JSON.stringify(now.autoClean.profiles[0]));

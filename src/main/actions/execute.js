@@ -41,6 +41,31 @@ function freedBy(result, description) {
   return description.freesOnVolume ? result.freedBytes : 0;
 }
 
+/**
+ * What a backup did, small enough to send to a window (E2).
+ *
+ * The handler's own result carries a record per file -- hash, destination,
+ * streams -- because the manifest is written from it. None of that belongs in
+ * a toast, and a list of several thousand paths crossing the IPC boundary for
+ * a sentence that names a number is waste, so this is the counted version.
+ */
+function summariseBackup(backup) {
+  return {
+    destination: backup.destination || null,
+    saved: backup.saved.length,
+    // Files already there, byte for byte, from an earlier run to the same
+    // folder. Copied nothing, still counted as backed up.
+    already: backup.saved.filter((one) => one.already).length,
+    bytes: backup.saved.reduce((n, one) => n + one.bytes, 0),
+    failed: backup.failed.length,
+    manifestPath: backup.manifestPath || null,
+    manifestError: backup.manifestError || null,
+    // False when the streams could not be listed at all, which means the
+    // copies may be missing their zone marks and the receipt should say so.
+    streamsKnown: backup.streamsKnown !== false,
+  };
+}
+
 /** For a caller with nothing to record into -- the test harnesses. */
 const NO_JOURNAL = Object.freeze({
   begin: async () => null,
@@ -218,6 +243,10 @@ async function execute(request, ctx = {}) {
     freedBytes: freedBy(result, description),
     freesOnVolume: description.freesOnVolume,
     pendingCount: result.pendingCount || 0,
+    // E2: what a backup-before-delete did, when one was asked for. The window
+    // needs it for the receipt -- how many copies, where, and which files were
+    // left alone because their copy could not be verified.
+    ...(result.backup ? { backup: summariseBackup(result.backup) } : {}),
     cancelled: result.cancelled,
     remaining: result.remaining,
     durationMs: result.durationMs,

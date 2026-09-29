@@ -1017,6 +1017,46 @@ recoverable is exactly the person who needs telling.
 **Automatic cleanup can never reach this screen.** The unattended run works from
 a fixed list of categories, and nothing here produces one.
 
+### Back up before deleting
+
+Because these are the files that cannot be got back, this screen can keep a copy
+somewhere else first — an external drive, a network share, any folder you pick.
+**Back up before deleting…** on the action bar chooses where; the button then
+names the folder, and clicking it again switches backing up off without
+forgetting the folder.
+
+What happens, in this order and no other:
+
+1. Each file is copied to the destination.
+2. The copy is **read back off that disk** and checked against the original with
+   SHA-256, and its length is checked too.
+3. A `manifest.json` at the top of the destination records what was copied, where
+   it came from, and each hash.
+4. Only then do the originals go to the Recycle Bin.
+
+**A file whose copy does not match is not deleted.** It stays exactly where it
+is, and the receipt says how many were left alone. If the manifest cannot be
+written, nothing is deleted at all — the copies stay, but nothing is thrown away
+on the strength of a backup the app cannot describe.
+
+Your files land under the destination in their original paths, with the drive as
+the first folder: `C:\Users\you\Pictures\trip\a.jpg` becomes
+`<destination>\C\Users\you\Pictures\trip\a.jpg`. The drive has to be in there —
+without it, the same path on two different drives would be the same destination.
+
+**Nothing is ever overwritten.** A file already there with the same contents is
+recognised and not copied again; one with the same name but different contents is
+saved as `a (2).jpg`. Backing up to the same folder next month adds to the
+manifest rather than replacing it.
+
+The confirmation dialog carries the switch as a tick box, so you can turn the
+copy off for one delete without leaving the dialog.
+
+> **Known limit.** A network destination is allowed and works here, but no NAS
+> has been available to measure on the machine this was built on, so nothing is
+> promised about speed over one. Copying to a network share is untested against
+> real hardware.
+
 ---
 
 ## Screen 6 — Duplicates

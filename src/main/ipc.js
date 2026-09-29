@@ -820,6 +820,13 @@ function register() {
                 : {}),
               // B4 takes no destination, only the direction.
               ...(kind === 'compress' ? { uncompress: options.uncompress === true } : {}),
+              // E2 takes where a copy goes before the originals are binned.
+              // Absent or empty means no backup, which is what every delete
+              // in the app did before this and still does everywhere but the
+              // Photos screen.
+              ...(kind === 'recycle' && typeof options.backupTo === 'string' && options.backupTo.trim() !== ''
+                ? { backupTo: options.backupTo.trim() }
+                : {}),
             },
           },
           {
@@ -1596,6 +1603,71 @@ function register() {
     })
   );
 
+  /**
+   * Where a copy goes before the originals are deleted (E2).
+   *
+   * Unlike the quarantine, nothing is prepared here and nothing is claimed:
+   * this is a folder the user already has -- an external drive, a NAS share,
+   * anywhere -- and the app writes into it rather than owning it. So the only
+   * questions asked are whether it can be written to at all and how much room
+   * is left, and both are answered by trying rather than by inferring from the
+   * kind of drive it is.
+   *
+   * A network destination is allowed on purpose. `lib/trash.js` refuses to
+   * delete anything *on* a network drive, and that rule is untouched: what is
+   * deleted here is the local original, and the share only ever receives a
+   * copy. [Unverified] No NAS has been measured on this machine -- see the
+   * open-items list -- so the speed of one is not promised anywhere.
+   */
+  handle('backup:choose', (event) =>
+    guard(async () => {
+      let picked = null;
+      if (relocateHarness && typeof relocateHarness.pickBackup === 'function') {
+        picked = await relocateHarness.pickBackup();
+      } else {
+        const win = BrowserWindow.fromWebContents(event.sender);
+        const result = await dialog.showOpenDialog(win, {
+          title: t('dialog.chooseBackup', 'Choose where the copies go before deleting'),
+          properties: ['openDirectory', 'createDirectory'],
+        });
+        picked = result.canceled ? null : result.filePaths[0];
+      }
+      if (!picked) return { chosen: false };
+
+      const destination = path.resolve(picked);
+      // Asked by trying. A folder can be on a perfectly ordinary drive and
+      // still be one this account may not write to, and the only reliable way
+      // to find that out is to write to it.
+      try {
+        const probe = path.join(destination, `.cleandrive-write-test-${process.pid}`);
+        await fsp.writeFile(probe, '');
+        await fsp.rm(probe, { force: true });
+      } catch (err) {
+        return {
+          chosen: false,
+          refusal: t('backup.refuse.write', 'Nothing can be written to that folder: {reason}', { reason: err.message }),
+        };
+      }
+
+      await services().settings.patch({ backup: { destination } });
+      const drive = await volumes.describePath(destination).catch(() => null);
+      return {
+        chosen: true,
+        destination,
+        display: displayPath(destination),
+        freeBytes: drive && Number.isFinite(drive.freeBytes) ? drive.freeBytes : null,
+      };
+    })
+  );
+
+  /** Stop backing up before deleting. The folder and its copies stay. */
+  handle('backup:clear', () =>
+    guard(async () => {
+      await services().settings.patch({ backup: { destination: null } });
+      return { chosen: false };
+    })
+  );
+
   handle('quarantine:choose', (event) =>
     guard(async () => {
       let picked = null;
@@ -1627,6 +1699,12 @@ function register() {
     guard(async () => {
       // The quarantine folder is set only by `quarantine:choose`, which checks
       // it and makes it; a save from the window keeps whatever is there.
+      // The backup folder is set only by `backup:choose`, which proves it can
+      // be written to first. Same reason as the quarantine's zone below.
+      if (next && next.backup && typeof next.backup === 'object') {
+        const { destination, ...rest } = next.backup;
+        next = { ...next, backup: rest };
+      }
       if (next && next.quarantine && typeof next.quarantine === 'object') {
         const { zone, ...rest } = next.quarantine;
         next = { ...next, quarantine: rest };
@@ -3381,7 +3459,38 @@ async function confirmAction(win, description, planned, options) {
   const count = description.count;
   const slow = description.etaMs >= 30000;
 
-  const { response } = await dialog.showMessageBox(win, {
+  /*
+   * E2 puts its switch in this dialog, and a native message box is the reason
+   * it is a checkbox rather than a folder picker.
+   *
+   * The roadmap says "an option in the confirmation dialog: back up to …
+   * first". `dialog.showMessageBox` has exactly one control besides its
+   * buttons, and that is a checkbox; it cannot hold a path field or open a
+   * folder browser. So the destination is chosen on the screen behind, the
+   * same way B2 and B5 choose theirs, and what lands here is the yes or no
+   * about a destination already named -- which is the part somebody actually
+   * changes their mind about at this moment.
+   */
+  const backup = description.backupTo
+    ? {
+        checkboxLabel: t('dialog.confirmDelete.backupCheck', 'Back up to {dest} first', {
+          dest: displayPath(description.backupTo),
+        }),
+        checkboxChecked: true,
+      }
+    : {};
+
+  const backupNote = description.backupTo
+    ? `\n\n${t(
+        'dialog.confirmDelete.backup',
+        'Each one is copied to {dest} and read back and checked against its original (SHA-256) before it goes to the ' +
+          'bin, and a manifest.json there lists what was copied. Anything whose copy does not match is left exactly ' +
+          'where it is and named in the receipt. Turn the box below off to delete without a copy.',
+        { dest: displayPath(description.backupTo) }
+      )}`
+    : '';
+
+  const { response, checkboxChecked } = await dialog.showMessageBox(win, {
     type: 'warning',
     buttons: [t('dialog.moveToBin', 'Move to Recycle Bin'), t('app.cancel', 'Cancel')],
     defaultId: 1,
@@ -3394,6 +3503,7 @@ async function confirmAction(win, description, planned, options) {
       t('dialog.confirmDelete.detailBin', '{size} will move to the Recycle Bin, where it stays recoverable.', {
         size: formatBytes(description.bytes),
       }) +
+      backupNote +
       binNote(description) +
       cloudNote(planned) +
       skippedNote(planned) +
@@ -3405,9 +3515,17 @@ async function confirmAction(win, description, planned, options) {
             { rate: ESTIMATED_FILES_PER_SEC, duration: formatDuration(description.etaMs) }
           )}`
         : ''),
+    ...backup,
   });
 
-  return response === 0;
+  if (response !== 0) return false;
+  // Unticking the box is an answer, not a cancel: delete these, without a
+  // copy. The pipeline takes options from a dialog over options from a window
+  // precisely so a decision made here is the one that runs.
+  if (description.backupTo && checkboxChecked === false) {
+    return { approved: true, options: { backupTo: null } };
+  }
+  return true;
 }
 
 /**

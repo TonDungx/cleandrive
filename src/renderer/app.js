@@ -1982,6 +1982,24 @@ const progressPanel = {
       return;
     }
 
+    // Backing up before deleting (E2). Paced by bytes for the same reason the
+    // quarantine's copy is, and it says "and checking" because it is: nothing
+    // reaches the bin until its copy has been read back and matched.
+    if (p.phase === 'backing-up') {
+      $('dp-title').textContent = t('backup.progressTitle', 'Copying and checking each copy before anything is deleted');
+      $('dp-count').textContent = t('delete.progress', '{done} of {total} · {moved} of {size}', {
+        done: formatCount(p.done),
+        total: formatCount(p.total),
+        moved: formatBytes(p.bytes),
+        size: formatBytes(p.totalBytes),
+      });
+      $('dp-rate').textContent = '';
+      $('dp-eta').textContent = '';
+      if (p.currentPath) $('dp-current').textContent = elide(p.currentPath, 78);
+      $('dp-fill').style.width = `${p.totalBytes > 0 ? Math.min(100, (p.bytes / p.totalBytes) * 100) : 0}%`;
+      return;
+    }
+
     // Copying to another drive (B1) is paced by bytes, not by files: one ISO
     // is most of the time.
     if (p.phase === 'copying') {
@@ -2110,6 +2128,21 @@ async function deleteSelected(paths, onDone, options = {}) {
     if (otherFailures > 0) {
       skipped.push(t('delete.otherSkipped', '{n} skipped', { n: formatCount(otherFailures) }));
     }
+    // E2: what the backup did, in front of what the delete did. A file that
+    // was not copied was not deleted either, and that is the half of the
+    // receipt somebody has to act on.
+    const backedUp = result.backup
+      ? ` · ${t('delete.backedUp', '{n} copied to {dest} and checked first', {
+          n: formatCount(result.backup.saved),
+          dest: result.backup.destination,
+        })}${
+          result.backup.failed
+            ? ` · ${t('delete.backupFailed', '{n} left alone — the copy could not be verified', {
+                n: formatCount(result.backup.failed),
+              })}`
+            : ''
+        }`
+      : '';
 
     // The receipt says moved, and says what that means. "2.1 GB freed" after a
     // move to the Recycle Bin was the most misleading sentence the app could
@@ -2120,7 +2153,7 @@ async function deleteSelected(paths, onDone, options = {}) {
         items: word(moved, 'app.item', 'item', 'items'),
         took,
         size: formatBytes(result.movedBytes),
-      }) + (skipped.length ? ` · ${skipped.join(', ')}` : '')
+      }) + backedUp + (skipped.length ? ` · ${skipped.join(', ')}` : '')
     );
     onDone(result.moved);
   } else {

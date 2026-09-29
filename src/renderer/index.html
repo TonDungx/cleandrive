@@ -569,12 +569,27 @@
           fixed to the bottom, appears only once there is something to act on,
           and says what would happen before it offers to do it.
         -->
-        <div class="actionbar" id="media-actionbar" hidden>
+        <!--
+          `is-crowded`: this bar carries two more buttons than any other (E2),
+          so it wraps sooner and stands taller, and the toast has to clear it.
+          A class rather than an id in the stylesheet, so the rules that move
+          the receipt stay at the same specificity as the ones they refine.
+        -->
+        <div class="actionbar is-crowded" id="media-actionbar" hidden>
           <span class="actionbar-count" id="media-selection" data-i18n="app.nothingSelected">Nothing selected</span>
           <span class="actionbar-gap"></span>
           <button class="btn btn-sm" id="media-select-filtered" data-i18n="media.selectShown">Select everything shown</button>
           <button class="btn btn-sm" id="media-select-none" hidden data-i18n="app.clearSelection">Clear selection</button>
           <button class="btn btn-sm quarantine-go" id="media-quarantine" disabled hidden>Move to another drive</button>
+          <!--
+            E2. The switch itself is in the confirmation dialog, where the
+            roadmap asks for it; a native message box can hold a checkbox but
+            not a folder browser, so the folder is named here and the yes-or-no
+            is asked there. `aria-pressed` rather than a checkbox because it
+            sits in a row of buttons and reads as one to a screen reader.
+          -->
+          <button class="btn btn-sm" id="media-backup" aria-pressed="false" data-i18n="media.backup.off">Back up before deleting…</button>
+          <button class="btn btn-sm" id="media-backup-choose" hidden data-i18n="media.backup.change">Change folder</button>
           <button class="btn btn-danger btn-sm" id="media-delete" disabled data-i18n="app.moveSelected">Move selected to Recycle Bin</button>
         </div>
 

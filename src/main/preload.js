@@ -77,6 +77,12 @@ const api = {
   quarantineStatus: () => ipcRenderer.invoke('quarantine:status'),
   quarantineChoose: () => ipcRenderer.invoke('quarantine:choose'),
 
+  // E2: where a copy goes before a delete from the Photos screen. Not an
+  // action of its own — it rides on `trash` as an option — so all that is
+  // exposed here is choosing the folder and forgetting it again.
+  backupChoose: () => ipcRenderer.invoke('backup:choose'),
+  backupClear: () => ipcRenderer.invoke('backup:clear'),
+
   // B2: a folder, to another drive. The destination is picked in the main
   // process because only it can open a folder chooser.
   relocate: (folders, options) => ipcRenderer.invoke('action:execute', { kind: 'relocate', items: folders, options }),

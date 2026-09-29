@@ -49,8 +49,10 @@ const themePalette = require('../../shared/theme-palette');
  *            first profile, unchanged and still enabled.
  *   7 -> 8   `trends.recap`: a weekly or monthly note about what the disk
  *            did, off (G3)
+ *   8 -> 9   `backup.destination`: where a copy goes before files are
+ *            deleted from the Photos screen, or null (E2)
  */
-const SCHEMA_VERSION = 8;
+const SCHEMA_VERSION = 9;
 
 const MIGRATIONS = Object.freeze([
   {
@@ -154,6 +156,19 @@ const MIGRATIONS = Object.freeze([
       // for it.
       const trends = isObject(raw.trends) ? raw.trends : {};
       return { ...raw, version: 8, trends: { recap: 'off', recapLastAt: 0, ...trends } };
+    },
+  },
+  {
+    from: 8,
+    to: 9,
+    migrate(raw) {
+      // Additive, and null: no delete anywhere in the app copies anything
+      // until somebody picks a folder for it. Deliberately not seeded from
+      // `quarantine.zone` -- the quarantine's folder is one this app owns and
+      // expires, and quietly pointing backups at it would put two features
+      // with different lifetimes in the same place.
+      const backup = isObject(raw.backup) ? raw.backup : {};
+      return { ...raw, version: 9, backup: { destination: null, ...backup } };
     },
   },
 ]);
@@ -277,7 +292,10 @@ const THEMES = ['system', 'light', 'dark'];
 const LANGUAGES = ['system', ...i18n.CODES];
 
 /** The top-level groups `patch` merges one level into. */
-const SECTIONS = ['autoClean', 'purge', 'monitor', 'appearance', 'updates', 'trends', 'snapshots', 'quarantine', 'explorer'];
+const SECTIONS = [
+  'autoClean', 'purge', 'monitor', 'appearance', 'updates',
+  'trends', 'snapshots', 'quarantine', 'backup', 'explorer',
+];
 
 /** Hard ceilings. These are not preferences -- they bound the blast radius. */
 const LIMITS = {
@@ -456,6 +474,13 @@ function defaults() {
       // the Recycle Bin, which frees nothing on its drive until the bin is
       // emptied; with it on the copy on the other drive is the only one left.
       deleteOriginal: false,
+    },
+    backup: {
+      // Where a copy goes before files are deleted from the Photos screen
+      // (E2). Null until somebody picks a folder, and picking one is the only
+      // way it is ever set -- `backup:choose` writes it after proving the
+      // folder can be written to.
+      destination: null,
     },
     explorer: {
       // "Analyse with CleanDrive" and "Find duplicates with CleanDrive" in
@@ -984,6 +1009,16 @@ function coerceSettings(input, { minMinutes = 1 } = {}) {
     deleteOriginal: bool(rawQuarantine.deleteOriginal, base.quarantine.deleteOriginal),
   };
 
+  // E2. Same treatment as `quarantine.zone`: a path this app will write into,
+  // read from a file that is editable by hand, so it is absolute or it is
+  // nothing.
+  const rawBackup = isObject(raw.backup) ? raw.backup : {};
+  let backupDestination = null;
+  if (typeof rawBackup.destination === 'string' && rawBackup.destination.trim() !== '') {
+    if (path.isAbsolute(rawBackup.destination.trim())) backupDestination = path.resolve(rawBackup.destination.trim());
+    else warnings.push(`backup.destination: "${rawBackup.destination}" is not absolute, ignored`);
+  }
+
   return {
     settings: {
       version: SCHEMA_VERSION,
@@ -995,6 +1030,7 @@ function coerceSettings(input, { minMinutes = 1 } = {}) {
       trends,
       snapshots,
       quarantine,
+      backup: { destination: backupDestination },
       explorer: {
         contextMenu: bool(isObject(raw.explorer) ? raw.explorer.contextMenu : undefined, base.explorer.contextMenu),
       },

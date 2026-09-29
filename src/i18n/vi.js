@@ -2487,6 +2487,31 @@
       '{n} mục trong số đó trở về từ thư mục cách ly: từng tệp được chép ngược lại, đối chiếu với bản đã chép ' +
       'lúc cách ly, rồi mới được gỡ khỏi thư mục đó. Chúng cần có chỗ trống trên ổ mà chúng trở về.',
 
+    /* ---- sao lưu trước khi xoá (E2) ------------------------------------- */
+    'media.backup.label': 'Sao lưu trước khi xoá',
+    'media.backup.off': 'Sao lưu trước khi xoá…',
+    'media.backup.offHint': 'Chép từng tệp sang nơi khác và kiểm tra bản chép, trước khi tệp vào Thùng rác',
+    'media.backup.on': 'Đang sao lưu sang {dest}',
+    'media.backup.paused': 'Không sao lưu sang {dest}',
+    'media.backup.change': 'Đổi thư mục',
+    'media.backup.set': 'Bản chép sẽ nằm ở {dest}, và từng bản được kiểm tra trước khi bản gốc bị xoá.',
+    'dialog.chooseBackup': 'Chọn nơi chứa bản chép trước khi xoá',
+    'backup.refuse.write': 'Không ghi được gì vào thư mục đó: {reason}',
+    'backup.progressTitle': 'Đang chép và kiểm tra từng bản chép trước khi xoá bất cứ thứ gì',
+    'backup.error.path': 'Không phải đường dẫn sao lưu được',
+    'backup.error.names': 'Đã có quá nhiều tệp trùng tên này ở đó',
+    'backup.error.length': 'Bản chép có độ dài khác bản gốc',
+    'backup.error.hash': 'Bản chép không khớp với bản gốc',
+    'backup.error.manifestName': 'Không còn tên trống cho tệp manifest',
+    'backup.error.manifest': 'Đã chép xong, nhưng không ghi được danh sách những gì đã chép: {reason}',
+    'delete.backedUp': 'đã chép {n} tệp sang {dest} và kiểm tra trước',
+    'delete.backupFailed': 'giữ nguyên {n} tệp — bản chép không kiểm chứng được',
+    'dialog.confirmDelete.backupCheck': 'Sao lưu sang {dest} trước',
+    'dialog.confirmDelete.backup':
+      'Mỗi tệp được chép sang {dest}, đọc lại và đối chiếu với bản gốc (SHA-256) trước khi vào Thùng rác, ' +
+      'và tệp manifest.json ở đó liệt kê những gì đã chép. Tệp nào có bản chép không khớp thì được giữ nguyên ' +
+      'tại chỗ và được nêu tên trong thông báo kết quả. Bỏ chọn ô bên dưới để xoá mà không chép.',
+
     /* ---- chuyển sang ổ khác (cách ly, B1) ------------------------------- */
     'quarantine.label': 'Chuyển sang ổ khác',
     'quarantine.go': 'Chuyển sang {drive}',

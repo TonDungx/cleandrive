@@ -3562,6 +3562,26 @@ main {
   }
 }
 
+/*
+ * The Photos bar carries two buttons the others do not -- backing up before
+ * deleting, and the folder it backs up to (E2) -- so it runs out of room
+ * sooner than 1000px. Measured: at 1180px with a destination chosen, the
+ * delete button was off the edge of the window entirely. Same remedy, earlier.
+ */
+@media (max-width: 1320px) {
+  .actionbar.is-crowded:has(.frees-badge:not([hidden])) {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    row-gap: 4px;
+    border-radius: var(--radius);
+  }
+
+  .actionbar.is-crowded:has(.frees-badge:not([hidden])) .action-pair {
+    flex-basis: 100%;
+    justify-content: flex-end;
+  }
+}
+
 /* ==========================================================================
    delete progress panel
    ========================================================================== */
@@ -3690,6 +3710,15 @@ body:has(.panel.is-active .actionbar:not([hidden])) .toast {
 @media (max-width: 1000px) {
   body:has(.panel.is-active .actionbar:not([hidden])) .toast {
     bottom: 100px;
+  }
+}
+
+/* The Photos bar wraps to three lines rather than two, because E2 put two more
+   buttons on it. Caught in a screenshot: the receipt for choosing the backup
+   folder was sitting across the delete button. */
+@media (max-width: 1320px) {
+  body:has(.panel.is-active .actionbar.is-crowded:not([hidden])) .toast {
+    bottom: 128px;
   }
 }
 

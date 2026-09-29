@@ -221,7 +221,7 @@ mà B5 và E2 dùng lại nguyên. Ba mục P2 rủi ro cao đi cuối.
 | B2 | Relocate | P1 | ✅ Đã code xong (2026-09-28) — **mục mở đường cho cả nhóm B**: `allowsFolders` trước đây được khai báo ở cả 5 handler mà **không dòng nào đọc**, nay `execute()` thực thi nó thật và `relocate` là handler đầu tiên khai `true`. Giữ nguyên ADS (đo: Downloads **10,6%** tệp có stream, ổ D **0,07%**) vì mất `Zone.Identifier` là âm thầm gỡ cảnh báo SmartScreen. Lối tắt là `.lnk` qua PowerShell COM, **không bao giờ** junction. **Không có bước trong G1**: một bước phải khớp với *candidate*, mà không gì trong app xếp hạng được "thư mục nào nên sang ổ khác" — xem `planner/plan.js`. **Sửa kèm:** `WHEN.relocate` trong planner viết sẵn là `now` từ trước khi có handler, thật ra là `bin`; và bản đồ vẫn vẽ thư mục đã chuyển đi cho tới khi có `removeFolders()` — ảnh chụp bắt được |
 | B5 | Đóng gói lưu trữ | P1 | ✅ Đã code xong (2026-09-28) — **nén có chọn lọc theo từng tệp**, quyết trên mẫu 64 KB: đo thật cho thấy mã nguồn tiết kiệm 68% còn `.docx` 1%, `.png` 1,5%, `.mp4` **−0%**, nên tệp không co lại thì ghi `STORED`. Manifest đi **bên trong archive**, không vào journal (journal có schema cố định — xem `journal/journal.js`). Xác minh là **bắt buộc**: mở lại archive, đối chiếu CRC + độ dài + sha256 từng tệp trước khi đụng bản gốc. Hoàn tác qua **Khôi phục**: giải nén về đúng chỗ, giữ timestamp. **ZIP64 đo được trên máy này** với thành viên 5,37 GB — Windows đọc lại đúng độ dài 64-bit. **Không làm `.7z`** (xem §11 mục 14). **Sửa kèm:** `WHEN.archive` trong planner cũng viết sẵn `now`, thật ra là `bin`; Restore Center liệt kê session archive nhưng báo "0 items can be put back" cho tới khi `inArchive` được thêm vào `RESTORABLE` — ảnh chụp bắt được |
 | B4 | Nén NTFS có chọn lọc | P1 | ✅ Đã code xong (2026-09-28) — **hành động duy nhất của giai đoạn này giải phóng dung lượng ngay**, không qua Thùng rác. **Chỉ LZNT1** (đã chốt): đo được LZX cho 96,4% so với 87,5%, nhưng **một lệnh ghi 40 byte tại chỗ làm mất nén cả tệp** — nặng hơn điều đặc tả ngờ (§11 mục 15). Con số "30–45%" của đặc tả **sai trên máy này**: mã nguồn **87,5%**, log **81,2%**, ảnh/video **0,0%** — nên ước lượng lấy bằng cách đưa 12 tệp thật của chính thư mục qua NTFS (lệch **0,1 điểm** so với thực tế). **Không parse output của `compact`** (bản địa hoá: "1,9 to 1"); kích thước lấy từ `stat().blocks * 512`. Từ chối thêm hai thứ đặc tả không nhắc: ổ không nén được (**hỏi bằng cách thử**, không suy từ cluster) và thư mục có tệp **chỉ nằm trên OneDrive** (nén sẽ kéo về, đúng phần B3 vừa giải phóng). **G1 vẫn không có bước nén** — lý do ở `planner/plan.js` |
-| E2 | Sao lưu trước khi xoá | P1 | |
+| E2 | Sao lưu trước khi xoá | P1 | ✅ Đã code xong (2026-09-29) — **không phải một handler mới**: là một tuỳ chọn của `recycle`, vì đặc tả đặt nó trong hộp thoại xác nhận. Nhưng hộp thoại đó là `dialog.showMessageBox` **native**, mà message box native chỉ chứa được **một checkbox**, không chứa được nút chọn thư mục — nên đích được chọn trên thanh hành động của màn Photos (giống B2/B5), còn hộp thoại giữ đúng phần người ta thật sự đổi ý vào phút chót: **bỏ tick là xoá mà không chép**. **Đề bài "dùng lại `tree-copy.js`" sai**: `copyTree` đòi đích **chưa tồn tại** và đi từ **một gốc**, còn E2 nhận một danh sách tệp rời từ nhiều thư mục, có thể nhiều ổ, vào một thư mục dùng đi dùng lại — phần dùng chung thật là `verified-copy.js`. Bố cục đích lấy **ổ làm thư mục đầu** (`<đích>\C\Users\…`), vì nếu không thì `C:\photos\a.jpg` và `D:\photos\a.jpg` là **cùng một chỗ**. **Không bao giờ ghi đè**: trùng tên mà khác nội dung thì thành ` (2)`; trùng cả hash thì tính là đã sao lưu và không chép lại. Manifest **cộng dồn**, không thay thế. **UNC được phép** — `lib/trash.js` chỉ từ chối **nguồn** trên mạng (`vet()`), còn đây chép **tới** mạng rồi xoá bản gốc cục bộ; nhưng máy này không có NAS nên tốc độ là `[Unverified]` (§11 mục 12). Giữ ADS (đã chốt). **Ảnh chụp bắt được ba lỗi**: đổi ngôn ngữ làm `translateDom` ghi đè nhãn nút và **mất tên thư mục đích**; hai nút mới đẩy **"Chuyển mục đã chọn vào Thùng rác" ra hẳn ngoài khung ở 1180px**; và toast nằm đè lên chính thanh đó |
 | E1 | Màn so sánh cạnh nhau | P1 | |
 | D3 | Dữ liệu Zalo / Telegram theo cuộc trò chuyện | P1 | |
 | E5 | Ảnh theo cuộc trò chuyện | P1 (phụ thuộc D3) | |
@@ -1331,6 +1331,79 @@ Mọi tính năng trong nhóm này giữ nguyên quy tắc gốc của màn Phot
 - Quy trình: copy → hash → ghi manifest → rồi mới đưa bản gốc vào bin. Nếu bất kỳ file nào xác minh thất bại, file đó **không bị xoá** và được liệt kê trong toast kết quả.
 - Dùng chung cơ chế copy-và-xác-minh với B1.
 - Cấu trúc đích giữ nguyên đường dẫn tương đối và có thêm `manifest.json`.
+
+> **✅ Đã code xong (2026-09-29).**
+>
+> Code: `src/main/lib/backup.js` (mới), tuỳ chọn `backupTo` trong
+> `actions/recycle.js`, `summariseBackup` trong `actions/execute.js`,
+> `backup:choose` / `backup:clear` trong `ipc.js`, checkbox trong
+> `confirmAction`, settings **v9** (`backup.destination`), nút trên thanh hành
+> động của màn Photos. Harness: `scripts/test-backup.js` (**50 kiểm tra, ALL
+> PASS**), ảnh chụp `npm run shoot:backup`. Khác với đặc tả ở trên:
+>
+> - **"Tuỳ chọn trong hộp thoại xác nhận" chỉ đúng được một nửa, và giới hạn
+>   là của Windows.** Hộp thoại xác nhận xoá là `dialog.showMessageBox` native
+>   (`ipc.js`, `confirmAction`). Ngoài các nút, message box native chỉ có
+>   **đúng một điều khiển: một checkbox**. Nó không chứa được ô đường dẫn và
+>   không mở được trình duyệt thư mục. Nên đích được chọn ở màn hình phía sau
+>   — đúng cách B2 và B5 đã làm — còn hộp thoại giữ phần người ta thật sự đổi
+>   ý vào phút chót: **bỏ tick ô "Sao lưu sang … trước" là xoá mà không chép**.
+>   Câu trả lời của hộp thoại thắng tuỳ chọn của cửa sổ, đúng đường đi
+>   `{ approved, options }` mà `execute.js` đã có sẵn cho Khôi phục.
+> - **"Dùng chung cơ chế copy-và-xác-minh với B1" đúng; "dùng lại
+>   `tree-copy.js`" thì sai.** `copyTree` đòi đích **chưa tồn tại** (cố ý: một
+>   phép trộn không hoàn tác được bằng cách xoá thứ vừa ghi) và đi từ **một
+>   gốc duy nhất**. E2 nhận một **danh sách tệp rời** chọn trên màn Photos, từ
+>   bao nhiêu thư mục cũng được, có thể **nhiều ổ**, vào một thư mục vốn đã
+>   tồn tại và còn được ghi tiếp tuần sau. Phần thật sự dùng chung là
+>   `verified-copy.js` — `copyHashed`, `copyMetadata`, `longPath` — mà comment
+>   đầu tệp đó **đã viết sẵn tên E2 từ khi làm B2**.
+> - **Đặc tả nói "giữ nguyên đường dẫn tương đối" mà không nói tương đối với
+>   gì, và câu trả lời hiển nhiên là sai.** Một lựa chọn trên màn Photos trải
+>   trên nhiều gốc, và trên máy này có ảnh ở cả `C:` lẫn `D:`. Không có gốc
+>   chung. Nếu bỏ ổ đi thì `C:\photos\a.jpg` và `D:\photos\a.jpg` là **cùng
+>   một đích** — một bản sao lưu âm thầm chỉ giữ một trong hai. Nên ổ là thư
+>   mục đầu: `<đích>\C\Users\…\a.jpg`, và `\\nas\share\…` thành
+>   `<đích>\UNC\nas\share\…`. `path.parse` **không dùng được** cho việc này:
+>   đo được, trên Windows nó trả `C:` cho ổ và `\\` trơ trọi cho UNC, nên mọi
+>   máy chủ sẽ dồn vào một thư mục không tên.
+> - **Không bao giờ ghi đè.** Đích đã có tệp trùng tên: giống hệt cả kích
+>   thước lẫn sha256 thì tính là **đã sao lưu rồi**, không chép lại; khác thì
+>   thành ` (2)`, ` (3)`… Chỉ so tên và kích thước là **không đủ** — hai ảnh
+>   trong một loạt chụp liên tiếp thường xuyên bằng nhau từng byte về độ dài.
+> - **Manifest cộng dồn, không thay thế.** Một thư mục đích sinh ra để dùng
+>   lại, và lần sao lưu thứ hai xoá mất bản ghi của lần đầu là một cái bẫy.
+>   `manifest.json` không phải của app này (hoặc không parse được) thì **để
+>   nguyên** và ghi sang `manifest (2).json`.
+> - **Manifest được ghi trước khi xoá bất cứ thứ gì**, và nếu **không ghi
+>   được** thì **không xoá gì cả** — bản chép vẫn nằm đó (là ảnh của người ta),
+>   nhưng không có gì bị xoá dựa trên một bản sao lưu mà app không mô tả nổi.
+> - **UNC được phép, và mối lo trong ghi chú là nhầm chỗ.** `lib/trash.js` từ
+>   chối đường dẫn mạng ở `vet()`, tức là từ chối **xoá thứ nằm trên mạng**.
+>   E2 chép **tới** chia sẻ mạng rồi xoá **bản gốc cục bộ**, nên không va vào
+>   luật đó; `longPath()` đã xử lý `\\?\UNC\` sẵn. Máy này không có NAS thật
+>   (§11 mục 12), nên **tốc độ và hành vi trên NAS là `[Unverified]`** và
+>   không được hứa ở đâu.
+> - **Giữ ADS** (đã chốt), dùng lại `lib/ads.js` với một tiến trình cho cả lô,
+>   đúng lý lẽ của B2: mất `Zone.Identifier` là âm thầm gỡ cảnh báo
+>   SmartScreen khỏi một tệp phục hồi từ bản sao lưu.
+> - **Xác minh là ba điều phải cùng đồng ý**, không phải một: hash đọc được
+>   lúc ghi, hash **đọc lại từ đích**, và độ dài. Harness dựng một ổ "nhận ghi
+>   rồi lưu thứ khác" và đòi cả ba tệp bị từ chối, bản dở bị xoá, và **không
+>   có manifest nào nói là đã lưu**.
+> - **Ảnh chụp bắt được ba lỗi**, đúng như ba lần trước: (a) đổi sang tiếng
+>   Việt làm `translateDom` ghi đè nhãn nút từ `data-i18n` và **mất tên thư
+>   mục đích khỏi màn hình** — sửa bằng `onLanguageChange(drawBackup)`, chạy
+>   sau lượt dịch DOM; (b) hai nút mới đẩy **"Chuyển mục đã chọn vào Thùng
+>   rác" ra hẳn ngoài khung ở 1180px** — đúng lỗi mà quy tắc xuống dòng trong
+>   `styles.css` đã được viết ra để chặn ở 700px, nay tái diễn vì thanh của màn
+>   Photos đông hơn mọi thanh khác; (c) sau khi cho xuống dòng, toast **nằm đè
+>   lên chính thanh đó**, thứ mà comment ngay trên quy tắc toast nói là chỗ nó
+>   tuyệt đối không được nằm.
+> - **Sửa kèm harness:** `test-settings-migration.js` viết cứng số `8` ở chín
+>   chỗ, nên vừa thêm một mục settings là cả tệp hỏng vì **nói sai phiên bản
+>   mà nó từng là**, che mất câu hỏi duy nhất đáng hỏi — tệp cũ còn migrate
+>   được không. Nay đọc `SCHEMA_VERSION`.
 
 ---
 

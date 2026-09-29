@@ -20,7 +20,9 @@ const path = require('node:path');
 
 const { planTrash, executeTrash } = require('../lib/trash');
 const { findUserBins, listItems, matchRecorded, putBack } = require('../lib/recyclebin');
+const { backupAll } = require('../lib/backup');
 const { pool } = require('../lib/util');
+const { t } = require('../../i18n');
 const appCaches = require('../analyzers/app-caches');
 const { runningProcessNames } = require('../lib/processes');
 
@@ -141,7 +143,7 @@ module.exports = {
   },
 
   /** What the confirmation says, before anything has moved. */
-  describe(planned) {
+  describe(planned, options = {}) {
     const needsAdmin = planned.needsAdmin ? planned.needsAdmin.length : 0;
     const inUse = planned.inUse ? planned.inUse.length : 0;
     return {
@@ -154,6 +156,10 @@ module.exports = {
       needsAdmin,
       inUse,
       refused: planned.failed.length - needsAdmin - inUse,
+      // E2: where a copy goes first, if anywhere. The dialog reads this to
+      // decide whether it has a backup to describe, and offers the switch to
+      // turn it off without leaving the dialog.
+      backupTo: typeof options.backupTo === 'string' && options.backupTo.trim() !== '' ? options.backupTo : null,
     };
   },
 
@@ -163,27 +169,95 @@ module.exports = {
    * `onItem` is awaited before the progress report that follows it, so the
    * journal holds an item before the window is told it happened.
    */
-  apply(planned, options, ctx) {
+  async apply(planned, options, ctx) {
     const execute = (ctx.deps && ctx.deps.executeTrash) || executeTrash;
+    const deps = ctx.deps || {};
+
+    /* -- E2: a copy elsewhere first, or nothing goes ----------------------- */
+    // The order is the feature: copy, hash, manifest, and only then the bin.
+    // A file whose copy could not be verified is dropped from the list here,
+    // so it is still where it was when the receipt names it -- which is what
+    // "it is not deleted and it is listed in the toast" has to mean.
+    let list = planned.plan;
+    let backup = null;
+    const destination = typeof options.backupTo === 'string' && options.backupTo.trim() !== ''
+      ? options.backupTo.trim()
+      : null;
+
+    if (destination) {
+      backup = await (deps.backupAll || backupAll)(planned.plan, destination, {
+        token: ctx.token,
+        onProgress: ctx.onProgress,
+        listStreams: deps.listStreams,
+        write: deps.write || null,
+        sessionId: ctx.sessionId || null,
+      });
+
+      // A manifest that could not be written means the copies are on the disk
+      // with nothing saying what they are of. The copies are left alone --
+      // they are somebody's photos -- but nothing is deleted on the strength
+      // of a backup we cannot describe.
+      if (backup.manifestError) {
+        return {
+          moved: [],
+          failed: [
+            ...backup.failed,
+            ...backup.saved.map((one) => ({
+              path: one.path,
+              error: t('backup.error.manifest', 'Copied, but the list of what was copied could not be written: {reason}', {
+                reason: backup.manifestError,
+              }),
+              code: 'EMANIFEST',
+            })),
+          ],
+          freedBytes: 0,
+          durationMs: 0,
+          cancelled: Boolean(backup.cancelled),
+          remaining: planned.plan.length,
+          backup,
+        };
+      }
+
+      const kept = new Set(backup.saved.map((one) => one.path));
+      list = planned.plan.filter((item) => kept.has(item.path));
+
+      if (backup.cancelled || list.length === 0) {
+        return {
+          moved: [],
+          failed: backup.failed,
+          freedBytes: 0,
+          durationMs: 0,
+          cancelled: Boolean(backup.cancelled),
+          remaining: planned.plan.length - backup.failed.length,
+          backup,
+        };
+      }
+    }
+
     // One immediate frame so the bar appears at 0 rather than after the first
     // throttled tick.
     if (ctx.onProgress) {
       ctx.onProgress({
         phase: 'deleting',
         done: 0,
-        total: planned.plan.length,
+        total: list.length,
         freedBytes: 0,
-        totalBytes: planned.totalBytes,
+        totalBytes: list.reduce((n, item) => n + item.size, 0),
         etaMs: planned.estimatedMs,
         ratePerSec: 0,
         elapsedMs: 0,
       });
     }
-    return execute(
-      planned.plan,
-      ctx.deps && ctx.deps.shell ? { shell: ctx.deps.shell } : {},
+    const out = await execute(
+      list,
+      deps.shell ? { shell: deps.shell } : {},
       { token: ctx.token, onProgress: ctx.onProgress, onItem: ctx.onItem }
     );
+
+    if (!backup) return out;
+    // The files that could not be copied never reached the bin, and the
+    // receipt has to say so alongside anything the delete itself refused.
+    return { ...out, failed: [...backup.failed, ...out.failed], backup };
   },
 
   undo,
