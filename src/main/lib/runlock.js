@@ -131,10 +131,23 @@ async function acquire(file, options = {}) {
      * it cannot come from the contents, and only when neither can answer is it
      * presumed ancient.
      */
-    let age = lastHolder && Number.isFinite(lastHolder.at) ? now() - lastHolder.at : null;
+    /*
+     * Never negative.
+     *
+     * `Date.now()` on Windows moves in steps of about 15 ms while an NTFS
+     * timestamp is far finer, so a file written a moment ago can carry a time
+     * *after* the clock reading it, and the subtraction comes out negative. A
+     * lock is not younger than no time at all, and a negative age compared
+     * against a threshold gives an answer that depends on how the two clocks
+     * happened to line up. `test-profiles.js` failed on exactly this, twice, in
+     * runs where nothing about the lock had changed.
+     */
+    const ageOf = (from) => Math.max(0, now() - from);
+
+    let age = lastHolder && Number.isFinite(lastHolder.at) ? ageOf(lastHolder.at) : null;
     if (age === null) {
       try {
-        age = now() - (await fsp.stat(file)).mtimeMs;
+        age = ageOf((await fsp.stat(file)).mtimeMs);
       } catch {
         // Gone between the failed create and here: go round again and take it.
         continue;

@@ -282,6 +282,26 @@ async function theLock() {
       await old.release();
     }
 
+    {
+      // A lock whose timestamp is in the future, which is not a hypothetical:
+      // `Date.now()` on Windows moves in steps of about 15 ms while an NTFS
+      // timestamp is far finer, so a file written a moment ago can be stamped
+      // after the clock that reads it. The check above failed on this twice,
+      // in runs where nothing about the lock had changed, because a negative
+      // age was being compared against a threshold.
+      await fsp.writeFile(file, JSON.stringify({ pid: process.pid, holder: 'skewed', at: Date.now() + 5000 }));
+      const skewed = await runlock.acquire(file, { holder: 'ours', waitMs: 0, staleAfterMs: -1 });
+      check('a lock stamped in the future is no younger than one stamped now', skewed.ok === true);
+      if (skewed.ok) await skewed.release();
+
+      // And it must not be treated as *old* either -- the clamp makes it zero,
+      // not a large number.
+      await fsp.writeFile(file, JSON.stringify({ pid: process.pid, holder: 'skewed', at: Date.now() + 5000 }));
+      const held = await runlock.acquire(file, { holder: 'ours', waitMs: 0, staleAfterMs: 60 * 60 * 1000 });
+      check('and it is still held while its process is alive', held.ok === false, held.reason || '');
+      await fsp.rm(file, { force: true });
+    }
+
     check('letting go twice is not an error', (await runlock.release(file)) === true || true);
   } finally {
     await fsp.rm(base, { recursive: true, force: true });
