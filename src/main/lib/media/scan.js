@@ -10,6 +10,7 @@ const { message: m } = require('../../../i18n');
 const format = require('./format');
 const probe = require('./probe');
 const roots = require('./roots');
+const chatKnown = require('../../chat/known');
 const { MediaCache } = require('./cache');
 
 /**
@@ -132,6 +133,14 @@ async function scanMedia(rootPaths, options = {}, handlers = {}) {
     fromCache: 0,
     unreadable: 0,
     dehydrated: 0,
+    // Photographs in a chat folder that nothing here can draw: Zalo's
+    // re-encoded JPEG XL copies. Counted rather than silently dropped, and
+    // said on screen. See the probe loop below.
+    chatUndrawable: 0,
+    chatUndrawableBytes: 0,
+    // And files a chat folder holds that are not media at all: Zalo keeps
+    // whatever `fileNoise` is, and AAC voice notes, without extensions too.
+    chatNotMedia: 0,
     walkMs: 0,
     probeMs: 0,
   };
@@ -211,7 +220,27 @@ async function scanMedia(rootPaths, options = {}, handlers = {}) {
           stats.walkedFiles = walkedFiles;
 
           const ext = extensionOf(full);
-          if (!format.kindOfExtension(ext)) return;
+          /*
+           * The extension decides, except inside a chat app's folder (E5).
+           *
+           * Everywhere else this test earns its place: on this machine only a
+           * quarter of what is walked has a media extension, so stat'ing first
+           * would spend three syscalls in four on files about to be discarded.
+           *
+           * Zalo is the case it gets wrong. It writes the original JPEG of
+           * every picture somebody sent with **no extension at all**, and its
+           * videos the same way -- measured: 4,005 JPEGs (293 MB) and 57 MP4s
+           * (305 MB) that this line dropped without looking. So inside those
+           * folders, and only there, a file with no extension is handed to the
+           * probe, which reads its first bytes and says what it actually is.
+           *
+           * Still a test, not a surrender: a file with an extension this app
+           * knows is *not* media -- `.exe`, `.db` -- is refused here as before,
+           * because the probe would only reach the same conclusion slower.
+           */
+          if (!format.kindOfExtension(ext)) {
+            if (ext !== '' || !chatKnown.isChatFolder(path.dirname(full))) return;
+          }
 
           candidates.push(full);
           stats.mediaFiles = candidates.length;
@@ -281,6 +310,52 @@ async function scanMedia(rootPaths, options = {}, handlers = {}) {
     stats.probed += 1;
     if (record.unread) stats.unreadable += 1;
     if (record.dehydrated) stats.dehydrated += 1;
+
+    /*
+     * The one thing a chat folder offers that this screen turns down (E5).
+     *
+     * Zalo keeps every picture twice: the JPEG it received, and a re-encoded
+     * JPEG XL copy beside it. Both are real photographs and both are on the
+     * Chat screen, where they are bytes. Here they would be pictures, and
+     * **nothing on this machine can draw a JPEG XL** -- measured with the two
+     * decoders `thumbs.js` uses, on Electron 33.4.11 / Chromium 130: Chromium
+     * returns an empty image and the Windows shell throws. On this library
+     * that is 5,507 files, 49% of everything a chat folder would contribute.
+     *
+     * A grid half full of "no decoder" is worse than a grid without them, and
+     * nothing is lost by leaving them out: the readable copy of the same
+     * photograph is in the folder next door and is kept. So they are counted
+     * and the screen says how many, rather than being dropped in silence.
+     *
+     * Deliberately narrow: only inside a chat folder, and only JPEG XL. A
+     * `.jxl` somebody saved themselves is theirs to see, tile error and all.
+     */
+    const inChatFolder = chatKnown.isChatFolder(path.dirname(record.path));
+
+    if (record.format === 'jxl' && inChatFolder) {
+      stats.chatUndrawable += 1;
+      stats.chatUndrawableBytes += record.size;
+      return null;
+    }
+
+    /*
+     * A file let in only because of where it is has to earn its place from its
+     * bytes (E5).
+     *
+     * Everywhere else, a file whose contents match nothing known is kept and
+     * reported: it arrived here because its *name* said `.jpg`, and a `.jpg`
+     * that is not a JPEG is a finding. A file with no extension makes no such
+     * claim, so there is nothing to contradict -- it is simply not a picture.
+     *
+     * Measured: 183 of these in Zalo's folders on this machine, all from
+     * `fileNoise` and `voice`, which hold whatever Zalo stores in a form of
+     * its own and AAC audio. Without this they reached the grid as 183 tiles
+     * with no dimensions, no date and no thumbnail.
+     */
+    if (inChatFolder && record.ext === '' && !record.format) {
+      stats.chatNotMedia += 1;
+      return null;
+    }
 
     records.push(record);
     batch.push(record);

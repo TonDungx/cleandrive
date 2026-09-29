@@ -30,6 +30,8 @@ const chatAnalyzer = require('../src/main/analyzers/chat');
 const analyzers = require('../src/main/analyzers');
 const format = require('../src/main/lib/media/format');
 const mediaRoots = require('../src/main/lib/media/roots');
+const { scanMedia } = require('../src/main/lib/media/scan');
+const chatAnalyzerMedia = require('../src/main/analyzers/media');
 const { validateCandidate } = require('../src/main/analyzers/contract');
 const { isAllowedUnattended } = require('../src/main/automatic/allowed-categories');
 const { can } = require('../src/main/license/entitlements');
@@ -534,6 +536,106 @@ async function main() {
         process.env.APPDATA = before;
       }
       check('without a lister it degrades quietly instead of throwing', without.length === 0);
+    }
+
+    /* ---- E5: the same folders, seen by the Photos screen --------------- */
+
+    console.log('\nchat: which conversation a photograph came from (E5)\n');
+    {
+      const downloads = path.join(appData, 'ZaloData', 'media', ACCOUNT, 'ZaloDownloads');
+      const group = 'g4247325580991211986';
+      const cacheFile = path.join(downloads, 'resource', group, 'Cache', `1788935538538_${ACCOUNT}_${group}_n`);
+      const jxlFile = path.join(downloads, 'resource', group, 'picture', `1788935538538_${ACCOUNT}_${group}_${'a'.repeat(32)}.jxl`);
+
+      check('a file under resource\\<id>\\<kind> names its conversation',
+        JSON.stringify(chatKnown.conversationOf(cacheFile)) ===
+          JSON.stringify({ app: 'zalo', conversation: group, kind: 'Cache' }),
+        JSON.stringify(chatKnown.conversationOf(cacheFile)));
+      check('the re-encoded copy names the same conversation',
+        (chatKnown.conversationOf(jxlFile) || {}).conversation === group);
+      check('a flat folder belongs to the account, not to any chat',
+        chatKnown.conversationOf(path.join(downloads, 'video', 'shared-1.mp4')) === null);
+      check('and an ordinary photograph has no conversation at all',
+        chatKnown.conversationOf('D:\\photos\\holiday.jpg') === null);
+      check('something that is not a conversation id is refused, not invented',
+        chatKnown.conversationOf(path.join(downloads, 'resource', 'notanid', 'Cache', 'x')) === null);
+
+      // `excludeDir` asks `chat/known.js`, which reads APPDATA, so the whole
+      // of this block runs with APPDATA pointed at the fixture. Without it the
+      // three checks below ask about the real machine and pass or fail for a
+      // reason that has nothing to do with the fixture.
+      const before = process.env.APPDATA;
+      process.env.APPDATA = appData;
+
+      // Gate one: the folder called Cache.
+      check('a folder called Cache is searched inside a chat folder',
+        mediaRoots.excludeDir('Cache', path.join(downloads, 'resource', group, 'Cache')) === null);
+      check('and refused everywhere else, exactly as before',
+        mediaRoots.excludeDir('Cache', 'C:\\Users\\me\\AppData\\Local\\Google\\Chrome\\Cache') !== null);
+      check('the exception is only for Cache -- appdata is still refused there',
+        mediaRoots.excludeDir('appdata', path.join(downloads, 'resource', group, 'appdata')) !== null);
+
+      // Gate two: the extension, and what the scan does with what comes through.
+      let scanned;
+      try {
+        scanned = await scanMedia([path.join(downloads, 'resource')], { concurrency: 8, hideAssetFolders: false }, {});
+      } catch (err) {
+        process.env.APPDATA = before;
+        throw err;
+      }
+
+      const kept = scanned.files;
+      check('the photographs with no extension are found', kept.length > 0, `${kept.length} files`);
+      check('every one of them is an image or a video, from its bytes',
+        kept.every((f) => f.kind === 'image' || f.kind === 'video'),
+        [...new Set(kept.map((f) => f.kind))].join(', '));
+      check('the extensionless JPEGs in Cache are among them',
+        kept.some((f) => f.ext === '' && f.format === 'jpeg'));
+
+      // The decision the measurements forced: the copy nothing can draw stays
+      // out, and the screen says how many rather than dropping them in silence.
+      check('the re-encoded JPEG XL copies are left out',
+        !kept.some((f) => f.format === 'jxl'), String(kept.filter((f) => f.format === 'jxl').length));
+      check('and counted, with their size, so the screen can say so',
+        scanned.stats.chatUndrawable > 0 && scanned.stats.chatUndrawableBytes > 0,
+        `${scanned.stats.chatUndrawable} files, ${scanned.stats.chatUndrawableBytes} bytes`);
+
+      // What a chat folder holds that is not media at all.
+      check('a file admitted only for where it is must earn it from its bytes',
+        kept.every((f) => f.ext !== '' || Boolean(f.format)));
+
+      // And the tag the Photos screen draws its axis from.
+      const tagged = kept.map((record) => chatAnalyzerMedia.toCandidate(record, { displays: [] }));
+      const conversations = new Set(tagged.map((c) => c.meta.conversation).filter(Boolean));
+      check('every kept file is tagged with its conversation',
+        tagged.every((c) => c.meta.conversation) && conversations.size === 2,
+        [...conversations].join(', '));
+      check('and with the app it came from', tagged.every((c) => c.meta.conversationApp === 'zalo'));
+
+      // The root itself.
+      let roots;
+      try {
+        roots = mediaRoots.candidateRoots(
+          { home: base, pictures: null, videos: null, downloads: null },
+          fs.existsSync,
+          (dir) => {
+            try {
+              return fs.readdirSync(dir, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name);
+            } catch {
+              return [];
+            }
+          }
+        );
+      } finally {
+        process.env.APPDATA = before;
+      }
+      const zaloRoot = roots.find((r) => r.name.startsWith('Zalo conversations'));
+      check('the conversation folder is offered as a place to look', Boolean(zaloRoot),
+        roots.map((r) => r.name).join(' | '));
+      check('and it is on by default, like every other chat app folder',
+        zaloRoot && zaloRoot.defaultOn === true);
+      check('it points at resource, not at the whole of ZaloData',
+        zaloRoot && zaloRoot.path.endsWith(path.join('ZaloDownloads', 'resource')), zaloRoot && zaloRoot.path);
     }
 
     /* ---- the licence --------------------------------------------------- */

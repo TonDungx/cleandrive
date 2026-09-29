@@ -224,7 +224,7 @@ mà B5 và E2 dùng lại nguyên. Ba mục P2 rủi ro cao đi cuối.
 | E2 | Sao lưu trước khi xoá | P1 | ✅ Đã code xong (2026-09-29) — **không phải một handler mới**: là một tuỳ chọn của `recycle`, vì đặc tả đặt nó trong hộp thoại xác nhận. Nhưng hộp thoại đó là `dialog.showMessageBox` **native**, mà message box native chỉ chứa được **một checkbox**, không chứa được nút chọn thư mục — nên đích được chọn trên thanh hành động của màn Photos (giống B2/B5), còn hộp thoại giữ đúng phần người ta thật sự đổi ý vào phút chót: **bỏ tick là xoá mà không chép**. **Đề bài "dùng lại `tree-copy.js`" sai**: `copyTree` đòi đích **chưa tồn tại** và đi từ **một gốc**, còn E2 nhận một danh sách tệp rời từ nhiều thư mục, có thể nhiều ổ, vào một thư mục dùng đi dùng lại — phần dùng chung thật là `verified-copy.js`. Bố cục đích lấy **ổ làm thư mục đầu** (`<đích>\C\Users\…`), vì nếu không thì `C:\photos\a.jpg` và `D:\photos\a.jpg` là **cùng một chỗ**. **Không bao giờ ghi đè**: trùng tên mà khác nội dung thì thành ` (2)`; trùng cả hash thì tính là đã sao lưu và không chép lại. Manifest **cộng dồn**, không thay thế. **UNC được phép** — `lib/trash.js` chỉ từ chối **nguồn** trên mạng (`vet()`), còn đây chép **tới** mạng rồi xoá bản gốc cục bộ; nhưng máy này không có NAS nên tốc độ là `[Unverified]` (§11 mục 12). Giữ ADS (đã chốt). **Ảnh chụp bắt được ba lỗi**: đổi ngôn ngữ làm `translateDom` ghi đè nhãn nút và **mất tên thư mục đích**; hai nút mới đẩy **"Chuyển mục đã chọn vào Thùng rác" ra hẳn ngoài khung ở 1180px**; và toast nằm đè lên chính thanh đó |
 | E1 | Màn so sánh cạnh nhau | P1 | ✅ Đã code xong (2026-09-29) — **hai phần, không phải một**: đặc tả nói "mở từ một nhóm near-duplicate", mà **nhóm đó chưa có mặt nào trên giao diện**. `perceptual.groupSimilar`, IPC `media:similar` và `api.mediaSimilar` đã nối đủ từ đầu và **không renderer nào từng gọi**; engine còn tính sẵn `spread` kèm comment "so the UI can say how alike these actually are". Nên mục này dựng cả dải nhóm lẫn màn so sánh. **Đo được**: băm một ảnh tốn **70,6 ms**, gom nhóm chỉ 2 ms — nên chi phí toàn bộ nằm ở phép giải mã mà lưới ảnh **cố ý không bao giờ làm hàng loạt**. Do đó có **nút riêng** kèm tiến độ và nút dừng (~4,9 phút cho 4.124 ảnh, trả một lần vì kết quả được cache), và thẻ luôn nói mẫu số thật. **2.534 ảnh chỉ nằm trên OneDrive bị loại khỏi lượt băm** và được nói ra — đọc một tấm là tải nó về, đảo ngược đúng thứ B3 vừa giải phóng. `preview:compare` từ 2 lên 2–4. `iso`/`exposureTime` đọc được từ lâu nhưng **bị bỏ rơi** khi dựng payload — nay có. **Ảnh chụp bắt được 4 lỗi**: ba ảnh hiện ở ba kích thước nên không so sánh được; `formatDuration` là bộ định dạng ETA nên toast ghi "in almost done"; ô Megapixel của ảnh nhỏ hiện `—` như thể không biết; và thẻ nhóm **không dịch phần do JS dựng** |
 | D3 | Dữ liệu Zalo / Telegram theo cuộc trò chuyện | P1 | ✅ Đã code xong (2026-09-29) — **màn riêng, không đi qua analyzer thường**: `scanner.js:201` gắn `hard` cho mọi thứ dưới `AppData\Roaming` nên `advisor.js:400` trả `null`, mà cả hai app đều ở đó. `pro.chat` từ nay mới **thật sự được dùng** — nó đã khai trong `entitlements.js` từ lâu và không một dòng nào gọi. **Mức 3 chỉ Zalo**, và sâu hơn brief một tầng: `resource\<cuộc trò chuyện>\<loại>\`, không phải phẳng. **Đo được: 2.195 ảnh nằm hai bản** (`Cache` = JPEG như lúc nhận, `picture` = JXL mã hoá lại) — 272,3 MB, 26% cả cây. Nhưng **không đề xuất xoá bản trùng**: đo bằng đúng hai bộ giải mã của `thumbs.js` thì `.jxl` trả EMPTY ở Chromium 130 và ném lỗi ở shell Windows, còn tệp `Cache` **không đuôi** giải mã ra 862×1897 — bản nhỏ hơn là bản không ai mở được. **Telegram chỉ Mức 1** (không gì trong `tdata` mang tên cuộc trò chuyện), và `tupdates` 212,6 MB **không phải rác**: đọc `FileVersion` từ chính hai tệp `.exe` cho thấy 7.2.5.0 đang chờ đè lên 7.1.3.0 đang chạy — `review`, và bằng chứng nói xoá là mất 212 MB tải lại. **Cache trình duyệt của Zalo đi sang D4** (app thứ 7, 602,3 MB, Free · `safe`), không khoá sau `pro.chat`; settings lên **v10**. **Ảnh chụp bắt được 4 lỗi**: hai dòng cùng tên "Files" và bốn dòng cùng tên "Cached media"; hàng `update` **chưa dịch** vì thiếu `label`; và hai video đề ngày **30/11/2185** — tên chúng mở đầu bằng 13 chữ số là *id*, không phải epoch. **Sửa kèm:** media root của Telegram trong `lib/media/roots.js` trỏ cứng `user_data\media_cache` (**1 tệp / 10 KB**) và **không bao giờ thấy tài khoản thứ hai** — nay mỗi tài khoản một root, có tên |
-| E5 | Ảnh theo cuộc trò chuyện | P1 (phụ thuộc D3) | |
+| E5 | Ảnh theo cuộc trò chuyện | P1 (phụ thuộc D3) | ✅ Đã code xong (2026-09-29) — **đặc tả một câu, ba chỗ nó không lường tới.** (1) Trục này **không phải một phân hoạch** như "Where from": hầu hết ảnh không thuộc cuộc trò chuyện nào, nên thanh chia **riêng phần ảnh chat** và thẻ **biến mất hẳn** khi thư viện không có ảnh chat — đúng chữ của đặc tả. (2) **Hai cổng, không phải một**: ngoài luật đuôi ở `media/scan.js:214` còn luật từ chối thư mục tên `Cache` ở `roots.js` — mà ảnh JPEG không đuôi của Zalo **nằm trong** thư mục tên `Cache`. Đo được: hai luật này giấu **4.005 ảnh JPEG đọc được (293 MB)** và **57 video xem được (305 MB)**. (3) **5.508 tệp `.jxl` (342 MB) bị để ngoài, và nói ra thành câu** (đã chốt): chúng là ảnh thật nhưng không thứ gì trên máy này vẽ được, còn bản đọc được của cùng tấm ảnh thì vẫn có trong lưới. 183 tệp `fileNoise`/`voice` tự rơi ra vì bytes không nói gì. Kết quả: **4.614 tệp / 593 MB / 51 cuộc trò chuyện**, mỗi tệp mang `meta.conversation` đọc từ đường dẫn bằng chính hàm màn Chat dùng. **Không khoá `pro.photos`** (đã chốt) — nhất quán với E1, cả màn Photos vẫn Free. **Sửa kèm, một lỗi có sẵn ảnh chụp bắt được:** `#media-status` mang `data-i18n`, nên **đổi ngôn ngữ xoá luôn kết quả quét** và thay bằng câu "sẵn sàng quét" — lần thứ ba dự án này dính bẫy `translateDom`. Nay dòng trạng thái giữ **các con số**, không giữ câu, và tự nói lại bằng ngôn ngữ mới |
 | F4 | Hardlink bản trùng (Dev Pack, có cảnh báo mạnh) | P2 | |
 | E4 | Timeline & bản đồ | P2 | |
 | E3 | Tạo bản video nhẹ hơn | P2 | ffmpeg **đã được duyệt làm dependency** cho riêng mục này (người dùng chốt 2026-09-28), sau khi cả ba phương án của đặc tả đều va vào một nguyên tắc |
@@ -1604,6 +1604,65 @@ Mọi tính năng trong nhóm này giữ nguyên quy tắc gốc của màn Phot
 | **Phụ thuộc** | D3 Mức 3 |
 
 Thêm trục **"Cuộc trò chuyện"** vào màn Photos & video, dùng thanh tỷ lệ giống trục "Where from". Nếu D3 Mức 3 không làm được thì tính năng này không xuất hiện, và UI không để lại dấu vết gì của nó.
+
+> **✅ Đã code xong (2026-09-29).**
+>
+> Code: `chat/known.js` (`conversationOf`, `isChatFolder`), gốc mới trong
+> `lib/media/roots.js`, ngoại lệ `Cache` trong `excludeDir`, cổng đuôi trong
+> `lib/media/scan.js`, `meta.conversation` trong `analyzers/media.js`, thẻ
+> Conversation + `renderConversations` + `pickConversation` trong
+> `renderer/media.js`. Harness: 22 kiểm tra mới trong `scripts/test-chat.js`,
+> 15 trong `smoke.js`, thẻ mới vào vòng quét `test-a11y.js`, ảnh chụp
+> `npm run shoot:conversations`. Khác với đặc tả ở trên:
+>
+> - **"Giống trục Where from" đúng về hình dạng, sai về phạm vi.** Where from
+>   là một **phân hoạch**: mỗi tệp thuộc đúng một nguồn, nên thanh chia cả thư
+>   viện. Cuộc trò chuyện thì **hầu hết ảnh không thuộc cái nào**, và một thanh
+>   trên cả thư viện sẽ là một đoạn "không thuộc chat nào" nuốt hết phần còn
+>   lại — đúng thứ luật 2 của bài học facet sinh ra để từ chối. Nên thanh chia
+>   **riêng phần ảnh chat**, và dòng cạnh tiêu đề nói đó là bao nhiêu trên tổng.
+> - **Câu "không để lại dấu vết gì" được làm đúng chữ**, và có ảnh chụp chứng
+>   minh: thư viện không có ảnh chat thì thẻ không tồn tại — không phải một thẻ
+>   rỗng, không phải một lời giải thích về thứ không dùng được.
+> - **⚠️ Hai cổng, không phải một.** Quyết định 2026-09-29 chỉ nhắc luật đuôi ở
+>   `media/scan.js:214`. Nhưng ảnh JPEG không đuôi của Zalo nằm trong thư mục
+>   tên `Cache`, mà `REFUSED_DIR_NAMES` từ chối mọi thư mục tên đó. Mở mỗi cổng
+>   đuôi thì màn Photos vẫn ra **0 tệp**. Đo được phần hai cổng này giấu:
+>   **4.005 ảnh JPEG đọc được (293 MB)** và **57 video xem được (305 MB)**.
+>   Cả hai ngoại lệ đều hẹp — chỉ tên `cache`, chỉ trong thư mục tải về của app
+>   chat, quyết bằng chính `chat/known.js`; `appdata` vẫn bị từ chối ở đó, và
+>   `Chrome\...\Cache` vẫn bị từ chối y như cũ.
+> - **5.508 tệp `.jxl` (342 MB) không vào lưới** (đã chốt), và **nói ra thành
+>   câu trên dòng trạng thái** thay vì rơi im lặng. Chúng là ảnh thật, nhưng
+>   đo bằng đúng hai bộ giải mã `thumbs.js` dùng thì không cái nào vẽ được —
+>   **49% số tệp một thư mục chat đóng góp** sẽ là ô báo lỗi. Không mất gì:
+>   bản đọc được của chính tấm ảnh đó nằm ở thư mục bên cạnh và vẫn vào lưới,
+>   còn 342 MB kia đã được màn Chat tính đủ.
+> - **Một luật nhỏ đặc tả không có, và cần:** tệp được nhận **chỉ vì nó nằm ở
+>   đâu** thì phải tự chứng minh bằng bytes. Ở mọi nơi khác, tệp mà nội dung
+>   không khớp gì vẫn được giữ và báo — vì nó vào được là do **cái tên** khai
+>   `.jpg`, và một `.jpg` không phải JPEG là một phát hiện. Tệp không đuôi thì
+>   không khai gì, nên không có gì để mâu thuẫn. Đo được **183 tệp** như vậy
+>   (`fileNoise`, `voice`); không có luật này chúng lên lưới thành 183 ô không
+>   kích thước, không ngày, không ảnh.
+> - **Gốc mới trỏ `ZaloDownloads\resource`, không phải cả `ZaloData`** — đó là
+>   thư mục duy nhất chia theo cuộc trò chuyện. Nhãn dán (39,1 MB / 962 tệp)
+>   và mảnh giao diện cố ý nằm ngoài: chúng không thuộc cuộc trò chuyện nào và
+>   sẽ là 39 MB nhiễu trong thư viện ảnh của người ta. **Bật sẵn** (đã chốt),
+>   như mọi thư mục app chat đã có từ trước.
+> - **Không khoá sau `pro.photos` hay `pro.chat`** (đã chốt), khác đặc tả.
+>   `analyzers/media.js` khai `feature: 'free'`, `pro.photos` xuất hiện đúng
+>   một lần trong cả repo — dòng khai — và **E1 cũng ghi `pro.photos` trong
+>   đặc tả rồi ship không khoá**. Khoá một trục của một màn miễn phí trong khi
+>   lưới ảnh, màn so sánh và phép gom nhóm gần giống đều Free là tuỳ tiện.
+>   Để Giai đoạn 6 quyết cả cụm.
+> - **Sửa kèm, một lỗi có sẵn:** `#media-status` mang `data-i18n`, nên
+>   `translateDom` **xoá kết quả quét** và thay bằng "sẵn sàng quét" mỗi lần
+>   đổi ngôn ngữ — ảnh chụp tiếng Việt bắt được. Đây là **lần thứ ba** dự án
+>   này dính đúng cái bẫy đó. Nay dòng trạng thái giữ **các con số**, không giữ
+>   câu đã dựng, và `renderStatus()` nói lại bằng ngôn ngữ mới với số được định
+>   dạng theo ngôn ngữ đó. Màn Game không bao giờ dính vì `#games-status` không
+>   mang thuộc tính ấy; nay hai màn giống nhau.
 
 ---
 

@@ -14,6 +14,7 @@
 const { scanMedia } = require('../lib/media/scan');
 const { classifyOrigin } = require('../lib/media/origin');
 const { describeNature } = require('../lib/media/nature');
+const { conversationOf } = require('../chat/known');
 const { candidateId } = require('./contract');
 const { streamWhile } = require('./channel');
 
@@ -29,6 +30,7 @@ const ID = 'media';
 function toCandidate(record, context) {
   const origin = classifyOrigin(record, context);
   const nature = describeNature(record, context);
+  const chat = conversationOf(record.path);
 
   // The year a photograph belongs to, in the order the user would mean it:
   // when it was taken, else when it was recorded, else when the file was last
@@ -81,6 +83,14 @@ function toCandidate(record, context) {
       year: at ? new Date(at).getFullYear() : null,
       origin: origin.origin,
       app: origin.app,
+      // Which chat this arrived in, where the folder says so (E5). Read off
+      // the path by `chat/known.js`, the same function the Chat screen uses,
+      // so the two screens cannot drift into disagreeing about which
+      // conversation a file belongs to. `null` for everything else, which is
+      // most of a library -- the axis is a card that appears only when there
+      // is something to put in it.
+      conversation: chat ? chat.conversation : null,
+      conversationApp: chat ? chat.app : null,
       traits: nature.traits,
     },
   };

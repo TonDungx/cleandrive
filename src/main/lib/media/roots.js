@@ -3,6 +3,7 @@
 const path = require('node:path');
 
 const { message: m } = require('../../../i18n');
+const chatKnown = require('../../chat/known');
 
 /**
  * Where to look for photographs, and where not to.
@@ -114,8 +115,30 @@ const APP_FOLDERS = [
      * its second account.
      */
     relative: ['Telegram Desktop', 'tdata'],
-    perAccount: { match: /^user_data(#[0-9]{1,3})?$/i, inside: ['media_cache'] },
+    perAccount: { match: /^user_data(#[0-9]{1,3})?$/i, inside: [['media_cache']] },
     why: m('media.root.telegram', 'Media cached by Telegram Desktop'),
+  },
+  {
+    /*
+     * The photographs and videos in Zalo's conversations (E5).
+     *
+     * Not `ZaloData` and not even `ZaloDownloads`, but the one folder under it
+     * that splits by conversation. Everything else Zalo keeps there belongs to
+     * the account rather than to any one chat -- stickers, interface fragments,
+     * link previews -- and pulling those in would add 39 MB of sticker packs to
+     * somebody's photo library for nothing.
+     *
+     * Measured here: 4,005 readable JPEGs (293 MB) and 57 playable videos
+     * (305 MB), none of which the photo scan could see before, because Zalo
+     * writes them with no extension into a folder called `Cache`. Both rules
+     * are relaxed inside a chat folder and nowhere else -- see `excludeDir`
+     * below and the extension test in `scan.js`.
+     */
+    name: 'Zalo conversations',
+    env: 'APPDATA',
+    relative: ['ZaloData', 'media'],
+    perAccount: { match: /^[0-9]{5,}$/, inside: [['ZaloDownloads', 'resource']] },
+    why: m('media.root.zaloChats', 'Photos and video in Zalo conversations'),
   },
   {
     name: 'WhatsApp Media',
@@ -195,7 +218,7 @@ function candidateRoots(known, exists, listDirs = () => []) {
     for (const account of accounts) {
       for (const leaf of folder.perAccount.inside) {
         add(
-          path.join(root, account, leaf),
+          path.join(root, account, ...leaf),
           accounts.length > 1 ? `${folder.name} · ${account}` : folder.name,
           folder.why,
           true
@@ -273,10 +296,27 @@ const REFUSED_DIR_SUFFIXES = ['.app', '.framework', '.lproj', '.bundle'];
  *
  * @returns {{kind: string, reason: object} | null}
  */
-function excludeDir(name) {
+function excludeDir(name, fullPath) {
   const lower = name.toLowerCase();
 
   if (REFUSED_DIR_NAMES.has(lower)) {
+    /*
+     * One exception, and it is the whole of E5 (2026-09-29).
+     *
+     * `cache` is on the refused list because a folder called Cache holds a
+     * program's working copies, not anybody's photographs. Inside a chat app's
+     * download folder that is exactly backwards: Zalo calls the folder holding
+     * the original JPEG of every picture somebody sent you `Cache`, and the
+     * re-encoded copy beside it -- in a folder called `picture` -- is the one
+     * nothing on this machine can decode.
+     *
+     * Measured: this one line hid 4,005 readable photographs, 293 MB.
+     *
+     * Narrow on purpose. `chat/known.js` answers only for the folders those
+     * two apps download into, so `AppData\...\Chrome\...\Cache` is refused
+     * exactly as before.
+     */
+    if (lower === 'cache' && fullPath && chatKnown.isChatFolder(fullPath)) return null;
     return { kind: 'media-noise', reason: m('media.skip.noise', 'Holds program data, not photographs') };
   }
   for (const suffix of REFUSED_DIR_SUFFIXES) {

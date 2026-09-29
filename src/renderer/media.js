@@ -27,7 +27,7 @@ const media = {
   thumbs: new Map(),
   /** Paths asked for but not yet answered, so a cell is not requested twice. */
   pending: new Set(),
-  filters: { origin: null, trait: null, year: null },
+  filters: { origin: null, trait: null, year: null, conversation: null },
   sort: 'size',
   roots: [],
   extraRoots: [],
@@ -111,6 +111,9 @@ function facets() {
   const origin = new Map();
   const trait = new Map();
   const year = new Map();
+  // Not a partition like the three above: most files have no conversation,
+  // and `bump` skips a null key, so this map counts the chat pictures only.
+  const conversation = new Map();
 
   const bump = (map, key, size) => {
     if (key === null || key === undefined) return;
@@ -123,21 +126,23 @@ function facets() {
   for (const file of media.files) {
     bump(origin, file.origin, file.size);
     bump(year, file.year, file.size);
+    bump(conversation, file.conversation, file.size);
     // A file can wear several traits, so it is counted under each of them --
     // these are filters, not a partition.
     for (const one of file.traits) bump(trait, one.key, file.size);
   }
 
-  return { origin, trait, year };
+  return { origin, trait, year, conversation };
 }
 
 function applyFilters() {
-  const { origin, trait, year } = media.filters;
+  const { origin, trait, year, conversation } = media.filters;
 
   media.shown = media.files.filter((file) => {
     if (origin && file.origin !== origin) return false;
     if (year !== null && file.year !== year) return false;
     if (trait && !file.traits.some((one) => one.key === trait)) return false;
+    if (conversation && file.conversation !== conversation) return false;
     return true;
   });
 
@@ -149,7 +154,7 @@ function applyFilters() {
 }
 
 function clearFilters() {
-  media.filters = { origin: null, trait: null, year: null };
+  media.filters = { origin: null, trait: null, year: null, conversation: null };
   applyFilters();
 }
 
@@ -275,10 +280,15 @@ function renderOverview() {
   panel.hidden = false;
   panel.classList.toggle(
     'is-filtered',
-    Boolean(media.filters.origin || media.filters.trait || media.filters.year !== null)
+    Boolean(
+      media.filters.origin ||
+        media.filters.trait ||
+        media.filters.year !== null ||
+        media.filters.conversation
+    )
   );
 
-  const { origin, trait, year } = facets();
+  const { origin, trait, year, conversation } = facets();
   const totalBytes = media.files.reduce((n, f) => n + f.size, 0);
 
   $('ov-total').textContent = t('media.overviewTotal', '{n} files · {size}', {
@@ -289,7 +299,107 @@ function renderOverview() {
   renderOriginBar(origin, totalBytes);
   renderYears(year);
   renderTraits(trait);
+  renderConversations(conversation);
 }
+
+/**
+ * Which conversation a picture arrived in (E5).
+ *
+ * The same proportional bar as "Where from", and for the same reason: a
+ * conversation is a bucket a file is in or is not, and what somebody clearing
+ * space wants to know is which chat took the room, not merely which chats
+ * exist.
+ *
+ * Two things make it different from the three cards above it, and both are
+ * visible rather than hidden:
+ *
+ *   - **It is not a partition of the library.** Most photographs came from no
+ *     conversation at all. So the bar divides up the chat pictures only, and
+ *     the line beside the heading says how many of the whole that is. A bar
+ *     over everything would be one segment reading "not from a chat" with a
+ *     sliver beside it, which is the shape the facet rules exist to refuse.
+ *   - **The card is absent when there is nothing in it.** A library with no
+ *     chat pictures gets no empty card and no explanation of a feature it
+ *     cannot use — the roadmap asks for exactly that.
+ */
+function renderConversations(conversation) {
+  const card = $('ov-conversations-card');
+  const bar = $('ov-conversations-bar');
+  const legend = $('ov-conversations-legend');
+  bar.replaceChildren();
+  legend.replaceChildren();
+
+  const entries = [...conversation.entries()].sort((a, b) => b[1].bytes - a[1].bytes);
+  if (entries.length === 0) {
+    card.hidden = true;
+    return;
+  }
+  card.hidden = false;
+
+  const chatBytes = entries.reduce((n, [, stat]) => n + stat.bytes, 0);
+  const chatCount = entries.reduce((n, [, stat]) => n + stat.count, 0);
+  setText($('ov-conversations-note'), t('media.conversationTotal', '{n} of {total} files · {size}', {
+    n: formatCount(chatCount),
+    total: formatCount(media.files.length),
+    size: formatBytes(chatBytes),
+  }));
+
+  entries.forEach(([key, stat], index) => {
+    const share = (stat.bytes / chatBytes) * 100;
+    const shade = shadeFor(index, entries.length);
+    const active = media.filters.conversation === key;
+    const detail = `${key} · ${formatCount(stat.count)} · ${formatBytes(stat.bytes)}`;
+
+    const seg = document.createElement('button');
+    seg.className = 'ov-seg';
+    seg.classList.toggle('is-active', active);
+    seg.style.flex = `${Math.max(share, 0.25)} 1 0`;
+    seg.style.opacity = String(shade);
+    seg.title = detail;
+    seg.setAttribute('aria-label', detail);
+    seg.setAttribute('aria-pressed', String(active));
+    seg.addEventListener('click', () => pickConversation(key));
+    bar.appendChild(seg);
+
+    // The legend is capped where the bar is not. Fifty-one ids is a wall of
+    // digits; the bar still carries every one of them, and clicking a sliver
+    // filters to it.
+    if (index >= CONVERSATION_KEYS && !active) return;
+
+    const entry = document.createElement('button');
+    entry.className = 'ov-key';
+    entry.classList.toggle('is-active', active);
+    entry.title = detail;
+
+    const dot = document.createElement('span');
+    dot.className = 'ov-dot';
+    dot.style.opacity = String(shade);
+
+    const text = document.createElement('span');
+    text.className = 'ov-key-id';
+    text.textContent = key;
+
+    const size = document.createElement('span');
+    size.className = 'ov-key-size';
+    size.textContent = formatBytes(stat.bytes);
+
+    entry.append(dot, text, size);
+    entry.addEventListener('click', () => pickConversation(key));
+    legend.appendChild(entry);
+  });
+
+  if (entries.length > CONVERSATION_KEYS) {
+    const rest = document.createElement('span');
+    rest.className = 'ov-key-rest';
+    rest.textContent = t('media.conversationRest', 'and {n} more, in the bar above', {
+      n: formatCount(entries.length - CONVERSATION_KEYS),
+    });
+    legend.appendChild(rest);
+  }
+}
+
+/** How many conversations get a line in the legend; the bar holds them all. */
+const CONVERSATION_KEYS = 8;
 
 /**
  * The library as one bar, divided by where its pictures came from.
@@ -511,6 +621,10 @@ function renderTokens() {
     host.appendChild(token);
   };
 
+  if (media.filters.conversation) {
+    add(t('media.token.conversation', 'Conversation {id}', { id: media.filters.conversation }),
+      () => pickConversation(media.filters.conversation));
+  }
   if (media.filters.origin) {
     add(labelFor(ORIGIN_LABEL, media.filters.origin), () => pickOrigin(media.filters.origin));
   }
@@ -526,6 +640,11 @@ function renderTokens() {
 
 function pickOrigin(key) {
   media.filters.origin = media.filters.origin === key ? null : key;
+  applyFilters();
+}
+
+function pickConversation(key) {
+  media.filters.conversation = media.filters.conversation === key ? null : key;
   applyFilters();
 }
 
@@ -1133,6 +1252,31 @@ function chosenRoots() {
 
 /* ------------------------------------------------------------------ the scan */
 
+/**
+ * The status line, and why it is a function rather than a string.
+ *
+ * `translateDom` rewrites only what is in the markup, so anything JavaScript
+ * writes has to be able to write itself again when the language changes.
+ * Keeping the *sentence* would hand Vietnamese an English one; keeping the
+ * function re-says it with the numbers formatted to match.
+ */
+let statusLine = null;
+
+function setStatus(fn) {
+  statusLine = fn;
+  renderStatus();
+}
+
+function renderStatus() {
+  setText(
+    $('media-status'),
+    statusLine ? statusLine() : t('media.readyToScan', 'Ready to look through your photo folders.')
+  );
+}
+
+// The markup no longer carries the idle sentence, so it is written once here.
+renderStatus();
+
 function setScanning(running) {
   media.scanning = running;
   $('media-scan').disabled = running;
@@ -1141,7 +1285,7 @@ function setScanning(running) {
 }
 
 api.onMediaProgress((p) => {
-  $('media-status').textContent =
+  setStatus(() =>
     p.phase === 'walking'
       ? t('media.progress.walking', 'Looking through folders… {n} pictures and videos so far', {
           n: formatCount(p.media),
@@ -1149,7 +1293,8 @@ api.onMediaProgress((p) => {
       : t('media.progress.reading', 'Reading {done} of {total}…', {
           done: formatCount(p.probed),
           total: formatCount(p.media),
-        });
+        })
+  );
 });
 
 // Files arrive in batches while the scan is still running, so the grid starts
@@ -1180,7 +1325,7 @@ $('media-scan').addEventListener('click', async () => {
   const result = unwrap(await api.scanMedia(roots), t('media.label.scan', 'Photo scan'));
   setScanning(false);
   if (!result) {
-    $('media-status').textContent = t('media.failed', 'The scan could not finish.');
+    setStatus(() => t('media.failed', 'The scan could not finish.'));
     return;
   }
 
@@ -1196,40 +1341,73 @@ $('media-scan').addEventListener('click', async () => {
   refreshSimilar();
 });
 
-function reportScan(result) {
+/**
+ * What a finished scan has to say, built from its numbers rather than kept as
+ * a finished string.
+ *
+ * Separated out for one reason, and a screenshot found it: the status line used
+ * to carry `data-i18n`, so `translateDom` replaced a finished scan's sentence
+ * with "Ready to look through your photo folders" the instant somebody switched
+ * to Vietnamese. The attribute is gone and this is what replaces it -- the
+ * counts are remembered and the sentence is made again, in whichever language
+ * is on, numbers formatted to match.
+ */
+function sentencesFor(said) {
   const parts = [
     t('media.found', 'Found {n} pictures and videos · {size}.', {
-      n: formatCount(result.files.length),
-      size: formatBytes(result.totalBytes),
+      n: formatCount(said.files),
+      size: formatBytes(said.totalBytes),
     }),
   ];
 
-  if (result.hidden > 0) {
+  if (said.hidden > 0) {
     parts.push(
       t('media.hiddenAssets', '{n} more were a program’s own artwork and are not shown.', {
-        n: formatCount(result.hidden),
+        n: formatCount(said.hidden),
       })
     );
   }
-  if (result.stats.dehydrated > 0) {
+  if (said.dehydrated > 0) {
     parts.push(
       t('media.onlineOnly', '{n} are stored online only and were not opened, so nothing was downloaded.', {
-        n: formatCount(result.stats.dehydrated),
+        n: formatCount(said.dehydrated),
       })
     );
   }
-  if (result.stats.unreadable > 0) {
-    parts.push(t('media.unreadable', '{n} could not be read.', { n: formatCount(result.stats.unreadable) }));
+  if (said.unreadable > 0) {
+    parts.push(t('media.unreadable', '{n} could not be read.', { n: formatCount(said.unreadable) }));
   }
-  if (result.cancelled) parts.push(t('app.cancelledPartial', 'Cancelled — results are partial.'));
+  // E5. Said rather than dropped in silence: these are real photographs, and
+  // the only reason they are not here is that nothing on this machine can
+  // draw one. The readable copy of each is in the list.
+  if (said.chatUndrawable > 0) {
+    parts.push(
+      t('media.chatUndrawable', '{n} more ({size}) are the copies a chat app re-encoded, in a format nothing here can display. The originals of the same pictures are shown.', {
+        n: formatCount(said.chatUndrawable),
+        size: formatBytes(said.chatUndrawableBytes),
+      })
+    );
+  }
+  if (said.cancelled) parts.push(t('app.cancelledPartial', 'Cancelled — results are partial.'));
+  return parts;
+}
+
+function reportScan(result) {
+  const said = {
+    ...result.stats,
+    files: result.files.length,
+    totalBytes: result.totalBytes,
+    hidden: result.hidden,
+    cancelled: result.cancelled,
+  };
 
   // The headline count lives in the overview card, where it sits under the bar
   // that divides it up. What is left for the bar is what the bar is for: what
   // just happened, and anything that went wrong.
-  $('media-status').textContent = parts.slice(1).join(' ');
+  setStatus(() => sentencesFor(said).slice(1).join(' '));
   // Said whole, headline included: the overview card it sits in is not where
   // a screen reader is when the scan ends.
-  announce(parts.join(' '));
+  announce(sentencesFor(said).join(' '));
 
   const empty = result.files.length === 0;
   $('media-layout').hidden = empty;
@@ -1799,6 +1977,7 @@ $('media-grid').addEventListener('keydown', (event) => {
 /* ---- language ---- */
 
 onLanguageChange(() => {
+  renderStatus();
   renderRoots();
   renderOverview();
   renderTokens();

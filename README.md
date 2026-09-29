@@ -924,7 +924,8 @@ plain description and can be switched off individually:
 
 your Pictures folder · your Videos folder · where the Windows screenshot key
 saves · pictures saved by apps · where the Game Bar records · Zalo received files
-· Telegram · WhatsApp · Viber
+· Zalo conversations · Telegram, one entry per signed-in account · WhatsApp ·
+Viber
 
 Plus **any folder you add yourself**. Downloads is offered and is **off by
 default**. Folders the scan decided to skip are listed too, with the reason.
@@ -955,7 +956,7 @@ pictures a chat app has resized and stripped, empty and unreadable files, and fo
 video the duration, resolution, bitrate and whether it has sound. A file can
 carry several of these at once, so they are tags rather than a category.
 
-### Three axes, three different controls
+### Four axes, four different controls
 
 The first version of this screen shipped with thirty-three filter chips wrapped
 over five rows — four hundred pixels of controls, in a bar that did not scroll
@@ -969,6 +970,7 @@ The mistake was using one control for three different shapes of data:
 | Where from | A partition — each file is in exactly one | **One proportional bar**, segments sized by bytes | The *share* each source takes, not merely that it exists. 3,450 screenshots at 674 MB should not look bigger than 463 photographs at 1.3 GB |
 | Year | An axis — ordered, with gaps | **A histogram** | The shape of a library over time, and its empty years, in the space three chips used |
 | What it is | Overlapping tags | **Chips**, which genuinely fit | Unchanged — but far fewer of them |
+| Conversation | A partition of *part* of the library — most photographs came from no chat at all | **One proportional bar**, over the chat pictures only | Which conversation took the room. The card is absent entirely when nothing came from a chat |
 
 Two smaller rules came with it:
 
@@ -981,6 +983,36 @@ Two smaller rules came with it:
   active filters as removable tokens. The tokens matter because the overview
   scrolls away, and a filtered grid three screens down would otherwise look
   exactly like the whole library.
+
+### Which conversation a picture arrived in
+
+Zalo puts the conversation in its folder names, so the photographs it has
+downloaded can be divided up by chat. That folder is in *Where to look*, on by
+default, like the other chat apps already there.
+
+A conversation is shown by its id and the card says why: the name is in the
+message database, and the app does not open message databases. Clicking a
+segment filters the grid to that chat; the legend lists the largest few and the
+bar holds every one of them.
+
+Two things had to be relaxed to see these pictures at all, and both only
+inside a chat app’s own download folder. Zalo writes the original of every
+photograph **with no file extension**, into a folder it calls `Cache` — and
+the scan normally refuses a file whose extension it does not know, and refuses
+any folder called Cache. On this machine those two rules between them were
+hiding **4,005 readable photographs and 57 playable videos**. Inside those
+folders a file is judged by its first bytes instead. Everywhere else both
+rules stand exactly as they were.
+
+Zalo also keeps a second, re-encoded copy of every picture, and **those are
+not shown**: nothing on this computer can decode the format they are in, so
+they would be several thousand tiles reading *no decoder*. The status line
+says how many were left out and how much they come to, and the copy that can
+be opened — the same photograph — is in the grid. Their space is accounted
+for on [Chat apps](#screen-9--chat-apps).
+
+Telegram has no conversation axis. Nothing in its folders is named after a
+chat, so there is nothing to divide by, and the card simply does not appear.
 
 ### The grid
 

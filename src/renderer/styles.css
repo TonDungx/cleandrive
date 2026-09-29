@@ -5210,6 +5210,37 @@ html[data-i18n-pending] body {
 
 .ov-key.is-active .ov-key-size { color: var(--accent); }
 
+/* ---- which conversation it came from (E5) ---- */
+
+/*
+ * The same bar and legend as "Where from"; only two things differ, and both
+ * come from this axis not being a partition of the library. A conversation id
+ * is eighteen digits with no word boundaries, so it gets the numeric face and
+ * is allowed to be clipped rather than to push the size off the row. And the
+ * card carries a footnote, because "why is this a number" is the first thing
+ * anybody asks of it.
+ */
+
+.ov-key-id {
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 22ch;
+}
+
+.ov-key-rest {
+  align-self: center;
+  color: var(--text-3);
+  font-size: 12px;
+}
+
+.ov-foot {
+  margin: 8px 0 0;
+  color: var(--text-3);
+  font-size: 11.5px;
+}
+
 /* ---- the year histogram ---- */
 
 .ov-hist {

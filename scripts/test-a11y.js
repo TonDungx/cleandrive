@@ -349,6 +349,21 @@ app.whenReady().then(async () => {
     document.getElementById('media-scan').click();`);
   check('the photo fixture is found', await until(`document.getElementById('media-cancel').hidden === true && media.files.length >= 40`));
 
+  // E5: the Conversation card is absent unless something in the library came
+  // from a chat, and the fixture tree is not a chat folder. Three of its files
+  // are tagged after the scan so the card, its bar and its capped legend are
+  // in front of axe and in front of the contrast pass like every other card.
+  await run(`
+    const ids = ['g4247325580991211986', 'g9122869841110304441', '13410346471542028'];
+    media.files.slice(0, 24).forEach((file, i) => {
+      file.conversation = ids[i % ids.length];
+      file.conversationApp = 'zalo';
+    });
+    applyFilters();`);
+  check('the Conversation card is drawn for it', await until(
+    `document.getElementById('ov-conversations-card').hidden === false && document.querySelectorAll('#ov-conversations-bar .ov-seg').length === 3`
+  ));
+
   // Trends: a series drawn by the real chart code, after the tab's own
   // refresh (which would otherwise draw over it with the throwaway userData's
   // empty history). Constructed readings, labelled as such here.

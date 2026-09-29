@@ -133,6 +133,7 @@
     "capture:games": "node scripts/capture-games.js",
     "shoot:games": "electron scripts/shoot-games.js",
     "shoot:chat": "electron scripts/shoot-chat.js",
+    "shoot:conversations": "electron scripts/shoot-conversations.js",
     "shoot:dev": "electron scripts/shoot-dev.js",
     "shoot:devprojects": "electron scripts/shoot-devprojects.js",
     "verify:prefetch": "electron scripts/verify-prefetch.js",

@@ -1562,6 +1562,7 @@
     'media.root.crossDevice': 'Ảnh mà Liên kết điện thoại chép sang từ điện thoại',
     'media.root.zalo': 'Tệp nhận được trong Zalo',
     'media.root.telegram': 'Ảnh và video Telegram Desktop lưu tạm',
+    'media.root.zaloChats': 'Ảnh và video trong các cuộc trò chuyện Zalo',
     'media.root.whatsapp': 'Ảnh và video nhận được trong WhatsApp',
     'media.root.viber': 'Tệp nhận được trong Viber',
     'media.root.downloads':
@@ -1665,6 +1666,12 @@
     'media.label.scan': 'Lần quét ảnh',
     'media.chip.origin': 'Từ đâu ra',
     'media.chip.what': 'Là loại gì',
+    'media.chip.conversation': 'Cuộc trò chuyện',
+    'media.conversationTotal': '{n} trên {total} tệp · {size}',
+    'media.conversationRest': 'và {n} cuộc nữa, nằm trong thanh phía trên',
+    'media.conversation.why':
+      'Hiện bằng id: cái tên nằm trong database tin nhắn của app chat, mà app này không mở database tin nhắn.',
+    'media.token.conversation': 'Cuộc trò chuyện {id}',
     'media.chip.year': 'Năm',
     'media.noPreview': 'không xem trước được',
     'media.videoShort': 'video',
@@ -1680,6 +1687,8 @@
     'media.onlineOnly':
       '{n} tệp chỉ lưu trên mạng nên không được mở ra, tức là không có gì bị tải về.',
     'media.unreadable': '{n} tệp không đọc được.',
+    'media.chatUndrawable':
+      'Còn {n} tệp nữa ({size}) là bản do app chat mã hoá lại, ở định dạng không thứ gì ở đây hiện được. Bản gốc của chính những tấm ảnh đó vẫn có trong danh sách.',
     'media.empty':
       'Không có ảnh hay video nào trong các thư mục đang tích. Mở “Tìm ở đâu” để thêm thư mục.',
     'media.excludedTitle': 'Những thư mục đã không tìm tới',

@@ -480,7 +480,7 @@
                 <option value="detail" data-i18n="media.sort.detail">Least detail first</option>
               </select>
             </label>
-            <span class="status" id="media-status" data-i18n="media.readyToScan">Ready to look through your photo folders.</span>
+            <span class="status" id="media-status"></span>
           </div>
 
           <div class="progress progress-walk" id="media-progress" hidden role="progressbar" data-i18n-aria="progress.media" aria-label="Looking through the photo folders">
@@ -549,6 +549,28 @@
               <button class="ov-more" id="ov-traits-more" hidden></button>
             </div>
             <div class="chips-row" id="ov-traits"></div>
+          </div>
+
+          <!--
+            Which conversation it arrived in (E5).
+
+            A card of its own, and one that is absent whenever there is nothing
+            to put in it — unlike the three above, this axis is not a partition
+            of the library. Most photographs came from no conversation at all,
+            so the bar divides up the chat pictures only and its heading says
+            so. A conversation is a raw id here for the same reason it is one on
+            the Chat screen: the name is in the message database, which this app
+            does not open.
+          -->
+          <div class="ov-card ov-conversations" id="ov-conversations-card" hidden>
+            <div class="ov-head">
+              <h2 data-i18n="media.chip.conversation">Conversation</h2>
+              <span class="ov-total" id="ov-conversations-note"></span>
+            </div>
+            <div class="ov-bar" id="ov-conversations-bar"
+              data-i18n-aria="media.chip.conversation" aria-label="Conversation" role="group"></div>
+            <div class="ov-legend" id="ov-conversations-legend"></div>
+            <p class="ov-foot" id="ov-conversations-why" data-i18n="media.conversation.why">Shown by id: the name is in the chat app’s message database, which this app does not open.</p>
           </div>
         </section>
 

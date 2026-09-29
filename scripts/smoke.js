@@ -1258,6 +1258,123 @@ app.whenReady().then(async () => {
     check('the fixture files are all still there',
       fs.readdirSync(path.join(mediaRoot, 'Camera Roll')).length > 0);
 
+    /* -- which conversation a photograph came from (E5) -------------------- */
+
+    /*
+     * Against the real Zalo folder, because that is the only place the two
+     * relaxed rules can be exercised at all: `chat/known.js` decides "is this
+     * a chat folder" from APPDATA, so a fixture tree in the temp directory is
+     * not one. `test-chat.js` covers the same ground with APPDATA pointed at a
+     * fixture; this is the pass over what is actually on the disk.
+     */
+    {
+      const js = (expr) => win.webContents.executeJavaScript(expr);
+      const zaloRoot = await js(`(() => {
+        const root = media.roots.find((r) => r.name.startsWith('Zalo conversations'));
+        return root ? root.path : null;
+      })()`);
+
+      if (!zaloRoot) {
+        check('with no Zalo on the machine, no conversation folder is offered', true, 'not installed here');
+      } else {
+        check('the Zalo conversation folder is offered as a place to look', true, zaloRoot);
+        await js(`
+          for (const root of media.roots) root.on = root.path === ${JSON.stringify(zaloRoot)};
+          media.extraRoots = [];
+          renderRoots();
+          document.getElementById('media-scan').click();
+        `);
+        await until(win, `document.getElementById('media-cancel').hidden === true`, 300000);
+
+        const seen = await js(`(() => {
+          const card = document.getElementById('ov-conversations-card');
+          const withConv = media.files.filter((f) => f.conversation);
+          return {
+            files: media.files.length,
+            withConv: withConv.length,
+            conversations: new Set(withConv.map((f) => f.conversation)).size,
+            cardHidden: card.hidden,
+            segments: card.querySelectorAll('.ov-seg').length,
+            legend: card.querySelectorAll('.ov-key').length,
+            note: document.getElementById('ov-conversations-note').textContent,
+            why: document.getElementById('ov-conversations-why').textContent,
+            noExtension: media.files.filter((f) => !f.ext).length,
+            fromCacheFolder: media.files.filter((f) => /[\\\\/]Cache[\\\\/]/i.test(f.path)).length,
+            anyJxl: media.files.filter((f) => f.format === 'jxl').length,
+            kinds: [...new Set(media.files.map((f) => f.kind))].sort(),
+            status: document.getElementById('media-status').textContent,
+          };
+        })()`);
+        console.log(`    ${seen.files} files, ${seen.conversations} conversations, ${seen.noExtension} with no extension`);
+
+        check('photographs with no extension at all are found',
+          seen.noExtension > 0, `${seen.noExtension} of ${seen.files}`);
+        check('and so are the ones inside a folder called Cache',
+          seen.fromCacheFolder > 0, String(seen.fromCacheFolder));
+        check('everything kept is an image or a video, decided by its bytes',
+          seen.kinds.every((k) => k === 'image' || k === 'video'), seen.kinds.join(', '));
+
+        // The decision the measurements forced.
+        check('the re-encoded copies nothing can draw are not in the grid', seen.anyJxl === 0, String(seen.anyJxl));
+        check('and the screen says how many were left out and why',
+          /display|hi\u1ec7n/i.test(seen.status), seen.status.slice(0, 110));
+
+        check('every file found here carries its conversation',
+          seen.withConv === seen.files && seen.conversations > 0,
+          `${seen.withConv} of ${seen.files}, ${seen.conversations} conversations`);
+        check('the Conversation card is drawn, with a segment per conversation',
+          seen.cardHidden === false && seen.segments === seen.conversations,
+          `${seen.segments} segments, ${seen.conversations} conversations`);
+        check('its legend is capped, and says how many more are in the bar',
+          seen.legend <= 9, `${seen.legend} keys`);
+        check('the card says what share of the library this is, not 100%',
+          /\bof\b/.test(seen.note), seen.note);
+        check('and it says why a conversation is a number', /database/i.test(seen.why), seen.why.slice(0, 70));
+
+        // Clicking a segment filters, and the filter appears as a token.
+        const filtered = await js(`(() => {
+          document.querySelector('#ov-conversations-bar .ov-seg').click();
+          return {
+            picked: media.filters.conversation,
+            shown: media.shown.length,
+            all: media.files.length,
+            tokens: [...document.querySelectorAll('#media-tokens button')].map((b) => b.textContent),
+            onlyOne: new Set(media.shown.map((f) => f.conversation)).size,
+          };
+        })()`);
+        check('clicking a segment filters the grid to that conversation',
+          Boolean(filtered.picked) && filtered.onlyOne === 1 && filtered.shown < filtered.all,
+          `${filtered.shown} of ${filtered.all}`);
+        check('and the filter shows as a token in the pinned bar',
+          filtered.tokens.some((text) => text.includes(filtered.picked)),
+          filtered.tokens.join(' | '));
+
+        const cleared = await js(`(() => {
+          document.querySelector('#ov-conversations-bar .ov-seg').click();
+          return { picked: media.filters.conversation, shown: media.shown.length };
+        })()`);
+        check('clicking it again takes the filter off',
+          cleared.picked === null && cleared.shown === filtered.all, String(cleared.shown));
+
+        // A library with no chat pictures must not carry an empty card, which
+        // is what the roadmap asks for in so many words. One file stands in for
+        // that library rather than an empty list: with no files at all the whole
+        // overview hides and the card would never be asked.
+        const withoutChat = await js(`(() => {
+          const keep = media.files;
+          media.files = [{ ...keep[0], conversation: null, conversationApp: null }];
+          applyFilters();
+          const hidden = document.getElementById('ov-conversations-card').hidden;
+          const overviewShown = document.getElementById('media-overview').hidden === false;
+          media.files = keep;
+          applyFilters();
+          return { hidden, overviewShown };
+        })()`);
+        check('a library with no chat pictures gets no card at all',
+          withoutChat.hidden === true && withoutChat.overviewShown === true,
+          JSON.stringify(withoutChat));
+      }
+    }
     /* -- the file viewer ---------------------------------------------------- */
     //
     // The viewer is the answer to "what is in this thing", asked from a list
