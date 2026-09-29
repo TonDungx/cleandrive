@@ -128,6 +128,26 @@ function evidenceFor(app, summary, { lastUsedAllowed }) {
     add(m('evidence.apps.alsoIn', 'The same program is registered {n} more times, and is counted once here', { n: n(app.alsoIn.length) }));
   }
 
+  // When it arrived. Measured before this was added: 505 of the 581 registry
+  // entries on this machine carry an install date, 87%, so it is worth a line
+  // -- and the 13% that do not simply get no line rather than a guess.
+  //
+  // Said in elapsed time rather than as a date, the way every other date on
+  // this screen is, so it needs no month names and reads the same in both
+  // languages. It is Windows' record, not a measurement, and says so: an
+  // in-place upgrade rewrites it, so a program that has been here for years
+  // can honestly claim to have arrived last Tuesday.
+  if (Number.isFinite(app.installedAt)) {
+    const days = Math.max(0, Math.floor((Date.now() - app.installedAt) / 86400000));
+    if (days < 90) {
+      add(m('evidence.apps.installedDays', 'Windows records it as installed {n} days ago', { n: n(days) }));
+    } else if (days < 730) {
+      add(m('evidence.apps.installedMonths', 'Windows records it as installed about {n} months ago', { n: n(Math.round(days / 30)) }));
+    } else {
+      add(m('evidence.apps.installedYears', 'Windows records it as installed about {n} years ago', { n: n(Math.round(days / 365)) }));
+    }
+  }
+
   return list;
 }
 
@@ -199,7 +219,7 @@ function toCandidate(app, summary, options) {
       publisher: app.publisher,
       version: app.version,
       installLocation: app.installLocation,
-      installDate: app.installDate || '',
+      installedAt: Number.isFinite(app.installedAt) ? app.installedAt : null,
       measuredBytes: app.measured ? app.measured.bytes : null,
       dataBytes: app.dataBytes || 0,
       declaredBytes: app.declaredBytes || 0,
@@ -210,7 +230,6 @@ function toCandidate(app, summary, options) {
       lastUsedAllowed: options.lastUsedAllowed,
       protection: app.protection || null,
       sharesLocationWith: app.sharesLocationWith || 0,
-      steamAppId: app.steamAppId || null,
       // Shown for the person to copy, never run by the app. The one in the
       // registry is whatever the installer wrote there.
       uninstallCommand: app.protection ? '' : app.uninstallCommand || '',

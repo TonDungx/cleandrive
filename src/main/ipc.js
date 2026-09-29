@@ -1677,14 +1677,6 @@ function register() {
     })
   );
 
-  /** Stop backing up before deleting. The folder and its copies stay. */
-  handle('backup:clear', () =>
-    guard(async () => {
-      await services().settings.patch({ backup: { destination: null } });
-      return { chosen: false };
-    })
-  );
-
   handle('quarantine:choose', (event) =>
     guard(async () => {
       let picked = null;

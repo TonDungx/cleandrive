@@ -112,6 +112,15 @@ function projectCandidate(project, staleDays) {
     list.push(evidence(list.length + 1, m('evidence.dev.refused', '{n} folders in it could not be read, so it holds at least this much', { n: n(project.refused) })));
   }
 
+  // Said only when it is absent, because that is the half that changes what
+  // somebody should do. A project under git has a history to fall back on if
+  // the wrong thing goes; a folder with no repository has nothing but the
+  // Recycle Bin. `hasGit` was measured from the first version of this scan and
+  // had never once reached a screen.
+  if (project.hasGit === false) {
+    list.push(evidence(list.length + 1, m('evidence.dev.projectNoGit', 'No git repository in this folder, so nothing here has a history to fall back on')));
+  }
+
   // Said on every row, because it is the one thing the app cannot check.
   list.push(evidence(list.length + 1, m('evidence.dev.projectNoProcess', 'Whether a program is running inside this folder was not checked: Windows reports where a process was started from, not which folder it is working in')));
 
@@ -144,7 +153,6 @@ function projectCandidate(project, staleDays) {
       touched: project.touched,
       fileCount: project.fileCount,
       dependencyDirs: project.dependencyDirs.map((d) => ({ name: d.name, path: d.path, bytes: d.bytes, files: d.files })),
-      buildFolders: project.buildFolders,
     },
   };
 }

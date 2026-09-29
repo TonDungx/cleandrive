@@ -152,6 +152,42 @@ console.log('\napps: what is part of Windows, and why\n');
 }
 
 /* -------------------------------------------------------------------------- */
+/* when a program says it arrived                                             */
+/* -------------------------------------------------------------------------- */
+
+// `InstallDate` is whatever the installer wrote. Counted across the three
+// Uninstall hives on this machine: 505 of 581 entries carry one, 87%, almost
+// all `YYYYMMDD` -- and the rest as `2025/10/06`, as `5/6/2025`, and as
+// `20260928` followed by spaces. Every one of those is in here.
+console.log('\napps: when Windows says a program was installed\n');
+
+{
+  const at = (s) => inventory.parseInstallDate(s);
+  const ymd = (ms) => {
+    const d = new Date(ms);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
+
+  check('the usual YYYYMMDD is read', ymd(at('20240917')) === '2024-09-17', String(at('20240917')));
+  check('trailing spaces do not stop it', ymd(at('20260928           ')) === '2026-09-28');
+  check('a slashed year-first date is read as written', ymd(at('2025/10/06')) === '2025-10-06');
+  check('a dashed one too', ymd(at('2025-10-06')) === '2025-10-06');
+  // Ambiguous with D/M/YYYY, and nothing in the registry says which. Read the
+  // way Windows itself writes it, month first.
+  check('a short date is read month-first, as Windows writes it', ymd(at('5/6/2025')) === '2025-05-06');
+
+  check('an empty value is nothing, not today', at('') === null && at(null) === null && at(undefined) === null);
+  check('a month that cannot be a month is refused', at('20241317') === null, String(at('20241317')));
+  check('a day that cannot be a day is refused', at('20240132') === null, String(at('20240132')));
+  // `new Date(2024, 1, 31)` silently becomes 2 March, which would report a
+  // program as installed on a day it was not.
+  check('31 February is refused rather than rolled into March', at('20240231') === null, String(at('20240231')));
+  check('a year before Windows existed is refused', at('19700101') === null);
+  check('a year in the future is refused', at(`${new Date().getFullYear() + 5}0101`) === null);
+  check('rubbish is refused', at('not a date') === null && at('2024') === null && at('202409') === null);
+}
+
+/* -------------------------------------------------------------------------- */
 /* UserAssist                                                                 */
 /* -------------------------------------------------------------------------- */
 
@@ -315,6 +351,11 @@ async function rest(records) {
         },
         {
           id: 'reg:HKLM:Fresh', source: 'registry', hive: 'HKLM', key: 'Fresh', name: 'Fresh App', publisher: 'Acme',
+          // Installed 400 days ago, so its evidence should say months. The
+          // other three carry no install date, which is the 13% of real
+          // registry entries that have none -- they must get no line at all
+          // rather than a guessed one.
+          installedAt: now - 400 * DAY,
           installLocation: 'C:\\Program Files\\Fresh', declaredBytes: 0, uninstallCommand: 'x', protection: null,
           dataFolders: [], dataBytes: 0, measured: { bytes: 1e8, files: 10, refused: 0 }, sharesLocationWith: 0,
           lastUsed: { at: now - 2 * DAY, source: 'prefetch', confidence: 'likely', sources: ['prefetch'] },
@@ -347,6 +388,27 @@ async function rest(records) {
     const byName = (name) => pro.candidates.find((c) => c.meta.name === name);
     check('no app is ever safe', pro.candidates.every((c) => c.verdict !== 'safe'),
       pro.candidates.map((c) => c.verdict).join(', '));
+    // When Windows says it arrived. Measured on this machine before it was
+    // added: 505 of 581 registry entries carry an install date. It reached the
+    // window from the first version of the Apps screen and was shown nowhere,
+    // which is the kind of thing `test-deadfeatures.js` now exists to catch.
+    {
+      // By key, not by prose: matching the word "installed" in the English
+      // catches "It did not record where it installed to", which is a
+      // different sentence entirely and made this pass for the wrong reason.
+      const keys = (name) => byName(name).evidence.map((e) => e.i18n);
+      const installedKey = (name) => keys(name).find((k) => /^evidence\.apps\.installed/.test(k)) || null;
+      const line = (name) => byName(name).evidence.find((e) => /^evidence\.apps\.installed/.test(e.i18n));
+
+      check('an app with an install date says how long ago that was',
+        installedKey('Fresh App') === 'evidence.apps.installedMonths', String(installedKey('Fresh App')));
+      check('and says the right number of them',
+        line('Fresh App') && line('Fresh App').params.n === '13',
+        line('Fresh App') ? line('Fresh App').params.n : '-');
+      check('one without an install date says nothing about it, rather than guessing',
+        installedKey('Never Recorded') === null, String(installedKey('Never Recorded')));
+    }
+
     check('an app with an old launch record is worth a look', byName('Big App').verdict === 'review', byName('Big App').verdict);
     check('one started two days ago is not', byName('Fresh App').verdict === 'keep', byName('Fresh App').verdict);
     check('an app with no record at all is kept, not called unused',

@@ -1376,6 +1376,14 @@ Parts of Windows are `protected`, and the row says which of four things made it
 so: Windows signed the package itself, Windows' own "cannot be removed" flag,
 it is installed inside the Windows folder, or it registered no uninstaller.
 
+### When it arrived
+
+The evidence under a row says how long ago Windows records the program as
+installed. **505 of the 581 registry entries on this machine carry that date**,
+87%; the other 13% get no line at all rather than a guessed one. It is Windows'
+record and not a measurement — an in-place upgrade rewrites it, so a program
+that has been here for years can honestly claim to have arrived last week.
+
 ---
 
 ## Screen 8 — Games
@@ -1408,6 +1416,12 @@ and one per signed-in account, and neither is reliably the newer: three of nine
 games here had been played more recently than the file beside them said, one of
 them by 499 days. Every account folder on the machine is read — the question is
 whether anyone has played it here — and only that one date is taken from them.
+
+**When Steam last updated it** is shown alongside, because the two disagree in
+the way that matters: a game played two years ago but patched last month is one
+Steam still maintains, and one never updated since it arrived is one nobody has
+touched at either end. Neither is a reason to remove it, which is why it is
+evidence and not a rule.
 
 A game is `review` when it has not been played for six months, which is longer
 than the ninety days the Apps screen uses: not opening a program for three
@@ -1523,6 +1537,10 @@ requirements.txt`, `cargo build`. It is `safe` only when there is a lockfile
 "last touched" reading deliberately skips the dependency folder itself, because
 one `npm install` stamps 47,754 files with today's date and would make a
 project nobody has opened since February look like this morning's work.
+
+**A project with no git repository says so**, and only then — a folder under
+git has a history to fall back on if the wrong thing goes, and one without has
+nothing but the Recycle Bin.
 
 **A build folder can go to the Recycle Bin — but only when your own
 `.gitignore` says it is regenerated.** Not because a project file sits beside

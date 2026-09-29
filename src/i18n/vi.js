@@ -2102,6 +2102,7 @@
       'Nó không có lệnh nào để dọn. Xoá thư mục đi thì công cụ sẽ tải lại thứ nó cần ở lần build kế tiếp',
     'evidence.dev.places': 'Nằm ở {n} thư mục: {list}',
     'evidence.dev.refused': 'Có {n} thư mục bên trong không đọc được, nên nó chứa ít nhất chừng này',
+    'evidence.dev.projectNoGit': 'Thư mục này không có kho git, nên không thứ gì trong đây có lịch sử để lần về',
     'evidence.dev.androidManager':
       'Hãy gỡ bớt thành phần từ chính SDK Manager của Android Studio, nơi biết dự án nào còn cần cái gì. Bốc thư mục ra bằng tay sẽ khiến nó vẫn tưởng các thành phần đó còn đấy',
     'evidence.dev.sdkManager':
@@ -2210,6 +2211,7 @@
     'evidence.games.partial':
       'Steam không đánh dấu nó là đã cài xong, nên một phần chỗ này có thể là bản tải dở dừng giữa chừng',
     'evidence.games.staging': 'Còn {size} nữa đang chờ sẵn cho một bản cập nhật chưa hoàn tất',
+    'evidence.games.updated': 'Steam cập nhật nó lần cuối cách đây {n} ngày',
     'evidence.games.library': 'Nằm trong thư viện Steam trên {library}',
     'evidence.games.accounts': 'Có {n} tài khoản Steam trên máy này từng chơi nó',
     'evidence.games.accountsUnread':
@@ -2340,6 +2342,9 @@
     'evidence.apps.shared':
       'Có {n} ứng dụng khác cũng cài vào đúng thư mục này, nên dung lượng này là của thư mục, không phải của riêng ứng dụng này. Tổng ở trên chỉ đếm nó một lần',
     'evidence.apps.alsoIn': 'Cùng một chương trình được đăng ký thêm {n} lần nữa, và ở đây chỉ đếm một lần',
+    'evidence.apps.installedDays': 'Windows ghi nhận nó được cài cách đây {n} ngày',
+    'evidence.apps.installedMonths': 'Windows ghi nhận nó được cài cách đây khoảng {n} tháng',
+    'evidence.apps.installedYears': 'Windows ghi nhận nó được cài cách đây khoảng {n} năm',
     'system.measure': 'Đo ổ này',
     'system.measureElevated': 'Đo với quyền quản trị…',
     'system.size': 'dung lượng',

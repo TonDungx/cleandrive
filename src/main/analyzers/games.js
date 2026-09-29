@@ -101,6 +101,20 @@ function gameEvidence(game, model) {
     add(m('evidence.games.staging', '{size} more is staged for an update that has not finished', { size: formatBytes(game.stagingBytes) }));
   }
 
+  // When Steam last wrote to it. Worth a line beside "last played" because the
+  // two disagree in the way that matters: a game played two years ago but
+  // patched last month is one Steam still maintains, and a game never updated
+  // since it arrived is one nobody has touched at either end. Neither is a
+  // reason to delete it, which is why this is evidence and not a rule.
+  //
+  // `updatedAt` is already milliseconds -- `steam.js` multiplies Steam's
+  // `LastUpdated` seconds by a thousand where it reads the manifest.
+  if (Number.isFinite(game.updatedAt) && game.updatedAt > 0) {
+    add(m('evidence.games.updated', 'Steam last updated it {n} days ago', {
+      n: n(Math.max(0, Math.floor((Date.now() - game.updatedAt) / 86400000))),
+    }));
+  }
+
   add(m('evidence.games.library', 'In the Steam library on {library}', { library: game.library }));
 
   if (game.alsoInAccounts > 1) {
@@ -141,7 +155,6 @@ function gameCandidate(game, model) {
       appid: game.appid,
       name: game.name,
       library: game.library,
-      installdir: game.installdir,
       lastPlayedAt: game.lastPlayedAt,
       playedSource: game.playedSource,
       fullyInstalled: game.fullyInstalled,

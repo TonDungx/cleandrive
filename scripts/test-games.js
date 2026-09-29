@@ -306,6 +306,22 @@ async function main() {
     check('and every game row says why the app will not remove it',
       realGames.every((c) => c.evidence.some((e) => e.i18n === 'evidence.games.uninstallOnly')));
 
+    // When Steam last patched it. Read from the manifest since D2 shipped and
+    // shown nowhere until the dead-feature sweep -- it disagrees with "last
+    // played" in the way that matters: a game played two years ago but patched
+    // last month is one Steam still maintains.
+    {
+      const withUpdate = gameRows.filter((c) => c.evidence.some((e) => e.i18n === 'evidence.games.updated'));
+      check('a game whose manifest records an update says how long ago that was',
+        withUpdate.length > 0, `${withUpdate.length} of ${gameRows.length} rows`);
+      check('and the number is days, not a raw timestamp',
+        withUpdate.every((c) => {
+          const line = c.evidence.find((e) => e.i18n === 'evidence.games.updated');
+          return Number(String(line.params.n).replace(/[^\d]/g, '')) < 40000;
+        }),
+        withUpdate.map((c) => c.evidence.find((e) => e.i18n === 'evidence.games.updated').params.n).slice(0, 4).join(', '));
+    }
+
     // Steam's own shared runtime sits in the library looking like a game, has
     // never been played, and breaks other games if it goes. A screenshot
     // caught it being offered for uninstall before this existed.

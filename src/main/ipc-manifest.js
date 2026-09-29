@@ -67,7 +67,6 @@ const INVOKE = Object.freeze([
   'quarantine:choose',
 
   'backup:choose',
-  'backup:clear',
 
   'relocate:choose',
   'archive:choose',

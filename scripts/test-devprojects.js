@@ -299,6 +299,20 @@ async function main() {
     check('and every one of them says so',
       deps.every((c) => c.evidence.some((e) => e.i18n === 'evidence.dev.projectNoProcess')));
 
+    // `hasGit` was measured from the first version of this scan and never once
+    // reached a screen. It is said only when it is false, because that is the
+    // half that changes what somebody should do: a folder with no repository
+    // has nothing but the Recycle Bin to fall back on.
+    {
+      const said = (c) => c.evidence.some((e) => e.i18n === 'evidence.dev.projectNoGit');
+      const noGit = candidates.filter((c) => c.meta && c.meta.hasGit === false);
+      const withGit = candidates.filter((c) => c.meta && c.meta.hasGit === true);
+      check('a project with no git repository says so', noGit.length === 0 || noGit.every(said),
+        `${noGit.filter(said).length} of ${noGit.length}`);
+      check('and a project that has one does not say anything about it',
+        withGit.every((c) => !said(c)), `${withGit.filter(said).length} of ${withGit.length} said it wrongly`);
+    }
+
     // my-app\dist 2 + tool\dist 1 + mobileuild 2 (the nested out\ is part of it)
     check('a declared build folder yields one row per file, each recyclable',
       files.length === 5 && files.every((c) => c.verdict === 'safe' && c.actions.includes('recycle')),
