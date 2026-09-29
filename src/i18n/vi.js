@@ -256,6 +256,7 @@
     'category.app.discord': 'Discord — bộ nhớ đệm',
     'category.app.zoom': 'Zoom — bộ nhớ đệm',
     'category.app.figma': 'Figma — bộ nhớ đệm',
+    'category.app.zalo': 'Zalo — bộ nhớ đệm',
     'category.app.chrome.hint':
       'Trang, script và hình ảnh Chrome lưu lại để mở web nhanh hơn, cùng mã đồ hoạ nó đã biên dịch. Chrome tự tải ' +
       'lại hoặc tạo lại khi cần; không có gì bạn đã lưu, cũng không có phiên đăng nhập nào nằm ở đây.',
@@ -274,6 +275,9 @@
     'category.app.figma.hint':
       'Script, hình ảnh và mã đồ hoạ ứng dụng Figma lưu lại để mở nhanh hơn. Figma tự tải lại hoặc tạo lại; ' +
       'tệp thiết kế của bạn nằm trên đám mây của Figma, không nằm ở đây.',
+    'category.app.zalo.hint':
+      'Trang, hình ảnh và mã đồ hoạ Zalo lưu lại để mở nhanh hơn. Zalo tự tải lại hoặc tạo lại; tin nhắn, phiên ' +
+      'đăng nhập và ảnh người ta gửi cho bạn không nằm ở đây — ảnh nằm ở màn Ứng dụng chat.',
     'cleanup.appOpen': 'đang mở',
     'cleanup.appUnknown': 'không kiểm được',
     'cleanup.appOpenHint': '{app} đang mở. Hãy đóng nó rồi quét lại để dọn bộ nhớ đệm của nó.',
@@ -2235,6 +2239,132 @@
     'evidence.games.steamOpen':
       'Steam đang mở — hãy đóng Steam trước khi xoá những thứ này, phòng khi một trong số đó là bản tải đang chạy',
     'evidence.games.steamUnknown': 'Không kiểm được Steam có đang chạy hay không, nên những mục này không được đề xuất',
+
+    /* ---- Ứng dụng chat (D3) ---------------------------------------------- */
+
+    'app.tab.chat': 'Ứng dụng chat',
+    'progress.chat': 'Đang đọc những gì ứng dụng chat đã tải về',
+    'chat.scan': 'Xem ứng dụng chat của tôi',
+    'chat.ready':
+      'Đo những gì Zalo và Telegram Desktop đã tải về máy này, và — với Zalo — mỗi phần thuộc cuộc trò chuyện nào. Không đọc tin nhắn nào.',
+    'chat.done': '{size} do ứng dụng chat tải về, trong {time}.',
+    'chat.needsPro': 'Dữ liệu ứng dụng chat thuộc gói Pro.',
+    'chat.noApps': 'Không tìm thấy Zalo lẫn Telegram Desktop trên máy này.',
+    'chat.tableLabel': 'Dữ liệu tải về theo cuộc trò chuyện',
+
+    'chat.phase.finding': 'Đang tìm ứng dụng chat…',
+    'chat.phase.zalo': 'Đang đọc những gì Zalo đã tải về…',
+    'chat.phase.conversations': 'Cuộc trò chuyện {done} trên {total}…',
+    'chat.phase.telegram': 'Đang đọc những gì Telegram Desktop giữ lại…',
+
+    'chat.stat.size': 'Đã tải về',
+    'chat.stat.conversations': 'Cuộc trò chuyện',
+    'chat.stat.twice': 'Ảnh giữ hai bản',
+    'chat.stat.selected': 'Đang chọn',
+
+    'chat.delete': 'Chuyển mục đã chọn vào Thùng rác',
+    'chat.deleteN': 'Chuyển {n} mục đã chọn vào Thùng rác',
+    'chat.quarantine': 'Để riêng sang chỗ khác…',
+    'chat.picking': 'Chọn',
+    'chat.picked': 'Đã chọn',
+    'chat.update.pick': 'Vẫn chọn',
+    'chat.update.picked': 'Đã chọn — nó sẽ phải tải lại',
+
+    'chat.kinds.title': 'Ở đây có gì, theo loại',
+    'chat.kinds.what':
+      'Mọi ứng dụng trên màn này, và mọi thứ nó đã tải về máy. Database tin nhắn không được tính và không bao giờ bị đụng tới.',
+    'chat.appTotal': '{size} trong {n} tệp',
+
+    'chat.months.title': 'Chúng đến khi nào',
+    'chat.months.fromNames':
+      'Zalo ghi thẳng thời điểm gửi tin nhắn vào tên tệp, nên đây là lúc từng thứ đến trong cuộc trò chuyện, không phải lúc máy này ghi tệp.',
+    'chat.months.mixed':
+      '{n} trong {total} mục mang sẵn thời điểm gửi trong tên; số còn lại xếp theo lúc máy này ghi tệp.',
+    'chat.month.what': '{month}: {size} trong {n} tệp',
+    'chat.biggest.title': 'Những tệp lớn nhất',
+
+    'chat.conversations.title': 'Theo cuộc trò chuyện',
+    'chat.conversations.what':
+      '{n} cuộc trò chuyện, {size}. Chỉ những gì Zalo tải về mới chia được như vậy, và chỉ vì id của cuộc trò chuyện nằm sẵn trong tên thư mục lẫn tên từng tệp.',
+    'chat.col.name': 'Cuộc trò chuyện',
+    'chat.col.name.what':
+      'Chính id của Zalo. Tên của nó nằm trong database tin nhắn, mà app này không mở database tin nhắn.',
+    'chat.col.size': 'Đã tải về',
+    'chat.col.when': 'Lần đến gần nhất',
+    'chat.groupChat': 'Nhóm · {n} tệp',
+    'chat.directChat': 'Một–một · {n} tệp',
+    'chat.span': 'Từ {first} đến {last}',
+    'chat.noDate': 'không rõ ngày',
+    'chat.showKinds': 'Trong đó có gì',
+    'chat.hideKinds': 'Ẩn phần trong đó',
+    'chat.reveal': 'Mở thư mục',
+
+    'chat.shared.title': 'Không gắn với cuộc trò chuyện nào',
+    'chat.shared.what':
+      '{size} không gắn được vào cuộc trò chuyện nào: mỗi loại một thư mục dùng chung cho cả tài khoản, bộ nhớ đệm của cả hai tài khoản Telegram, và phần một bản cập nhật đã giải nén ra.',
+
+    'chat.note.cancelled': 'Lượt quét đã bị dừng giữa chừng.',
+    'chat.note.appOpen':
+      '{apps} đang mở, nên không thứ gì của nó được đề xuất xoá. Hãy đóng nó rồi quét lại.',
+    'chat.note.processUnknown':
+      'Không kiểm được các ứng dụng này có đang chạy hay không, nên không thứ gì ở đây được đề xuất xoá.',
+    'chat.note.noDatabase':
+      'Không database tin nhắn nào được mở và không tin nhắn nào được đọc. Đó chính là lý do một cuộc trò chuyện hiện bằng id: cái tên của nó nằm bên trong database.',
+    'chat.note.telegramFlat':
+      'Telegram Desktop không đặt tên thứ gì theo cuộc trò chuyện — bộ nhớ đệm của nó đánh địa chỉ theo nội dung — nên nó chỉ xuất hiện ở phần theo loại và theo tháng phía trên.',
+    'chat.note.paired':
+      'Zalo giữ {n} tấm ảnh trong số này hai bản: một bản đúng như lúc nhận và một bản đã mã hoá lại. Chỉ bản đúng như lúc nhận là thứ máy này mở được, nên bản nhỏ hơn không phải bản nên xoá.',
+
+    'chat.kind.picture': 'Ảnh, do Zalo mã hoá lại',
+    'chat.kind.cache': 'Ảnh đúng như lúc nhận',
+    'chat.kind.video': 'Video',
+    'chat.kind.voice': 'Tin nhắn thoại',
+    'chat.kind.file': 'Tệp người ta gửi',
+    'chat.kind.fileNoise': 'Tệp, ở dạng chỉ Zalo đọc được',
+    'chat.kind.fileThumb': 'Ảnh thu nhỏ của tệp',
+    'chat.kind.richThumb': 'Ảnh xem trước của liên kết',
+    'chat.kind.zinstant': 'Mảnh giao diện Zalo tải về',
+    'chat.kind.sticker': 'Nhãn dán',
+    'chat.kind.tgCache': 'Mọi thứ Telegram lưu đệm',
+    'chat.kind.tgMediaCache': 'Ảnh và video Telegram lưu đệm',
+    'chat.kind.update': 'Một bản cập nhật đã tải',
+    'chat.kind.other': 'Thứ tải về khác',
+
+    'chat.removalNote':
+      'Xoá ở đây là xoá khỏi máy này, không phải khỏi cuộc trò chuyện. Ứng dụng có tải lại được hay không còn tuỳ tệp đó còn trên máy chủ hay không — hãy coi như là không.',
+
+    'evidence.chat.appOpen': '{app} đang mở — hãy đóng nó rồi quét lại',
+    'evidence.chat.processUnknown':
+      'Không kiểm được {app} có đang chạy hay không, nên không thứ gì ở đây được đề xuất xoá',
+    'evidence.chat.group':
+      'Một nhóm chat. Id của nó bắt đầu bằng “g”, và đó là dấu hiệu duy nhất phân biệt được ở đây',
+    'evidence.chat.direct': 'Một cuộc trò chuyện một–một',
+    'evidence.chat.noName':
+      'Hiện bằng id vì cái tên nằm trong database tin nhắn của Zalo, mà app này không mở nó',
+    'evidence.chat.oneDay': 'Mọi thứ ở đây đến trong ngày {day}',
+    'evidence.chat.span': 'Từ {first} đến {last}',
+    'evidence.chat.spread': 'Trải trên {n} loại tải về, mỗi loại một dung lượng riêng',
+    'evidence.chat.paired':
+      'Có {n} tấm trong số ảnh này được giữ hai bản — một bản đúng như Zalo nhận được và một bản mã hoá lại. Các bản đúng như lúc nhận cộng lại là {size}, và chúng mới là thứ máy này mở được',
+    'evidence.chat.file': 'Do {app} tải về',
+    'evidence.chat.shared':
+      '{size} trong {n} tệp, và không có gì ở đây cho biết phần nào thuộc cuộc trò chuyện nào',
+    'evidence.chat.sharedZalo':
+      'Zalo để chung những thứ này trong một thư mục cho cả tài khoản, nên không có cách nào biết cái nào thuộc cuộc trò chuyện nào mà không đọc database tin nhắn',
+    'evidence.chat.sharedTelegram':
+      'Telegram không đặt tên thứ gì ở đây theo cuộc trò chuyện. Bộ nhớ đệm của nó đánh địa chỉ theo nội dung, và chỗ duy nhất định danh một cuộc trò chuyện là kho tin nhắn, mà app này không mở',
+    'evidence.chat.updatePending':
+      'Telegram {staged} đã được tải về và giải nén sẵn, đang chờ thay cho bản {installed} bạn đang chạy',
+    'evidence.chat.updateApplied':
+      'Telegram {staged} nằm giải nén ở đây còn bản đang chạy là {installed}, nên đây là bản sao của một lần cập nhật đã xong',
+    'evidence.chat.updateUnknown':
+      'Một bản cập nhật Telegram đã giải nén. Không đọc được hai số hiệu phiên bản, nên không biết được ở đây là nó còn đang chờ áp dụng hay không',
+    'evidence.chat.updateWhen': 'Tải về ngày {day}',
+    'evidence.chat.updateCost':
+      'Xoá nó không phải là dọn rác: Telegram sẽ tải lại {size} đó vào lần cập nhật tới',
+
+    'dialog.confirmDelete.chat':
+      '{n} mục trong số này do {apps} tải về. Xoá chúng là xoá khỏi máy này, không phải khỏi cuộc trò chuyện. Ứng dụng có tải lại được hay không còn tuỳ tệp đó còn trên máy chủ hay không, mà điều đó không kiểm được từ đây — hãy coi như là không.',
 
     /* ---- Ứng dụng đã cài (D1) -------------------------------------------- */
 

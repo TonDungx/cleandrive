@@ -100,7 +100,21 @@ const APP_FOLDERS = [
   {
     name: 'Telegram Desktop',
     env: 'APPDATA',
-    relative: ['Telegram Desktop', 'tdata', 'user_data', 'media_cache'],
+    /*
+     * One root per signed-in account, not one for the machine.
+     *
+     * This entry used to be the fixed path `tdata\user_data\media_cache`, and
+     * D3 measured what that was worth on this machine: **one file, 10 KB**.
+     * The second account, which the path could never reach, holds `user_data#2`
+     * -- 4 files in its `media_cache` and 352 in its `cache`. So the folder was
+     * not small, it was the wrong folder, and half of it had been invisible
+     * since the photo screen shipped.
+     *
+     * `#N` is Telegram's own suffix, not a guess: it is what this machine calls
+     * its second account.
+     */
+    relative: ['Telegram Desktop', 'tdata'],
+    perAccount: { match: /^user_data(#[0-9]{1,3})?$/i, inside: ['media_cache'] },
     why: m('media.root.telegram', 'Media cached by Telegram Desktop'),
   },
   {
@@ -128,9 +142,13 @@ const APP_FOLDERS = [
  *
  * @param {{pictures: string|null, videos: string|null, downloads: string|null, home: string}} known
  * @param {(p: string) => boolean} exists
+ * @param {(dir: string) => string[]} [listDirs]  subdirectory names, for the
+ *   app folders that keep one per signed-in account. Injected for the same
+ *   reason `exists` is, and defaulting to "none" means a caller that does not
+ *   pass it simply gets no per-account roots rather than a crash.
  * @returns {Array<{path: string, name: string, why: object, defaultOn: boolean}>}
  */
-function candidateRoots(known, exists) {
+function candidateRoots(known, exists, listDirs = () => []) {
   const out = [];
   const seen = new Set();
 
@@ -163,7 +181,27 @@ function candidateRoots(known, exists) {
   for (const folder of APP_FOLDERS) {
     const base = process.env[folder.env];
     if (!base) continue;
-    add(path.join(base, ...folder.relative), folder.name, folder.why, true);
+    const root = path.join(base, ...folder.relative);
+
+    if (!folder.perAccount) {
+      add(root, folder.name, folder.why, true);
+      continue;
+    }
+
+    // An app that signs in more than once keeps a folder per account, and a
+    // fixed path can only ever see the first. Each one gets its own entry so
+    // the list says which account it is rather than silently merging them.
+    const accounts = listDirs(root).filter((name) => folder.perAccount.match.test(name)).sort();
+    for (const account of accounts) {
+      for (const leaf of folder.perAccount.inside) {
+        add(
+          path.join(root, account, leaf),
+          accounts.length > 1 ? `${folder.name} · ${account}` : folder.name,
+          folder.why,
+          true
+        );
+      }
+    }
   }
 
   // Off by default, and on its own, because of the 9,676.

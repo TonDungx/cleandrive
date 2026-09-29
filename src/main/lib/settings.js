@@ -52,7 +52,7 @@ const themePalette = require('../../shared/theme-palette');
  *   8 -> 9   `backup.destination`: where a copy goes before files are
  *            deleted from the Photos screen, or null (E2)
  */
-const SCHEMA_VERSION = 9;
+const SCHEMA_VERSION = 10;
 
 const MIGRATIONS = Object.freeze([
   {
@@ -169,6 +169,35 @@ const MIGRATIONS = Object.freeze([
       // with different lifetimes in the same place.
       const backup = isObject(raw.backup) ? raw.backup : {};
       return { ...raw, version: 9, backup: { destination: null, ...backup } };
+    },
+  },
+  {
+    from: 9,
+    to: 10,
+    migrate(raw) {
+      // D3 added Zalo to the known apps whose caches the 2am run may take.
+      // The same rule version 3 used when Chrome and Edge arrived: a profile
+      // that is already cleaning some app's cache is cleaning app caches, so
+      // it gets this one too; a profile that is cleaning none gains nothing it
+      // did not ask for. Only Zalo's *browser* caches are involved -- what it
+      // downloaded from conversations is on the Chat screen, is never `safe`,
+      // and can never be run unattended.
+      const auto = isObject(raw.autoClean) ? raw.autoClean : null;
+      const profiles = auto && Array.isArray(auto.profiles) ? auto.profiles : null;
+      if (!profiles) return { ...raw, version: 10 };
+      return {
+        ...raw,
+        version: 10,
+        autoClean: {
+          ...auto,
+          profiles: profiles.map((profile) => {
+            if (!isObject(profile) || !Array.isArray(profile.categories)) return profile;
+            const has = profile.categories.some((c) => String(c).toLowerCase().startsWith('app.'));
+            if (!has || profile.categories.includes('app.zalo')) return profile;
+            return { ...profile, categories: [...profile.categories, 'app.zalo'] };
+          }),
+        },
+      };
     },
   },
 ]);

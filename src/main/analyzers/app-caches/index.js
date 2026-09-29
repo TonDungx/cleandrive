@@ -32,7 +32,7 @@
 
 const path = require('node:path');
 
-const FILES = Object.freeze(['chrome', 'edge', 'teams', 'discord', 'zoom', 'figma']);
+const FILES = Object.freeze(['chrome', 'edge', 'teams', 'discord', 'zoom', 'figma', 'zalo']);
 const BASES = Object.freeze(['LOCALAPPDATA', 'APPDATA']);
 
 function fail(file, what) {

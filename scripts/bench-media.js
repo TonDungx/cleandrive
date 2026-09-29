@@ -106,7 +106,14 @@ app.whenReady().then(async () => {
           videos: safePath('videos'),
           downloads: safePath('downloads'),
         },
-        (p) => fs.existsSync(p)
+        (p) => fs.existsSync(p),
+        (dir) => {
+          try {
+            return fs.readdirSync(dir, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name);
+          } catch {
+            return [];
+          }
+        }
       )
         .filter((entry) => entry.defaultOn)
         .map((entry) => entry.path);

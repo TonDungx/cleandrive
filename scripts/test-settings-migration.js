@@ -22,6 +22,7 @@ const {
   SCHEMA_VERSION,
   LIMITS,
 } = require('../src/main/lib/settings');
+const { isAllowedUnattended } = require('../src/main/automatic/allowed-categories');
 
 let failures = 0;
 function check(label, cond, detail = '') {
@@ -85,14 +86,14 @@ const V1 = {
     const on = { version: 2, autoClean: { enabled: true, categories: ['temp', 'gpucache'] } };
     const withGpu = first(migrate(on).raw).categories;
     check('with the GPU category on, every known app’s cache is added',
-      ['app.chrome', 'app.edge', 'app.teams', 'app.discord', 'app.zoom', 'app.figma'].every((c) => withGpu.includes(c)) &&
+      ['app.chrome', 'app.edge', 'app.teams', 'app.discord', 'app.zoom', 'app.figma', 'app.zalo'].every((c) => withGpu.includes(c)) &&
         withGpu[0] === 'temp' && withGpu[1] === 'gpucache', withGpu.join(', '));
     const off = first(migrate({ version: 2, autoClean: { enabled: true, categories: ['temp', 'log'] } }).raw).categories;
     check('with it off, nothing is added', JSON.stringify(off) === '["temp","log"]', off.join(', '));
     const unticked = first(migrate({ version: 3, autoClean: { categories: ['gpucache'] } }).raw).categories;
     check('a version 3 file keeps its categories -- an app somebody unticked stays unticked', JSON.stringify(unticked) === '["gpucache"]');
     const read = first(coerceSettings(on).settings).categories;
-    check('and the added names are ones the settings accept', read.includes('app.edge') && read.length === 8, read.join(', '));
+    check('and the added names are ones the settings accept', read.includes('app.edge') && read.length === 9, read.join(', '));
   }
 
   {
@@ -161,6 +162,45 @@ const V1 = {
     const odd = coerceSettings({ version: 6, explorer: { contextMenu: 'yes' } }).settings.explorer;
     check('and anything but true is off', odd.contextMenu === false);
     check('a fresh install has it off', coerceSettings({}).settings.explorer.contextMenu === false);
+  }
+
+  console.log('\nsettings: version 9 to 10 -- Zalo joins the known apps (D3)\n');
+
+  {
+    // The same rule version 3 used when the first six arrived: a profile that
+    // is already cleaning some app's cache gets this one too, and a profile
+    // cleaning none gains nothing it did not ask for.
+    const withApps = migrate({
+      version: 9,
+      autoClean: { profiles: [{ id: 'a', enabled: true, categories: ['temp', 'app.chrome'] }] },
+    }).raw;
+    check('a profile already cleaning an app cache gains Zalo',
+      withApps.version === SCHEMA_VERSION && withApps.autoClean.profiles[0].categories.join(',') === 'temp,app.chrome,app.zalo',
+      withApps.autoClean.profiles[0].categories.join(', '));
+
+    const without = migrate({
+      version: 9,
+      autoClean: { profiles: [{ id: 'a', enabled: true, categories: ['temp', 'log'] }] },
+    }).raw;
+    check('a profile cleaning none of them gains nothing',
+      without.autoClean.profiles[0].categories.join(',') === 'temp,log',
+      without.autoClean.profiles[0].categories.join(', '));
+
+    const already = migrate({
+      version: 9,
+      autoClean: { profiles: [{ id: 'a', enabled: true, categories: ['app.zalo'] }] },
+    }).raw;
+    check('and it is never added twice', already.autoClean.profiles[0].categories.join(',') === 'app.zalo');
+
+    const none = migrate({ version: 9, appearance: { theme: 'dark' } }).raw;
+    check('a file with no automatic section is left alone', none.version === SCHEMA_VERSION && none.autoClean === undefined);
+
+    // The one thing this migration must not do. What Zalo downloaded from
+    // conversations is on the Chat screen, is never `safe`, and is refused by
+    // the whitelist itself -- not merely left off a default.
+    check('nothing about chat downloads is on the automatic whitelist',
+      !isAllowedUnattended('chat.conversation') && !isAllowedUnattended('chat.file') &&
+        !isAllowedUnattended('chat.shared') && !isAllowedUnattended('chat.update'));
   }
 
   console.log('\nsettings: the snapshot section is clamped like everything else\n');

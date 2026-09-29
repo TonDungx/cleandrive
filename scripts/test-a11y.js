@@ -465,6 +465,90 @@ app.whenReady().then(async () => {
   await openGames();
   check('the Games screen draws its rows', await until(`document.querySelectorAll('#games-list .games-row').length >= 4`, 10000));
 
+  // Chat: two conversations, a shared folder and a staged update, so the
+  // conversation table, the by-type bars, the month histogram and the chips
+  // are all on screen at once. Constructed rows, labelled as such; `smoke.js`
+  // runs this screen against the real Zalo and Telegram on this machine.
+  const openChat = () => run(`
+    selectTab(document.getElementById('tab-chat'));
+    const now = Date.now();
+    const ev = (rank, i18n, en, params) => ({ rank, i18n, en, params });
+    const label = (i18n, en) => ({ i18n, en });
+    const conv = (n, id, over) => Object.assign({
+      id: 'c' + n,
+      path: 'C:\\\\Users\\\\me\\\\AppData\\\\Roaming\\\\ZaloData\\\\media\\\\1\\\\ZaloDownloads\\\\resource\\\\' + id,
+      kind: 'folder', bytes: 2.6e8 / n, category: 'chat.conversation', verdict: 'review', confidence: 'certain',
+      evidence: [
+        ev(1, 'evidence.chat.group', 'A group chat. Its id begins with \u201Cg\u201D, which is the only thing that distinguishes one here'),
+        ev(2, 'evidence.chat.noName', 'Shown by id because the name is in Zalo\u2019s message database, and this app does not open it'),
+        ev(3, 'evidence.chat.paired', '{n} of these photos are kept twice', { n: '412', size: '48.2 MB' }),
+      ],
+      actions: [], unattendedEligible: false,
+      meta: {
+        app: 'zalo', folderRow: true, conversationId: id, group: id[0] === 'g', account: '1',
+        files: 3400 / n, earliest: now - 500 * 86400000, latest: now - n * 86400000,
+        pairedCount: 412 / n, pairedCacheBytes: 4.8e7 / n,
+        byKind: [
+          { kind: 'picture', bytes: 1.4e8 / n, files: 1800 / n, label: label('chat.kind.picture', 'Photos, re-encoded by Zalo') },
+          { kind: 'Cache', bytes: 8e7 / n, files: 900 / n, label: label('chat.kind.cache', 'Photos as they arrived') },
+          { kind: 'video', bytes: 4e7 / n, files: 12, label: label('chat.kind.video', 'Videos') },
+        ],
+      },
+    }, over || {});
+    const rows = [
+      conv(1, 'g4247325580991211986'),
+      conv(2, '13410346471542028'),
+      {
+        id: 's1', path: 'C:\\\\Users\\\\me\\\\AppData\\\\Roaming\\\\ZaloData\\\\media\\\\1\\\\sticker',
+        kind: 'folder', bytes: 4.1e7, category: 'chat.shared', verdict: 'review', confidence: 'certain',
+        evidence: [ev(1, 'evidence.chat.shared', '{size} in {n} files, and nothing here says which conversation any of it belongs to', { size: '39.1 MB', n: '962' })],
+        actions: [], unattendedEligible: false,
+        meta: { app: 'zalo', folderRow: true, kind: 'sticker', label: label('chat.kind.sticker', 'Stickers'), files: 962, account: '1' },
+      },
+      {
+        id: 'u1', path: 'C:\\\\Users\\\\me\\\\AppData\\\\Roaming\\\\Telegram Desktop\\\\tupdates',
+        kind: 'folder', bytes: 2.23e8, category: 'chat.update', verdict: 'review', confidence: 'certain',
+        evidence: [ev(1, 'evidence.chat.updatePending', 'Telegram {staged} has been downloaded and unpacked, waiting to replace the {installed} you are running', { staged: '7.2.5.0', installed: '7.1.3.0' })],
+        actions: [], unattendedEligible: false,
+        meta: { app: 'telegram', folderRow: true, kind: 'update', stagedVersion: '7.2.5.0', installedVersion: '7.1.3.0', newer: 1, stagedAt: now - 6 * 86400000, files: 5 },
+      },
+    ];
+    const months = [];
+    for (let i = 17; i >= 0; i--) {
+      const d = new Date(now - i * 30 * 86400000);
+      months.push({ month: d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'), bytes: 2e7 + i * 4e6, files: 100 + i * 20 });
+    }
+    window.chatScreen.view.result = {
+      candidates: rows,
+      apps: { zalo: { installed: true, path: 'C:\\\\ZaloData' }, telegram: { installed: true, path: 'C:\\\\Telegram Desktop' } },
+      summary: {
+        rows: { conversations: ['c1', 'c2'], shared: ['s1'], updates: ['u1'] },
+        fileRows: 11932, running: { zalo: false, telegram: false }, cancelled: false, durationMs: 7400,
+        zalo: {
+          installed: true, bytes: 1.15e9, files: 11567,
+          byKind: [
+            { kind: 'picture', bytes: 3.85e8, files: 5868 },
+            { kind: 'video', bytes: 3.2e8, files: 57 },
+            { kind: 'Cache', bytes: 3.07e8, files: 4003 },
+            { kind: 'sticker', bytes: 4.1e7, files: 962 },
+          ],
+          histogram: { months, biggest: [], fromNames: 10296, totalFiles: 11567 },
+          conversations: 2, accounts: [{ id: '1', bytes: 1.15e9, files: 11567 }], hasUpdate: false,
+        },
+        telegram: {
+          installed: true, bytes: 2.32e8, files: 365,
+          byKind: [{ kind: 'update', bytes: 2.23e8, files: 5 }, { kind: 'cache', bytes: 9.1e6, files: 355 }],
+          histogram: { months: [], biggest: [], fromNames: 0, totalFiles: 365 },
+          accounts: [{ id: 'user_data', bytes: 4.5e5, files: 4 }, { id: 'user_data#2', bytes: 8.9e6, files: 356 }],
+          hasUpdate: true,
+        },
+        conversationsFrom: ['zalo'],
+      },
+    };
+    window.chatScreen.render();`);
+  await openChat();
+  check('the Chat screen draws its rows', await until(`document.querySelectorAll('#chat-conversations .chat-row').length >= 3`, 10000));
+
   // Developer: one card of each kind, including an editor that is open so the
   // held-back state is drawn too. Constructed readings, labelled as such;
   // `smoke.js` runs the screen against this machine's real tools.
@@ -586,12 +670,13 @@ app.whenReady().then(async () => {
       incomplete: r.incomplete.reduce((n, v) => n + v.nodes.length, 0),
     }))`);
 
-  const SCREENS = ['usage', 'system', 'cleanup', 'media', 'dupes', 'apps', 'games', 'dev', 'trends', 'restore', 'auto', 'settings'];
+  const SCREENS = ['usage', 'system', 'cleanup', 'media', 'dupes', 'apps', 'games', 'chat', 'dev', 'trends', 'restore', 'auto', 'settings'];
   const axeScreens = async (label) => {
     for (const screen of SCREENS) {
       if (screen === 'trends') await openTrends();
       else if (screen === 'apps') await openApps();
       else if (screen === 'games') await openGames();
+      else if (screen === 'chat') await openChat();
       else if (screen === 'dev') await openDev();
       else await tab(screen);
       await wait(250);
@@ -687,7 +772,7 @@ app.whenReady().then(async () => {
   }
   for (const mode of ['light', 'dark']) {
     await setTheme(mode);
-    for (const screen of ['usage', 'cleanup', 'dupes', 'media', 'apps', 'games', 'dev', 'restore', 'settings']) {
+    for (const screen of ['usage', 'cleanup', 'dupes', 'media', 'apps', 'games', 'chat', 'dev', 'restore', 'settings']) {
       await tab(screen);
       await wait(250);
       const hover = await contrastUnder(['hover'], HOVERED);
@@ -714,7 +799,7 @@ app.whenReady().then(async () => {
   const selected = tabs.filter((n) => prop(n, 'selected') === true);
   // Thirteen since the Space Planner (G1). The count is asserted rather than
   // counted from the page so that a tab lost to a bad edit is a failure here.
-  check('thirteen tabs, and exactly one says it is selected', tabs.length === 13 && selected.length === 1,
+  check('fourteen tabs, and exactly one says it is selected', tabs.length === 14 && selected.length === 1,
     `${tabs.length} tabs, selected: ${selected.map((n) => n.name && n.name.value).join(', ')}`);
   check('the selected one is the screen on show', selected[0] && /Trends/.test(selected[0].name.value), selected[0] && selected[0].name.value);
 

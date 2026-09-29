@@ -1,0 +1,20 @@
+{
+  "id": "zalo",
+  "name": "Zalo",
+  "hint": "Pages, images and graphics code Zalo saved to open faster. Zalo fetches or rebuilds them; your messages, your sign-in and the photos people sent you are not kept here.",
+  "processes": ["Zalo.exe", "ZaloCall.exe", "ZaloCap.exe"],
+  "verified": "2026-09-29",
+  "roots": [
+    {
+      "base": "APPDATA",
+      "path": ["ZaloData"],
+      "atRoot": ["Cache", "Code Cache", "GPUCache", "DawnCache"]
+    },
+    {
+      "base": "APPDATA",
+      "path": ["ZaloData", "Partitions"],
+      "profiles": "^zalo$",
+      "inProfile": ["Cache", "Code Cache", "GPUCache", "DawnCache"]
+    }
+  ]
+}

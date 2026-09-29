@@ -57,8 +57,11 @@ async function make(file, bytes = 1024) {
       const onDisk = fs.readdirSync(DEFS_DIR).filter((n) => n.endsWith('.json')).map((n) => n.slice(0, -5)).sort();
       check('every definition file is loaded, and nothing loaded is missing',
         JSON.stringify(onDisk) === JSON.stringify([...appCaches.FILES].sort()), onDisk.join(', '));
+      // Zalo joined the list with D3. Only its *browser* caches are here; what
+      // it downloaded from conversations is on the Chat screen, is never
+      // `safe`, and is never taken by an unattended run.
       check('the apps checked on this machine, and not Camera Raw',
-        appCaches.DEFINITIONS.map((d) => d.id).join(',') === 'chrome,edge,teams,discord,zoom,figma');
+        appCaches.DEFINITIONS.map((d) => d.id).join(',') === 'chrome,edge,teams,discord,zoom,figma,zalo');
       const bad = (patch, why) => {
         let threw = null;
         try {

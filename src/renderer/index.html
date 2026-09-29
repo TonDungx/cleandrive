@@ -116,6 +116,11 @@
             <svg class="tab-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="1.6" y="4.6" width="12.8" height="7.2" rx="2.6"/><path d="M4.6 7.4v2.2M3.5 8.5h2.2"/><circle cx="10.6" cy="8" r="0.7" fill="currentColor" stroke="none"/><circle cx="12.1" cy="9.4" r="0.7" fill="currentColor" stroke="none"/></svg>
             <span class="tab-label" data-i18n="app.tab.games">Games</span>
           </button>
+          <button class="tab" data-tab="chat" role="tab"
+            data-i18n-title="app.tab.chat" title="Chat apps">
+            <svg class="tab-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M13.6 9.2a1.8 1.8 0 0 1-1.8 1.8H6.2L3.2 13.4V4.6a1.8 1.8 0 0 1 1.8-1.8h6.8a1.8 1.8 0 0 1 1.8 1.8z"/><path d="M6 6.2h4.2M6 8.4h2.6"/></svg>
+            <span class="tab-label" data-i18n="app.tab.chat">Chat apps</span>
+          </button>
           <button class="tab" data-tab="dev" role="tab"
             data-i18n-title="app.tab.dev" title="Developer">
             <svg class="tab-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5.6 5.4L2.8 8l2.8 2.6"/><path d="M10.4 5.4L13.2 8l-2.8 2.6"/><path d="M8.9 3.6L7.1 12.4"/></svg>
@@ -784,6 +789,56 @@
           <h2 data-i18n="games.leftovers.title">What Steam left behind</h2>
           <p class="card-note" id="games-leftovers-what"></p>
           <div class="games-leftovers" id="games-leftovers"></div>
+        </section>
+      </section>
+
+      <section class="panel" id="panel-chat" role="tabpanel">
+        <div class="panel-actions">
+          <button class="btn btn-primary" id="chat-scan" data-i18n="chat.scan">Look at my chat apps</button>
+          <button class="btn" id="chat-cancel" hidden data-i18n="app.stop">Stop</button>
+          <button class="btn" id="chat-delete" hidden data-i18n="chat.delete">Move selected to Recycle Bin</button>
+          <button class="btn btn-quiet" id="chat-quarantine" hidden data-i18n="chat.quarantine">Set aside instead…</button>
+          <span class="status" id="chat-status"></span>
+        </div>
+
+        <div class="progress progress-walk" id="chat-progress" hidden role="progressbar" data-i18n-aria="progress.chat" aria-label="Reading what the chat apps have downloaded">
+          <span class="critters" aria-hidden="true"></span>
+          <span class="progress-track"><span class="progress-bar is-indeterminate"></span></span>
+        </div>
+
+        <div class="stats" id="chat-stats" hidden>
+          <div class="stat"><span class="stat-value" id="cstat-size">–</span><span class="stat-label" data-i18n="chat.stat.size">Downloaded</span></div>
+          <div class="stat"><span class="stat-value" id="cstat-conversations">–</span><span class="stat-label" data-i18n="chat.stat.conversations">Conversations</span></div>
+          <div class="stat"><span class="stat-value" id="cstat-twice">–</span><span class="stat-label" data-i18n="chat.stat.twice">Photos kept twice</span></div>
+          <div class="stat"><span class="stat-value" id="cstat-selected">–</span><span class="stat-label" data-i18n="chat.stat.selected">Selected</span></div>
+        </div>
+
+        <div class="card-note chat-note" id="chat-note" hidden></div>
+
+        <section class="card card-wide" id="chat-kinds-card" hidden>
+          <h2 data-i18n="chat.kinds.title">What is here, by type</h2>
+          <p class="card-note" data-i18n="chat.kinds.what">Every app on this screen, and everything it has downloaded onto this computer. Message databases are not counted and never touched.</p>
+          <div class="chat-kinds" id="chat-kinds"></div>
+        </section>
+
+        <section class="card card-wide" id="chat-months-card" hidden>
+          <h2 data-i18n="chat.months.title">When it arrived</h2>
+          <p class="card-note" id="chat-months-what"></p>
+          <div class="chat-months" id="chat-months"></div>
+          <h3 class="chat-biggest-title" data-i18n="chat.biggest.title">The largest of them</h3>
+          <div class="chat-biggest" id="chat-biggest"></div>
+        </section>
+
+        <section class="card card-wide" id="chat-conversations-card" hidden>
+          <h2 data-i18n="chat.conversations.title">By conversation</h2>
+          <p class="card-note" id="chat-conversations-what"></p>
+          <div class="chat-list" id="chat-conversations" role="table" data-i18n-aria="chat.tableLabel" aria-label="Downloads by conversation"></div>
+        </section>
+
+        <section class="card card-wide" id="chat-shared-card" hidden>
+          <h2 data-i18n="chat.shared.title">Not tied to a conversation</h2>
+          <p class="card-note" id="chat-shared-what"></p>
+          <div class="chat-list" id="chat-shared"></div>
         </section>
       </section>
 
@@ -1859,6 +1914,7 @@
     <script src="report.js"></script>
     <script src="apps.js"></script>
     <script src="games.js"></script>
+    <script src="chat.js"></script>
     <script src="dev.js"></script>
     <script src="dev-projects.js"></script>
     <script src="planner.js"></script>

@@ -27,6 +27,7 @@ const CATEGORY_LABELS = {
   'app.discord': ['category.app.discord', 'Discord — cache'],
   'app.zoom': ['category.app.zoom', 'Zoom — cache'],
   'app.figma': ['category.app.figma', 'Figma — cache'],
+  'app.zalo': ['category.app.zalo', 'Zalo — cache'],
 };
 
 const WEEKDAY_KEYS = [

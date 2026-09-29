@@ -110,14 +110,17 @@ check('and the override narrows it for testing a tier',
   check('and a Pro licence without the add-on still does not include it',
     !can({ state: 'active', tier: 'pro', addons: [] }, 'pro.dev'));
 }
-// The games library (D2) is the first analyzer behind a feature key. Every
-// other one is free, and that one still runs today because a release build has
-// Pro open until Phase 6 -- which is what this checks, rather than that no
-// analyzer is ever gated.
+// The games library (D2) was the first analyzer behind a feature key; the chat
+// apps (D3) made `pro.chat` the second key in use -- it had been declared in
+// `entitlements.js` and reached by nothing at all until that screen existed.
+// Every other analyzer is free, and all of these still run today because a
+// release build has Pro open until Phase 6, which is what this checks rather
+// than that no analyzer is ever gated.
 {
   const paid = registry.list().filter((a) => a.feature !== 'free');
-  check('the analyzers behind a feature key are the games library and the Developer Pack',
-    paid.length === 3 && paid.some((a) => a.id === 'games' && a.feature === 'pro.games') &&
+  check('the analyzers behind a feature key are the games library, the chat apps and the Developer Pack',
+    paid.length === 4 && paid.some((a) => a.id === 'games' && a.feature === 'pro.games') &&
+      paid.some((a) => a.id === 'chat' && a.feature === 'pro.chat') &&
       paid.some((a) => a.id === 'dev' && a.feature === 'pro.dev') &&
       // The Developer screen has two of them: its own tools, and the projects
       // on whatever folders were chosen. One key covers both (C1, C5).

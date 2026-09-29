@@ -1,0 +1,87 @@
+{
+  "id": "zalo",
+  "captured": "2026-09-29",
+  "note": "Folder names on the machine the definition was checked on, two levels deep; accounts blanked.",
+  "roots": [
+    {
+      "base": "APPDATA",
+      "path": [
+        "ZaloData"
+      ],
+      "folders": [
+        "Cache",
+        "Cache/Cache_Data",
+        "Code Cache",
+        "Code Cache/js",
+        "Code Cache/wasm",
+        "Database",
+        "Database/_production",
+        "DawnCache",
+        "GPUCache",
+        "Local Storage",
+        "Local Storage/leveldb",
+        "Local Storage/leveldb__tmp_for_rebuild",
+        "Network",
+        "Partitions",
+        "Partitions/zalo",
+        "Session Storage",
+        "Session Storage__tmp_for_rebuild",
+        "WebStorage",
+        "Zalo",
+        "Zalo/logs",
+        "blob_storage",
+        "blob_storage/id3",
+        "cal",
+        "databases",
+        "logs",
+        "media",
+        "media/id4",
+        "media/action",
+        "media/qos",
+        "media/temp",
+        "media/update",
+        "resp_cache",
+        "resp_cache/404",
+        "tf-models",
+        "tf-models/stk_sug",
+        "trust_path"
+      ],
+      "matched": [
+        "Cache",
+        "Code Cache",
+        "DawnCache",
+        "GPUCache"
+      ]
+    },
+    {
+      "base": "APPDATA",
+      "path": [
+        "ZaloData",
+        "Partitions"
+      ],
+      "folders": [
+        "zalo",
+        "zalo/Cache",
+        "zalo/Code Cache",
+        "zalo/DawnCache",
+        "zalo/GPUCache",
+        "zalo/IndexedDB",
+        "zalo/Local Storage",
+        "zalo/Network",
+        "zalo/Service Worker",
+        "zalo/Session Storage",
+        "zalo/VideoDecodeStats",
+        "zalo/WebStorage",
+        "zalo/blob_storage",
+        "zalo/databases",
+        "zalo/shared_proto_db"
+      ],
+      "matched": [
+        "zalo/Cache",
+        "zalo/Code Cache",
+        "zalo/DawnCache",
+        "zalo/GPUCache"
+      ]
+    }
+  ]
+}

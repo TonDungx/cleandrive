@@ -28,11 +28,12 @@ and the notifications.
 - [Screen 6 — Duplicates](#screen-6--duplicates)
 - [Screen 7 — Apps](#screen-7--apps)
 - [Screen 8 — Games](#screen-8--games)
-- [Screen 9 — Developer](#screen-9--developer)
-- [Screen 10 — Trends](#screen-10--trends)
-- [Screen 11 — Restore](#screen-11--restore)
-- [Screen 12 — Automatic](#screen-12--automatic)
-- [Screen 13 — Settings](#screen-13--settings)
+- [Screen 9 — Chat apps](#screen-9--chat-apps)
+- [Screen 10 — Developer](#screen-10--developer)
+- [Screen 11 — Trends](#screen-11--trends)
+- [Screen 12 — Restore](#screen-12--restore)
+- [Screen 13 — Automatic](#screen-13--automatic)
+- [Screen 14 — Settings](#screen-14--settings)
 - [The file viewer](#the-file-viewer)
 - [Deleting](#deleting)
 - [Disk alerts and the tray](#disk-alerts-and-the-tray)
@@ -103,6 +104,7 @@ while skimming.
 | **Duplicates** | What do I have more than one copy of — file by file, a whole folder at a time, or drafts of one document? | One folder you choose |
 | **Apps** | What is installed, how big is it, when did I last start it? | The installed-apps list, and the folders it names |
 | **Games** | Which games am I keeping and not playing? | The Steam library |
+| **Chat apps** | What have Zalo and Telegram downloaded, and which conversation is it from? | What those two apps downloaded — never a message database |
 | **Developer** | What have my development tools filled the disk with? | Package caches, SDKs, editor caches, WSL and Docker, and your own projects |
 | **Trends** | Is this getting worse, and how fast? | Every volume the app knows about |
 | **Restore** | What did the app do, and can I have it back? | Everything in the Action Journal |
@@ -834,15 +836,20 @@ total size`, and the delete button stays disabled until something is ticked.
 
 ### Known apps' caches
 
-For six apps — Google Chrome, Microsoft Edge, the new Microsoft Teams, Discord,
-Zoom and Figma — the scan knows which of their folders are cache, and each gets a
-group under its own name. Only the folders on that app's list count: `Cache`,
-`Code Cache`, `GPUCache` and the shader caches, in each profile. Everything else
-in the app's folder — `IndexedDB`, `Service Worker`, `Local Storage`, sign-ins,
-extensions — is left alone, even where it is bigger. Each list was checked
+For seven apps — Google Chrome, Microsoft Edge, the new Microsoft Teams,
+Discord, Zoom, Figma and Zalo — the scan knows which of their folders are
+cache, and each gets a group under its own name. Only the folders on that
+app's list count: `Cache`, `Code Cache`, `GPUCache` and the shader caches, in
+each profile. Everything else in the app's folder — `IndexedDB`,
+`Service Worker`, `Local Storage`, sign-ins, extensions — is left alone, even
+where it is bigger. Each list was checked
 against the app's real folders on a real machine
 ([`src/main/analyzers/app-caches/`](src/main/analyzers/app-caches/)), and an app
 is shipped only when that could be done; Adobe Camera Raw is not.
+
+Zalo is on that list for its browser caches only — around 600 MB here. What it
+has downloaded from conversations is a different thing entirely and lives on
+[Chat apps](#screen-9--chat-apps), where nothing is ever marked safe.
 
 An app's cache is offered only while the app is closed. The scan asks Windows
 which programs are running as it finishes. An open app's group says *open*,
@@ -1451,7 +1458,73 @@ said out loud rather than listed as if they were worth removing.
 
 ---
 
-## Screen 9 — Developer
+## Screen 9 — Chat apps
+
+What Zalo and Telegram Desktop have downloaded onto this computer, and — for
+Zalo — which conversation each piece of it came from. Pro.
+
+**No message database is opened and no message is read.** That is not a
+limitation that happened; it is the decision the screen is built around, and it
+is why a conversation is shown by an id rather than by a name — the name is
+inside the database. `ZaloData\Database` is 1.2 GB on the machine this was
+built on and nothing here touches it.
+
+Three answers, in the order they stop being possible:
+
+- **By type** — every kind of thing each app has downloaded, with its size.
+  Both apps.
+- **By month** — when it arrived, and the largest pieces. Zalo puts the time a
+  message was sent into the file name, so for Zalo this is when something
+  arrived in the conversation rather than when the computer wrote the file.
+- **By conversation** — Zalo only. Nothing in Telegram’s folders is named
+  after a conversation: its caches are addressed by content, and the only place
+  a chat is identified is the message store. The screen says so rather than
+  showing an empty list.
+
+### Zalo keeps every photo twice, and the smaller copy is the unreadable one
+
+For each picture, Zalo stores the JPEG it received *and* a re-encoded JPEG XL
+copy. On this machine **2,195 photos exist as both**, and the copies as
+received come to 272 MB — about a quarter of everything Zalo has downloaded.
+
+The obvious advice would be "delete the duplicate", and it points at the wrong
+file. Neither the Windows shell nor Chromium can decode JPEG XL: the `.jxl`
+copy opens in nothing on this computer, while the copy Zalo received — which
+has no file extension at all — decodes fine. So the screen reports the pairing
+as a fact and leaves the choice alone.
+
+### What you can remove
+
+Selection is per kind inside a conversation, not per file: nobody picks through
+5,868 photographs, but "the videos in this group chat can go, the photographs
+stay" is a real decision. Ticked kinds go to the Recycle Bin, or to another
+drive.
+
+Nothing here is ever marked safe, nothing is ticked in advance, and none of it
+can run automatically. A photograph somebody sent is not a cache, and it may be
+the only copy: whether the app could fetch it again depends on whether it is
+still on the server, which cannot be checked from here. The confirmation says
+so, and says which way to assume — and it says it wherever those files are
+deleted from, including the Photos screen.
+
+**While either app is open, nothing it owns is offered.** Nor is it when the
+running programs cannot be listed at all. The screen names the app to close.
+
+Zalo’s *browser* caches are not on this screen. They behave like any other
+app’s cache — around 600 MB here, rebuilt when needed — so they sit on **What
+to delete** with Chrome’s and Discord’s, and they are free.
+
+### The one row that is not media
+
+Telegram unpacks a downloaded update into its own folder and applies it at the
+next start. On this machine that folder holds **212 MB**: Telegram 7.2.5.0,
+waiting to replace the 7.1.3.0 that is running. It is by far the largest thing
+Telegram keeps and it looks like an installer nobody needs. Deleting it costs a
+212 MB download, so the row names both version numbers and says that outright.
+
+---
+
+## Screen 10 — Developer
 
 What a developer's tools have quietly filled the disk with: the packages they
 downloaded, the toolchains they installed, the caches the editors write, and the
@@ -1591,7 +1664,7 @@ you to assume it was checked.
 
 ---
 
-## Screen 10 — Trends
+## Screen 11 — Trends
 
 Whether the problem is getting worse, and how fast.
 
@@ -1739,7 +1812,7 @@ because the two numbers measure different things.
 
 ---
 
-## Screen 11 — Restore
+## Screen 12 — Restore
 
 Everything the app has done to a file, newest first, and the way back from each
 of it. It is free on every tier and it is never behind a licence: whatever the
@@ -1798,7 +1871,7 @@ can ask for something the app did to be undone and for nothing else.
 
 ---
 
-## Screen 12 — Automatic
+## Screen 13 — Automatic
 
 Cleanup on a timetable, with no window open. Off by default, and designed so that
 every ambiguity resolves towards doing nothing — there is no dialog in front of
@@ -1934,7 +2007,7 @@ cannot attribute with certainty is left exactly where it is.
 
 ---
 
-## Screen 13 — Settings
+## Screen 14 — Settings
 
 Small on purpose. **Nothing in Settings changes what the app deletes**, with one
 exception, off until you switch it on: *Delete the original*, on the card for
@@ -2232,7 +2305,7 @@ Month files older than thirteen months are dropped at launch — except a month
 that moved files to another drive: those copies stay as long as somebody leaves
 them, and the journal is how Restore knows where each came from.
 
-It is also what the [Restore](#screen-11--restore) screen reads, and a restore is
+It is also what the [Restore](#screen-12--restore) screen reads, and a restore is
 recorded in it like any other action — which is how the purge knows a file that
 was put back is no longer the app's to remove.
 

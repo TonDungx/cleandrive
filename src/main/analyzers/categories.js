@@ -94,6 +94,17 @@ declare('dev.dockerDisk', { screen: 'dev' });
 declare('dev.dependencies', { screen: 'dev' });
 declare('dev.buildOutput', { screen: 'dev' });
 
+// "Chat": what Zalo and Telegram Desktop have downloaded (D3). A folder row
+// carries no action -- both `recycle` and `quarantine` refuse a directory, and
+// B2 made `execute()` enforce that -- so each file inside is its own row, and
+// that is what a button acts on. The staged Telegram update has a category to
+// itself because it is the one thing here that is not media, and the one thing
+// deleting costs a download rather than saving one.
+declare('chat.conversation', { screen: 'chat' });
+declare('chat.shared', { screen: 'chat' });
+declare('chat.update', { screen: 'chat' });
+declare('chat.file', { screen: 'chat' });
+
 function isDeclared(id) {
   return DECLARED.has(id);
 }

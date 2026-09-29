@@ -20,6 +20,8 @@ const quarantineZone = require('./lib/quarantine-zone');
 const systemMeasure = require('./system/measure');
 const appsMeasure = require('./apps/measure');
 const gamesMeasure = require('./games/measure');
+const chatMeasure = require('./chat/measure');
+const chatKnown = require('./chat/known');
 const devMeasure = require('./dev/measure');
 const devProjects = require('./dev/projects');
 const systemBreakdown = require('./system/breakdown');
@@ -62,7 +64,7 @@ const contextMenu = require('./lib/context-menu');
 const launchTarget = require('./launch-target');
 
 // One in-flight job of each kind at a time; a new run supersedes the old one.
-const tokens = { scan: null, dupes: null, trash: null, auto: null, media: null, thumbs: null, measureAll: null, system: null, apps: null, games: null, dev: null, devProjects: null, planner: null };
+const tokens = { scan: null, dupes: null, trash: null, auto: null, media: null, thumbs: null, measureAll: null, system: null, apps: null, games: null, chat: null, dev: null, devProjects: null, planner: null };
 
 /* ---- the Disk usage map's state -------------------------------------------- */
 
@@ -1093,6 +1095,65 @@ function register() {
 
   handle('games:cancel', () => {
     if (tokens.games) tokens.games.cancel();
+    return { ok: true };
+  });
+
+  /* ---- the Chat screen (D3) ---------------------------------------------- */
+
+  /*
+   * What Zalo and Telegram Desktop have downloaded, and which conversation
+   * each piece of it came from.
+   *
+   * A screen of its own for a structural reason rather than a stylistic one:
+   * both apps keep their data under `AppData\Roaming`, which `lib/scanner.js`
+   * marks `hard`-blocked so that `lib/advisor.js` will never call any of it
+   * disposable. That guard is right and stays, so D3 cannot arrive through
+   * "What to delete" and arrives here instead, behind `pro.chat`.
+   *
+   * The scan is a real walk -- 11,567 files and about seven seconds on this
+   * machine -- so it waits for a click and can be stopped, like Apps and the
+   * system walk. Nothing in it opens a message database.
+   */
+  let chatState = null;
+
+  async function presentChat() {
+    const { candidates, summary, locked } = await analyzers.collect(
+      'chat',
+      { model: chatState },
+      { can: licenseState.canNow() }
+    );
+    return {
+      candidates,
+      summary,
+      locked: locked || null,
+      apps: {
+        zalo: { installed: chatState.zalo.installed, path: chatState.zalo.root },
+        telegram: { installed: chatState.telegram.installed, path: chatState.telegram.root },
+      },
+    };
+  }
+
+  handle('chat:last', () => guard(async () => (chatState ? await presentChat() : { candidates: null, summary: null })));
+
+  handle('chat:scan', (event) =>
+    guard(async () => {
+      if (tokens.chat) tokens.chat.cancel();
+      const token = new CancelToken();
+      tokens.chat = token;
+      const send = (payload) => {
+        if (!event.sender.isDestroyed()) event.sender.send('chat:progress', payload);
+      };
+      try {
+        chatState = await chatMeasure.scan({ token, onProgress: send });
+        return await presentChat();
+      } finally {
+        if (tokens.chat === token) tokens.chat = null;
+      }
+    })
+  );
+
+  handle('chat:cancel', () => {
+    if (tokens.chat) tokens.chat.cancel();
     return { ok: true };
   });
 
@@ -2569,7 +2630,18 @@ function register() {
           videos: safePath('videos'),
           downloads: safePath('downloads'),
         },
-        (p) => require('node:fs').existsSync(p)
+        (p) => require('node:fs').existsSync(p),
+        // Telegram keeps a folder per signed-in account; see `roots.js`.
+        (dir) => {
+          try {
+            return require('node:fs')
+              .readdirSync(dir, { withFileTypes: true })
+              .filter((e) => e.isDirectory())
+              .map((e) => e.name);
+          } catch {
+            return [];
+          }
+        }
       );
 
       return list.map((entry) => ({
@@ -3634,6 +3706,7 @@ async function confirmAction(win, description, planned, options) {
       }) +
       backupNote +
       binNote(description) +
+      chatNote(planned) +
       cloudNote(planned) +
       skippedNote(planned) +
       (slow
@@ -3848,6 +3921,35 @@ function cloudNote(planned) {
  * decision (rule 2, "moved is not freed", on every action), so it now depends
  * on what the action frees and not on which screen asked.
  */
+/**
+ * The sentence D3 requires in front of deleting something a chat app received.
+ *
+ * Decided by looking at the paths rather than by trusting the screen that
+ * asked. A photograph from a Zalo conversation is the same photograph whether
+ * it was reached from the Chat screen or from Photos & video, and the warning
+ * it deserves does not depend on which button was pressed. `chat/known.js`
+ * answers only for the folders downloads land in, so a settings file under the
+ * same app does not trigger it.
+ *
+ * The second half is the part worth being careful about. The roadmap's draft
+ * said the app "can download it again if it is still on the server", which
+ * reads as a reassurance -- and nothing here can check whether it is. So it is
+ * written as the uncertainty it is, and it says which way to assume.
+ */
+function chatNote(planned) {
+  const counts = chatKnown.countByApp((planned.plan || []).map((item) => item.path));
+  if (counts.size === 0) return '';
+  const total = [...counts.values()].reduce((sum, v) => sum + v, 0);
+  const names = [...counts.keys()].map((app) => (app === 'zalo' ? 'Zalo' : 'Telegram')).join(', ');
+  return `\n\n${t(
+    'dialog.confirmDelete.chat',
+    '{n} of these were downloaded by {apps}. Deleting them removes them from this computer, not from the ' +
+      'conversation. Whether the app can fetch one again depends on whether it is still on the server, which ' +
+      'cannot be checked from here — assume it cannot.',
+    { n: total.toLocaleString(language.current()), apps: names }
+  )}`;
+}
+
 function binNote(description) {
   if (description.freesOnVolume) return '';
   return `\n\n${t(

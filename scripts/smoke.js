@@ -1869,9 +1869,9 @@ app.whenReady().then(async () => {
 
       console.log(`    state "${autoUi.state}" · disk ${autoUi.disk} · defaults ${autoUi.checked.join(', ')}`);
       check('the Automatic panel opens', autoUi.panelVisible);
-      check('only safe categories are offered -- six kinds, and six known apps’ caches', autoUi.categories === 12, String(autoUi.categories));
+      check('only safe categories are offered -- six kinds, and seven known apps’ caches', autoUi.categories === 13, String(autoUi.categories));
       check('the known apps’ caches are on by default, each taken only while its app is closed',
-        ['app.chrome', 'app.edge', 'app.teams', 'app.discord', 'app.zoom', 'app.figma'].every((c) => autoUi.checked.includes(c)),
+        ['app.chrome', 'app.edge', 'app.teams', 'app.discord', 'app.zoom', 'app.figma', 'app.zalo'].every((c) => autoUi.checked.includes(c)),
         autoUi.checked.join(','));
       check('build output is not enabled by default', !autoUi.checked.includes('buildoutput'),
         autoUi.checked.join(','));
@@ -3974,6 +3974,169 @@ app.whenReady().then(async () => {
           const said = document.getElementById('games-status').textContent;
           window.gamesScreen.view.result = out;
           window.gamesScreen.render();
+          return said;
+        })()`);
+        check('without the feature the screen says which one it needs, not nothing',
+          /Pro/.test(locked), locked.slice(0, 80));
+      }
+    }
+
+    /* -- the chat apps (D3) -------------------------------------------------- */
+
+    console.log('\nChat apps (the Chat tab, against this machine\u2019s real Zalo and Telegram):');
+    {
+      const js = (expr) => win.webContents.executeJavaScript(expr);
+      await js(`document.querySelector('.tab[data-tab="chat"]').click()`);
+      await js(`document.getElementById('chat-scan').click()`);
+      const finished = await until(win, `document.getElementById('chat-cancel').hidden`, 300000);
+      check('a scan of the real machine finishes', finished);
+
+      const found = await js(`(() => {
+        const out = window.chatScreen.view.result;
+        return {
+          hasResult: Boolean(out && out.summary),
+          zalo: out && out.apps ? out.apps.zalo.installed : null,
+          telegram: out && out.apps ? out.apps.telegram.installed : null,
+        };
+      })()`);
+
+      if (!found.hasResult || (!found.zalo && !found.telegram)) {
+        // Neither app here. That the screen says so rather than drawing an
+        // empty table is the whole check, the same as Games with no Steam.
+        const said = await js(`document.getElementById('chat-status').textContent`);
+        check('with neither app on the machine, the screen says so', /Zalo|Telegram/.test(said), said.slice(0, 90));
+      } else {
+        const seen = await js(`(() => {
+          const out = window.chatScreen.view.result;
+          const rows = [...document.querySelectorAll('#chat-conversations .chat-row:not(.chat-head)')];
+          const cell = (row, sel) => { const el = row.querySelector(sel); return el ? el.textContent.trim() : ''; };
+          const conv = out.candidates.filter((c) => c.category === 'chat.conversation');
+          const files = out.candidates.filter((c) => c.category === 'chat.file');
+          const folders = out.candidates.filter((c) => c.kind === 'folder');
+          return {
+            rows: rows.length,
+            names: rows.map((r) => cell(r, '.chat-name')),
+            head: [...document.querySelectorAll('#chat-conversations .chat-head .chat-headcell')].map((c) => c.textContent.trim()),
+            stats: ['cstat-size', 'cstat-conversations', 'cstat-twice'].map((id) => document.getElementById(id).textContent),
+            notes: [...document.querySelectorAll('#chat-note p')].map((p) => p.textContent),
+            categories: [...new Set(out.candidates.map((c) => c.category))].sort(),
+            verdicts: [...new Set(out.candidates.map((c) => c.verdict))].sort(),
+            unattended: out.candidates.filter((c) => c.unattendedEligible).length,
+            folderActions: [...new Set(folders.flatMap((c) => c.actions))],
+            fileActions: [...new Set(files.flatMap((c) => c.actions))],
+            zaloFileActions: [...new Set(files.filter((c) => c.meta.app === 'zalo').flatMap((c) => c.actions))],
+            telegramFileActions: [...new Set(files.filter((c) => c.meta.app === 'telegram').flatMap((c) => c.actions))],
+            convCount: conv.length,
+            fileCount: files.length,
+            touchesDatabase: out.candidates.filter((c) => /\\\\(Database|databases|Local Storage|Session Storage)\\\\/i.test(c.path + '\\\\')).length,
+            kindsCardHidden: document.getElementById('chat-kinds-card').hidden,
+            monthsCardHidden: document.getElementById('chat-months-card').hidden,
+            bars: document.querySelectorAll('#chat-kinds .chat-bar').length,
+            months: document.querySelectorAll('#chat-months .chat-month').length,
+            running: out.summary.running,
+            update: (out.candidates.find((c) => c.category === 'chat.update') || {}).meta || null,
+          };
+        })()`);
+
+        check('the categories are the four this screen declared',
+          seen.categories.every((c) => ['chat.conversation', 'chat.file', 'chat.shared', 'chat.update'].includes(c)),
+          seen.categories.join(', '));
+        check('nothing a chat app downloaded is ever called safe', !seen.verdicts.includes('safe'), seen.verdicts.join(', '));
+        check('none of it can be part of an unattended run', seen.unattended === 0, String(seen.unattended));
+
+        // The privacy decision, checked against the paths rather than taken
+        // on trust: nothing the screen produced is inside a message store.
+        check('no candidate is inside a message database', seen.touchesDatabase === 0, String(seen.touchesDatabase));
+        check('the screen says no message database is opened',
+          seen.notes.some((n) => /database/i.test(n)), seen.notes.map((n) => n.slice(0, 40)).join(' | '));
+
+        // The two grains, and which one carries an action. A folder row that
+        // offered `recycle` would be offering something `execute()` refuses.
+        check('a folder row carries no action', seen.folderActions.length === 0, seen.folderActions.join(', ') || 'none');
+
+        check('the by-type breakdown is drawn', seen.kindsCardHidden === false && seen.bars > 0, String(seen.bars) + ' bars');
+
+        if (found.zalo && seen.convCount > 0) {
+          check('conversations are listed, each named by its id',
+            seen.rows > 0 && seen.names.every((n) => /^g?[0-9]{5,}$/.test(n)), `${seen.rows} conversations`);
+          check('the columns are the conversation, its size and when it last had something',
+            seen.head.includes('Downloaded') && seen.head.includes('Last arrival'), seen.head.join(' | '));
+          check('the three figures at the top are filled in', seen.stats.every((v) => v && v !== '\u2013'), seen.stats.join(' / '));
+          check('the by-month histogram is drawn', seen.monthsCardHidden === false && seen.months > 0, String(seen.months) + ' months');
+
+          // The rule the whole screen turns on: an open app holds everything
+          // back, and so does not being able to tell.
+          // Each app answers for itself, and they are checked apart because on
+          // this machine they disagree: Zalo runs at login and Telegram does
+          // not. A check on the union of both passed for the wrong reason.
+          if (seen.running && seen.running.zalo === false) {
+            check('with Zalo closed, its file rows can go to the bin',
+              seen.zaloFileActions.includes('recycle') && seen.zaloFileActions.includes('quarantine'),
+              seen.zaloFileActions.join(', '));
+          } else {
+            check('with Zalo open (or unknown), nothing of Zalo\u2019s is offered at all',
+              seen.zaloFileActions.length === 1 && seen.zaloFileActions[0] === 'none', seen.zaloFileActions.join(', '));
+            check('and the screen says which app to close',
+              seen.notes.some((n) => /open|checked/i.test(n)), seen.notes.map((n) => n.slice(0, 40)).join(' | '));
+          }
+          if (seen.telegramFileActions.length > 0) {
+            check('and Telegram answers for itself, not for Zalo',
+              seen.running && seen.running.telegram === false
+                ? seen.telegramFileActions.includes('recycle')
+                : seen.telegramFileActions.join() === 'none',
+              seen.telegramFileActions.join(', '));
+          }
+        }
+
+        // The staged Telegram update: the one row here that is not media, and
+        // the one where deleting costs a download instead of saving one.
+        if (seen.update) {
+          check('a staged Telegram update names both version numbers, or says it could not read them',
+            (seen.update.stagedVersion && seen.update.installedVersion) ||
+              seen.update.stagedVersion === null || seen.update.installedVersion === null,
+            `${seen.update.stagedVersion} over ${seen.update.installedVersion}`);
+        }
+
+        // Picking a kind, and what the buttons then say.
+        const picked = await js(`(() => {
+          const row = document.querySelector('#chat-conversations .chat-row:not(.chat-head)');
+          if (!row) return null;
+          // Named by its column: the evidence badge beside it also carries
+          // aria-expanded, and comes first.
+          const expand = row.querySelector('.chat-col-actions button');
+          if (expand) expand.click();
+          const chip = document.querySelector('.chat-chips-row button.chat-chip');
+          if (!chip) return { noChip: true };
+          chip.click();
+          return {
+            picked: window.chatScreen.view.picked.size,
+            deleteHidden: document.getElementById('chat-delete').hidden,
+            selected: document.getElementById('cstat-selected').textContent,
+            pressed: document.querySelector('.chat-chips-row button.chat-chip').getAttribute('aria-pressed'),
+          };
+        })()`);
+        if (picked && !picked.noChip) {
+          check('ticking a kind inside a conversation selects it',
+            picked.picked === 1 && picked.pressed === 'true', `${picked.picked} picked`);
+          check('and the delete button appears, with what it would take',
+            picked.deleteHidden === false && picked.selected !== '\u2013', picked.selected);
+        }
+
+        const stable = await js(`(() => {
+          const host = document.getElementById('chat-conversations');
+          const first = host.querySelector('.chat-row:not(.chat-head)');
+          window.chatScreen.render();
+          return host.querySelector('.chat-row:not(.chat-head)') === first;
+        })()`);
+        check('a redraw that changes nothing leaves the rows in place', stable);
+
+        const locked = await js(`(() => {
+          const out = window.chatScreen.view.result;
+          window.chatScreen.view.result = { candidates: null, summary: null, locked: 'pro.chat', apps: out.apps };
+          window.chatScreen.render();
+          const said = document.getElementById('chat-status').textContent;
+          window.chatScreen.view.result = out;
+          window.chatScreen.render();
           return said;
         })()`);
         check('without the feature the screen says which one it needs, not nothing',

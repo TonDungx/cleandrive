@@ -223,7 +223,7 @@ mà B5 và E2 dùng lại nguyên. Ba mục P2 rủi ro cao đi cuối.
 | B4 | Nén NTFS có chọn lọc | P1 | ✅ Đã code xong (2026-09-28) — **hành động duy nhất của giai đoạn này giải phóng dung lượng ngay**, không qua Thùng rác. **Chỉ LZNT1** (đã chốt): đo được LZX cho 96,4% so với 87,5%, nhưng **một lệnh ghi 40 byte tại chỗ làm mất nén cả tệp** — nặng hơn điều đặc tả ngờ (§11 mục 15). Con số "30–45%" của đặc tả **sai trên máy này**: mã nguồn **87,5%**, log **81,2%**, ảnh/video **0,0%** — nên ước lượng lấy bằng cách đưa 12 tệp thật của chính thư mục qua NTFS (lệch **0,1 điểm** so với thực tế). **Không parse output của `compact`** (bản địa hoá: "1,9 to 1"); kích thước lấy từ `stat().blocks * 512`. Từ chối thêm hai thứ đặc tả không nhắc: ổ không nén được (**hỏi bằng cách thử**, không suy từ cluster) và thư mục có tệp **chỉ nằm trên OneDrive** (nén sẽ kéo về, đúng phần B3 vừa giải phóng). **G1 vẫn không có bước nén** — lý do ở `planner/plan.js` |
 | E2 | Sao lưu trước khi xoá | P1 | ✅ Đã code xong (2026-09-29) — **không phải một handler mới**: là một tuỳ chọn của `recycle`, vì đặc tả đặt nó trong hộp thoại xác nhận. Nhưng hộp thoại đó là `dialog.showMessageBox` **native**, mà message box native chỉ chứa được **một checkbox**, không chứa được nút chọn thư mục — nên đích được chọn trên thanh hành động của màn Photos (giống B2/B5), còn hộp thoại giữ đúng phần người ta thật sự đổi ý vào phút chót: **bỏ tick là xoá mà không chép**. **Đề bài "dùng lại `tree-copy.js`" sai**: `copyTree` đòi đích **chưa tồn tại** và đi từ **một gốc**, còn E2 nhận một danh sách tệp rời từ nhiều thư mục, có thể nhiều ổ, vào một thư mục dùng đi dùng lại — phần dùng chung thật là `verified-copy.js`. Bố cục đích lấy **ổ làm thư mục đầu** (`<đích>\C\Users\…`), vì nếu không thì `C:\photos\a.jpg` và `D:\photos\a.jpg` là **cùng một chỗ**. **Không bao giờ ghi đè**: trùng tên mà khác nội dung thì thành ` (2)`; trùng cả hash thì tính là đã sao lưu và không chép lại. Manifest **cộng dồn**, không thay thế. **UNC được phép** — `lib/trash.js` chỉ từ chối **nguồn** trên mạng (`vet()`), còn đây chép **tới** mạng rồi xoá bản gốc cục bộ; nhưng máy này không có NAS nên tốc độ là `[Unverified]` (§11 mục 12). Giữ ADS (đã chốt). **Ảnh chụp bắt được ba lỗi**: đổi ngôn ngữ làm `translateDom` ghi đè nhãn nút và **mất tên thư mục đích**; hai nút mới đẩy **"Chuyển mục đã chọn vào Thùng rác" ra hẳn ngoài khung ở 1180px**; và toast nằm đè lên chính thanh đó |
 | E1 | Màn so sánh cạnh nhau | P1 | ✅ Đã code xong (2026-09-29) — **hai phần, không phải một**: đặc tả nói "mở từ một nhóm near-duplicate", mà **nhóm đó chưa có mặt nào trên giao diện**. `perceptual.groupSimilar`, IPC `media:similar` và `api.mediaSimilar` đã nối đủ từ đầu và **không renderer nào từng gọi**; engine còn tính sẵn `spread` kèm comment "so the UI can say how alike these actually are". Nên mục này dựng cả dải nhóm lẫn màn so sánh. **Đo được**: băm một ảnh tốn **70,6 ms**, gom nhóm chỉ 2 ms — nên chi phí toàn bộ nằm ở phép giải mã mà lưới ảnh **cố ý không bao giờ làm hàng loạt**. Do đó có **nút riêng** kèm tiến độ và nút dừng (~4,9 phút cho 4.124 ảnh, trả một lần vì kết quả được cache), và thẻ luôn nói mẫu số thật. **2.534 ảnh chỉ nằm trên OneDrive bị loại khỏi lượt băm** và được nói ra — đọc một tấm là tải nó về, đảo ngược đúng thứ B3 vừa giải phóng. `preview:compare` từ 2 lên 2–4. `iso`/`exposureTime` đọc được từ lâu nhưng **bị bỏ rơi** khi dựng payload — nay có. **Ảnh chụp bắt được 4 lỗi**: ba ảnh hiện ở ba kích thước nên không so sánh được; `formatDuration` là bộ định dạng ETA nên toast ghi "in almost done"; ô Megapixel của ảnh nhỏ hiện `—` như thể không biết; và thẻ nhóm **không dịch phần do JS dựng** |
-| D3 | Dữ liệu Zalo / Telegram theo cuộc trò chuyện | P1 | |
+| D3 | Dữ liệu Zalo / Telegram theo cuộc trò chuyện | P1 | ✅ Đã code xong (2026-09-29) — **màn riêng, không đi qua analyzer thường**: `scanner.js:201` gắn `hard` cho mọi thứ dưới `AppData\Roaming` nên `advisor.js:400` trả `null`, mà cả hai app đều ở đó. `pro.chat` từ nay mới **thật sự được dùng** — nó đã khai trong `entitlements.js` từ lâu và không một dòng nào gọi. **Mức 3 chỉ Zalo**, và sâu hơn brief một tầng: `resource\<cuộc trò chuyện>\<loại>\`, không phải phẳng. **Đo được: 2.195 ảnh nằm hai bản** (`Cache` = JPEG như lúc nhận, `picture` = JXL mã hoá lại) — 272,3 MB, 26% cả cây. Nhưng **không đề xuất xoá bản trùng**: đo bằng đúng hai bộ giải mã của `thumbs.js` thì `.jxl` trả EMPTY ở Chromium 130 và ném lỗi ở shell Windows, còn tệp `Cache` **không đuôi** giải mã ra 862×1897 — bản nhỏ hơn là bản không ai mở được. **Telegram chỉ Mức 1** (không gì trong `tdata` mang tên cuộc trò chuyện), và `tupdates` 212,6 MB **không phải rác**: đọc `FileVersion` từ chính hai tệp `.exe` cho thấy 7.2.5.0 đang chờ đè lên 7.1.3.0 đang chạy — `review`, và bằng chứng nói xoá là mất 212 MB tải lại. **Cache trình duyệt của Zalo đi sang D4** (app thứ 7, 602,3 MB, Free · `safe`), không khoá sau `pro.chat`; settings lên **v10**. **Ảnh chụp bắt được 4 lỗi**: hai dòng cùng tên "Files" và bốn dòng cùng tên "Cached media"; hàng `update` **chưa dịch** vì thiếu `label`; và hai video đề ngày **30/11/2185** — tên chúng mở đầu bằng 13 chữ số là *id*, không phải epoch. **Sửa kèm:** media root của Telegram trong `lib/media/roots.js` trỏ cứng `user_data\media_cache` (**1 tệp / 10 KB**) và **không bao giờ thấy tài khoản thứ hai** — nay mỗi tài khoản một root, có tên |
 | E5 | Ảnh theo cuộc trò chuyện | P1 (phụ thuộc D3) | |
 | F4 | Hardlink bản trùng (Dev Pack, có cảnh báo mạnh) | P2 | |
 | E4 | Timeline & bản đồ | P2 | |
@@ -1267,6 +1267,99 @@ Gộp `bin/`, `obj/`, `target/`, `dist/`, `build/`, `.next/`, `.nuxt/`, `.turbo/
 - Hộp thoại xác nhận có thêm câu: *"Xoá file ở đây không xoá chúng khỏi cuộc trò chuyện. Zalo có thể tải lại nếu file còn trên máy chủ, hoặc hiện là không còn khả dụng."* [Unverified] Hành vi thực tế của từng app phải được kiểm tra trước khi viết câu này.
 
 **Tự động:** không bao giờ.
+
+> **✅ Đã code xong (2026-09-29).**
+>
+> Code: `src/main/chat/` (`zalo.js`, `telegram.js`, `measure.js`, `known.js`),
+> `src/main/analyzers/chat.js`, `src/renderer/chat.js`, tab + panel trong
+> `index.html`, `chat:last`/`chat:scan`/`chat:cancel` + `chat:progress` trong
+> `ipc.js`, `chatNote()` trong hộp thoại xác nhận, `analyzers/app-caches/zalo.json`,
+> settings **v10**. Harness: `scripts/test-chat.js` (**84 kiểm tra**), khối Chat
+> trong `smoke.js` (**17 kiểm tra**), màn thứ 14 trong `test-a11y.js`, ảnh chụp
+> `npm run shoot:chat`. Khác với đặc tả ở trên:
+>
+> - **Ba mức đều làm được, nhưng Mức 3 chỉ cho Zalo.** Đặc tả để ngỏ vì sợ
+>   không có mức nào chạy được; thực tế Mức 1 và Mức 2 chạy cho cả hai app,
+>   còn Mức 3 **chỉ Zalo** — không gì trong `tdata` của Telegram mang tên một
+>   cuộc trò chuyện, bộ nhớ đệm của nó đánh địa chỉ theo nội dung, và chỗ duy
+>   nhất định danh một cuộc trò chuyện là kho tin nhắn. Màn hình **nói ra điều
+>   đó thành câu**, không để người dùng tự suy từ một danh sách rỗng.
+> - **Cấu trúc sâu hơn một tầng so với những gì đã đo trước.** Không phải
+>   `resource\<id>\<tệp>` mà `resource\<id>\{Cache,picture,richThumb,video,voice,file,fileNoise}\<tệp>`:
+>   thư mục **loại** nằm *bên trong* thư mục cuộc trò chuyện. Đo lại cả cây:
+>   **10.501 tệp / 1.034,4 MB**, trong đó `picture` 5.908 tệp / 367,3 MB,
+>   `Cache` 4.038 / 292,5 MB, `video` 68 / 258,0 MB.
+> - **⚠️ Zalo giữ mỗi ảnh hai bản, và bản nhỏ hơn là bản không ai mở được.**
+>   Cùng một tấm: `Cache\<ts>_<acct>_<conv>_n` là **JPEG 91.405 byte không có
+>   đuôi**, `picture\<ts>_<acct>_<conv>_<md5>.jxl` là **JPEG XL 41.323 byte**.
+>   Trên cả cây: **2.194 ảnh có mặt ở cả hai, phần `Cache` của chúng là 272,3 MB**
+>   — 26% cả cây. Lời khuyên hiển nhiên là "xoá bản trùng", và nó **sai chiều**:
+>   chạy đúng hai bộ giải mã `lib/media/thumbs.js` dùng (Electron 33.4.11 /
+>   Chromium 130) cho kết quả `.jxl` → **EMPTY** ở Chromium và **ném lỗi** ở
+>   shell Windows, còn `Cache\..._n` → **862×1897**. Nên con số là **bằng
+>   chứng**, không phải một hành động.
+> - **Một cuộc trò chuyện hiện bằng id thô** (đã chốt), và mỗi hàng nói rõ vì
+>   sao: cái tên nằm trong database tin nhắn, app không mở database tin nhắn.
+>   `ZaloData\Database` là **1.239,8 MB** trên máy này và không một dòng code
+>   nào chạm vào nó; harness kiểm điều đó **bằng đường dẫn**, không bằng lời hứa.
+> - **Hai hạt, và chỉ một hạt hành động được** — đúng khuôn `duplicates.js` đã
+>   chốt cho thư mục: hàng cuộc trò chuyện là `folder` và `actions: []` (cả
+>   `recycle` lẫn `quarantine` đều từ chối thư mục, và B2 đã bắt `execute()`
+>   thực thi điều đó), còn thứ nút bấm tác động lên là **từng tệp**, mỗi tệp
+>   một hàng. Chọn theo **(cuộc trò chuyện, loại)**: không ai đi tick 5.868 tấm ảnh.
+> - **Không có gì ở đây là `safe`, và không có gì chạy tự động.** Một tấm ảnh
+>   người ta gửi không phải cache, và có thể là bản duy nhất — hộp thoại của
+>   Zalo không hứa gì, app cũng không ở vị trí hứa thay.
+> - **Câu cảnh báo bắt buộc quyết theo đường dẫn, không theo màn hình gọi tới.**
+>   `chat/known.js` nhận ra tệp của app chat ở bất kỳ đâu, nên một ảnh Zalo xoá
+>   từ màn Ảnh cũng nhận đúng câu đó. Và câu ấy **không hứa tải lại được**: đặc
+>   tả viết "Zalo có thể tải lại nếu file còn trên máy chủ", đọc như một lời
+>   trấn an mà **không gì ở đây kiểm được** — nên nó viết đúng là một điều không
+>   chắc, kèm chỉ dẫn nên giả định chiều nào.
+> - **Telegram: `tupdates` 212,6 MB không phải rác.** Đọc `FileVersion` từ
+>   chính hai tệp `.exe`: `tupdates\temp\Telegram.exe` là **7.2.5.0** (2026-09-23),
+>   bản đang cài là **7.1.3.0** (2026-08-28). Đây là **một bản cập nhật đã tải,
+>   đã giải nén, chưa áp dụng** — xoá đi là bắt tải lại 212 MB, nên `review` và
+>   bằng chứng nói thẳng điều đó. Phép đọc phiên bản **hỏng hai lần trước khi
+>   chạy**: `ProductVersion` xuất hiện **hai lần** trong `Telegram.exe` (lần đầu
+>   ở 46,8% là tên import `api-ms-win-core-version-l1-1-0.dll`), và phần đệm
+>   căn theo khối tài nguyên chứ không theo tệp. Khoá đúng là `FileVersion`, ở
+>   99,4%, và cách tách đúng là **bỏ qua dải NUL** — 6–9 ms một tệp 208 MB.
+> - **Cache trình duyệt của Zalo sang D4, không sang đây** (đã chốt). Đó là
+>   `ZaloData\{Cache,Code Cache,GPUCache,DawnCache}` (337,4 MB) và
+>   `ZaloData\Partitions\zalo\{...}` (264,9 MB) — **602,3 MB**, Free · `safe`,
+>   chạy được trong Automatic, dùng lại nguyên cỗ máy D4 đã có. `IndexedDB`,
+>   `Local Storage`, `Service Worker` **không bao giờ** được đề xuất. Settings lên
+>   **v10**: hồ sơ nào đang dọn cache của app nào đó thì được thêm `app.zalo`,
+>   hồ sơ không dọn cái nào thì không được thêm gì — đúng luật v2→v3 đã dùng.
+>   `cal\` (66,7 MB) **cố ý để ngoài**: đó là log xoay vòng, không phải cache.
+> - **Chặn theo tiến trình cả ba tệp của Zalo.** `Zalo.exe`, `ZaloCall.exe`,
+>   `ZaloCap.exe` — cả ba đều đang chạy trên máy này. Harness bắt được chỗ hụt
+>   khi danh sách mới chỉ có `Zalo.exe`. **Zalo chạy lúc đăng nhập ở đây**, nên
+>   mọi ảnh chụp đều là trạng thái "đang mở, không đề xuất gì" — đó là màn hình
+>   đang làm việc, không phải màn hình rỗng, và các hàng Telegram trong cùng
+>   tấm ảnh cho thấy nửa còn lại.
+> - **Ảnh chụp bắt được 4 lỗi.** (a) Hai dòng cùng tên **"Files"** — `file` và
+>   `fileNoise`; đo magic bytes thì `file` là **14 JPEG + 3 PNG**, còn
+>   `fileNoise` (104 MB) **không tệp nào có đuôi và không tệp nào nhận dạng
+>   được**, nên nay là "Files people sent" và "Files, kept in a form only Zalo
+>   reads". (b) Bốn dòng cùng tên **"Cached media"** — Telegram có `cache` và
+>   `media_cache` × hai tài khoản. (c) Hàng `update` **hiện chữ `update` giữa
+>   một khối tiếng Việt** vì `meta` thiếu `label`. (d) Hai video đề ngày
+>   **30/11/2185** và **15/5/2187**: tên chúng mở đầu bằng `6813644617565` —
+>   13 chữ số, qua được phép kiểm độ dài, mà là **id chứ không phải epoch**. Luật
+>   nay là **một khoảng thời gian**, không phải một số chữ số.
+> - **Sửa kèm, một lỗi có sẵn:** `lib/media/roots.js` cho màn Ảnh trỏ cứng
+>   `tdata\user_data\media_cache` — trên máy này là **1 tệp / 10 KB**, và
+>   **không bao giờ thấy tài khoản thứ hai** (`user_data#2`: 4 tệp trong
+>   `media_cache`, 352 trong `cache`). Nay mỗi tài khoản một root, mang tên tài
+>   khoản khi có nhiều hơn một.
+> - **Chưa làm, để cho E5:** nới luật "chỉ nhận theo đuôi" ở `media/scan.js:214`
+>   và luật từ chối thư mục tên `Cache` ở `roots.js`. **Hai cổng, không phải
+>   một** — mở mỗi cổng đuôi thì màn Ảnh vẫn ra 0 tệp, vì ảnh không đuôi nằm
+>   trong thư mục tên `Cache`. Phần nhận dạng thì **đã sẵn**: `probe.js:87-99`
+>   ghi đè `record.kind` bằng kết quả magic bytes, và `extensionMatches('', 'jpeg')`
+>   trả `true` nên tệp không đuôi **không bị gắn nhầm `formatMismatch`**.
 
 ---
 

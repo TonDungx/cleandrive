@@ -31,6 +31,10 @@ const ALLOWED = Object.freeze([
   'cleanup.app.discord',
   'cleanup.app.zoom',
   'cleanup.app.figma',
+  // Zalo arrived with D3. Only its browser caches are here: what it has
+  // downloaded from conversations is on the Chat screen, is never `safe`, and
+  // is never run unattended.
+  'cleanup.app.zalo',
 ]);
 
 const SET = new Set(ALLOWED);

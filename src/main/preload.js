@@ -56,6 +56,10 @@ const api = {
   scanGames: () => ipcRenderer.invoke('games:scan'),
   cancelGames: () => ipcRenderer.invoke('games:cancel'),
 
+  lastChat: () => ipcRenderer.invoke('chat:last'),
+  scanChat: () => ipcRenderer.invoke('chat:scan'),
+  cancelChat: () => ipcRenderer.invoke('chat:cancel'),
+
   lastDev: () => ipcRenderer.invoke('dev:last'),
   scanDev: () => ipcRenderer.invoke('dev:scan'),
   cancelDev: () => ipcRenderer.invoke('dev:cancel'),
@@ -177,6 +181,7 @@ const api = {
   onSystemProgress: (cb) => subscribe('system:progress', cb),
   onAppsProgress: (cb) => subscribe('apps:progress', cb),
   onGamesProgress: (cb) => subscribe('games:progress', cb),
+  onChatProgress: (cb) => subscribe('chat:progress', cb),
   onDevProgress: (cb) => subscribe('dev:progress', cb),
   onDevProjectsProgress: (cb) => subscribe('dev:projectProgress', cb),
   onAutoCleanProgress: (cb) => subscribe('autoclean:progress', cb),
