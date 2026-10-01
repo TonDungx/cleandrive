@@ -213,5 +213,52 @@ console.log('\ntheme: every failure reads as a sentence, in both languages\n');
   i18n.setLanguage('en');
 }
 
+/* -------------------------------------------------------------------------- */
+console.log('\ntheme: every colour the window asks for exists\n');
+
+{
+  // A `var(--name)` naming a property nobody defines is not an error to the
+  // browser: the declaration becomes `unset`, and for `color` that quietly
+  // means "whatever the parent has". Found 2026-10-01 in seven places --
+  // `--text-1` on the Chat screen's chips and `--text-dim` under the Planner
+  // and the fast-scan line -- all drawing body-coloured text where a dimmer
+  // one was written, and none of them visible to axe, because the colour they
+  // fell back to passes contrast.
+  //
+  // Defined means: declared in a stylesheet (`--name:`), set from script
+  // (`setProperty('--name'`), or named as a string, which is how the theme
+  // palette generates the user's own tokens. A `var()` with its own fallback
+  // is left alone; one without is a promise that the property exists.
+  const dirs = [path.join(__dirname, '..', 'src', 'renderer'), path.join(__dirname, '..', 'src', 'shared')];
+  const files = [];
+  const walk = (dir) => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (/\.(css|js|html)$/.test(entry.name)) files.push(full);
+    }
+  };
+  for (const dir of dirs) walk(dir);
+
+  const defined = new Set();
+  const uses = [];
+  for (const file of files) {
+    const src = fs.readFileSync(file, 'utf8');
+    for (const m of src.matchAll(/(--[a-z0-9-]+)\s*:/gi)) defined.add(m[1]);
+    for (const m of src.matchAll(/setProperty\(\s*['"`](--[a-z0-9-]+)/gi)) defined.add(m[1]);
+    for (const m of src.matchAll(/['"`](--[a-z0-9-]+)['"`]/g)) defined.add(m[1]);
+    if (!file.startsWith(dirs[0])) continue;
+    for (const m of src.matchAll(/var\(\s*(--[a-z0-9-]+)\s*([,)])/gi)) {
+      if (m[2] === ',') continue;
+      const line = src.slice(0, m.index).split('\n').length;
+      uses.push({ name: m[1], where: `${path.basename(file)}:${line}` });
+    }
+  }
+  const missing = uses.filter((u) => !defined.has(u.name));
+  check(`every var() without a fallback names a property that is defined (${uses.length} uses, ${defined.size} properties)`,
+    missing.length === 0, missing.map((u) => `${u.name} at ${u.where}`).join(', '));
+  check('the check can see the tokens it is checking for', defined.has('--text') && defined.has('--text-2') && defined.has('--accent'));
+}
+
 console.log(failures === 0 ? '\nALL PASS\n' : `\n${failures} FAILURE(S)\n`);
 process.exit(failures === 0 ? 0 : 1);

@@ -1067,7 +1067,7 @@ main {
 .plan-bar-note {
   margin: 8px 0 0;
   font-size: 13px;
-  color: var(--text-dim);
+  color: var(--text-2);
   line-height: 1.5;
 }
 
@@ -1128,14 +1128,14 @@ main {
 
 .plan-step-size {
   font-size: 13px;
-  color: var(--text-dim);
+  color: var(--text-2);
 }
 
 .plan-step-count,
 .plan-step-note {
   margin: 6px 0 0;
   font-size: 13px;
-  color: var(--text-dim);
+  color: var(--text-2);
   line-height: 1.5;
 }
 
@@ -1150,7 +1150,7 @@ main {
 
 .plan-step-running {
   font-size: 12px;
-  color: var(--text-3, var(--text-dim));
+  color: var(--text-3);
 }
 
 .plan-missing {
@@ -1164,7 +1164,7 @@ main {
   padding: 10px 12px;
   border-left: 3px solid var(--border);
   font-size: 13px;
-  color: var(--text-dim);
+  color: var(--text-2);
   line-height: 1.5;
 }
 
@@ -1188,7 +1188,7 @@ main {
   align-items: center;
   gap: 7px;
   font-size: 13px;
-  color: var(--text-dim);
+  color: var(--text-2);
   line-height: 1.4;
   cursor: pointer;
   white-space: nowrap;
@@ -3583,7 +3583,7 @@ main {
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-sm, 6px);
   background: var(--surface);
-  color: var(--text-1);
+  color: var(--text);
   font: inherit;
   font-size: 12px;
   text-align: left;
