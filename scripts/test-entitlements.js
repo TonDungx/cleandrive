@@ -159,6 +159,11 @@ console.log('\nentitlements: what never goes through can()\n');
   const ROOT = path.join(__dirname, '..');
   const mustNotGate = [
     'src/main/journal/journal.js',
+    // The seal (H4) is written by the journal and checked by the Restore
+    // Center, so it is held to the journal's rule: it is told, never asks.
+    'src/main/journal/seal.js',
+    'src/main/journal/seal-key.js',
+    'src/main/lib/dpapi.js',
     'src/main/lib/ledger.js',
     'src/main/lib/recyclebin.js',
     'src/main/lib/trash.js',
@@ -180,6 +185,15 @@ console.log('\nentitlements: what never goes through can()\n');
   check('nor do the Restore Center\'s handlers', restoreBlock.includes("handle('journal:restore'") &&
     !/\bcan\s*:|canNow|entitlements|licenseState/.test(restoreBlock));
   check('and the restore action asks for no paid feature', require('../src/main/actions/restore').feature === 'free');
+
+  // H4 is a Business feature inside the one module no licence may touch. It
+  // works because the decision is made where the journal is built and handed
+  // in: `services.js` asks `biz.audit`, the journal is given a sealer or not.
+  const servicesSrc = fs.readFileSync(path.join(ROOT, 'src/main/services.js'), 'utf8');
+  check('whether to seal is decided where the journal is built, from biz.audit',
+    /canNow\(\)\('biz\.audit'\)/.test(servicesSrc) && /new ActionJournal\([^)]*sealer/.test(servicesSrc));
+  check('and the check of the seals is one of the Restore Center’s handlers, ungated',
+    restoreBlock.includes("handle('journal:verify'"));
 }
 
 console.log(failures === 0 ? '\nALL PASS\n' : `\n${failures} FAILURE(S)\n`);

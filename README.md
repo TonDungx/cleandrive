@@ -2114,6 +2114,53 @@ Two decisions behind it, both measured rather than assumed:
 The window asks for items by their place in the journal and never by path, so it
 can ask for something the app did to be undone and for nothing else.
 
+### Whether the journal is still as it was
+
+On **CleanDrive Business**, every session ends with a **seal**: one more line in
+the journal, signed with a key kept on this computer. Above the cards the screen
+says whether every sealed session is still exactly as it was sealed —
+*"Sealed: 12 sessions, none changed since"* — and each card carries one of three
+words: *Sealed*, *Changed after sealing*, or *Not sealed*. A changed card says
+where: *"Line 14 of the journal file 2026-10.jsonl was changed after it was
+sealed."*
+
+| Done to the journal | What the screen says |
+| --- | --- |
+| A number or a path in one line edited | That line was changed after it was sealed |
+| A line taken out | A line was removed just before the line that followed it |
+| A line put in | That line was added after the session was sealed |
+| A whole session taken out from between two others | Sealed sessions no longer in the journal: 1 |
+| Every hash recomputed after an edit (anyone can) | The seal no longer matches what it covers — recomputing the chain is easy, signing it again is not |
+| The file opened and saved by an editor that changes line endings | Every session in that file changed — because every line was |
+| The key file deleted or replaced | Each older seal *"was made with a key this computer does not have"* |
+
+**What it cannot find — read this before relying on it:**
+
+- **The computer's own user can rewrite the journal and sign it again.** The
+  cleanup that runs at 02:00 runs as that user, without administrator rights,
+  and seals as it goes; any key it can open with nobody there, that user can
+  open too. A seal shows that a session was changed by something that did not
+  go to that trouble — a hand edit, another program, a damaged disk. It is not
+  proof against the person whose computer it is.
+- **The newest sessions, taken out whole, leave no trace**: nothing comes after
+  them to notice. Nor does deleting the whole journal.
+- Both need a copy kept where the user cannot rewrite it. That is the
+  multi-machine console's job, which is not built yet.
+
+The key is `seal-key.json`, beside the settings. Its private half is protected
+by Windows (DPAPI) for this user's account; the screen shows the first sixteen
+characters of its fingerprint, so it can be compared with a note kept
+elsewhere. If Windows can no longer open it — [Unverified] for instance after an
+administrator resets a local account's password — a new key is made, the old
+public half is kept, and every earlier seal still checks. If PowerShell cannot
+run on the machine, the key cannot be opened at all: sessions are still written
+whole, they read as *Not sealed*, and the screen says why.
+
+On any other licence sessions are not sealed, and the screen says so in one
+line. When a Business licence lapses, new sessions stop being sealed and every
+earlier seal is still checked: the check is reading, and reading the journal is
+never behind a licence. Nothing about putting files back changes either way.
+
 ---
 
 ## Screen 13 — Automatic
@@ -2565,6 +2612,15 @@ It is also what the [Restore](#screen-12--restore) screen reads, and a restore i
 recorded in it like any other action — which is how the purge knows a file that
 was put back is no longer the app's to remove.
 
+On Business, each line also names the line before it in the same session by its
+hash, and each session ends with a signed seal ([what that does and does not
+prove](#whether-the-journal-is-still-as-it-was)). The chain runs per session
+rather than through the file because the window and the 02:00 run append to the
+same file at once, and a chain through it would call every power cut an edit.
+Dropping old months still happens, but with sealing on the journal first writes
+a sealed note naming the months it removes, so that retention is never mistaken
+for somebody deleting them.
+
 ---
 
 ## Limits worth knowing before you plan around it
@@ -2619,6 +2675,10 @@ was put back is no longer the app's to remove.
   checked in the script it is built from, [Unverified] not by installing and
   uninstalling — a test install carries the same identity as a real one and
   would replace it.
+- **A sealed journal is not proof against the computer's own user** (Business).
+  They can rewrite it and sign it again, and nobody can tell that its newest
+  sessions were taken out. It catches edits by anything else.
+  [Details](#whether-the-journal-is-still-as-it-was).
 - **The scheduled task only fires while somebody is logged on.** A machine left
   at the login screen at 02:00 runs the cleanup at the next opportunity instead.
 - **Moving the app** relocates the executable the scheduled task points at. The
@@ -2734,7 +2794,8 @@ down to a folder swapped for a junction half way through, the
 candidate contract, the action pipeline, the map of the folder and what the
 window may ask of it, what two scans of a folder can honestly say changed, the
 journal (including two processes
-writing it at once), the deletion guards, the unattended-run gates, the Recycle
+writing it at once) and its seal (edited, cut and forged lines, and the two
+attacks it cannot see, checked to be as invisible as the documentation says), the deletion guards, the unattended-run gates, the Recycle
 Bin purge and the restore both written from the attacker's side, the
 entitlement matrix, the elevated helper's handshake, the settings migration
 against the released code, the translation dictionary, and an end-to-end run
@@ -2744,7 +2805,7 @@ that boots the real application and reads its rendered interface back out.
 `npm run test:onboarding` walks the introduction every way out of it, and
 `npm run test:explorer` the right-click menu's card and what the menu asks for.
 `npm run verify:restore` puts throwaway files back from the real Recycle Bin.
-`npm run shoot:lists`, `shoot:media`, `shoot:viewer`, `shoot:restore`,
+`npm run shoot:lists`, `shoot:media`, `shoot:viewer`, `shoot:restore`, `shoot:seal`,
 `shoot:system`, `shoot:treemap`, `shoot:changes`, `shoot:cloud`, `shoot:appcaches`, `shoot:quarantine`, `shoot:a11y`, `shoot:intro` and `shoot:explorer` take screenshots of the real screens.
 
 Harnesses run against a sandbox userData and a suffixed task name, so they cannot

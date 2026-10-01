@@ -19,6 +19,11 @@
  * Nothing here is behind a licence. The window never names a path to put
  * back, only journal ids, so it can ask for something the app did to be undone
  * and for nothing else.
+ *
+ * Above the cards, whether the journal is still as it was sealed (H4). The
+ * check itself is never behind the licence either; the licence is read only
+ * to say whether *new* sessions are being sealed, and when they are not, to
+ * say why in words.
  */
 (() => {
   const host = $('restore-sessions');
@@ -30,6 +35,8 @@
     open: new Set(), // session ids whose files are shown
     selection: new Map(), // session id -> Set of paths
     lists: new Map(), // session id -> CandidateList
+    integrity: null, // what `journal:verify` said, or { failed: true }
+    audit: null, // the `biz.audit` entitlement: { allowed, reason }
     loading: false,
   };
 
@@ -199,6 +206,168 @@
     return el;
   }
 
+  /* ---- the seal (H4) ----------------------------------------------------------- */
+
+  /** Whether there is anything to say about seals: sealing is on, or once was. */
+  function sealsInPlay() {
+    const report = view.integrity;
+    if (!report || report.failed) return false;
+    return Boolean(view.audit && view.audit.allowed) || report.seals.count > 0 || report.counts.altered > 0;
+  }
+
+  function sealStateOf(session) {
+    const s = view.integrity && view.integrity.sessions ? view.integrity.sessions[session.id] : null;
+    return s ? s.state : null;
+  }
+
+  function sealBadge(session) {
+    const state = sealStateOf(session);
+    if (!state || !sealsInPlay()) return null;
+    const el = document.createElement('span');
+    // Neutral like the state badges: a changed record is a fact about the
+    // journal, not a verdict on any file in it. The words carry the weight.
+    el.className = 'badge badge-state badge-seal';
+    el.dataset.seal = state === 'sealed' || state === 'altered' ? state : 'unsealed';
+    el.textContent =
+      state === 'sealed'
+        ? t('restore.seal.state.sealed', 'Sealed')
+        : state === 'altered'
+          ? t('restore.seal.state.altered', 'Changed after sealing')
+          : t('restore.seal.state.unsealed', 'Not sealed');
+    return el;
+  }
+
+  /** One sentence per thing the check found wrong with a session. */
+  function problemText(p) {
+    const at = { line: formatCount(p.line), file: p.file };
+    switch (p.what) {
+      case 'modified':
+        return t('restore.seal.problem.modified', 'Line {line} of the journal file {file} was changed after it was sealed.', at);
+      case 'deleted':
+        return t('restore.seal.problem.deleted', 'A line was removed just before line {line} of the journal file {file}.', at);
+      case 'inserted':
+        return t('restore.seal.problem.inserted', 'Line {line} of the journal file {file} was added after the session was sealed.', at);
+      case 'signature':
+        return t('restore.seal.problem.signature', 'The seal on line {line} of the journal file {file} no longer matches what it covers.', at);
+      case 'unknownKey':
+        return t('restore.seal.problem.unknownKey', 'The seal on line {line} of the journal file {file} was made with a key this computer does not have.', at);
+      case 'count':
+        return t('restore.seal.problem.count', 'The seal on line {line} of the journal file {file} counts a different number of lines.', at);
+      default:
+        return t('restore.seal.problem.changed', 'The line before line {line} of the journal file {file} was changed or removed.', at);
+    }
+  }
+
+  const PROBLEMS_SHOWN = 5;
+
+  function sealNotes(session) {
+    const s = view.integrity && view.integrity.sessions ? view.integrity.sessions[session.id] : null;
+    if (!s || s.state !== 'altered') return [];
+    const lines = s.problems.slice(0, PROBLEMS_SHOWN).map(problemText);
+    if (s.problems.length > PROBLEMS_SHOWN) {
+      lines.push(t('restore.seal.problem.more', 'And {n} more.', { n: formatCount(s.problems.length - PROBLEMS_SHOWN) }));
+    }
+    return lines;
+  }
+
+  /** The refusal, when the licence does not seal: said, never left out. */
+  function refusalText() {
+    const lapsed = view.audit && view.audit.reason === 'expired';
+    const report = view.integrity;
+    const anySealed = report && !report.failed && (report.seals.count > 0 || report.counts.altered > 0);
+    if (lapsed) {
+      return anySealed
+        ? t('restore.seal.expired', 'The Business licence has lapsed, so new sessions are not sealed. Those sealed before it lapsed are still checked.')
+        : t('restore.seal.expiredNone', 'The Business licence has lapsed, so sessions are not sealed.');
+    }
+    return anySealed
+      ? t('restore.seal.stopped', 'New sessions are not sealed: sealing the journal is part of CleanDrive Business. Those sealed before are still checked.')
+      : t('restore.seal.needsBusiness', 'Sealing the journal is part of CleanDrive Business: each session is signed with a key kept on this computer, so a line changed, removed or added afterwards can be found. Sessions are not sealed now.');
+  }
+
+  function headline(report) {
+    const sessions = (n) => word(n, 'restore.session', 'session', 'sessions');
+    const { counts } = report;
+    const unsealed = counts.unsealed + counts.legacy + counts.incomplete;
+    const first =
+      counts.altered > 0
+        ? t('restore.seal.altered', 'Changed after sealing: {n} {sessions}', { n: formatCount(counts.altered), sessions: sessions(counts.altered) })
+        : counts.sealed > 0
+          ? t('restore.seal.allGood', 'Sealed: {n} {sessions}, none changed since', { n: formatCount(counts.sealed), sessions: sessions(counts.sealed) })
+          : t('restore.seal.noneYet', 'Each session is sealed as it finishes. None has finished since sealing began.');
+    const rest = [
+      counts.altered > 0 && counts.sealed > 0 && t('restore.seal.alsoSealed', '{n} still as sealed', { n: formatCount(counts.sealed) }),
+      unsealed > 0 && t('restore.seal.unsealed', '{n} not sealed', { n: formatCount(unsealed) }),
+      report.missingCount > 0 &&
+        t('restore.seal.missing', 'sealed sessions no longer in the journal: {n}', { n: formatCount(report.missingCount) }),
+      report.oldestMissing &&
+        t('restore.seal.oldestMissing', 'older sealed sessions no longer in the journal, with no record of the app removing them: {n}', {
+          n: formatCount(report.oldestMissing.count),
+        }),
+      report.duplicates.length > 0 && t('restore.seal.duplicate', 'two seals carry the same number'),
+      report.unreadable.length > 0 && t('restore.seal.unreadable', 'lines that could not be read: {n}', { n: formatCount(report.unreadable.length) }),
+    ].filter(Boolean);
+    return [first, ...rest];
+  }
+
+  function failureText(code) {
+    switch (code) {
+      case 'key':
+        return t('restore.seal.failure.key', 'The last session in this window could not be sealed: the key could not be opened. PowerShell may be blocked on this computer.');
+      case 'busy':
+        return t('restore.seal.failure.busy', 'The last session in this window could not be sealed: another CleanDrive process held the journal for too long.');
+      default:
+        return t('restore.seal.failure.other', 'The last session in this window could not be sealed.');
+    }
+  }
+
+  /** The block above the cards, as paragraphs: `[text, className]`. */
+  function integrityParagraphs() {
+    const report = view.integrity;
+    if (!report) return [];
+    if (report.failed) return [[t('restore.seal.checkFailed', 'The journal could not be checked just now.'), 'restore-integrity-head']];
+    const sealing = Boolean(view.audit && view.audit.allowed);
+    if (!sealsInPlay()) return view.audit ? [[refusalText(), 'upgrade-hint']] : [];
+    const out = [[headline(report), 'restore-integrity-head']];
+    if (report.sealFailure && sealing) out.push([failureText(report.sealFailure), 'restore-integrity-note']);
+    if (!sealing) out.push([refusalText(), 'restore-integrity-note']);
+    if (report.keys.currentShort) {
+      out.push([t('restore.seal.key', 'This computer’s key: {fingerprint}', { fingerprint: report.keys.currentShort }), 'restore-integrity-note']);
+    }
+    out.push([
+      t('restore.seal.limit', 'A seal shows that a session was changed. It cannot stop someone signed in to this computer from deleting the journal, or from rewriting it and signing it again.'),
+      'restore-integrity-note',
+    ]);
+    return out;
+  }
+
+  function renderIntegrity() {
+    const box = $('restore-integrity');
+    if (!box) return;
+    const paragraphs = integrityParagraphs();
+    box.hidden = paragraphs.length === 0;
+    box.replaceChildren(
+      ...paragraphs.map(([text, className]) => {
+        const p = document.createElement('p');
+        p.className = className;
+        if (Array.isArray(text)) {
+          // One block per fact, so a narrow window breaks between facts and
+          // never between a number and what it counts.
+          text.forEach((fact, i) => {
+            if (i > 0) p.append(' · ');
+            const span = document.createElement('span');
+            span.className = 'restore-integrity-fact';
+            span.textContent = fact;
+            p.append(span);
+          });
+        } else {
+          p.textContent = text;
+        }
+        return p;
+      })
+    );
+  }
+
   /* ---- the floating bar ------------------------------------------------------ */
 
   function selectedRows() {
@@ -289,6 +458,8 @@
     meta.className = 'restore-meta';
     meta.textContent = [formatWhen(session.startedAt), sourceOf(session), formatBytes(session.bytes)].filter(Boolean).join(' · ');
     title.append(strong, meta);
+    const seal = sealBadge(session);
+    if (seal) title.appendChild(seal);
     head.appendChild(title);
 
     const actions = document.createElement('div');
@@ -355,6 +526,12 @@
       p.textContent = text;
       body.appendChild(p);
     }
+    for (const text of sealNotes(session)) {
+      const p = document.createElement('p');
+      p.className = 'group-hint restore-note restore-seal-note';
+      p.textContent = text;
+      body.appendChild(p);
+    }
 
     if (view.open.has(session.id)) {
       const files = document.createElement('div');
@@ -374,6 +551,7 @@
     view.lists.clear();
     const sessions = view.sessions || [];
     $('restore-empty').hidden = sessions.length > 0 || view.sessions === null;
+    renderIntegrity();
     host.replaceChildren(...sessions.map(renderSession));
 
     const restorable = sessions.reduce((n, s) => n + (s.undoable ? s.restorable.count : 0), 0);
@@ -420,14 +598,20 @@
        * both have arrived.
        */
       const openIds = [...view.open];
-      const [sessionsEnvelope, ...itemEnvelopes] = await Promise.all([
+      const [sessionsEnvelope, verifyEnvelope, rights, ...itemEnvelopes] = await Promise.all([
         api.journalSessions(),
+        api.journalVerify(),
+        loadEntitlements(),
         ...openIds.map((id) => api.journalItems(id)),
       ]);
 
       const sessions = unwrap(sessionsEnvelope, t('app.tab.restore', 'Restore'));
       if (!sessions) return;
       view.sessions = sessions;
+      // A check that could not run is said above the cards rather than in a
+      // toast: it must not stand in the way of putting anything back.
+      view.integrity = verifyEnvelope && verifyEnvelope.ok ? verifyEnvelope.data : { failed: true };
+      view.audit = rights.get('biz.audit') || null;
       // Everything is read again: a file somebody restored in Explorer since
       // the last look must not still be offered.
       view.items.clear();

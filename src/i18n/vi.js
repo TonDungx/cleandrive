@@ -2946,6 +2946,47 @@
     'restore.why.unavailableZone': 'Ổ chứa thư mục cách ly đang không kết nối',
     'restore.why.hash': 'Bản chép không còn khớp với bản đã cách ly, nên không được khôi phục',
 
+    /* ---- niêm phong nhật ký (H4) ----
+     * "seal" → **niêm phong** (động từ) / **con dấu** (danh từ), "key" → **khoá**.
+     * Một "session" của Restore Center đã là **lần** (xem `restore.session`), nên ở
+     * đây cũng vậy. */
+    'restore.seal.state.sealed': 'Đã niêm phong',
+    'restore.seal.state.altered': 'Bị sửa sau khi niêm phong',
+    'restore.seal.state.unsealed': 'Chưa niêm phong',
+    'restore.seal.problem.modified': 'Dòng {line} của tệp nhật ký {file} đã bị sửa sau khi niêm phong.',
+    'restore.seal.problem.deleted': 'Một dòng đã bị xoá ngay trước dòng {line} của tệp nhật ký {file}.',
+    'restore.seal.problem.inserted': 'Dòng {line} của tệp nhật ký {file} được thêm vào sau khi lần này đã niêm phong.',
+    'restore.seal.problem.signature': 'Con dấu ở dòng {line} của tệp nhật ký {file} không còn khớp với những gì nó niêm phong.',
+    'restore.seal.problem.unknownKey': 'Con dấu ở dòng {line} của tệp nhật ký {file} được ký bằng một khoá mà máy này không có.',
+    'restore.seal.problem.count': 'Con dấu ở dòng {line} của tệp nhật ký {file} đếm ra một số dòng khác.',
+    'restore.seal.problem.changed': 'Dòng ngay trước dòng {line} của tệp nhật ký {file} đã bị sửa hoặc bị xoá.',
+    'restore.seal.problem.more': 'Và {n} chỗ khác.',
+    'restore.seal.expired': 'Giấy phép Business đã hết hạn nên các lần mới không được niêm phong. Những lần đã niêm phong trước đó vẫn được kiểm.',
+    'restore.seal.expiredNone': 'Giấy phép Business đã hết hạn nên các lần không được niêm phong.',
+    'restore.seal.stopped':
+      'Các lần mới không được niêm phong: niêm phong nhật ký thuộc CleanDrive Business. Những lần đã niêm phong trước đó vẫn được kiểm.',
+    'restore.seal.needsBusiness':
+      'Niêm phong nhật ký thuộc CleanDrive Business: mỗi lần được ký bằng một khoá giữ trên máy này, nên dòng nào bị sửa, ' +
+      'bị xoá hay được thêm vào sau đó đều tìm ra được. Hiện các lần không được niêm phong.',
+    'restore.seal.altered': 'Bị sửa sau khi niêm phong: {n} {sessions}',
+    'restore.seal.allGood': 'Đã niêm phong: {n} {sessions}, không lần nào bị sửa từ đó',
+    'restore.seal.noneYet': 'Mỗi lần được niêm phong ngay khi kết thúc. Từ khi bắt đầu niêm phong chưa có lần nào kết thúc.',
+    'restore.seal.alsoSealed': '{n} vẫn nguyên như lúc niêm phong',
+    'restore.seal.unsealed': '{n} chưa niêm phong',
+    'restore.seal.missing': 'lần đã niêm phong nay không còn trong nhật ký: {n}',
+    'restore.seal.oldestMissing': 'lần đã niêm phong cũ hơn không còn trong nhật ký, và không có bản ghi nào cho thấy ứng dụng đã dọn chúng: {n}',
+    'restore.seal.duplicate': 'có hai con dấu mang cùng một số',
+    'restore.seal.unreadable': 'dòng không đọc được: {n}',
+    'restore.seal.failure.key':
+      'Lần gần nhất trong cửa sổ này không niêm phong được: không mở được khoá. Có thể PowerShell đang bị chặn trên máy này.',
+    'restore.seal.failure.busy':
+      'Lần gần nhất trong cửa sổ này không niêm phong được: một tiến trình CleanDrive khác giữ nhật ký quá lâu.',
+    'restore.seal.failure.other': 'Lần gần nhất trong cửa sổ này không niêm phong được.',
+    'restore.seal.checkFailed': 'Lúc này không kiểm được nhật ký.',
+    'restore.seal.key': 'Khoá của máy này: {fingerprint}',
+    'restore.seal.limit':
+      'Con dấu cho biết bản ghi của một lần đã bị sửa. Nó không ngăn được người đang đăng nhập máy này xoá nhật ký, hay viết lại rồi ký lại.',
+
     /* ---- accessibility (I2) ---- */
     'progress.scan': 'Đang quét',
     'progress.system': 'Đang đọc ổ đĩa',

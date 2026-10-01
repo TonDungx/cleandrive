@@ -1572,6 +1572,27 @@ function register() {
     guard(async () => restoreEngine.listSessions(services().journal, { deps: await retention() }))
   );
 
+  /*
+   * Whether each session is as it was sealed (H4). Reading, so never behind
+   * the licence: one that has lapsed stops new seals and leaves every old one
+   * checkable. Public keys only -- nothing here can sign -- and the report
+   * names journal files and line numbers, never a path from inside a line.
+   */
+  handle('journal:verify', () =>
+    guard(async () => {
+      const { verifyJournal } = require('./journal/seal');
+      const { shortFingerprint } = require('./journal/seal-key');
+      const journal = services().journal;
+      const report = verifyJournal(await journal.readRaw(), await services().sealKey.publicKeys());
+      // Why this window's last seal could not be made, as a word the screen
+      // can translate. Only this process's: a scheduled run that could not
+      // seal shows as an unsealed session, not as a reason.
+      const err = journal.sealError;
+      const sealFailure = !err ? null : err.code === 'EBUSY' ? 'busy' : err.code === 'EDPAPI' ? 'key' : 'other';
+      return { ...report, sealFailure, keys: { ...report.keys, currentShort: shortFingerprint(report.keys.current) } };
+    })
+  );
+
   handle('journal:items', (_event, sessionId) =>
     guard(async () => {
       if (typeof sessionId !== 'string' || !/^s_[0-9a-f]{8}$/.test(sessionId)) throw new Error('Not a session id');

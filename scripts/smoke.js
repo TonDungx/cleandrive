@@ -2142,6 +2142,57 @@ app.whenReady().then(async () => {
         /35 still in the Recycle Bin/.test(after.note) && /5 put back/.test(after.note), after.note);
       check('the five can no longer be ticked', after.tickable === 35, String(after.tickable));
       check('and each restore is a session of its own on the screen', after.restoreCards === 2, String(after.restoreCards));
+
+      /* -- the seal on those same sessions (H4) ----------------------------- */
+      // A checkout opens every feature, so the forty and the two restores were
+      // sealed as they ended -- with a real key, through real DPAPI, kept in
+      // the sandbox. Then one line of the sandbox journal is edited the way a
+      // person with Notepad would, and put back byte for byte afterwards.
+      console.log('\nThe seal on the journal (H4, the same sessions):');
+      check('the key is in the sandbox, not the real profile', services().sealKeyPath.startsWith(SANDBOX_USER_DATA) &&
+        fs.existsSync(services().sealKeyPath), services().sealKeyPath);
+      const verified = await win.webContents.executeJavaScript(`window.cleandrive.journalVerify().then((r) => r.ok ? {
+        state: (r.data.sessions[${JSON.stringify(listed ? listed.session : '')}] || {}).state,
+        counts: r.data.counts, key: r.data.keys.currentShort, failure: r.data.sealFailure } : { error: r.error })`);
+      check('the forty were sealed, and so was each restore', verified.state === 'sealed' && verified.counts.sealed >= 3 &&
+        verified.counts.altered === 0, JSON.stringify(verified));
+      check('with a key the screen can name', /^[0-9A-F]{4}( [0-9A-F]{4}){3}$/.test(verified.key || ''), verified.key);
+      const shown = await win.webContents.executeJavaScript(`(() => {
+        const box = document.getElementById('restore-integrity');
+        const card = document.querySelector('.restore-session[data-session="${listed ? listed.session : ''}"]');
+        return { hidden: box.hidden, head: (box.querySelector('.restore-integrity-head') || {}).textContent || '',
+          badge: (card.querySelector('.badge-seal') || {}).textContent || '' };
+      })()`);
+      check('the screen says so above the cards, and on the card', !shown.hidden && /^Sealed: \d+ sessions, none changed since/.test(shown.head) &&
+        shown.badge === 'Sealed', `${shown.head} | ${shown.badge}`);
+
+      const journalFile = path.join(services().journalDir, fs.readdirSync(services().journalDir).find((n) => /^\d{4}-\d{2}\.jsonl$/.test(n)));
+      const original = fs.readFileSync(journalFile);
+      const rowsOf = original.toString('utf8').split('\n');
+      const at = rowsOf.findIndex((raw) => raw.includes(`"session":"${listed ? listed.session : ''}"`) && raw.includes('"op":"item"'));
+      rowsOf[at] = rowsOf[at].replace('"bytes":4096', '"bytes":4095');
+      fs.writeFileSync(journalFile, rowsOf.join('\n'));
+      try {
+        await win.webContents.executeJavaScript('restoreCenter.load()');
+        const edited = await win.webContents.executeJavaScript(`(() => {
+          const box = document.getElementById('restore-integrity');
+          const card = document.querySelector('.restore-session[data-session="${listed ? listed.session : ''}"]');
+          return { head: (box.querySelector('.restore-integrity-head') || {}).textContent || '',
+            badge: (card.querySelector('.badge-seal') || {}).textContent || '',
+            note: [...card.querySelectorAll('.restore-seal-note')].map((p) => p.textContent).join(' | '),
+            stillListed: card.querySelectorAll('.file-row').length };
+        })()`);
+        check('one number changed in Notepad: the card says it was changed after sealing, and which line',
+          edited.badge === 'Changed after sealing' && new RegExp(`^Line ${at + 1} of the journal file \\d{4}-\\d{2}\\.jsonl was changed`).test(edited.note),
+          `${edited.badge} | ${edited.note}`);
+        check('the line above the cards says the same', /^Changed after sealing: 1 session/.test(edited.head), edited.head);
+        check('and nothing about putting files back changed: the card still lists what it did', edited.stillListed === 40, String(edited.stillListed));
+      } finally {
+        fs.writeFileSync(journalFile, original);
+      }
+      await win.webContents.executeJavaScript('restoreCenter.load()');
+      const putBackJournal = await win.webContents.executeJavaScript(`window.cleandrive.journalVerify().then((r) => r.data.counts.altered)`);
+      check('the file put back byte for byte reads as sealed again', putBackJournal === 0, String(putBackJournal));
     }
 
     fs.rmSync(probeDir, { recursive: true, force: true });

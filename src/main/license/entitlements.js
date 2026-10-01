@@ -13,6 +13,11 @@
  * app did impossible to undo. `scripts/test-entitlements.js` checks those
  * modules do not even load this file.
  *
+ * One Business feature lives inside the journal all the same -- the seal at
+ * the end of each session (H4, `biz.audit`) -- and it keeps to that rule by
+ * never asking: `services.js` asks, and hands the journal a sealer or none.
+ * Checking the seals is reading, so it is never gated.
+ *
  * @typedef License
  * @property {'free'|'trial'|'active'|'expired'} state
  * @property {'pro'|'business'} [tier]

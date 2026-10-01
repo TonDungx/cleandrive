@@ -52,6 +52,8 @@ function services() {
   let journal = null;
   let ledger = null;
   let snapshots = null;
+  let sealKey = null;
+  let sealer;
 
   cached = {
     dir,
@@ -90,9 +92,46 @@ function services() {
     get journal() {
       if (!journal) {
         const { ActionJournal } = require('./journal/journal');
-        journal = new ActionJournal(this.journalDir);
+        journal = new ActionJournal(this.journalDir, { sealer: this.sealer });
       }
       return journal;
+    },
+
+    sealKeyPath: path.join(dir, 'seal-key.json'),
+
+    /** The key that seals the journal (H4). Public halves only, until something signs. */
+    get sealKey() {
+      if (!sealKey) {
+        const { SealKey } = require('./journal/seal-key');
+        sealKey = new SealKey(this.sealKeyPath);
+      }
+      return sealKey;
+    },
+
+    /**
+     * Whether sessions are sealed (H4, `biz.audit`), decided here and handed
+     * to the journal, which never asks.
+     *
+     * That split is the whole of how a Business feature lives inside the one
+     * module no licence may touch: sealing is an extra line at the end of a
+     * session, and a journal without it records, purges and restores exactly
+     * as before. Checking seals is reading, and is never gated -- a lapsed
+     * licence stops new seals and leaves every old one checkable.
+     *
+     * Asked once per process, which is right while a licence cannot change
+     * under a running app. Phase 6 makes it able to, and must ask again.
+     */
+    get sealer() {
+      if (sealer === undefined) {
+        const { canNow } = require('./license/state');
+        if (canNow()('biz.audit')) {
+          const { Sealer } = require('./journal/seal');
+          sealer = new Sealer({ key: this.sealKey, lockFile: path.join(this.journalDir, '.seal.lock') });
+        } else {
+          sealer = null;
+        }
+      }
+      return sealer;
     },
 
     /** The purge's view of the journal. The old ledger file is imported once. */

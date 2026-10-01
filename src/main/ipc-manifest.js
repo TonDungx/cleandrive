@@ -66,6 +66,7 @@ const INVOKE = Object.freeze([
   'journal:sessions',
   'journal:items',
   'journal:restore',
+  'journal:verify',
 
   'quarantine:status',
   'quarantine:choose',

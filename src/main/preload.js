@@ -75,6 +75,7 @@ const api = {
   journalSessions: () => ipcRenderer.invoke('journal:sessions'),
   journalItems: (sessionId) => ipcRenderer.invoke('journal:items', sessionId),
   restore: (itemIds, options) => ipcRenderer.invoke('journal:restore', { items: itemIds, options }),
+  journalVerify: () => ipcRenderer.invoke('journal:verify'),
 
   /* moving files to another drive (B1): the folder is picked and made in the main process */
   quarantine: (paths, options) => ipcRenderer.invoke('action:execute', { kind: 'quarantine', items: paths, options }),

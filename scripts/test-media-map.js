@@ -173,7 +173,10 @@ async function main() {
     // for a position -- so "keep the metadata" and this rule point in opposite
     // directions, and the rule wins. The copy carries the capture date and the
     // rotation and deliberately not the place.
-    const roots = ['report', 'snapshots', path.join('lib', 'media', 'mp4')];
+    //
+    // The whole of `journal` with H4, not just `journal.js`: the seal is a line
+    // the journal writes, and the key is a file of its own.
+    const roots = ['report', 'snapshots', 'journal', path.join('lib', 'media', 'mp4')];
     const files = [];
     const walk = (dir) => {
       for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -186,7 +189,9 @@ async function main() {
       const dir = path.join(__dirname, '..', 'src', 'main', name);
       if (fs.existsSync(dir)) walk(dir);
     }
-    files.push(path.join(__dirname, '..', 'src', 'main', 'journal', 'journal.js'));
+    const named = files.map((f) => path.basename(f));
+    check('the journal, its seal and its key are among what is read',
+      ['journal.js', 'seal.js', 'seal-key.js'].every((name) => named.includes(name)), named.filter((n) => /journal|seal/.test(n)).join(', '));
 
     const guilty = files.filter((file) => {
       const src = fs.readFileSync(file, 'utf8');
