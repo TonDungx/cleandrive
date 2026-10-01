@@ -41,8 +41,12 @@ const { t } = require('../i18n');
  *   happens every time somebody touches the Automatic screen. It is passed at
  *   launch and after a profile is removed, which is every way a task can be
  *   orphaned; see `sweepOrphans`.
+ * @param {boolean} [options.sampler]  also the daily measurement's task. Off
+ *   only for `cleandrive policy apply` (H2), which is about the cleanup tasks
+ *   a policy decides: a logon script run on a machine where nobody has opened
+ *   the app must not register a second task the policy never mentioned.
  */
-async function reconcile(settings, { settingsExisted = true, sweep = false } = {}) {
+async function reconcile(settings, { settingsExisted = true, sweep = false, sampler = true } = {}) {
   if (process.platform !== 'win32') {
     return {
       supported: false,
@@ -76,8 +80,8 @@ async function reconcile(settings, { settingsExisted = true, sweep = false } = {
     return {
       supported: true,
       cleanup: { taskPath: cleanupTaskPath, installed: true, wanted: null, ok: false, orphaned: true },
-      profiles: [],
-      sampler: await reconcileSampler(settings, changes, problems),
+      profiles: await reconcileManaged(settings, { sweep }, changes, problems),
+      sampler: sampler ? await reconcileSampler(settings, changes, problems) : null,
       changes,
       problems,
     };
@@ -95,14 +99,15 @@ async function reconcile(settings, { settingsExisted = true, sweep = false } = {
   // else is registered: a task for a profile that is gone would otherwise run
   // for ever on a timetable nobody can see any more.
   if (sweep && settingsExisted) await sweepOrphans(settings, changes, problems);
+  else if (sweep) await sweepManaged(settings, changes, problems);
 
-  const sampler = await reconcileSampler(settings, changes, problems);
+  const samplerState = sampler ? await reconcileSampler(settings, changes, problems) : null;
 
   // `cleanup` is the first profile, kept under its old name because the
   // Automatic screen, the tray and three harnesses read it.
   const cleanup = profiles[0] || { taskPath: cleanupTaskPath, wanted: false, installed: false, ok: true };
 
-  return { supported: true, cleanup, profiles, sampler, changes, problems };
+  return { supported: true, cleanup, profiles, sampler: samplerState, changes, problems };
 }
 
 function reconcileProfile(profile, changes, problems) {
@@ -121,7 +126,52 @@ function reconcileProfile(profile, changes, problems) {
 }
 
 function profileLabel(profile) {
+  if (profile.managed) return t('task.label.managed', 'Your organisation’s cleanup');
   return profile.name || t('task.label.cleanup', 'Automatic cleanup');
+}
+
+/**
+ * The organisation's profile (H2), whatever state the user's file is in.
+ *
+ * The rule above -- a missing settings file means intent unknown, so touch
+ * nothing -- is about the *user's* intent. The organisation's is not in that
+ * file; it is in the policy, which says what it wants in so many words. So its
+ * profile is registered on a machine where nobody has ever opened the app,
+ * which is the machine Group Policy is most often pushed to.
+ */
+async function reconcileManaged(settings, { sweep = false } = {}, changes, problems) {
+  const managed = profilesOf(settings).filter((p) => p.managed);
+  const out = [];
+  for (const profile of managed) out.push(await reconcileProfile(profile, changes, problems));
+  if (sweep && managed.length === 0) await sweepManaged(settings, changes, problems);
+  return out;
+}
+
+/**
+ * The organisation's task, once its policy no longer asks for a profile.
+ *
+ * `sweepOrphans` already does this when the settings file exists. Without one
+ * it does nothing at all -- rightly, for the user's tasks -- and the
+ * organisation's would otherwise run on, every night, finding a profile that
+ * is not there. Its id is the policy's own (schema.js), so there is nothing to
+ * guess.
+ */
+async function sweepManaged(settings, changes, problems) {
+  const { PROFILE_ID } = require('./policy/schema');
+  if (profilesOf(settings).some((p) => p.id === PROFILE_ID)) return;
+  const taskPath = scheduler.cleanupTaskPath(PROFILE_ID);
+  if (!(await scheduler.isInstalled(taskPath))) return;
+  const removed = await scheduler.uninstall(taskPath);
+  if (removed.ok) {
+    changes.push(t('task.change.managedRemoved', 'Your organisation no longer runs a cleanup profile here, so its Windows task was removed.'));
+  } else {
+    problems.push(
+      t('task.problem.orphanRemoveFailed', 'A Windows task from a deleted profile ({task}) could not be removed ({error}); it will keep running.', {
+        task: taskPath,
+        error: removed.error,
+      })
+    );
+  }
 }
 
 /**

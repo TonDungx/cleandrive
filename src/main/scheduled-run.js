@@ -67,7 +67,12 @@ async function runScheduled() {
       console.warn('[scheduled] settings warnings:', store.warnings.join('; '));
     }
 
-    if (!store.exists) {
+    const wanted = profileFlag();
+    // The organisation's profile (H2) lives in the policy, not in the file, so
+    // a machine where nobody ever opened the app still runs it.
+    const managedRun = Boolean(wanted && settings.managed && settings.managed.profileId === wanted);
+
+    if (!store.exists && !managedRun) {
       // Worth its own entry rather than the generic "switched off". The task is
       // registered, so somebody configured this; the file recording *what* they
       // configured is not there, and that is a fact the Automatic tab should be
@@ -79,7 +84,6 @@ async function runScheduled() {
       );
       run.notes.push(t('run.expectedAt', 'Expected at {path}', { path: services().settingsPath }));
     } else {
-      const wanted = profileFlag();
       const profile = wanted ? profileById(settings, wanted) : profilesOf(settings)[0];
 
       // One unattended run at a time, across processes. Two profiles due in
@@ -252,6 +256,12 @@ function notify(run) {
           })
         : ' ' + t('notify.done.notFreed', 'No disk space is free yet — the Recycle Bin is on the same disk.');
     body = moved + freed;
+  }
+
+  // The person at the machine never set this profile up (H2), so the note
+  // says whose it was before it says what it did.
+  if (run.managed) {
+    body = `${t('notify.managed.lead', 'Your organisation’s cleanup profile ran on this computer.')} ${body}`;
   }
 
   toasts.show({ title, body, silent: false }, () => app.focus());

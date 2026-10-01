@@ -174,7 +174,10 @@ const isAscii = (text) => /^[\x00-\x7e]*$/.test(text);
     check('diff takes exactly two', refused(['diff', 'a']) && refused(['diff', 'a', 'b', 'c']));
     check('journal without list, show or verify is refused', refused(['journal']) && refused(['journal', 'delete']));
     check('a value given twice is refused', refused(['suggest', 'C:\\', '--category', 'a', '--category', 'b']));
-    check('there is no policy command yet: it arrives with H2', refused(['policy', 'validate', 'x.json']) && !COMMANDS.policy);
+    // H2 brought it, with no file for `apply` (see commands/policy.js).
+    check('policy takes validate with at most one file, and apply with none',
+      !refused(['policy', 'validate']) && !refused(['policy', 'validate', 'x.reg']) && !refused(['policy', 'apply']) &&
+        refused(['policy', 'validate', 'a.reg', 'b.reg']) && refused(['policy', 'apply', 'x.reg']) && refused(['policy', 'set']) && refused(['policy']));
     check('and no command that deletes a path it is given', !Object.keys(COMMANDS).some((c) => /delete|remove|clean|purge|wipe/.test(c)));
   }
 
@@ -232,7 +235,7 @@ const isAscii = (text) => /^[\x00-\x7e]*$/.test(text);
     check('and hands its exit code back', /\r\nexit \/b %errorlevel%\r\n$/.test(shim));
     check('it clears ELECTRON_RUN_AS_NODE, for itself only', shim.indexOf('setlocal') > 0 && shim.indexOf('setlocal') < shim.indexOf('set ELECTRON_RUN_AS_NODE='));
     const build = fs.readFileSync(path.join(ROOT, 'scripts', 'build.js'), 'utf8');
-    check('the build ships it as bin\\cleandrive.cmd, and does not touch PATH', /extraFiles: \[\{ from: binDir, to: 'bin' \}\]/.test(build) && /cleandrive\.cmd/.test(build) && !/\bPATH\b.*(EnVar|setx|WriteRegExpandStr)/i.test(build));
+    check('the build ships it as bin\\cleandrive.cmd, and does not touch PATH', /extraFiles: \[\s*\{ from: binDir, to: 'bin' \}/.test(build) && /cleandrive\.cmd/.test(build) && !/\bPATH\b.*(EnVar|setx|WriteRegExpandStr)/i.test(build));
   }
 
   /* ---- the licence ---------------------------------------------------------- */

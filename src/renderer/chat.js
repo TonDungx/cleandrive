@@ -525,6 +525,9 @@
 
     $('chat-delete').hidden = picked.length === 0;
     $('chat-quarantine').hidden = picked.length === 0;
+    // Nothing else here turns these off, so the policy (H2) switches them back on.
+    Managed.hold($('chat-delete'), Managed.holds('recycle'), { release: true });
+    Managed.hold($('chat-quarantine'), Managed.holds('quarantine'), { release: true });
     setText($('chat-delete'), t('chat.deleteN', 'Move {n} selected to Recycle Bin', { n: formatCount(picked.length) }));
     setText($('chat-quarantine'), t('chat.quarantine', 'Set aside instead…'));
 
@@ -643,6 +646,7 @@
   // Everything on this screen is built by JavaScript, so none of it is reached
   // by `translateDom`. Without this the Vietnamese runs out at the markup.
   onLanguageChange(render_);
+  Managed.onChange(render_);
 
   window.chatScreen = { load, run, view, render: render_ };
 })();

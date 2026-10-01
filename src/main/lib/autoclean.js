@@ -254,6 +254,8 @@ async function runAutoClean(options) {
     action: auto.action === 'quarantine' ? 'quarantine' : 'recycle',
     dryRun: auto.dryRun === true,
     roots: auto.roots,
+    // The organisation's own profile (H2), so the log and Restore can say whose it was.
+    ...(auto.managed === true ? { managed: true } : {}),
   };
 
   const finish = (outcome, reason) => {
@@ -267,9 +269,35 @@ async function runAutoClean(options) {
   // Every reason below is a message rather than a sentence, because the run log
   // it ends up in is read later -- possibly in a different language, and months
   // after this process exited.
+
+  /* -- gate: the organisation's policy (H2) ------------------------------- */
+  //
+  // Read from the settings every caller is handed (policy/effective.js), so
+  // the 02:00 run, the command line and the button meet the same rules. A
+  // report moves nothing and is always allowed; the button's report is how
+  // somebody on a managed machine still sees what a profile would take.
+  const managed = settings.managed || null;
+  if (managed && managed.viewOnly && !run.dryRun) {
+    return finish('skipped', m('run.viewOnlyByPolicy', 'Your organisation has set this computer to view only, so nothing was moved'));
+  }
+  if (managed && managed.automatic === 'off' && (!auto.enabled || !run.dryRun)) {
+    return finish('skipped', m('run.automaticOffByPolicy', 'Your organisation has turned automatic cleanup off on this computer'));
+  }
+  // The category ceiling and the protected folders are already in the profile
+  // a caller got from the settings. Applied again here, where files are
+  // chosen, so a profile built any other way meets them too.
+  const limits =
+    managed && (managed.categories || (managed.protectedFolders || []).length > 0)
+      ? {
+          ...auto,
+          categories: managed.categories ? auto.categories.filter((c) => managed.categories.includes(c)) : auto.categories,
+          whitelist: [...auto.whitelist, ...(managed.protectedFolders || [])],
+        }
+      : auto;
+
   if (!auto.enabled) return finish('skipped', m('run.switchedOff', 'Automatic cleanup is switched off'));
   if (auto.roots.length === 0) return finish('skipped', m('run.noFolders', 'No folders are configured'));
-  if (auto.categories.length === 0) {
+  if (limits.categories.length === 0) {
     return finish('skipped', m('run.noCategories', 'No cleanup categories are enabled'));
   }
 
@@ -364,7 +392,7 @@ async function runAutoClean(options) {
     // minutes, and what counts is whether the app is open when its cache is
     // about to go.
     const open = appCaches.openApps(await deps.runningProcessNames());
-    const picked = selectFiles(result.cleanup, auto, now, open);
+    const picked = selectFiles(result.cleanup, limits, now, open);
     for (const key of Object.keys(run.skipped)) run.skipped[key] += picked.skipped[key] || 0;
     if (picked.truncated) run.selected.truncated = true;
     selected.push(...picked.files);
@@ -426,6 +454,9 @@ async function runAutoClean(options) {
       journal: options.journal,
       source: options.source || 'autoclean',
       runId: run.runId,
+      // Already refused above when it is set; handed on so the pipeline's own
+      // gate holds even if that one is ever moved.
+      viewOnly: Boolean(managed && managed.viewOnly),
       deps: {
         planTrash: deps.planTrash,
         executeTrash: deps.executeTrash,

@@ -131,6 +131,7 @@
       const clear = document.createElement('button');
       clear.className = 'btn btn-sm btn-primary';
       clear.disabled = view.busy;
+      Managed.hold(clear, Managed.holds('recycle'));
       clear.textContent = t('dev.clear', 'Move {n} files to the Recycle Bin', { n: formatCount(rows.length) });
       clear.addEventListener('click', () => clearCache(group, rows));
       actions.appendChild(clear);
@@ -379,6 +380,7 @@
   const tab = document.querySelector('.tab[data-tab="dev"]');
   if (tab) tab.addEventListener('click', load);
   onLanguageChange(render);
+  Managed.onChange(render);
 
   window.devScreen = { load, run, view, render };
 })();

@@ -216,7 +216,9 @@ async function make(file, bytes = 1024) {
       const shut = selectFiles(cleanup, settings, Date.now(), new Set());
       check('with both closed, both are taken', shut.files.length === 2);
       const src = fs.readFileSync(path.join(__dirname, '..', 'src', 'main', 'lib', 'autoclean.js'), 'utf8');
-      check('and it asks which apps are open after the scan, right before it chooses', /openApps\(await deps\.runningProcessNames\(\)\)[\s\S]{0,120}selectFiles\(result\.cleanup, auto, now, open\)/.test(src));
+      // `limits` since H2: the profile with the organisation's category ceiling
+      // and protected folders laid over it, chosen from in the same breath.
+      check('and it asks which apps are open after the scan, right before it chooses', /openApps\(await deps\.runningProcessNames\(\)\)[\s\S]{0,120}selectFiles\(result\.cleanup, (?:auto|limits), now, open\)/.test(src));
     }
 
     console.log('\nRight before anything moves (the Recycle Bin’s plan):');

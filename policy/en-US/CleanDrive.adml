@@ -1,0 +1,137 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<!-- Written by scripts/build.js from src/main/policy/admx.js; do not edit. -->
+<policyDefinitionResources xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" revision="1.0" schemaVersion="1.0" xmlns="http://schemas.microsoft.com/GroupPolicy/2006/07/PolicyDefinitions">
+  <displayName>CleanDrive</displayName>
+  <description>Group Policy settings for CleanDrive</description>
+  <resources>
+    <stringTable>
+      <string id="CleanDrive">CleanDrive</string>
+      <string id="SUPPORTED_CleanDrive_0_5">CleanDrive 0.5 and later</string>
+      <string id="ViewOnly">View only: change no files</string>
+      <string id="ViewOnly_Explain">Enabled: CleanDrive shows what is on the disk and what could be cleaned, but moves, deletes, compresses and changes no file on this computer — not from its window, not on a schedule, not from the command line. It does not empty its own items from the Recycle Bin either.
+
+Putting things back still works: anything CleanDrive moved before can be restored from its Restore Center, except that a file now in the way is never replaced, because replacing would move it to the Recycle Bin.
+
+Opening a Windows tool from CleanDrive (Storage settings, a program’s uninstaller) is still allowed: the tool asks its own questions. So are making a smaller copy of a video and saving a report, which write a new file and change none that is there.
+
+Disabled or not configured: the person at the computer decides.
+
+Applies to every copy of CleanDrive, with or without CleanDrive Business.</string>
+      <string id="AutomaticCleanup">Automatic cleanup</string>
+      <string id="AutomaticCleanup_Explain">Disabled: automatic cleanup is off for every profile on this computer. Profiles the person set up are kept as they were and come back when this policy is removed. Applies to every copy of CleanDrive.
+
+Enabled: CleanDrive runs one profile of the organisation’s own, as a Windows scheduled task for each person who signs in. It goes through every rule a person’s own profile does: only the categories automatic cleanup may ever use, only files untouched for the given number of days, never Windows’ own folders, never files marked worth reviewing. Files go to the Recycle Bin, or to the quarantine folder on another drive, and can be put back from the Restore Center.
+
+It starts in report only — it lists what it would move and moves nothing — unless “Report only” is cleared below. Each run that moves anything shows a notification saying it was the organisation’s profile.
+
+Folders may use %USERPROFILE%, %LOCALAPPDATA% and other variables; they are expanded for each person. Folders on the network are refused.
+
+Enabled needs CleanDrive Business; a copy without it reports this policy as not applied and runs nothing.
+
+The task is registered the next time CleanDrive opens, or at once by “cleandrive policy apply” run as that person (a logon script, or an Intune script in the user’s context).</string>
+      <string id="AutomaticFolders">Folders it may clean:</string>
+      <string id="Schedule">How often</string>
+      <string id="Schedule_daily">Every day</string>
+      <string id="Schedule_weekly">Every week</string>
+      <string id="Schedule_monthly">Every month</string>
+      <string id="Time">At (HH:MM, 24-hour clock)</string>
+      <string id="Weekday">On (for every week)</string>
+      <string id="Weekday_0">Sunday</string>
+      <string id="Weekday_1">Monday</string>
+      <string id="Weekday_2">Tuesday</string>
+      <string id="Weekday_3">Wednesday</string>
+      <string id="Weekday_4">Thursday</string>
+      <string id="Weekday_5">Friday</string>
+      <string id="Weekday_6">Saturday</string>
+      <string id="Day">On day (for every month, 1–28)</string>
+      <string id="ReportOnly">Report only: list what would go, move nothing</string>
+      <string id="Action">What it does</string>
+      <string id="Action_recycle">Move to the Recycle Bin</string>
+      <string id="Action_quarantine">Move to another drive</string>
+      <string id="MinAgeDays">Untouched for at least (days)</string>
+      <string id="MinDiskUsedPercent">Only when the disk is over (% full, 0 = always)</string>
+      <string id="AllowedCategories">Categories automatic cleanup may use</string>
+      <string id="AllowedCategories_Explain">Enabled: automatic cleanup uses only the categories ticked below — in the organisation’s profile and in every profile the person sets up. A person can still untick more; they cannot tick one that is not allowed here. Their own choices are kept and come back when this policy is removed.
+
+Only categories CleanDrive already allows to run unattended are listed. Nothing here can let automatic cleanup touch anything else.
+
+Disabled or not configured: every category is available.
+
+Applies to every copy of CleanDrive.</string>
+      <string id="ProtectedFolders">Folders automatic cleanup never touches</string>
+      <string id="ProtectedFolders_Explain">Enabled: automatic cleanup never moves anything inside these folders, in any profile. A person can add more of their own; they cannot remove these.
+
+Folders may use %USERPROFILE% and other variables; they are expanded for each person.
+
+Disabled or not configured: only the folders the person lists, and the Windows folders CleanDrive always refuses.
+
+Applies to every copy of CleanDrive.</string>
+      <string id="ProtectedFoldersList">Folders:</string>
+      <string id="DisableUpdateCheck">Do not check for updates</string>
+      <string id="DisableUpdateCheck_Explain">Enabled: CleanDrive never contacts its release host to look for a new version — not on its own, and not when “Check now” is pressed. Updates are then the organisation’s to deploy.
+
+Disabled or not configured: the person decides, and checking is on by default.
+
+Applies to every copy of CleanDrive.</string>
+      <string id="QuarantineFolder">Where files moved to another drive go</string>
+      <string id="QuarantineFolder_Explain">Enabled: files CleanDrive moves to another drive go to a “CleanDrive Quarantine” folder inside the folder given here, and the person cannot choose another. The folder must be on a local drive; network folders, Windows’ own folders and folders inside OneDrive are refused, as they are when a person picks one.
+
+May use %USERPROFILE% and other variables.
+
+Needs CleanDrive Business; a copy without it reports this policy as not applied.</string>
+      <string id="QuarantineFolderPath">Folder:</string>
+      <string id="Category_temp">Temporary files</string>
+      <string id="Category_cache">Caches</string>
+      <string id="Category_crashdump">Crash dumps</string>
+      <string id="Category_log">Old log files</string>
+      <string id="Category_gpucache">GPU &amp; compiled-code caches</string>
+      <string id="Category_buildoutput">Build output</string>
+      <string id="Category_app_chrome">Google Chrome — cache</string>
+      <string id="Category_app_edge">Microsoft Edge — cache</string>
+      <string id="Category_app_teams">Microsoft Teams — cache</string>
+      <string id="Category_app_discord">Discord — cache</string>
+      <string id="Category_app_zoom">Zoom — cache</string>
+      <string id="Category_app_figma">Figma — cache</string>
+      <string id="Category_app_zalo">Zalo — cache</string>
+    </stringTable>
+    <presentationTable>
+      <presentation id="AutomaticCleanup">
+        <listBox refId="AutomaticFolders">$(string.AutomaticFolders)</listBox>
+        <dropdownList refId="Schedule" noSort="true" defaultItem="1">$(string.Schedule)</dropdownList>
+        <textBox refId="Time">
+          <label>$(string.Time)</label>
+          <defaultValue>02:00</defaultValue>
+        </textBox>
+        <dropdownList refId="Weekday" noSort="true" defaultItem="0">$(string.Weekday)</dropdownList>
+        <decimalTextBox refId="Day" defaultValue="1">$(string.Day)</decimalTextBox>
+        <checkBox refId="ReportOnly" defaultChecked="true">$(string.ReportOnly)</checkBox>
+        <dropdownList refId="Action" noSort="true" defaultItem="0">$(string.Action)</dropdownList>
+        <decimalTextBox refId="MinAgeDays" defaultValue="180">$(string.MinAgeDays)</decimalTextBox>
+        <decimalTextBox refId="MinDiskUsedPercent" defaultValue="0">$(string.MinDiskUsedPercent)</decimalTextBox>
+      </presentation>
+      <presentation id="AllowedCategories">
+        <checkBox refId="Category_temp" defaultChecked="true">$(string.Category_temp)</checkBox>
+        <checkBox refId="Category_cache" defaultChecked="true">$(string.Category_cache)</checkBox>
+        <checkBox refId="Category_crashdump" defaultChecked="true">$(string.Category_crashdump)</checkBox>
+        <checkBox refId="Category_log" defaultChecked="true">$(string.Category_log)</checkBox>
+        <checkBox refId="Category_gpucache" defaultChecked="true">$(string.Category_gpucache)</checkBox>
+        <checkBox refId="Category_buildoutput" defaultChecked="false">$(string.Category_buildoutput)</checkBox>
+        <checkBox refId="Category_app_chrome" defaultChecked="true">$(string.Category_app_chrome)</checkBox>
+        <checkBox refId="Category_app_edge" defaultChecked="true">$(string.Category_app_edge)</checkBox>
+        <checkBox refId="Category_app_teams" defaultChecked="true">$(string.Category_app_teams)</checkBox>
+        <checkBox refId="Category_app_discord" defaultChecked="true">$(string.Category_app_discord)</checkBox>
+        <checkBox refId="Category_app_zoom" defaultChecked="true">$(string.Category_app_zoom)</checkBox>
+        <checkBox refId="Category_app_figma" defaultChecked="true">$(string.Category_app_figma)</checkBox>
+        <checkBox refId="Category_app_zalo" defaultChecked="true">$(string.Category_app_zalo)</checkBox>
+      </presentation>
+      <presentation id="ProtectedFolders">
+        <listBox refId="ProtectedFoldersList">$(string.ProtectedFoldersList)</listBox>
+      </presentation>
+      <presentation id="QuarantineFolder">
+        <textBox refId="QuarantineFolderPath">
+          <label>$(string.QuarantineFolderPath)</label>
+        </textBox>
+      </presentation>
+    </presentationTable>
+  </resources>
+</policyDefinitionResources>

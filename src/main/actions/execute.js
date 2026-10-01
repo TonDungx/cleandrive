@@ -78,6 +78,28 @@ function handlerFor(kind) {
 }
 
 /**
+ * What an organisation's "view only" (H2) still lets through.
+ *
+ * Putting things back, because restoring is there at every tier (rule 4) and
+ * a policy is no different from a lapsed licence in that. And a handoff,
+ * which opens a Windows tool and changes nothing itself -- the tool asks its
+ * own questions. Everything else changes a file, and is refused.
+ */
+const VIEW_ONLY_ALLOWS = new Set(['restore', 'handoff']);
+
+function managedRefusal(base, list) {
+  return {
+    ...base,
+    refused: 'managed',
+    failed: list.map((item) => ({
+      path: item,
+      error: t('policy.viewOnly.refused', 'Your organisation has set this computer to view only, so CleanDrive changes no files here.'),
+      code: 'EMANAGED',
+    })),
+  };
+}
+
+/**
  * @param {object} request
  * @param {string} request.kind                 an ActionKind with a handler
  * @param {string[]} request.items              absolute paths
@@ -90,6 +112,7 @@ function handlerFor(kind) {
  * @param {object} [ctx.journal]                begin/record/end
  * @param {string} [ctx.source]                 'manual' | 'autoclean' | 'scheduled'
  * @param {string} [ctx.runId]
+ * @param {boolean} [ctx.viewOnly]              the organisation's "view only" (H2); every caller says
  * @param {object} [ctx.deps]                   injected engines, for the harnesses
  */
 async function execute(request, ctx = {}) {
@@ -114,6 +137,7 @@ async function execute(request, ctx = {}) {
   // outright rather than approximated -- quarantine done badly is worse than
   // quarantine not offered.
   if (!handler) return { ...base, refused: 'unsupported' };
+  if (ctx.viewOnly === true && !VIEW_ONLY_ALLOWS.has(kind)) return managedRefusal(base, list);
   if (ctx.can && !ctx.can(handler.feature)) return { ...base, refused: 'locked', feature: handler.feature };
   if (list.length === 0 || (list.length === 1 && list[0] === undefined)) return { ...base, requested: 0 };
 
@@ -201,6 +225,15 @@ async function execute(request, ctx = {}) {
       return { ...withPlan, cancelled: true };
     }
     if (answer && typeof answer === 'object' && answer.options) applyOptions = { ...options, ...answer.options };
+  }
+
+  // The one way a restore deletes: "Replace" sends the file now in the way to
+  // the Recycle Bin. Under view only the dialog does not offer it, so a
+  // request that carries it anyway is refused whole rather than quietly made
+  // into a different choice.
+  if (ctx.viewOnly === true && applyOptions.onConflict === 'replace') {
+    onProgress({ phase: 'done' });
+    return managedRefusal(withPlan, usable);
   }
 
   /* -- apply, journalled as it goes --------------------------------------- */

@@ -221,13 +221,40 @@ async function quarantineDeps() {
 }
 
 /**
+ * The organisation's policy as it stands now (H2), read again from the
+ * registry. Asked right before anything acts, because Group Policy can change
+ * it under a window that has been open for days; everything else reads the
+ * last answer through the settings.
+ */
+async function managedNow() {
+  const { managedOf } = require('./policy/effective');
+  return managedOf(await services().policy.refresh());
+}
+
+/** A refusal the window shows as it is: the organisation's, and said as such. */
+function managedRefusal(text) {
+  return Object.assign(new Error(text), { code: 'EMANAGED', quiet: true });
+}
+
+const MANAGED_PROFILE = () =>
+  t('policy.profile.locked', 'This is your organisation’s profile; only your organisation can change it.');
+
+/**
  * The quarantine as the Settings card and the startup notice see it: the
  * folder, whether it can take files now, its room, and what is in it.
  */
 async function quarantineStatus() {
   const settings = await services().settings.get();
   const q = settings.quarantine;
-  const zone = await quarantineZone.check(q.zone, quarantineHarness || {});
+  const managedZone = settings.managed && settings.managed.quarantineZone;
+  let zone = await quarantineZone.check(q.zone, quarantineHarness || {});
+  // A folder the organisation named (H2) is made the first time it is needed,
+  // the way `quarantine:choose` makes the one a person picks -- and refused in
+  // the same words when it cannot be.
+  if (managedZone && !zone.ok && zone.reason === 'missing') {
+    const made = await quarantineZone.prepare(path.dirname(managedZone), quarantineHarness || {});
+    if (made.ok) zone = await quarantineZone.check(q.zone, quarantineHarness || {});
+  }
   const used = zone.ok ? await quarantineZone.usage(zone.zone) : { bytes: 0, files: 0 };
   const held = await restoreEngine.quarantined(services().journal, { retentionDays: q.retentionDays });
   const drive = q.zone ? path.parse(q.zone).root.replace(/\\$/, '') : null;
@@ -249,6 +276,9 @@ async function quarantineStatus() {
     retentionDays: q.retentionDays,
     maxGB: q.maxGB,
     deleteOriginal: q.deleteOriginal,
+    // The folder was set by the organisation, so the window does not offer
+    // to choose another (H2).
+    managed: Boolean(managedZone),
   };
 }
 
@@ -680,6 +710,10 @@ function register() {
       const options = request.options && typeof request.options === 'object' ? request.options : {};
       if (list.length === 0) return { kind, moved: [], failed: [], movedBytes: 0, freedBytes: 0, requested: 0 };
 
+      // H2. Read again here, at the click, and handed to the pipeline, which
+      // refuses every kind that changes a file while it says view only.
+      const managed = await managedNow();
+
       /*
        * F4's second gate, and the reason it is here rather than in the handler:
        * this is a *setting*, and a handler that read settings would be a
@@ -774,6 +808,7 @@ function register() {
             token,
             onProgress: send,
             can: licenseState.canNow(),
+            viewOnly: managed.viewOnly,
             source: 'manual',
             runId: 'manual',
             deps:
@@ -912,7 +947,16 @@ function register() {
     guard(async () =>
       execute(
         { kind: 'handoff', items: [typeof key === 'string' ? key : ''] },
-        { journal: services().journal, source: 'manual', runId: 'manual', can: licenseState.canNow(), deps: handoffDeps }
+        {
+          journal: services().journal,
+          source: 'manual',
+          runId: 'manual',
+          can: licenseState.canNow(),
+          // A handoff changes nothing itself, so view only lets it through;
+          // passed all the same, so no call into the pipeline leaves it out.
+          viewOnly: services().policy.current().viewOnly,
+          deps: handoffDeps,
+        }
       )
     )
   );
@@ -1495,6 +1539,9 @@ function register() {
       const confirmWanted = !(options.confirm === false && unconfirmedAllowed);
       const win = BrowserWindow.fromWebContents(event.sender);
       const journal = services().journal;
+      // Putting back works under view only (rule 4); replacing what is in the
+      // way does not, because it moves that file to the Recycle Bin (H2).
+      const managed = await managedNow();
 
       try {
         return await execute(
@@ -1512,8 +1559,9 @@ function register() {
             source: 'manual',
             runId: 'manual',
             journal,
+            viewOnly: managed.viewOnly,
             deps: { journal },
-            confirm: confirmWanted ? (description, planned) => confirmRestore(win, description, planned) : null,
+            confirm: confirmWanted ? (description) => confirmRestore(win, description, { viewOnly: managed.viewOnly }) : null,
           }
         );
       } finally {
@@ -1685,6 +1733,11 @@ function register() {
 
   handle('quarantine:choose', (event) =>
     guard(async () => {
+      if ((await managedNow()).quarantineZone) {
+        throw managedRefusal(
+          t('policy.quarantine.chooseManaged', 'Your organisation chose where files moved to another drive go, so it cannot be changed here.')
+        );
+      }
       let picked = null;
       if (quarantineHarness && typeof quarantineHarness.pick === 'function') {
         picked = await quarantineHarness.pick();
@@ -1792,6 +1845,7 @@ function register() {
       if (at === -1) {
         throw Object.assign(new Error('That profile no longer exists'), { code: 'ENOENT', quiet: true });
       }
+      if (profiles[at].managed) throw managedRefusal(MANAGED_PROFILE());
       const next = profiles.map((p, i) => (i === at ? { ...p, ...profile, id: p.id } : p));
       return writeProfiles(next);
     })
@@ -1804,14 +1858,16 @@ function register() {
       const can = licenseState.canNow();
 
       // Refused out loud, never a silently ignored button -- the same shape as
-      // the fast scan (A2), the keeper rule (F1) and whole folders (F2).
-      if (profiles.length >= 1 && !can('pro.automatic.profiles')) {
+      // the fast scan (A2), the keeper rule (F1) and whole folders (F2). The
+      // organisation's profile (H2) is not the person's, and is not counted.
+      const own = profiles.filter((p) => !p.managed);
+      if (own.length >= 1 && !can('pro.automatic.profiles')) {
         throw Object.assign(
           new Error('More than one automatic profile is part of CleanDrive Pro'),
           { code: 'ELOCKED', quiet: true }
         );
       }
-      if (profiles.length >= settingsLib.MAX_PROFILES) {
+      if (own.length >= settingsLib.MAX_PROFILES) {
         throw Object.assign(
           new Error(`At most ${settingsLib.MAX_PROFILES} profiles`),
           { code: 'EINVAL', quiet: true }
@@ -1838,7 +1894,9 @@ function register() {
     guard(async () => {
       const settings = await services().settings.load();
       const profiles = settingsLib.profilesOf(settings);
-      if (profiles.length <= 1) {
+      const target = profiles.find((p) => p.id === id);
+      if (target && target.managed) throw managedRefusal(MANAGED_PROFILE());
+      if (profiles.filter((p) => !p.managed).length <= 1) {
         throw Object.assign(new Error('The last profile cannot be removed'), { code: 'EINVAL', quiet: true });
       }
       const next = profiles.filter((p) => p.id !== id);
@@ -1944,6 +2002,24 @@ function register() {
         // saved but not switched on can still be tested. Nothing else about the
         // policy is relaxed.
         const dryRun = options.dryRun !== false;
+
+        // H2. The button may run a profile that is switched off -- pressing it
+        // is consent -- but not past what the organisation has ruled out. A
+        // report changes nothing, so it is always allowed.
+        if (!dryRun) {
+          if (base.managed.viewOnly) {
+            throw managedRefusal(t('policy.viewOnly.run', 'Your organisation has set this computer to view only, so a cleanup can only report what it would do.'));
+          }
+          if (base.managed.automatic === 'off') {
+            throw managedRefusal(
+              t('policy.automatic.runOff', 'Your organisation has turned automatic cleanup off on this computer, so a cleanup can only report what it would do.')
+            );
+          }
+          if (chosen.managed && chosen.dryRun) {
+            throw managedRefusal(t('policy.profile.reportOnlyRun', 'This is your organisation’s profile, and it is set to report only.'));
+          }
+        }
+
         const profile = { ...chosen, enabled: true, dryRun };
         const settings = base;
 
@@ -2045,6 +2121,12 @@ function register() {
     guard(async () => {
       const { settings: store, ledger } = services();
       const settings = await store.load();
+      // The one irreversible action, and not one view only lets through (H2).
+      if (settings.managed.viewOnly) {
+        throw managedRefusal(
+          t('policy.viewOnly.purge', 'Your organisation has set this computer to view only, so nothing is permanently deleted from the Recycle Bin.')
+        );
+      }
       await ledger.load();
 
       const expired = ledger.expired(settings.purge.afterDays);
@@ -3218,6 +3300,22 @@ function register() {
    * here, on every request that needs one; this list only decides what the
    * window draws.
    */
+  /**
+   * What the organisation's policy locks (H2), for the line every screen
+   * shows and the buttons it disables. Read afresh: the window asks when it
+   * opens and whenever it is brought back to the front.
+   */
+  handle('policy:state', () =>
+    guard(async () => {
+      const managed = await managedNow();
+      // The update checker took the policy when it started. Group Policy can
+      // change it since, and this is where the window notices -- so a change
+      // is applied here, and only a change: applying restarts its timer.
+      if (updater.snapshot().managed !== managed.updatesOff) updater.apply(await services().settings.get());
+      return managed;
+    })
+  );
+
   handle('license:entitlements', () =>
     guard(async () => entitlements.forRenderer(licenseState.currentLicense()))
   );
@@ -3400,7 +3498,9 @@ async function readState() {
       max: settingsLib.MAX_PROFILES,
       // Free keeps the one profile it has always had. The refusal is said out
       // loud when an extra one is asked for -- see `autoclean:addProfile`.
+      // The organisation's profile (H2) is not counted against either.
       allowed: licenseState.canNow()('pro.automatic.profiles') ? settingsLib.MAX_PROFILES : 1,
+      own: settingsLib.profilesOf(settings).filter((p) => !p.managed).length,
       actions: settingsLib.AUTO_ACTIONS,
     },
     // The last run of each profile, so a card can show its own result rather
@@ -3989,7 +4089,7 @@ async function confirmAction(win, description, planned, options) {
  *
  * @returns {Promise<false | {approved: true, options: {onConflict: 'skip'|'rename'|'replace'}}>}
  */
-async function confirmRestore(win, description) {
+async function confirmRestore(win, description, { viewOnly = false } = {}) {
   if (description.kind !== 'restore') return false;
   const n = (v) => Number(v || 0).toLocaleString(language.current());
 
@@ -4014,17 +4114,24 @@ async function confirmRestore(win, description) {
   }
 
   const conflicts = description.conflicts || 0;
-  const replaceable = conflicts - (description.conflictFolders || 0);
+  // Replacing moves the file in the way to the Recycle Bin, which view only
+  // (H2) does not allow; keeping both and skipping touch nothing that is there.
+  const replaceable = viewOnly ? 0 : conflicts - (description.conflictFolders || 0);
   const buttons = [];
   const choices = [];
   if (conflicts > 0) {
     lines.push(
       t('dialog.restore.conflicts', '{n} of them have something else at that path now.', { n: n(conflicts) }) +
         ' ' +
-        t(
-          'dialog.restore.conflictsHow',
-          '“Keep both” puts the restored file beside it with “(restored)” added to its name. “Replace” moves the file that is there now to the Recycle Bin first, so it can be put back too.'
-        )
+        (viewOnly
+          ? t(
+              'dialog.restore.conflictsHowViewOnly',
+              '“Keep both” puts the restored file beside it with “(restored)” added to its name. Replacing is not offered: your organisation has set this computer to view only, and replacing would move the file that is there now to the Recycle Bin.'
+            )
+          : t(
+              'dialog.restore.conflictsHow',
+              '“Keep both” puts the restored file beside it with “(restored)” added to its name. “Replace” moves the file that is there now to the Recycle Bin first, so it can be put back too.'
+            ))
     );
     buttons.push(t('dialog.restore.keepBoth', 'Put back, keep both'));
     choices.push('rename');

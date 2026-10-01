@@ -2222,6 +2222,9 @@ $('dp-cancel').addEventListener('click', async () => {
  */
 async function deleteSelected(paths, onDone, options = {}) {
   if (paths.length === 0) return;
+  // The organisation's view only (H2). The buttons are already held; this is
+  // for one pressed before the answer arrived. The main process refuses too.
+  if (Managed.refuseIfHeld(options.kind === 'quarantine' ? 'quarantine' : 'recycle')) return;
   if (options.kind === 'quarantine') {
     const { kind, ...rest } = options;
     return quarantineSelected(paths, onDone, rest);
@@ -2407,6 +2410,7 @@ async function quarantineSelected(paths, onDone, options = {}) {
  * to something. The confirmation comes from the main process afterwards.
  */
 async function relocateFolder(folderPath, options = {}) {
+  if (Managed.refuseIfHeld('relocate')) return;
   const where = unwrap(await api.relocateChoose(folderPath), t('relocate.label', 'Move to another drive'));
   if (!where || !where.chosen) return;
 
@@ -2473,6 +2477,7 @@ async function relocateFolder(folderPath, options = {}) {
  * emptied.
  */
 async function archiveFolder(folderPath, options = {}) {
+  if (Managed.refuseIfHeld('archive')) return;
   const where = unwrap(await api.archiveChoose(folderPath), t('archive.label', 'Pack into an archive'));
   if (!where || !where.chosen) return;
 
@@ -2537,6 +2542,7 @@ async function archiveFolder(folderPath, options = {}) {
  * there is no Recycle Bin between here and the space.
  */
 async function compressFolder(folderPath, options = {}) {
+  if (Managed.refuseIfHeld('compress')) return;
   const state = unwrap(await api.compressState(folderPath), t('compress.label', 'NTFS compression'));
   if (!state) return;
   const undo = options.uncompress === true || state.compressed === true;

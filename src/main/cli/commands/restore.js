@@ -25,14 +25,18 @@ async function run(args, ctx) {
   const id = args.positional[0];
   if (!SESSION_ID.test(id)) throw new CliError(EXIT.USAGE, `"${id}" is not a session id. "cleandrive journal list" lists them.`);
   const svc = ctx.services();
-  const retentionDays = (await svc.settings.load()).quarantine.retentionDays;
+  const settings = await svc.settings.load();
+  const retentionDays = settings.quarantine.retentionDays;
+  // Putting back works under an organisation's view only (H2); this command
+  // never replaces what is in the way, the one part of a restore that does not.
+  const viewOnly = Boolean(settings.managed && settings.managed.viewOnly);
   const items = await restoreEngine.listItems(svc.journal, id, { deps: { retentionDays } });
   if (!items) throw new CliError(EXIT.USAGE, `No session ${id} in the journal. "cleandrive journal list" lists them.`);
 
   const dryRun = Boolean(args.flags['dry-run']);
   const result = await execute(
     { kind: 'restore', items: items.map((i) => i.id), options: { onConflict: 'skip', dryRun } },
-    { token: ctx.token, journal: svc.journal, deps: { journal: svc.journal, retentionDays }, source: 'cli', runId: 'cli' }
+    { token: ctx.token, journal: svc.journal, deps: { journal: svc.journal, retentionDays }, source: 'cli', runId: 'cli', viewOnly }
   );
 
   // In a dry run the plan is the answer: what is in the way is still in it.

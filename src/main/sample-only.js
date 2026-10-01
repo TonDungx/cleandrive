@@ -33,8 +33,10 @@ async function runSample() {
   // The settings are read only to decide *which* volumes to measure. Nothing
   // here acts on a policy, so a missing or corrupt file is not a problem worth
   // reporting: the defaults measure the home volume, which is the useful
-  // answer anyway.
-  const settings = await store.load();
+  // answer anyway. Nor does the organisation's policy (H2) say anything about
+  // measuring, so it is not read: that would be a reg.exe process a day for
+  // nothing, in the one process measured to the millisecond.
+  const settings = await store.load({ policy: false });
   await history.load();
 
   const result = await sample({

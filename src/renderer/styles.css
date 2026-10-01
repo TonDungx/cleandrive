@@ -4014,18 +4014,25 @@ button.chat-chip:hover {
  * end left them beside neither button.
  */
 @media (max-width: 1000px) {
-  .actionbar:has(.frees-badge:not([hidden])) {
+  .actionbar:has(.frees-badge:not([hidden])),
+  .actionbar:has(.managed-mark-bar:not([hidden])) {
     flex-wrap: wrap;
     justify-content: flex-end;
     row-gap: 4px;
     border-radius: var(--radius);
   }
 
-  .actionbar:has(.frees-badge:not([hidden])) .action-pair {
+  .actionbar:has(.frees-badge:not([hidden])) .action-pair,
+  .actionbar:has(.managed-mark-bar:not([hidden])) .action-pair {
     flex-basis: 100%;
     justify-content: flex-end;
   }
 }
+
+/* Under the organisation's view only (H2) the sentences are hidden -- an
+   action that cannot happen frees nothing either way -- and the padlock line
+   stands in their place. It wraps the bar the way they did: measured at 720px,
+   without this the delete button went 28px past the edge. */
 
 /*
  * Two bars carry more buttons than the rest and so run out of room sooner
@@ -4042,14 +4049,16 @@ button.chat-chip:hover {
  * with the switch off it wraps at 1000px like every other bar.
  */
 @media (max-width: 1320px) {
-  .actionbar.is-crowded:has(.frees-badge:not([hidden])) {
+  .actionbar.is-crowded:has(.frees-badge:not([hidden])),
+  .actionbar.is-crowded:has(.managed-mark-bar:not([hidden])) {
     flex-wrap: wrap;
     justify-content: flex-end;
     row-gap: 4px;
     border-radius: var(--radius);
   }
 
-  .actionbar.is-crowded:has(.frees-badge:not([hidden])) .action-pair {
+  .actionbar.is-crowded:has(.frees-badge:not([hidden])) .action-pair,
+  .actionbar.is-crowded:has(.managed-mark-bar:not([hidden])) .action-pair {
     flex-basis: 100%;
     justify-content: flex-end;
   }
@@ -7858,4 +7867,147 @@ kbd {
 
 .compare-video::-webkit-media-controls-panel {
   transform: none;
+}
+
+/* ------------------------------------------------------------- managed */
+/*
+ * What the organisation's policy holds (H2). Neutral on purpose: green,
+ * amber and red say how a verdict came out, and a lock is not a verdict --
+ * it says whose decision a control is, which is a fact about the computer,
+ * not about any file on it.
+ */
+
+.managed-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  margin: 0 16px 10px;
+  padding: 9px 14px;
+  border: 1px solid var(--border-soft);
+  border-left: 3px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-2);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.managed-banner[hidden] {
+  display: none;
+}
+
+.managed-banner-text {
+  flex: 1 1 260px;
+  min-width: 0;
+}
+
+.managed-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 1px 8px 1px 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.6;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.managed-mark[hidden] {
+  display: none;
+}
+
+.managed-mark-lead {
+  color: var(--text);
+}
+
+.managed-icon {
+  flex: none;
+  width: 12px;
+  height: 12px;
+}
+
+/* Beside a checkbox's own words, a little apart from them. */
+.check .managed-mark {
+  margin-left: 8px;
+}
+
+/* In an action bar, after the count it explains. */
+.managed-mark-bar {
+  margin-left: 4px;
+}
+
+/* A held button keeps its words and gains the padlock in front of them. */
+button.is-managed::before {
+  content: '';
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-right: 6px;
+  vertical-align: -1px;
+  background: currentColor;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3.5' y='7' width='9' height='6.5' rx='1.2'/%3E%3Cpath d='M5.5 7V5a2.5 2.5 0 0 1 5 0v2'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+
+button.is-managed {
+  cursor: not-allowed;
+}
+
+/* A held checkbox: its words dimmed, so it does not read as merely unticked. */
+.check:has(> input.is-managed) {
+  cursor: not-allowed;
+}
+
+.check:has(> input.is-managed) > span:not(.managed-mark) {
+  color: var(--text-3);
+}
+
+/* In a list of them, the padlock sits on each one: the card's own line may
+   be scrolled out of sight by the time somebody reaches the box. */
+#auto-categories .check:has(> input.is-managed) > span::after {
+  content: '';
+  display: inline-block;
+  width: 11px;
+  height: 11px;
+  margin-left: 6px;
+  vertical-align: -1px;
+  background: currentColor;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3.5' y='7' width='9' height='6.5' rx='1.2'/%3E%3Cpath d='M5.5 7V5a2.5 2.5 0 0 1 5 0v2'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+
+/* The organisation's own profile among the person's (H2). */
+.profile-chip.is-managed-profile .managed-icon {
+  margin-right: 2px;
+}
+
+/* A folder the organisation protects: on the list, padlocked, no Remove. */
+.path-row.is-managed-row .path-text {
+  color: var(--text-2);
+}
+
+/* A menu entry held by view only: still there to be read, doing nothing. */
+.spacemap-menu [role='menuitem'].is-held {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  color: var(--text-3);
+  cursor: not-allowed;
+}
+
+@media (forced-colors: active) {
+  button.is-managed::before,
+  #auto-categories .check:has(> input.is-managed) > span::after {
+    forced-color-adjust: none;
+    background: GrayText;
+  }
+
+  .managed-mark {
+    border-color: CanvasText;
+  }
 }

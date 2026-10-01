@@ -1,0 +1,265 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<!-- CleanDrive's Group Policy definitions. Written by scripts/build.js from src/main/policy/admx.js; do not edit. -->
+<policyDefinitions xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" revision="1.0" schemaVersion="1.0" xmlns="http://schemas.microsoft.com/GroupPolicy/2006/07/PolicyDefinitions">
+  <policyNamespaces>
+    <target prefix="cleandrive" namespace="CleanDrive.Policies.CleanDrive" />
+  </policyNamespaces>
+  <resources minRequiredRevision="1.0" />
+  <supportedOn>
+    <definitions>
+      <definition name="SUPPORTED_CleanDrive_0_5" displayName="$(string.SUPPORTED_CleanDrive_0_5)" />
+    </definitions>
+  </supportedOn>
+  <categories>
+    <category name="CleanDrive" displayName="$(string.CleanDrive)" />
+  </categories>
+  <policies>
+    <policy name="ViewOnly" class="Machine" displayName="$(string.ViewOnly)" explainText="$(string.ViewOnly_Explain)" key="Software\Policies\CleanDrive" valueName="ViewOnly">
+      <parentCategory ref="CleanDrive" />
+      <supportedOn ref="SUPPORTED_CleanDrive_0_5" />
+      <enabledValue>
+        <decimal value="1" />
+      </enabledValue>
+      <disabledValue>
+        <decimal value="0" />
+      </disabledValue>
+    </policy>
+    <policy name="AutomaticCleanup" class="Machine" displayName="$(string.AutomaticCleanup)" explainText="$(string.AutomaticCleanup_Explain)" presentation="$(presentation.AutomaticCleanup)" key="Software\Policies\CleanDrive" valueName="AutomaticCleanup">
+      <parentCategory ref="CleanDrive" />
+      <supportedOn ref="SUPPORTED_CleanDrive_0_5" />
+      <enabledValue>
+        <decimal value="1" />
+      </enabledValue>
+      <disabledValue>
+        <decimal value="0" />
+      </disabledValue>
+      <elements>
+        <list id="AutomaticFolders" key="Software\Policies\CleanDrive\Automatic\Folders" expandable="true" />
+        <enum id="Schedule" key="Software\Policies\CleanDrive\Automatic" valueName="Schedule" required="true">
+          <item displayName="$(string.Schedule_daily)">
+            <value>
+              <string>daily</string>
+            </value>
+          </item>
+          <item displayName="$(string.Schedule_weekly)">
+            <value>
+              <string>weekly</string>
+            </value>
+          </item>
+          <item displayName="$(string.Schedule_monthly)">
+            <value>
+              <string>monthly</string>
+            </value>
+          </item>
+        </enum>
+        <text id="Time" key="Software\Policies\CleanDrive\Automatic" valueName="Time" required="true" maxLength="5" />
+        <enum id="Weekday" key="Software\Policies\CleanDrive\Automatic" valueName="Weekday" required="true">
+          <item displayName="$(string.Weekday_0)">
+            <value>
+              <decimal value="0" />
+            </value>
+          </item>
+          <item displayName="$(string.Weekday_1)">
+            <value>
+              <decimal value="1" />
+            </value>
+          </item>
+          <item displayName="$(string.Weekday_2)">
+            <value>
+              <decimal value="2" />
+            </value>
+          </item>
+          <item displayName="$(string.Weekday_3)">
+            <value>
+              <decimal value="3" />
+            </value>
+          </item>
+          <item displayName="$(string.Weekday_4)">
+            <value>
+              <decimal value="4" />
+            </value>
+          </item>
+          <item displayName="$(string.Weekday_5)">
+            <value>
+              <decimal value="5" />
+            </value>
+          </item>
+          <item displayName="$(string.Weekday_6)">
+            <value>
+              <decimal value="6" />
+            </value>
+          </item>
+        </enum>
+        <decimal id="Day" key="Software\Policies\CleanDrive\Automatic" valueName="Day" minValue="1" maxValue="28" />
+        <boolean id="ReportOnly" key="Software\Policies\CleanDrive\Automatic" valueName="ReportOnly">
+          <trueValue>
+            <decimal value="1" />
+          </trueValue>
+          <falseValue>
+            <decimal value="0" />
+          </falseValue>
+        </boolean>
+        <enum id="Action" key="Software\Policies\CleanDrive\Automatic" valueName="Action" required="true">
+          <item displayName="$(string.Action_recycle)">
+            <value>
+              <string>recycle</string>
+            </value>
+          </item>
+          <item displayName="$(string.Action_quarantine)">
+            <value>
+              <string>quarantine</string>
+            </value>
+          </item>
+        </enum>
+        <decimal id="MinAgeDays" key="Software\Policies\CleanDrive\Automatic" valueName="MinAgeDays" minValue="7" maxValue="3650" />
+        <decimal id="MinDiskUsedPercent" key="Software\Policies\CleanDrive\Automatic" valueName="MinDiskUsedPercent" minValue="0" maxValue="100" />
+      </elements>
+    </policy>
+    <policy name="AllowedCategories" class="Machine" displayName="$(string.AllowedCategories)" explainText="$(string.AllowedCategories_Explain)" presentation="$(presentation.AllowedCategories)" key="Software\Policies\CleanDrive" valueName="AllowedCategories">
+      <parentCategory ref="CleanDrive" />
+      <supportedOn ref="SUPPORTED_CleanDrive_0_5" />
+      <enabledValue>
+        <decimal value="1" />
+      </enabledValue>
+      <disabledValue>
+        <decimal value="0" />
+      </disabledValue>
+      <elements>
+        <boolean id="Category_temp" key="Software\Policies\CleanDrive\AllowedCategories" valueName="temp">
+          <trueValue>
+            <decimal value="1" />
+          </trueValue>
+          <falseValue>
+            <decimal value="0" />
+          </falseValue>
+        </boolean>
+        <boolean id="Category_cache" key="Software\Policies\CleanDrive\AllowedCategories" valueName="cache">
+          <trueValue>
+            <decimal value="1" />
+          </trueValue>
+          <falseValue>
+            <decimal value="0" />
+          </falseValue>
+        </boolean>
+        <boolean id="Category_crashdump" key="Software\Policies\CleanDrive\AllowedCategories" valueName="crashdump">
+          <trueValue>
+            <decimal value="1" />
+          </trueValue>
+          <falseValue>
+            <decimal value="0" />
+          </falseValue>
+        </boolean>
+        <boolean id="Category_log" key="Software\Policies\CleanDrive\AllowedCategories" valueName="log">
+          <trueValue>
+            <decimal value="1" />
+          </trueValue>
+          <falseValue>
+            <decimal value="0" />
+          </falseValue>
+        </boolean>
+        <boolean id="Category_gpucache" key="Software\Policies\CleanDrive\AllowedCategories" valueName="gpucache">
+          <trueValue>
+            <decimal value="1" />
+          </trueValue>
+          <falseValue>
+            <decimal value="0" />
+          </falseValue>
+        </boolean>
+        <boolean id="Category_buildoutput" key="Software\Policies\CleanDrive\AllowedCategories" valueName="buildoutput">
+          <trueValue>
+            <decimal value="1" />
+          </trueValue>
+          <falseValue>
+            <decimal value="0" />
+          </falseValue>
+        </boolean>
+        <boolean id="Category_app_chrome" key="Software\Policies\CleanDrive\AllowedCategories" valueName="app.chrome">
+          <trueValue>
+            <decimal value="1" />
+          </trueValue>
+          <falseValue>
+            <decimal value="0" />
+          </falseValue>
+        </boolean>
+        <boolean id="Category_app_edge" key="Software\Policies\CleanDrive\AllowedCategories" valueName="app.edge">
+          <trueValue>
+            <decimal value="1" />
+          </trueValue>
+          <falseValue>
+            <decimal value="0" />
+          </falseValue>
+        </boolean>
+        <boolean id="Category_app_teams" key="Software\Policies\CleanDrive\AllowedCategories" valueName="app.teams">
+          <trueValue>
+            <decimal value="1" />
+          </trueValue>
+          <falseValue>
+            <decimal value="0" />
+          </falseValue>
+        </boolean>
+        <boolean id="Category_app_discord" key="Software\Policies\CleanDrive\AllowedCategories" valueName="app.discord">
+          <trueValue>
+            <decimal value="1" />
+          </trueValue>
+          <falseValue>
+            <decimal value="0" />
+          </falseValue>
+        </boolean>
+        <boolean id="Category_app_zoom" key="Software\Policies\CleanDrive\AllowedCategories" valueName="app.zoom">
+          <trueValue>
+            <decimal value="1" />
+          </trueValue>
+          <falseValue>
+            <decimal value="0" />
+          </falseValue>
+        </boolean>
+        <boolean id="Category_app_figma" key="Software\Policies\CleanDrive\AllowedCategories" valueName="app.figma">
+          <trueValue>
+            <decimal value="1" />
+          </trueValue>
+          <falseValue>
+            <decimal value="0" />
+          </falseValue>
+        </boolean>
+        <boolean id="Category_app_zalo" key="Software\Policies\CleanDrive\AllowedCategories" valueName="app.zalo">
+          <trueValue>
+            <decimal value="1" />
+          </trueValue>
+          <falseValue>
+            <decimal value="0" />
+          </falseValue>
+        </boolean>
+      </elements>
+    </policy>
+    <policy name="ProtectedFolders" class="Machine" displayName="$(string.ProtectedFolders)" explainText="$(string.ProtectedFolders_Explain)" presentation="$(presentation.ProtectedFolders)" key="Software\Policies\CleanDrive" valueName="ProtectedFolders">
+      <parentCategory ref="CleanDrive" />
+      <supportedOn ref="SUPPORTED_CleanDrive_0_5" />
+      <enabledValue>
+        <decimal value="1" />
+      </enabledValue>
+      <disabledValue>
+        <decimal value="0" />
+      </disabledValue>
+      <elements>
+        <list id="ProtectedFoldersList" key="Software\Policies\CleanDrive\ProtectedFolders" expandable="true" />
+      </elements>
+    </policy>
+    <policy name="DisableUpdateCheck" class="Machine" displayName="$(string.DisableUpdateCheck)" explainText="$(string.DisableUpdateCheck_Explain)" key="Software\Policies\CleanDrive" valueName="DisableUpdateCheck">
+      <parentCategory ref="CleanDrive" />
+      <supportedOn ref="SUPPORTED_CleanDrive_0_5" />
+      <enabledValue>
+        <decimal value="1" />
+      </enabledValue>
+      <disabledValue>
+        <decimal value="0" />
+      </disabledValue>
+    </policy>
+    <policy name="QuarantineFolder" class="Machine" displayName="$(string.QuarantineFolder)" explainText="$(string.QuarantineFolder_Explain)" presentation="$(presentation.QuarantineFolder)" key="Software\Policies\CleanDrive">
+      <parentCategory ref="CleanDrive" />
+      <supportedOn ref="SUPPORTED_CleanDrive_0_5" />
+      <elements>
+        <text id="QuarantineFolderPath" key="Software\Policies\CleanDrive" valueName="QuarantineFolder" required="true" expandable="true" />
+      </elements>
+    </policy>
+  </policies>
+</policyDefinitions>

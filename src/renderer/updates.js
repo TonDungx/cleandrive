@@ -148,7 +148,16 @@ function applyUpdateState(next) {
   $('update-badge').className = !next.supported || !next.enabled ? 'card-badge' : badge.cls;
 
   $('update-enabled').checked = next.enabled;
-  $('update-detail').textContent = describeUpdate(next);
+  // Switched off by the organisation (H2): the switch and the button are its.
+  const managed = next.managed === true;
+  Managed.hold($('update-enabled'), managed, { release: true });
+  Managed.show('updates', managed);
+  $('update-detail').textContent = managed
+    ? t(
+        'update.managed',
+        'Your organisation has switched update checks off on this computer, so CleanDrive does not contact its release page — not even when asked. New versions come from your organisation.'
+      )
+    : describeUpdate(next);
   renderVersionFacts(next);
 
   const downloading = next.status === 'downloading';
@@ -159,7 +168,8 @@ function applyUpdateState(next) {
   }
 
   $('update-check').disabled = !next.supported || next.checking || downloading ||
-    next.status === 'available';
+    next.status === 'available' || managed;
+  Managed.hold($('update-check'), managed);
   // The download runs on its own, so the only button that ever needs pressing
   // is the one that installs. "Download" stays as a manual fallback for the
   // case where the automatic fetch failed and left it merely available.

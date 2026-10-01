@@ -1,0 +1,5 @@
+# The Group Policy files (H2) are byte for byte what the installer ships and
+# what an administrator downloads: UTF-8 with a byte-order mark and CRLF, the
+# way Microsoft's own ADMX files are. Never converted on checkout or commit;
+# scripts/test-policy.js compares them with what the code writes.
+policy/** -text

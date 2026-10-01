@@ -3390,6 +3390,157 @@
     'roots.drives.none': 'Windows không liệt kê ổ nào quét được.',
     'map.unscanned': '(không có trong lần quét này)',
     'map.allRoots': '{n} thư mục',
+    /* ---- chính sách của tổ chức (H2) -----------------------------------
+     * "policy" -> **chính sách**; "view only" -> **chỉ cho xem**; "managed by
+     * your organisation" -> **Do tổ chức của bạn quản lý**, đúng câu đặc tả
+     * yêu cầu. Tên chính sách trong ADML giữ nghĩa đen để người làm IT tra
+     * được với bản tiếng Anh.
+     */
+    'policy.managed': 'Do tổ chức của bạn quản lý',
+    'auto.profile.managed': 'Hồ sơ của tổ chức bạn',
+    'auto.state.held': 'Bị giữ: chỉ cho xem',
+    'auto.describe.held': 'Tổ chức của bạn đã đặt máy này ở chế độ chỉ cho xem, nên hồ sơ này không chạy cho tới khi chế độ đó được gỡ.',
+    'policy.profile.note':
+      'Đây là hồ sơ của tổ chức bạn. Nó chạy cho mọi người đăng nhập vào máy này, và chỉ tổ chức của bạn ' +
+      'mới thay đổi được.',
+    'policy.profile.locked': 'Đây là hồ sơ của tổ chức bạn; chỉ tổ chức của bạn mới thay đổi được.',
+    'policy.profile.reportOnlyRun': 'Đây là hồ sơ của tổ chức bạn, và nó được đặt ở chế độ chỉ báo cáo.',
+    'dialog.restore.conflictsHowViewOnly':
+      '“Giữ cả hai” đặt tệp được khôi phục ngay bên cạnh, tên có thêm “(đã khôi phục)”. Không có lựa chọn ' +
+      'thay thế: tổ chức của bạn đã đặt máy này ở chế độ chỉ cho xem, mà thay thế thì phải chuyển tệp đang ' +
+      'nằm ở đó vào Thùng rác.',
+    'notify.managed.lead': 'Hồ sơ dọn dẹp của tổ chức bạn vừa chạy trên máy này.',
+    'task.label.managed': 'Dọn dẹp của tổ chức bạn',
+    'task.change.managedRemoved': 'Tổ chức của bạn không còn chạy hồ sơ dọn dẹp nào ở đây, nên tác vụ Windows của nó đã được gỡ.',
+    'update.managed':
+      'Tổ chức của bạn đã tắt kiểm tra cập nhật trên máy này, nên CleanDrive không liên lạc với trang phát ' +
+      'hành — kể cả khi được bấm. Phiên bản mới sẽ do tổ chức của bạn cài.',
+    'run.viewOnlyByPolicy': 'Tổ chức của bạn đã đặt máy này ở chế độ chỉ cho xem, nên không có gì bị chuyển đi',
+    'run.automaticOffByPolicy': 'Tổ chức của bạn đã tắt dọn dẹp tự động trên máy này',
+
+    'policy.banner.lead': 'Tổ chức của bạn quản lý một phần CleanDrive trên máy này: {list}.',
+    'policy.banner.viewOnly': 'chỉ cho xem — CleanDrive không thay đổi tệp nào ở đây, và khôi phục vẫn hoạt động',
+    'policy.banner.automaticOff': 'dọn dẹp tự động đang tắt',
+    'policy.banner.automaticOn': 'nó chạy một hồ sơ dọn dẹp riêng',
+    'policy.banner.categories': 'dọn dẹp tự động được dùng những nhóm tệp nào',
+    'policy.banner.protected': 'những thư mục dọn dẹp tự động không bao giờ đụng vào',
+    'policy.banner.updates': 'kiểm tra cập nhật đang tắt',
+    'policy.banner.quarantine': 'tệp chuyển sang ổ khác sẽ đi đâu',
+    'policy.banner.notApplied':
+      'Tổ chức còn đặt {n} chính sách mà bản này không áp dụng, vì chúng cần CleanDrive Business.',
+    'policy.banner.unreadable': 'Không đọc được chính sách của tổ chức bạn, nên không phần nào được áp dụng ở đây.',
+
+    'policy.viewOnly.refused': 'Tổ chức của bạn đã đặt máy này ở chế độ chỉ cho xem, nên CleanDrive không thay đổi tệp nào ở đây.',
+    'policy.viewOnly.run':
+      'Tổ chức của bạn đã đặt máy này ở chế độ chỉ cho xem, nên một lượt dọn dẹp chỉ báo cáo được thứ nó sẽ làm.',
+    'policy.viewOnly.purge':
+      'Tổ chức của bạn đã đặt máy này ở chế độ chỉ cho xem, nên không có gì bị xoá vĩnh viễn khỏi Thùng rác.',
+    'policy.automatic.runOff':
+      'Tổ chức của bạn đã tắt dọn dẹp tự động trên máy này, nên một lượt dọn dẹp chỉ báo cáo được thứ nó sẽ làm.',
+    'policy.quarantine.chooseManaged':
+      'Tổ chức của bạn đã chọn nơi chứa tệp chuyển sang ổ khác, nên không đổi được ở đây.',
+
+    'policy.viewOnly.applied':
+      'Chỉ cho xem: CleanDrive không được chuyển, xoá hay thay đổi tệp nào trên máy này. Khôi phục vẫn hoạt động.',
+    'policy.automatic.off': 'Dọn dẹp tự động tắt cho mọi hồ sơ trên máy này.',
+    'policy.automatic.onReport': 'Hồ sơ của tổ chức báo cáo trên {n} thư mục và không chuyển gì.',
+    'policy.automatic.onLive': 'Hồ sơ của tổ chức dọn {n} thư mục theo lịch.',
+    'policy.automatic.refused': 'Hồ sơ của tổ chức không được lập, nên nó không chạy.',
+    'policy.automatic.viewOnly': 'Chính sách chỉ cho xem cũng đang bật, nên hồ sơ này chỉ báo cáo thứ nó sẽ làm.',
+    'policy.categories.applied': 'Dọn dẹp tự động chỉ được dùng {n} trong {total} nhóm tệp: {list}.',
+    'policy.categories.none': 'Không nhóm tệp nào được phép, nên dọn dẹp tự động không có gì để làm.',
+    'policy.protected.applied': '{n} thư mục không bao giờ bị dọn dẹp tự động đụng vào.',
+    'policy.protected.empty': 'Chính sách đang bật nhưng không nêu thư mục nào máy này dùng được.',
+    'policy.updates.applied': 'CleanDrive không kiểm tra cập nhật trên máy này, kể cả khi được bấm.',
+    'policy.quarantine.applied': 'Tệp chuyển sang ổ khác sẽ vào một thư mục bên trong {path}.',
+    'policy.needsBusiness':
+      'Không áp dụng: chính sách này bắt CleanDrive làm thay tổ chức, việc đó thuộc CleanDrive Business, ' +
+      'và bản này không có.',
+    'policy.refused': 'Không áp dụng.',
+    'policy.unreadable': 'Không đọc được chính sách của tổ chức, nên không phần nào được áp dụng: {error}',
+    'policy.unknown.key': 'CleanDrive không đọc khoá con {name}; khoá đó được để nguyên.',
+    'policy.unknown.value': 'CleanDrive không đọc giá trị tên {name}; giá trị đó được để nguyên.',
+    'policy.unknown.valueIn': 'CleanDrive không đọc giá trị tên {name} trong {key}; giá trị đó được để nguyên.',
+
+    'policy.problem.notText': 'Có một mục không phải chữ.',
+    'policy.problem.emptyEntry': 'Có một mục để trống.',
+    'policy.problem.variable': '{path}: %{name}% không được đặt cho tài khoản này.',
+    'policy.problem.network': '{path} nằm trên mạng, mà ổ mạng chỉ bao giờ được đọc.',
+    'policy.problem.notFull': '{path} không phải đường dẫn đầy đủ kiểu D:\\Data.',
+    'policy.problem.type': '{name} trong registry không phải số.',
+    'policy.problem.typeText': '{name} trong registry không phải chữ.',
+    'policy.problem.range': '{name} là {value}, ngoài khoảng {min}–{max}.',
+    'policy.problem.oneOf': '{name} là "{value}", không thuộc {allowed}.',
+    'policy.problem.category': '"{name}" không phải nhóm tệp dọn dẹp tự động được dùng.',
+    'policy.problem.noFolders': 'Không có thư mục nào được nêu để nó dọn.',
+    'policy.problem.time': 'Time là "{value}", không phải một giờ trong ngày kiểu 02:00.',
+    'policy.problem.noCategories': 'Không nhóm tệp nào được phép, nên nó sẽ không có gì để dọn.',
+
+    'policy.admx.description': 'Các thiết lập Group Policy cho CleanDrive',
+    'policy.admx.supported': 'CleanDrive 0.5 trở lên',
+    'policy.admx.viewOnly': 'Chỉ cho xem: không thay đổi tệp nào',
+    'policy.admx.viewOnly.explain':
+      'Bật: CleanDrive cho thấy trên đĩa có gì và có thể dọn gì, nhưng không chuyển, xoá, nén hay thay đổi ' +
+      'tệp nào trên máy này — không từ cửa sổ, không theo lịch, không từ dòng lệnh. Nó cũng không xoá các mục ' +
+      'của chính nó khỏi Thùng rác.\n\nKhôi phục vẫn hoạt động: mọi thứ CleanDrive đã chuyển trước đó đều ' +
+      'đưa về được từ Trung tâm khôi phục, chỉ trừ việc tệp đang nằm chắn đường không bao giờ bị thay thế, vì ' +
+      'thay thế sẽ chuyển nó vào Thùng rác.\n\nMở một công cụ Windows từ CleanDrive (Cài đặt bộ nhớ, trình ' +
+      'gỡ cài đặt của một chương trình) vẫn được phép: công cụ đó tự hỏi câu của nó. Tạo bản video nhẹ hơn và ' +
+      'lưu báo cáo cũng vậy, vì chúng chỉ ghi một tệp mới và không đổi tệp nào đang có.\n\nTắt hoặc không cấu ' +
+      'hình: người dùng máy tự quyết.\n\nÁp dụng cho mọi bản CleanDrive, có hay không có CleanDrive Business.',
+    'policy.admx.automatic': 'Dọn dẹp tự động',
+    'policy.admx.automatic.explain':
+      'Tắt: dọn dẹp tự động tắt cho mọi hồ sơ trên máy này. Các hồ sơ người dùng đã lập được giữ nguyên và ' +
+      'trở lại khi gỡ chính sách này. Áp dụng cho mọi bản CleanDrive.\n\nBật: CleanDrive chạy một hồ sơ riêng ' +
+      'của tổ chức, thành một tác vụ Windows cho mỗi người đăng nhập. Nó qua đúng mọi quy tắc của hồ sơ người ' +
+      'dùng: chỉ những nhóm tệp dọn dẹp tự động được phép dùng, chỉ tệp không ai đụng tới trong số ngày đã đặt, ' +
+      'không bao giờ đụng thư mục của Windows, không bao giờ đụng tệp được đánh dấu cần xem lại. Tệp được ' +
+      'chuyển vào Thùng rác, hoặc vào thư mục cách ly trên ổ khác, và khôi phục được từ Trung tâm khôi phục.' +
+      '\n\nNó bắt đầu ở chế độ chỉ báo cáo — liệt kê thứ nó sẽ chuyển và không chuyển gì — trừ khi bỏ chọn ' +
+      '“Chỉ báo cáo” bên dưới. Mỗi lượt có chuyển tệp đều hiện một thông báo nói đó là hồ sơ của tổ chức.\n\n' +
+      'Thư mục được dùng %USERPROFILE%, %LOCALAPPDATA% và các biến khác; chúng được thay theo từng người. Thư ' +
+      'mục trên mạng bị từ chối.\n\nBật cần CleanDrive Business; bản không có sẽ báo chính sách này là không ' +
+      'áp dụng và không chạy gì.\n\nTác vụ được đăng ký lần sau CleanDrive mở, hoặc ngay lập tức bằng ' +
+      '“cleandrive policy apply” chạy dưới tài khoản của người đó (một script đăng nhập, hoặc script Intune ' +
+      'chạy trong ngữ cảnh người dùng).',
+    'policy.admx.automatic.folders': 'Các thư mục nó được dọn:',
+    'policy.admx.automatic.schedule': 'Bao lâu một lần',
+    'policy.admx.automatic.time': 'Lúc (HH:MM, đồng hồ 24 giờ)',
+    'policy.admx.automatic.weekday': 'Vào (cho mỗi tuần)',
+    'policy.admx.automatic.day': 'Vào ngày (cho mỗi tháng, 1–28)',
+    'policy.admx.automatic.reportOnly': 'Chỉ báo cáo: liệt kê thứ sẽ bị chuyển, không chuyển gì',
+    'policy.admx.automatic.action': 'Nó làm gì',
+    'policy.admx.automatic.age': 'Không ai đụng tới ít nhất (ngày)',
+    'policy.admx.automatic.threshold': 'Chỉ khi ổ đầy hơn (% đầy, 0 = luôn luôn)',
+    'policy.admx.categories': 'Các nhóm tệp dọn dẹp tự động được dùng',
+    'policy.admx.categories.explain':
+      'Bật: dọn dẹp tự động chỉ dùng những nhóm tệp được chọn bên dưới — trong hồ sơ của tổ chức và trong ' +
+      'mọi hồ sơ người dùng lập. Người dùng vẫn bỏ chọn thêm được; họ không chọn được nhóm không được phép ở ' +
+      'đây. Lựa chọn của họ được giữ và trở lại khi gỡ chính sách này.\n\nChỉ những nhóm CleanDrive vốn đã cho ' +
+      'chạy khi không có người được liệt kê. Không gì ở đây cho dọn dẹp tự động đụng tới thứ khác.\n\nTắt hoặc ' +
+      'không cấu hình: mọi nhóm đều dùng được.\n\nÁp dụng cho mọi bản CleanDrive.',
+    'policy.admx.protected': 'Các thư mục dọn dẹp tự động không bao giờ đụng vào',
+    'policy.admx.protected.explain':
+      'Bật: dọn dẹp tự động không bao giờ chuyển thứ gì bên trong các thư mục này, ở bất kỳ hồ sơ nào. Người ' +
+      'dùng thêm được thư mục của riêng họ; họ không gỡ được những thư mục này.\n\nThư mục được dùng ' +
+      '%USERPROFILE% và các biến khác; chúng được thay theo từng người.\n\nTắt hoặc không cấu hình: chỉ những ' +
+      'thư mục người dùng nêu, và các thư mục Windows mà CleanDrive luôn từ chối.\n\nÁp dụng cho mọi bản ' +
+      'CleanDrive.',
+    'policy.admx.protected.folders': 'Thư mục:',
+    'policy.admx.updates': 'Không kiểm tra cập nhật',
+    'policy.admx.updates.explain':
+      'Bật: CleanDrive không bao giờ liên lạc với nơi phát hành để tìm phiên bản mới — không tự làm, và không ' +
+      'làm khi bấm “Kiểm tra ngay”. Việc cài bản cập nhật khi đó là của tổ chức.\n\nTắt hoặc không cấu hình: ' +
+      'người dùng tự quyết, và mặc định là có kiểm tra.\n\nÁp dụng cho mọi bản CleanDrive.',
+    'policy.admx.quarantine': 'Tệp chuyển sang ổ khác đi đâu',
+    'policy.admx.quarantine.explain':
+      'Bật: tệp CleanDrive chuyển sang ổ khác sẽ vào một thư mục “CleanDrive Quarantine” bên trong thư mục ' +
+      'nêu ở đây, và người dùng không chọn được nơi khác. Thư mục phải nằm trên ổ cục bộ; thư mục mạng, thư ' +
+      'mục của Windows và thư mục bên trong OneDrive bị từ chối, như khi người dùng tự chọn.\n\nĐược dùng ' +
+      '%USERPROFILE% và các biến khác.\n\nCần CleanDrive Business; bản không có sẽ báo chính sách này là ' +
+      'không áp dụng.',
+    'policy.admx.quarantine.folder': 'Thư mục:',
+
     'map.unscannedHint': 'Đang dùng trên {volume} nhưng lần quét này không đếm: Windows, chương trình đã cài, thư mục của người khác, và những gì không đọc được. Là số ước tính. Bấm để xem trên màn Hệ thống.',
   };
 });

@@ -665,6 +665,7 @@
         items.push({
           label: t('map.menu.relocate', 'Move to another drive…'),
           run: () => relocateFolder(entry.path),
+          held: Managed.holds('relocate'),
         });
       }
       // B5, next to B2 because they answer the same question -- "this folder
@@ -673,6 +674,7 @@
         items.push({
           label: t('map.menu.archive', 'Pack into an archive…'),
           run: () => archiveFolder(entry.path),
+          held: Managed.holds('archive'),
         });
       }
       // B4, which is the third answer: keep it exactly where it is and let
@@ -687,6 +689,7 @@
         items.push({
           label: t('map.menu.compress', 'NTFS compression…'),
           run: () => compressFolder(entry.path),
+          held: Managed.holds('compress'),
         });
       }
       return items;
@@ -730,6 +733,13 @@
       button.setAttribute('role', 'menuitem');
       button.tabIndex = -1;
       button.textContent = item.label;
+      // Held by the organisation's view only (H2): still in the menu, so the
+      // reason can be read, but it says whose decision it is and does nothing.
+      if (item.held) {
+        button.setAttribute('aria-disabled', 'true');
+        button.classList.add('is-held');
+        button.append(Managed.ManagedMark());
+      }
       button.addEventListener('click', () => {
         closeMenu(false);
         item.run();

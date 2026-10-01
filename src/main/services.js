@@ -34,9 +34,36 @@ let cached = null;
  * `%LOCALAPPDATA%` with snapshots of its fixture.
  */
 function localDataDir({ userData, appData, name, localAppData }) {
-  const isDefault = appData && name && pathKey(userData) === pathKey(path.join(appData, name));
-  if (isDefault && localAppData) return path.join(localAppData, name);
+  if (isDefaultUserData({ userData, appData, name }) && localAppData) return path.join(localAppData, name);
   return path.join(userData, 'local');
+}
+
+/** Whether `userData` is where Electron puts it, rather than where a harness moved it. */
+function isDefaultUserData({ userData, appData, name }) {
+  return Boolean(appData && name && pathKey(userData) === pathKey(path.join(appData, name)));
+}
+
+/**
+ * Which registry key holds this process's policy (H2), or null for none.
+ *
+ * An installed copy reads the organisation's key and nothing else. A checkout
+ * reads it too -- a developer's machine may be managed -- but only with the
+ * real `userData`: a harness that moved `userData` to keep off the real app's
+ * files must keep off a real policy as well, or a policy set on this machine
+ * one day would quietly decide what every harness sees. Such a harness has no
+ * policy unless it names its own key with CLEANDRIVE_POLICY_KEY, and that key
+ * must be under the harness prefix (read.js) -- never a real `Policies` key.
+ * The one exception is the word `machine`, for the elevated harness that sets
+ * a real policy on purpose and has to read it from a userData of its own.
+ * The same rule as CLEANDRIVE_COPIES_SCOPE: a built installer ignores it.
+ */
+function policyKeyFor({ packaged, defaultUserData, env = process.env }) {
+  const { MACHINE_KEY, isHarnessKey } = require('./policy/read');
+  if (packaged) return MACHINE_KEY;
+  const asked = env.CLEANDRIVE_POLICY_KEY;
+  if (asked === 'machine') return MACHINE_KEY;
+  if (asked) return isHarnessKey(asked) ? asked : null;
+  return defaultUserData ? MACHINE_KEY : null;
 }
 
 function services() {
@@ -54,6 +81,8 @@ function services() {
   let snapshots = null;
   let sealKey = null;
   let sealer;
+  let policy = null;
+  const minMinutes = app.isPackaged ? MIN_MINUTES_PACKAGED : 1;
 
   cached = {
     dir,
@@ -140,17 +169,43 @@ function services() {
       return ledger;
     },
 
-    // The interval floor is a property of the build, not of the file: a
-    // checkout may schedule a one-minute loop to watch it work, an installed
-    // copy may not. Passed in here so every process in the app -- window,
-    // scheduled run, sampler -- reads the same file with the same rules.
-    settings: new SettingsStore(path.join(dir, 'settings.json'), {
-      minMinutes: app.isPackaged ? MIN_MINUTES_PACKAGED : 1,
-    }),
+    /**
+     * The organisation's policy (H2), and which half of it applies.
+     *
+     * The tightening half applies to every copy; the acting half -- the
+     * organisation's own profile, its quarantine folder -- is `biz.policy`
+     * (decided 2026-10-01). Asked here and handed in, the way the journal is
+     * handed a sealer: nothing under policy/ loads the licence. Asked once
+     * per process, for the same reason as the seal.
+     */
+    get policy() {
+      if (!policy) {
+        const { PolicySource } = require('./policy/source');
+        const { canNow } = require('./license/state');
+        policy = new PolicySource({
+          key: policyKeyFor({
+            packaged: app.isPackaged,
+            defaultUserData: isDefaultUserData({ userData: dir, appData: app.getPath('appData'), name: app.getName() }),
+          }),
+          acting: canNow()('biz.policy'),
+          minMinutes,
+        });
+      }
+      return policy;
+    },
+
     runLog: new RunLog(path.join(dir, 'autoclean-log.json')),
     history: new History(path.join(dir, 'history.json')),
   };
+
+  // The interval floor is a property of the build, not of the file: a
+  // checkout may schedule a one-minute loop to watch it work, an installed
+  // copy may not. Passed in here so every process in the app -- window,
+  // scheduled run, sampler -- reads the same file with the same rules. And
+  // every one of them reads it through the policy (H2): see policy/store.js.
+  const { ManagedSettingsStore } = require('./policy/store');
+  cached.settings = new ManagedSettingsStore(new SettingsStore(path.join(dir, 'settings.json'), { minMinutes }), () => cached.policy);
   return cached;
 }
 
-module.exports = { services, localDataDir };
+module.exports = { services, localDataDir, isDefaultUserData, policyKeyFor };

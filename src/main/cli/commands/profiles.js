@@ -23,7 +23,8 @@ const SCHEDULE = Object.freeze({
 });
 
 /** What a profile is called when it has no name of its own: what the screen calls it (`profileTitle`). */
-const nameOf = (p, index) => p.name || (index === 0 ? 'Automatic cleanup' : `Profile ${index + 1}`);
+const nameOf = (p, index) =>
+  p.managed ? "Your organisation's profile" : p.name || (index === 0 ? 'Automatic cleanup' : `Profile ${index + 1}`);
 
 async function run(args, ctx) {
   const { settings: store, runLog } = ctx.services();
@@ -38,6 +39,8 @@ async function run(args, ctx) {
       id: p.id,
       name: p.name || null,
       shownAs: nameOf(p, i),
+      // Set by the organisation's policy (H2), not in the settings file.
+      managed: p.managed === true,
       enabled: p.enabled,
       reportOnly: p.dryRun,
       action: p.action,

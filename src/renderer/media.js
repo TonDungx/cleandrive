@@ -1240,6 +1240,7 @@ function updateSelection() {
   mediaQuarantineFrees.hidden = count === 0;
   $('media-quarantine').disabled = count === 0;
   $('media-quarantine').hidden = count === 0;
+  Managed.hold($('media-quarantine'), Managed.holds('quarantine'));
   let bytes = 0;
   let synced = 0;
   let videos = 0;
@@ -1282,6 +1283,8 @@ function updateSelection() {
 
   $('media-delete').disabled = count === 0;
   $('media-delete').hidden = count === 0;
+  // The organisation's view only (H2) holds both, whatever is ticked.
+  Managed.hold($('media-delete'), Managed.holds('recycle'));
   $('media-select-none').hidden = count === 0;
   // "Select everything shown" is only an offer while there is something left
   // to select; once everything is, it is a button that does nothing.
@@ -1813,6 +1816,7 @@ $('media-backup-choose').addEventListener('click', chooseBackup);
 // Vietnamese screenshot caught exactly that. Listeners run after the DOM pass,
 // so drawing again here is the last word.
 onLanguageChange(drawBackup);
+Managed.onChange(() => updateSelection());
 
 // The setting is read once, when the screen is first built, the same way the
 // quarantine card reads its own.

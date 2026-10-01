@@ -85,6 +85,19 @@ function mb(bytes) {
   fs.writeFileSync(shimPath, require('../src/main/cli/shim').shimText(), 'ascii');
   console.log(`cli         ${path.relative(ROOT, shimPath)}\n`);
 
+  /* ---- the Group Policy files (H2) --------------------------------------- */
+  // `<install folder>\policy\CleanDrive.admx` and its ADML in English and
+  // Vietnamese, written from the same table the app reads, so the copy an
+  // administrator finds beside the app is the one this build understands.
+  const policyDir = path.join(BUILD, 'policy');
+  fs.rmSync(policyDir, { recursive: true, force: true });
+  for (const [rel, text] of Object.entries(require('../src/main/policy/admx').files())) {
+    const file = path.join(policyDir, ...rel.split('/'));
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, text, 'utf8');
+  }
+  console.log(`policy      ${path.relative(ROOT, policyDir)}  (ADMX + ADML en-US, vi-VN)\n`);
+
   /* ---- which build this is ----------------------------------------------- */
   // Written for the packager and removed straight after, so it only ever
   // exists inside an installer. A checkout without it is the `dev` channel,
@@ -119,8 +132,12 @@ function mb(bytes) {
       // ship a verify-autoclean.js that deletes real files, to a machine whose
       // owner never asked for it.
       files: ['src/**/*', 'package.json'],
-      // The command line's batch file, as `<install folder>\bin\cleandrive.cmd`.
-      extraFiles: [{ from: binDir, to: 'bin' }],
+      // The command line's batch file, as `<install folder>\bin\cleandrive.cmd`,
+      // and the Group Policy files, as `<install folder>\policy\`.
+      extraFiles: [
+        { from: binDir, to: 'bin' },
+        { from: policyDir, to: 'policy' },
+      ],
 
       win: {
         icon: icoPath,

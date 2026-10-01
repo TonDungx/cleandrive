@@ -196,6 +196,9 @@ const api = {
   /* which features this build may use -- never the licence itself */
   entitlements: () => ipcRenderer.invoke('license:entitlements'),
 
+  /* what the organisation's policy locks (H2) -- never the registry itself */
+  policyState: () => ipcRenderer.invoke('policy:state'),
+
   /** Subscribe to progress. Returns an unsubscribe function. */
   onScanProgress: (cb) => subscribe('scan:progress', cb),
   onPlannerProgress: (cb) => subscribe('planner:progress', cb),

@@ -150,6 +150,7 @@
   async function run(options = {}) {
     const paths = [...selection];
     if (paths.length === 0) return;
+    if (Managed.refuseIfHeld('dehydrate')) return;
     progressPanel.show(t('cloud.checking', 'Asking OneDrive about the files'));
     let result;
     try {

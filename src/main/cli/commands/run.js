@@ -49,11 +49,15 @@ async function run(args, ctx) {
   const svc = ctx.services();
   const { settings: store, ledger, runLog, history } = svc;
   const settings = await store.load();
-  if (!store.exists) throw new CliError(EXIT.REFUSED, 'No settings file was found, so there is no profile to run. Nothing was done.');
+  const id = args.values.profile;
+  // The organisation's profile (H2) needs no settings file; any other does.
+  const managedId = settings.managed && settings.managed.profileId;
+  if (!store.exists && !(managedId && profileById(settings, id) && profileById(settings, id).id === managedId)) {
+    throw new CliError(EXIT.REFUSED, 'No settings file was found, so there is no profile to run. Nothing was done.');
+  }
   await ledger.load();
   await runLog.load();
 
-  const id = args.values.profile;
   const profile = profileById(settings, id);
   if (!profile) {
     const ids = profilesOf(settings).map((p) => p.id).join(', ');

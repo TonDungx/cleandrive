@@ -180,6 +180,10 @@
       pairUp(badges[kind], button);
     }
     let said = '';
+    // "Managed by your organisation" (H2), once per bar, beside the readout:
+    // the reason every button after it is greyed out.
+    let managedMark = null;
+    const held = (kind) => typeof Managed !== 'undefined' && Managed.holds(kind);
 
     function update() {
       const rows = selected();
@@ -197,18 +201,36 @@
       if (count > 0 && key !== said && typeof announce === 'function') announce(readout.textContent);
       said = count > 0 ? key : '';
 
+      let anyHeld = false;
       for (const [kind, button] of Object.entries(buttons)) {
         const allowed =
           count > 0 &&
           rows.every((row) => !row.actions || row.actions.includes(kind)) &&
           (typeof usable[kind] !== 'function' || usable[kind]());
-        button.disabled = !allowed || actionRunning;
-        if (badges[kind]) badges[kind].hidden = !allowed;
+        const isHeld = held(kind);
+        anyHeld = anyHeld || isHeld;
+        button.disabled = !allowed || actionRunning || isHeld;
+        if (typeof Managed !== 'undefined') Managed.hold(button, isHeld);
+        if (badges[kind]) badges[kind].hidden = !allowed || isHeld;
       }
+      if (anyHeld && !managedMark) {
+        managedMark = Managed.ManagedMark();
+        managedMark.classList.add('managed-mark-bar');
+        readout.after(managedMark);
+      }
+      if (managedMark) managedMark.hidden = !anyHeld;
       root.hidden = count === 0;
     }
 
-    return { update, root };
+    const bar = { update, root };
+    allBars.push(bar);
+    return bar;
+  }
+
+  /** Every bar on every screen, so a change of policy can redraw them all. */
+  const allBars = [];
+  function refreshActionBars() {
+    for (const bar of allBars) bar.update();
   }
 
   /** Set by the delete progress panel: nothing else may start while one runs. */
@@ -581,6 +603,7 @@
   root.FreesBadge = FreesBadge;
   root.pairUp = pairUp;
   root.ActionBar = ActionBar;
+  root.refreshActionBars = refreshActionBars;
   root.setActionRunning = setActionRunning;
   root.CandidateList = CandidateList;
   root.UpgradeHint = UpgradeHint;

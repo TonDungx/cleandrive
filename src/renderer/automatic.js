@@ -133,6 +133,8 @@ function renderAutoLists() {
   renderPathList($('auto-whitelist'), 'whitelist', t('auto.whitelist.empty', 'No exclusions. System locations are still protected.'));
   renderPathList($('auto-skip'), 'skipIfRunning', t('auto.skip.empty', 'Nothing listed — the cleanup runs whatever is open.'), true);
   renderPathList($('monitor-volumes'), 'monitorVolumes', t('monitor.volumes.empty', 'None listed — your home drive is watched by default.'));
+  // The rows were just made again, without their padlocks (H2).
+  if (state.auto) applyManaged(state.auto);
 }
 
 function markAutoDirty() {
@@ -265,15 +267,28 @@ function lastRunOf(data, profile) {
 
 /** What to call a profile that has not been named. */
 function profileTitle(profile, index) {
+  // The organisation's (H2): never named by the person, and never theirs.
+  if (profile.managed) return t('auto.profile.managed', 'Your organisation’s profile');
   if (profile.name) return profile.name;
   return index === 0
     ? t('auto.profile.first', 'Automatic cleanup')
     : t('auto.profile.nth', 'Profile {n}', { n: index + 1 });
 }
 
+/**
+ * A profile that would act, on a computer the organisation set to view only
+ * (H2): switched on, and still nothing will happen. Saying "On" in green
+ * would be the screen claiming a cleanup that is refused every time.
+ */
+function heldByPolicy(profile) {
+  const m = state.auto && state.auto.settings ? state.auto.settings.managed : null;
+  return Boolean(m && m.viewOnly && profile.enabled && !profile.dryRun);
+}
+
 /** A word for what a profile is doing, for its row in the list. */
 function profileStateWord(profile) {
   if (!profile.enabled) return t('app.off', 'Off');
+  if (heldByPolicy(profile)) return t('auto.state.held', 'Held: view only');
   return profile.dryRun ? t('auto.state.reportOnly', 'Report only') : t('app.on', 'On');
 }
 
@@ -295,11 +310,15 @@ function renderProfileList(data) {
     name.textContent = profileTitle(profile, index);
 
     const state = document.createElement('span');
-    state.className = `profile-chip-state${profile.enabled && !profile.dryRun ? ' is-on' : ''}${
+    state.className = `profile-chip-state${profile.enabled && !profile.dryRun && !heldByPolicy(profile) ? ' is-on' : ''}${
       profile.enabled && profile.dryRun ? ' is-dry' : ''
     }`;
     state.textContent = profileStateWord(profile);
 
+    if (profile.managed) {
+      button.classList.add('is-managed-profile');
+      button.prepend(Managed.lockIcon());
+    }
     button.append(name, state);
     button.addEventListener('click', () => selectProfile(profile.id));
     return button;
@@ -308,14 +327,16 @@ function renderProfileList(data) {
   replaceChildrenIfChanged(holder, rows, list.map((p, i) => `${p.id}:${profileTitle(p, i)}:${profileStateWord(p)}:${current && p.id === current.id}`).join('|'));
 
   // Adding is refused out loud rather than by a button that does nothing.
-  const atLimit = list.length >= Math.min(limits.allowed, limits.max);
+  // The organisation's profile (H2) is not the person's and is not counted.
+  const own = list.filter((p) => !p.managed);
+  const atLimit = own.length >= Math.min(limits.allowed, limits.max);
   $('auto-profile-add').disabled = atLimit;
   $('auto-profile-add').title = atLimit
     ? limits.allowed <= 1
       ? t('auto.profile.locked', 'More than one profile is part of CleanDrive Pro.')
       : t('auto.profile.full', 'At most {n} profiles.', { n: limits.max })
     : '';
-  $('auto-profile-remove').disabled = list.length <= 1;
+  $('auto-profile-remove').disabled = own.length <= 1 || Boolean(current && current.managed);
   $('auto-profile-name').value = current && current.name ? current.name : '';
   $('auto-profile-name').placeholder = current ? profileTitle(current, list.indexOf(current)) : '';
 }
@@ -404,11 +425,7 @@ function applyAutoState(data, { form = true } = {}) {
   renderAutoLists();
   syncScheduleRows();
 
-  const stateWord = auto.enabled
-    ? auto.dryRun
-      ? t('auto.state.reportOnly', 'Report only')
-      : t('app.on', 'On')
-    : t('app.off', 'Off');
+  const stateWord = profileStateWord(auto);
 
   setText($('astat-state'), stateWord);
 
@@ -416,7 +433,7 @@ function applyAutoState(data, { form = true } = {}) {
   // question it answers -- is any of this actually running -- does not.
   const chip = $('auto-state');
   setText(chip, stateWord);
-  chip.classList.toggle('is-on', auto.enabled && !auto.dryRun);
+  chip.classList.toggle('is-on', auto.enabled && !auto.dryRun && !heldByPolicy(auto));
   chip.classList.toggle('is-dry', auto.enabled && auto.dryRun);
   // The figures are about the profile on screen, not about whichever profile
   // happens to be first or ran most recently (G4).
@@ -437,6 +454,65 @@ function applyAutoState(data, { form = true } = {}) {
   renderRunResult(lastRun);
   renderRunHistory(data.history || []);
   setText($('auto-status'), autoDirty ? t('auto.unsaved', 'Unsaved changes.') : describeSchedule(auto));
+  applyManaged(data);
+}
+
+/**
+ * The organisation's hand on this screen (H2): every control it holds is
+ * disabled and padlocked, with the line that says whose decision it was.
+ *
+ * Drawn after everything else, so whatever the rest of the tab decided about
+ * a control, the policy has the last word. Released controls are switched
+ * back on only where nothing but the policy turned them off.
+ */
+const PROFILE_CONTROLS = [
+  'auto-dryrun', 'auto-action', 'auto-delete-original', 'auto-kind', 'auto-minutes', 'auto-weekday', 'auto-day',
+  'auto-time', 'auto-catchup', 'auto-age', 'auto-threshold', 'auto-max', 'auto-add-root', 'auto-add-whitelist',
+  'auto-add-skip', 'auto-skip-input', 'auto-profile-name',
+];
+
+function applyManaged(data) {
+  const m = (data && data.settings && data.settings.managed) || {};
+  const auto = profileOnScreen(data);
+  const theirs = auto.managed === true;
+  const off = m.automatic === 'off';
+  const viewOnly = Boolean(m.viewOnly);
+
+  for (const id of PROFILE_CONTROLS) Managed.hold($(id), theirs, { release: true });
+  Managed.hold($('auto-enabled'), theirs || off, { release: true });
+  // A category outside the organisation's list is unticked and held; inside
+  // it, the person still chooses.
+  for (const box of document.querySelectorAll('#auto-categories input[type=checkbox]')) {
+    const outside = Array.isArray(m.categories) && !m.categories.includes(box.dataset.category);
+    if (outside) box.checked = false;
+    Managed.hold(box, theirs || outside, { release: true });
+  }
+  // A folder the organisation protects stays on the list, padlocked, with no
+  // way to take it off.
+  const protectedKeys = new Set((m.protectedFolders || []).map((p) => p.toLowerCase()));
+  for (const row of document.querySelectorAll('#auto-whitelist .path-row')) {
+    const text = row.querySelector('.path-text');
+    const remove = row.querySelector('button');
+    const isTheirs = theirs || (text && protectedKeys.has(String(text.title).toLowerCase()));
+    if (remove) Managed.hold(remove, isTheirs, { release: true });
+    row.classList.toggle('is-managed-row', Boolean(isTheirs));
+  }
+  for (const row of document.querySelectorAll('#auto-roots .path-row button, #auto-skip .path-row button')) {
+    Managed.hold(row, theirs, { release: true });
+  }
+
+  // "Run cleanup now" acts; a report never does, so Preview is never held.
+  const runHeld = viewOnly || off || (theirs && auto.dryRun);
+  Managed.hold($('auto-run'), runHeld, { release: !autoRunning });
+  for (const id of ['purge-enabled', 'purge-days']) Managed.hold($(id), viewOnly, { release: true });
+  Managed.hold($('purge-now'), viewOnly);
+
+  Managed.show('profile', theirs);
+  for (const note of document.querySelectorAll('[data-managed-note="profile"]')) note.hidden = !theirs;
+  Managed.show('automaticOff', off && !theirs);
+  Managed.show('categories', theirs || Array.isArray(m.categories));
+  Managed.show('protected', theirs || protectedKeys.size > 0);
+  Managed.show('run', runHeld);
 }
 
 /** The saved settings into the fields. Only when nothing on screen is unsaved. */
@@ -533,6 +609,9 @@ function showNotice(id, text) {
 
 function describeSchedule(auto) {
   if (!auto.enabled) return t('auto.describe.off', 'Automatic cleanup is off.');
+  if (heldByPolicy(auto)) {
+    return t('auto.describe.held', 'Your organisation has set this computer to view only, so this profile does not run until that is lifted.');
+  }
 
   let when;
   if (auto.schedule.kind === 'minutes') {
@@ -1048,7 +1127,7 @@ async function refreshPurgeStatus() {
   const preview = unwrap(await api.previewPurge(), t('purge.label', 'Recycle Bin'));
   if (!preview) return;
 
-  $('purge-now').disabled = preview.items === 0;
+  $('purge-now').disabled = preview.items === 0 || Managed.viewOnly();
 
   if (preview.tracked === 0) {
     setText($('purge-status'), t('purge.nothingRecorded', 'Nothing recorded yet.'));
@@ -1177,7 +1256,9 @@ $('auto-skip-input').addEventListener('keydown', (event) => {
  * from.
  */
 async function saveAll(requested) {
-  if (requested.profile.id) {
+  // The organisation's profile (H2) is not saved from here; the rest is.
+  const current = state.auto ? currentProfile(state.auto) : null;
+  if (requested.profile.id && !(current && current.managed)) {
     const afterProfile = unwrap(
       await api.saveAutoProfile(requested.profile),
       t('app.label.saveSettings', 'Save settings')
@@ -1237,9 +1318,13 @@ $('auto-save').addEventListener('click', async () => {
   await refreshTaskStatus({ quiet: true });
 });
 
+let autoRunning = false;
+
 function setAutoRunning(running) {
+  autoRunning = running;
   $('auto-preview').disabled = running;
-  $('auto-run').disabled = running;
+  // Held by the organisation's policy (H2) or not, it is never on during a run.
+  $('auto-run').disabled = running || $('auto-run').classList.contains('is-managed');
   $('auto-save').disabled = running;
   $('auto-cancel').hidden = !running;
   $('auto-progress').hidden = !running;

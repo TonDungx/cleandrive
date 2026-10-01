@@ -19,8 +19,10 @@
  *
  * `feature: null` is never asked about at all: the journal and putting things
  * back are readable and undoable at every tier (ROADMAP rule 4), and help and
- * version describe the program rather than use it. `policy validate|apply`
- * are not here -- they arrive with H2, which has the policy for them to read.
+ * version describe the program rather than use it. `policy` (H2) is not asked
+ * either: checking a policy is reading, and the tightening half of one applies
+ * to every copy (decided 2026-10-01) -- which half applies is decided where
+ * the policy is read, in services.js.
  */
 const COMMANDS = Object.freeze({
   scan: { feature: 'biz.cli', positional: [1, Infinity], flags: ['json', 'mft', 'snapshot'], usage: 'scan <folder...> [--mft] [--snapshot] [--json]' },
@@ -37,6 +39,12 @@ const COMMANDS = Object.freeze({
     usage: 'journal list|show <session>|verify [--json]',
   },
   restore: { feature: null, positional: [1, 1], flags: ['json', 'dry-run'], usage: 'restore <session> [--dry-run] [--json]' },
+  policy: {
+    feature: null,
+    sub: { validate: [0, 1], apply: [0, 0] },
+    flags: ['json'],
+    usage: 'policy validate [<file.reg>] | apply [--json]',
+  },
   version: { feature: null, positional: [0, 0], flags: ['json'], usage: 'version [--json]' },
   help: { feature: null, positional: [0, 1], flags: [], usage: 'help [<command>]' },
 });

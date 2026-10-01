@@ -236,6 +236,7 @@
   button.addEventListener('click', async () => {
     const pairs = pairsForSelection();
     if (pairs.length === 0) return;
+    if (Managed.refuseIfHeld('hardlink')) return;
 
     const keepers = {};
     for (const pair of pairs) keepers[pair.path] = pair.keeper;

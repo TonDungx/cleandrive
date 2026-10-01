@@ -1,0 +1,137 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<!-- Written by scripts/build.js from src/main/policy/admx.js; do not edit. -->
+<policyDefinitionResources xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" revision="1.0" schemaVersion="1.0" xmlns="http://schemas.microsoft.com/GroupPolicy/2006/07/PolicyDefinitions">
+  <displayName>CleanDrive</displayName>
+  <description>Các thiết lập Group Policy cho CleanDrive</description>
+  <resources>
+    <stringTable>
+      <string id="CleanDrive">CleanDrive</string>
+      <string id="SUPPORTED_CleanDrive_0_5">CleanDrive 0.5 trở lên</string>
+      <string id="ViewOnly">Chỉ cho xem: không thay đổi tệp nào</string>
+      <string id="ViewOnly_Explain">Bật: CleanDrive cho thấy trên đĩa có gì và có thể dọn gì, nhưng không chuyển, xoá, nén hay thay đổi tệp nào trên máy này — không từ cửa sổ, không theo lịch, không từ dòng lệnh. Nó cũng không xoá các mục của chính nó khỏi Thùng rác.
+
+Khôi phục vẫn hoạt động: mọi thứ CleanDrive đã chuyển trước đó đều đưa về được từ Trung tâm khôi phục, chỉ trừ việc tệp đang nằm chắn đường không bao giờ bị thay thế, vì thay thế sẽ chuyển nó vào Thùng rác.
+
+Mở một công cụ Windows từ CleanDrive (Cài đặt bộ nhớ, trình gỡ cài đặt của một chương trình) vẫn được phép: công cụ đó tự hỏi câu của nó. Tạo bản video nhẹ hơn và lưu báo cáo cũng vậy, vì chúng chỉ ghi một tệp mới và không đổi tệp nào đang có.
+
+Tắt hoặc không cấu hình: người dùng máy tự quyết.
+
+Áp dụng cho mọi bản CleanDrive, có hay không có CleanDrive Business.</string>
+      <string id="AutomaticCleanup">Dọn dẹp tự động</string>
+      <string id="AutomaticCleanup_Explain">Tắt: dọn dẹp tự động tắt cho mọi hồ sơ trên máy này. Các hồ sơ người dùng đã lập được giữ nguyên và trở lại khi gỡ chính sách này. Áp dụng cho mọi bản CleanDrive.
+
+Bật: CleanDrive chạy một hồ sơ riêng của tổ chức, thành một tác vụ Windows cho mỗi người đăng nhập. Nó qua đúng mọi quy tắc của hồ sơ người dùng: chỉ những nhóm tệp dọn dẹp tự động được phép dùng, chỉ tệp không ai đụng tới trong số ngày đã đặt, không bao giờ đụng thư mục của Windows, không bao giờ đụng tệp được đánh dấu cần xem lại. Tệp được chuyển vào Thùng rác, hoặc vào thư mục cách ly trên ổ khác, và khôi phục được từ Trung tâm khôi phục.
+
+Nó bắt đầu ở chế độ chỉ báo cáo — liệt kê thứ nó sẽ chuyển và không chuyển gì — trừ khi bỏ chọn “Chỉ báo cáo” bên dưới. Mỗi lượt có chuyển tệp đều hiện một thông báo nói đó là hồ sơ của tổ chức.
+
+Thư mục được dùng %USERPROFILE%, %LOCALAPPDATA% và các biến khác; chúng được thay theo từng người. Thư mục trên mạng bị từ chối.
+
+Bật cần CleanDrive Business; bản không có sẽ báo chính sách này là không áp dụng và không chạy gì.
+
+Tác vụ được đăng ký lần sau CleanDrive mở, hoặc ngay lập tức bằng “cleandrive policy apply” chạy dưới tài khoản của người đó (một script đăng nhập, hoặc script Intune chạy trong ngữ cảnh người dùng).</string>
+      <string id="AutomaticFolders">Các thư mục nó được dọn:</string>
+      <string id="Schedule">Bao lâu một lần</string>
+      <string id="Schedule_daily">Mỗi ngày</string>
+      <string id="Schedule_weekly">Mỗi tuần</string>
+      <string id="Schedule_monthly">Mỗi tháng</string>
+      <string id="Time">Lúc (HH:MM, đồng hồ 24 giờ)</string>
+      <string id="Weekday">Vào (cho mỗi tuần)</string>
+      <string id="Weekday_0">Chủ nhật</string>
+      <string id="Weekday_1">Thứ hai</string>
+      <string id="Weekday_2">Thứ ba</string>
+      <string id="Weekday_3">Thứ tư</string>
+      <string id="Weekday_4">Thứ năm</string>
+      <string id="Weekday_5">Thứ sáu</string>
+      <string id="Weekday_6">Thứ bảy</string>
+      <string id="Day">Vào ngày (cho mỗi tháng, 1–28)</string>
+      <string id="ReportOnly">Chỉ báo cáo: liệt kê thứ sẽ bị chuyển, không chuyển gì</string>
+      <string id="Action">Nó làm gì</string>
+      <string id="Action_recycle">Chuyển vào Thùng rác</string>
+      <string id="Action_quarantine">Chuyển sang ổ khác</string>
+      <string id="MinAgeDays">Không ai đụng tới ít nhất (ngày)</string>
+      <string id="MinDiskUsedPercent">Chỉ khi ổ đầy hơn (% đầy, 0 = luôn luôn)</string>
+      <string id="AllowedCategories">Các nhóm tệp dọn dẹp tự động được dùng</string>
+      <string id="AllowedCategories_Explain">Bật: dọn dẹp tự động chỉ dùng những nhóm tệp được chọn bên dưới — trong hồ sơ của tổ chức và trong mọi hồ sơ người dùng lập. Người dùng vẫn bỏ chọn thêm được; họ không chọn được nhóm không được phép ở đây. Lựa chọn của họ được giữ và trở lại khi gỡ chính sách này.
+
+Chỉ những nhóm CleanDrive vốn đã cho chạy khi không có người được liệt kê. Không gì ở đây cho dọn dẹp tự động đụng tới thứ khác.
+
+Tắt hoặc không cấu hình: mọi nhóm đều dùng được.
+
+Áp dụng cho mọi bản CleanDrive.</string>
+      <string id="ProtectedFolders">Các thư mục dọn dẹp tự động không bao giờ đụng vào</string>
+      <string id="ProtectedFolders_Explain">Bật: dọn dẹp tự động không bao giờ chuyển thứ gì bên trong các thư mục này, ở bất kỳ hồ sơ nào. Người dùng thêm được thư mục của riêng họ; họ không gỡ được những thư mục này.
+
+Thư mục được dùng %USERPROFILE% và các biến khác; chúng được thay theo từng người.
+
+Tắt hoặc không cấu hình: chỉ những thư mục người dùng nêu, và các thư mục Windows mà CleanDrive luôn từ chối.
+
+Áp dụng cho mọi bản CleanDrive.</string>
+      <string id="ProtectedFoldersList">Thư mục:</string>
+      <string id="DisableUpdateCheck">Không kiểm tra cập nhật</string>
+      <string id="DisableUpdateCheck_Explain">Bật: CleanDrive không bao giờ liên lạc với nơi phát hành để tìm phiên bản mới — không tự làm, và không làm khi bấm “Kiểm tra ngay”. Việc cài bản cập nhật khi đó là của tổ chức.
+
+Tắt hoặc không cấu hình: người dùng tự quyết, và mặc định là có kiểm tra.
+
+Áp dụng cho mọi bản CleanDrive.</string>
+      <string id="QuarantineFolder">Tệp chuyển sang ổ khác đi đâu</string>
+      <string id="QuarantineFolder_Explain">Bật: tệp CleanDrive chuyển sang ổ khác sẽ vào một thư mục “CleanDrive Quarantine” bên trong thư mục nêu ở đây, và người dùng không chọn được nơi khác. Thư mục phải nằm trên ổ cục bộ; thư mục mạng, thư mục của Windows và thư mục bên trong OneDrive bị từ chối, như khi người dùng tự chọn.
+
+Được dùng %USERPROFILE% và các biến khác.
+
+Cần CleanDrive Business; bản không có sẽ báo chính sách này là không áp dụng.</string>
+      <string id="QuarantineFolderPath">Thư mục:</string>
+      <string id="Category_temp">Tệp tạm</string>
+      <string id="Category_cache">Bộ nhớ đệm</string>
+      <string id="Category_crashdump">Tệp ghi lỗi treo</string>
+      <string id="Category_log">Nhật ký cũ</string>
+      <string id="Category_gpucache">Đệm GPU và mã đã biên dịch</string>
+      <string id="Category_buildoutput">Kết quả biên dịch</string>
+      <string id="Category_app_chrome">Google Chrome — bộ nhớ đệm</string>
+      <string id="Category_app_edge">Microsoft Edge — bộ nhớ đệm</string>
+      <string id="Category_app_teams">Microsoft Teams — bộ nhớ đệm</string>
+      <string id="Category_app_discord">Discord — bộ nhớ đệm</string>
+      <string id="Category_app_zoom">Zoom — bộ nhớ đệm</string>
+      <string id="Category_app_figma">Figma — bộ nhớ đệm</string>
+      <string id="Category_app_zalo">Zalo — bộ nhớ đệm</string>
+    </stringTable>
+    <presentationTable>
+      <presentation id="AutomaticCleanup">
+        <listBox refId="AutomaticFolders">$(string.AutomaticFolders)</listBox>
+        <dropdownList refId="Schedule" noSort="true" defaultItem="1">$(string.Schedule)</dropdownList>
+        <textBox refId="Time">
+          <label>$(string.Time)</label>
+          <defaultValue>02:00</defaultValue>
+        </textBox>
+        <dropdownList refId="Weekday" noSort="true" defaultItem="0">$(string.Weekday)</dropdownList>
+        <decimalTextBox refId="Day" defaultValue="1">$(string.Day)</decimalTextBox>
+        <checkBox refId="ReportOnly" defaultChecked="true">$(string.ReportOnly)</checkBox>
+        <dropdownList refId="Action" noSort="true" defaultItem="0">$(string.Action)</dropdownList>
+        <decimalTextBox refId="MinAgeDays" defaultValue="180">$(string.MinAgeDays)</decimalTextBox>
+        <decimalTextBox refId="MinDiskUsedPercent" defaultValue="0">$(string.MinDiskUsedPercent)</decimalTextBox>
+      </presentation>
+      <presentation id="AllowedCategories">
+        <checkBox refId="Category_temp" defaultChecked="true">$(string.Category_temp)</checkBox>
+        <checkBox refId="Category_cache" defaultChecked="true">$(string.Category_cache)</checkBox>
+        <checkBox refId="Category_crashdump" defaultChecked="true">$(string.Category_crashdump)</checkBox>
+        <checkBox refId="Category_log" defaultChecked="true">$(string.Category_log)</checkBox>
+        <checkBox refId="Category_gpucache" defaultChecked="true">$(string.Category_gpucache)</checkBox>
+        <checkBox refId="Category_buildoutput" defaultChecked="false">$(string.Category_buildoutput)</checkBox>
+        <checkBox refId="Category_app_chrome" defaultChecked="true">$(string.Category_app_chrome)</checkBox>
+        <checkBox refId="Category_app_edge" defaultChecked="true">$(string.Category_app_edge)</checkBox>
+        <checkBox refId="Category_app_teams" defaultChecked="true">$(string.Category_app_teams)</checkBox>
+        <checkBox refId="Category_app_discord" defaultChecked="true">$(string.Category_app_discord)</checkBox>
+        <checkBox refId="Category_app_zoom" defaultChecked="true">$(string.Category_app_zoom)</checkBox>
+        <checkBox refId="Category_app_figma" defaultChecked="true">$(string.Category_app_figma)</checkBox>
+        <checkBox refId="Category_app_zalo" defaultChecked="true">$(string.Category_app_zalo)</checkBox>
+      </presentation>
+      <presentation id="ProtectedFolders">
+        <listBox refId="ProtectedFoldersList">$(string.ProtectedFoldersList)</listBox>
+      </presentation>
+      <presentation id="QuarantineFolder">
+        <textBox refId="QuarantineFolderPath">
+          <label>$(string.QuarantineFolderPath)</label>
+        </textBox>
+      </presentation>
+    </presentationTable>
+  </resources>
+</policyDefinitionResources>

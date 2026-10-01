@@ -55,6 +55,10 @@ function create() {
     token: new CancelToken(),
     cwd: process.cwd(),
     now: () => Date.now(),
+    // `policy apply` (H2): the same reconciliation the window runs at launch,
+    // and the organisation's quarantine folder made the way a chosen one is.
+    reconcileTasks: (settings, options) => require('../tasks').reconcile(settings, options),
+    prepareZone: (zone) => require('../lib/quarantine-zone').prepare(path.dirname(zone)),
     app: {
       version: app.getVersion(),
       channel: BUILD_CHANNEL,

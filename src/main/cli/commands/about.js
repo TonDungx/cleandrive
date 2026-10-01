@@ -20,6 +20,7 @@ const SUMMARY = Object.freeze({
   run: 'One automatic cleanup now, through every gate the scheduled one passes. The only command that moves files.',
   journal: 'What the app did (list, show) and whether that record is as it was written (verify).',
   restore: 'Put back what one session moved. Never overwrites: a file in the way is skipped.',
+  policy: 'What the organisation\'s policy sets here, value by value (validate, or validate a .reg file before rolling it out), and this account\'s scheduled cleanups brought into line with it now (apply).',
   version: 'This copy, and where it keeps its data.',
   help: 'This list, or one command\'s usage.',
 });
@@ -27,8 +28,8 @@ const SUMMARY = Object.freeze({
 const CODES = [
   '0   done',
   '1   failed (the message says why)',
-  '2   refused by a gate: a profile switched off, a disk below its threshold, a file in the way',
-  '3   not in this licence; nothing was done',
+  '2   refused by a gate: a profile switched off, a disk below its threshold, a file in the way, a policy value refused',
+  '3   not in this licence; nothing was done (policy validate: set, but only CleanDrive Business applies it)',
   '4   needs an elevated terminal; nothing was done',
   '5   started and stopped short',
   '6   journal verify found a sealed session changed, removed or duplicated',

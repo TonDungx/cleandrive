@@ -55,6 +55,9 @@ const state = {
   currentVersion: app.getVersion(),
   signed: false,
   justUpdated: null, // the version updated *from*, on the first run afterwards
+  // The organisation has switched update checks off (H2). Then nothing here
+  // contacts the release host, not even the "Check now" button.
+  managed: false,
 };
 
 /** How often a long-running window re-checks. Updates are not urgent. */
@@ -226,7 +229,8 @@ async function promptToInstall() {
 function apply(settings, { onEvent } = {}) {
   if (onEvent) subscribe(onEvent);
 
-  state.enabled = Boolean(settings.updates && settings.updates.enabled);
+  state.managed = Boolean(settings.managed && settings.managed.updatesOff);
+  state.enabled = Boolean(settings.updates && settings.updates.enabled) && !state.managed;
   state.supported = app.isPackaged;
   state.signed = false; // no certificate is configured; see the README
 
@@ -293,6 +297,9 @@ async function noteVersion(store) {
 }
 
 async function check({ manual = false } = {}) {
+  // Before anything else, the manual button included: "switched off by the
+  // organisation" has to mean no request leaves the machine at all.
+  if (state.managed) return { ...state };
   if (!app.isPackaged) {
     state.status = 'unsupported';
     state.supported = false;
@@ -320,7 +327,7 @@ async function check({ manual = false } = {}) {
 
 /** Kept for the manual button; the automatic path downloads by itself. */
 async function download() {
-  if (state.status !== 'available') return { ...state };
+  if (state.managed || state.status !== 'available') return { ...state };
   try {
     await load().downloadUpdate();
   } catch (err) {

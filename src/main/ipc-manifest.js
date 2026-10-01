@@ -153,6 +153,8 @@ const INVOKE = Object.freeze([
   'monitor:resume',
 
   'license:entitlements',
+  // What the organisation's policy locks (H2): the line and the padlocks.
+  'policy:state',
 ]);
 
 const EVENTS = Object.freeze([

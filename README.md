@@ -38,6 +38,7 @@ and the notifications.
 - [Deleting](#deleting)
 - [Disk alerts and the tray](#disk-alerts-and-the-tray)
 - [The command line](#the-command-line)
+- [Managed by an organisation](#managed-by-an-organisation)
 - [Rules the interface will not break](#rules-the-interface-will-not-break)
 - [What it deliberately does not do](#what-it-deliberately-does-not-do)
 - [Limits worth knowing before you plan around it](#limits-worth-knowing-before-you-plan-around-it)
@@ -2343,7 +2344,10 @@ deleting files on a timetable.
 application binary follows the same rule as deleting a file: nothing happens on
 its own. Update checks can be switched off entirely, and the scheduled cleanup
 never checks — a 2am maintenance task that replaced the program is not something
-anybody asked for.
+anybody asked for. An organisation can switch them off for you
+([Managed by an organisation](#managed-by-an-organisation)); then the switch
+and *Check now* carry a padlock, and nothing contacts the release page, not
+even when the button is pressed.
 
 ---
 
@@ -2557,14 +2561,16 @@ cleandrive profiles [--json]
 cleandrive run --profile <id> [--report-only] [--json]
 cleandrive journal list | show <session> | verify [--json]
 cleandrive restore <session> [--dry-run] [--json]
+cleandrive policy validate [<file.reg>] | apply [--json]
 cleandrive version | help [<command>]
 ```
 
 It is part of CleanDrive Business. Until licences exist, an installed copy has
-Business closed, so every command except `journal`, `restore`, `version` and
-`help` answers with exit code 3 and a sentence saying so — never a smaller run
-instead. Those four are never asked about the licence at all: reading what the
-app did, and putting it back, are there whatever the licence says.
+Business closed, so every command except `journal`, `restore`, `policy`,
+`version` and `help` answers with exit code 3 and a sentence saying so — never
+a smaller run instead. Those five are never asked about the licence at all:
+reading what the app did, putting it back, and checking what an organisation's
+policy says are there whatever the licence says.
 
 ### Starting it
 
@@ -2612,6 +2618,12 @@ should. That file holds no logic of its own; what it starts is the executable.
   NTFS drive is refused rather than walked instead.
 - **It runs beside the window and beside the scheduled run.** It takes no
   single-instance lock.
+- **`policy validate` and `policy apply` are for whoever manages the machine**
+  ([Managed by an organisation](#managed-by-an-organisation)). `validate`
+  says, value by value, what the app makes of the policy in the registry — or
+  of a `.reg` file before it is rolled out — and changes nothing. `apply`
+  registers or removes this account's scheduled cleanups to match the policy
+  now, instead of the next time somebody opens the window.
 
 `profiles` lists the ids `run --profile` takes — a profile's name is optional,
 so the id is the one thing every profile has. `snapshots` lists the ids `diff`
@@ -2624,8 +2636,8 @@ prints the session to undo it with.
 | --- | --- |
 | 0 | Done |
 | 1 | Failed; the message says why |
-| 2 | Refused by a gate: a profile switched off, a disk below its threshold, another run holding the lock, a file in the way, nothing to put back |
-| 3 | Not in this licence; nothing was done |
+| 2 | Refused by a gate: a profile switched off, a disk below its threshold, another run holding the lock, a file in the way, nothing to put back, a policy value refused or not understood |
+| 3 | Not in this licence; nothing was done. For `policy validate`: a policy is set that only CleanDrive Business applies |
 | 4 | Needs an elevated terminal; nothing was done |
 | 5 | Started and stopped short: the record of what moved could not be written |
 | 6 | `journal verify` found a sealed session changed, removed or duplicated |
@@ -2650,7 +2662,8 @@ $scan.cleanup.safeBytes
 ```
 
 `journal verify --json` is the Restore Center's own check, report and all
-(`cleandrive.journal-verify/1`).
+(`cleandrive.journal-verify/1`). `policy validate --json` and `policy apply
+--json` are `cleandrive.policy-validate/1` and `cleandrive.policy-apply/1`.
 
 ### Language
 
@@ -2659,6 +2672,73 @@ it was built on, a Windows console runs code page 437 and shows Vietnamese as
 garbage, and a program cannot change that from inside — it was tried, two ways.
 Paths are printed as they are, so they read correctly in a console set to UTF-8
 (`chcp 65001`, measured) and in any file the output is sent to.
+
+---
+
+## Managed by an organisation
+
+Whoever looks after a group of computers can set CleanDrive's rules for all of
+them with Group Policy or Intune. The definitions are in the install folder,
+under `policy\` — `CleanDrive.admx`, and its words in `en-US\CleanDrive.adml`
+and `vi-VN\CleanDrive.adml` — and in the `policy/` folder of the source.
+Copy them into the Group Policy central store, or import them into Intune, and
+the policies appear under *Computer Configuration → Administrative Templates →
+CleanDrive*. They write `HKEY_LOCAL_MACHINE\SOFTWARE\Policies\CleanDrive`,
+which an account without administrator rights cannot change. A machine with no
+Group Policy can be given the same values with `reg import`.
+
+| Policy | What it does | Without Business |
+| --- | --- | --- |
+| **View only: change no files** | Nothing is moved, deleted, compressed, packed, joined or made online-only — not from the window, not on a schedule, not from the command line — and nothing is emptied from the Recycle Bin. Putting things back still works, except that a file in the way is never replaced. Opening a Windows tool, making a smaller copy of a video and saving a report still work: they change no file that is there. | Applies |
+| **Automatic cleanup** — *Disabled* | Every profile is off. The person's own profiles are kept as they were and come back when the policy is removed. | Applies |
+| **Automatic cleanup** — *Enabled* | Runs one profile of the organisation's own: its folders (`%USERPROFILE%` and the like are expanded for each person; network folders are refused), schedule, age and threshold. It goes through every rule a person's profile does, and **starts in report only** unless the policy says otherwise in so many words. Every run that moves anything shows a notification saying it was the organisation's. | Not applied, and said so |
+| **Categories automatic cleanup may use** | A ceiling: a person can untick more, not tick one outside it. Only categories automatic cleanup could already use are offered. | Applies |
+| **Folders automatic cleanup never touches** | Added to every profile's list; a person can add more, not remove these. | Applies |
+| **Do not check for updates** | No request to the release page, not even from *Check now*. | Applies |
+| **Where files moved to another drive go** | The `CleanDrive Quarantine` folder is made inside the folder named, which must already exist on a local drive; a person cannot choose another. | Not applied, and said so |
+
+The ones that only take something away apply to every copy of CleanDrive: an
+organisation's *view only* that a missing licence could quietly switch off
+would be a safety rail that is not there. The two that make the app act on the
+organisation's behalf are CleanDrive Business, and Business is closed on an
+installed copy until licences exist — so on one, `cleandrive policy validate`
+and the line at the top of the window both say which policies were set but not
+applied.
+
+**What the person at the computer sees.** A line at the top of every screen
+saying that the organisation manages part of CleanDrive and what, and on every
+control the policy holds a padlock and *Managed by your organisation* (*Do tổ
+chức của bạn quản lý*). A profile that would act on a view-only computer says
+*Held: view only* rather than *On*. The organisation's profile is listed beside
+the person's own, padlocked, and cannot be changed or removed from here.
+
+**The settings file is never changed by a policy.** What the window shows is
+the file with the policy laid over it; what it saves is put back to the file's
+own values wherever the policy holds a field. When the organisation lifts a
+policy, the person's choices are exactly where they left them.
+
+**When the policy changes.** It is read again before every action, before every
+unattended run, and whenever the window comes back to the front. A policy that
+was there and is suddenly not is read a second time a moment later before it is
+believed, because a key being rewritten reads as empty for an instant. The
+organisation's scheduled task is registered the next time CleanDrive opens, or
+at once by `cleandrive policy apply` — run as the person who signs in (a logon
+script, or an Intune script in the user's context), because scheduled cleanups
+belong to an account. Run as SYSTEM, from a startup script, it refuses and says
+why. It registers nothing else: not the daily disk measurement, which is the
+person's own setting.
+
+**A policy that cannot be read is no policy, said out loud.** If neither
+`reg.exe` nor PowerShell can read the key, the app runs as if none were set,
+and the line at the top says the organisation's policy could not be read. View
+only is a guard rail for an organisation, not a lock against the person: they
+can delete their own files in Explorer whatever it says.
+
+What has not been checked: the files have not been loaded into the Group Policy
+editor or into Intune — the machine this was built on runs Windows 11 Home,
+which has neither. [Unverified] Their structure follows the ADMX files
+Microsoft ships in `C:\Windows\PolicyDefinitions`, they parse as XML, and
+every value they write is one the app is tested to read.
 
 ---
 
@@ -2691,7 +2771,8 @@ Paths are printed as they are, so they read correctly in a console set to UTF-8
   [the map of where pictures were taken](#where-they-were-taken), which ships
   off — that one is *about* your pictures, in that the pieces fetched are for
   the area they are in, and the card says so before you turn it on. Switch both
-  off and the app makes no network requests at all. The interface itself is
+  off and the app makes no network requests at all. An organisation can switch
+  the first off for every computer it manages. The interface itself is
   forbidden from reaching the network either way: both requests are made by the
   main process.
 - **No automatic optimisation, defragmentation or registry cleaning.** It does
@@ -2714,6 +2795,9 @@ Paths are printed as they are, so they read correctly in a console set to UTF-8
   theme file, only when you export your own colours, only where you save it. And,
   only while the right-click menu is switched on, its four entries in your
   account's registry (see [the right-click menu](#the-right-click-menu-and-what-it-writes)).
+  And, only when an organisation names one, the `CleanDrive Quarantine` folder
+  inside the folder it named. The app reads an organisation's policy and never
+  writes it.
 - **Settings upgrade forward, once.** The settings file is versioned; the first
   save after an upgrade keeps the previous file as `settings.v1.json`, and the
   version before this one still reads the new file (that is tested against the
@@ -2818,6 +2902,13 @@ for somebody deleting them.
   `CleanDrive.exe --cli` directly, PowerShell and cmd do not wait for it. Ctrl+C
   ends it at once rather than letting it finish the file it is on. Business
   only, and closed on an installed copy until licences exist.
+- **An organisation's policy is machine-wide and read through `reg.exe`** — or
+  through PowerShell when `reg.exe` is blocked, which it is (measured) wherever
+  *Prevent access to registry editing tools* is on. There is no per-user half yet. The
+  ADMX files have not been loaded into a real Group Policy editor or Intune.
+  The organisation's profile skips while one of the programs on the default
+  list is open (Visual Studio Code among them), like any profile, and the
+  policy cannot change that list.
 - **The scheduled task only fires while somebody is logged on.** A machine left
   at the login screen at 02:00 runs the cleanup at the next opportunity instead.
 - **Moving the app** relocates the executable the scheduled task points at. The

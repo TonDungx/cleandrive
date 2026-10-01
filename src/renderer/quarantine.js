@@ -104,6 +104,9 @@
       open.hidden = !s.ok;
     }
     choose.textContent = s && s.zone ? t('settings.quarantine.change', 'Change folder…') : t('settings.quarantine.choose', 'Choose folder…');
+    // The organisation named the folder (H2), so there is no choosing here.
+    Managed.hold(choose, Boolean(s && s.managed), { release: true });
+    Managed.show('quarantine', Boolean(s && s.managed));
     if (s) {
       days.value = s.retentionDays;
       max.value = s.maxGB;
@@ -130,7 +133,7 @@
       if (next.refusal) toast(next.refusal, true);
       else if (next.chosen) toast(t('settings.quarantine.chosen', 'Files moved to another drive will go to {zone}', { zone: next.zone }));
     } finally {
-      choose.disabled = false;
+      choose.disabled = Boolean(status && status.managed);
     }
   });
 
@@ -172,5 +175,6 @@
     draw();
     label();
   });
+  Managed.onChange(load);
   load();
 })();

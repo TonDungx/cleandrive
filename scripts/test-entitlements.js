@@ -174,6 +174,17 @@ console.log('\nentitlements: what never goes through can()\n');
     // `restore` are a terminal's Restore Center, held to its rule.
     'src/main/cli/commands/journal.js',
     'src/main/cli/commands/restore.js',
+    // The organisation's policy (H2): told which half applies, never asking.
+    // A view only that a lapsed licence could switch off would be a safety
+    // rail that depends on paying.
+    'src/main/policy/schema.js',
+    'src/main/policy/read.js',
+    'src/main/policy/interpret.js',
+    'src/main/policy/effective.js',
+    'src/main/policy/source.js',
+    'src/main/policy/store.js',
+    'src/main/policy/admx.js',
+    'src/main/cli/commands/policy.js',
   ];
   const offenders = mustNotGate.filter((rel) => /license\/(entitlements|state)/.test(fs.readFileSync(path.join(ROOT, rel), 'utf8')));
   check('the journal, the ledger, the purge and the Recycle Bin never consult a licence', offenders.length === 0,
@@ -194,19 +205,24 @@ console.log('\nentitlements: what never goes through can()\n');
   // works because the decision is made where the journal is built and handed
   // in: `services.js` asks `biz.audit`, the journal is given a sealer or not.
   const servicesSrc = fs.readFileSync(path.join(ROOT, 'src/main/services.js'), 'utf8');
+  // H2, the same split: which half of the policy applies is decided where
+  // the policy source is built, from biz.policy, and handed in.
+  check('whether the acting half of a policy applies is decided where the policy is read, from biz.policy',
+    /acting: canNow\(\)\('biz\.policy'\)/.test(servicesSrc) && /new PolicySource\(/.test(servicesSrc));
   check('whether to seal is decided where the journal is built, from biz.audit',
     /canNow\(\)\('biz\.audit'\)/.test(servicesSrc) && /new ActionJournal\([^)]*sealer/.test(servicesSrc));
   check('and the check of the seals is one of the Restore Center’s handlers, ungated',
     restoreBlock.includes("handle('journal:verify'"));
 
   // And on the command line, the table that decides: everything is behind
-  // biz.cli except reading the journal, putting things back, and describing
-  // the program -- and those are not asked about at all.
+  // biz.cli except reading the journal, putting things back, describing the
+  // program, and the organisation's policy (H2) -- whose tightening half
+  // applies to every copy, and whose other half is decided in services.js.
   const { COMMANDS } = require('../src/main/cli/args');
   const free = Object.entries(COMMANDS).filter(([, spec]) => spec.feature === null).map(([name]) => name).sort();
   const gated = Object.entries(COMMANDS).filter(([, spec]) => spec.feature !== null);
-  check('the command line never asks about journal, restore, version or help',
-    free.join(',') === 'help,journal,restore,version', free.join(','));
+  check('the command line never asks about journal, restore, policy, version or help',
+    free.join(',') === 'help,journal,policy,restore,version', free.join(','));
   check('and every other command needs biz.cli', gated.length > 0 && gated.every(([, spec]) => spec.feature === 'biz.cli'),
     gated.map(([name, spec]) => `${name}:${spec.feature}`).join(' '));
 }

@@ -58,6 +58,16 @@
     </header>
 
     <!--
+      What the organisation's policy holds on this computer (H2), in one line,
+      on every screen. Written by managed.js; the padlocks on each control say
+      which ones, this says why.
+    -->
+    <div class="managed-banner" id="managed-banner" role="status" hidden>
+      <span class="managed-mark managed-mark-lead" data-managed="banner"><span class="managed-text" data-i18n="policy.managed">Managed by your organisation</span></span>
+      <span class="managed-banner-text" id="managed-banner-text"></span>
+    </div>
+
+    <!--
       The sections, as a sidebar rather than a row of tabs.
 
       It can be dragged narrower, and below the width its labels need it keeps
@@ -669,6 +679,7 @@
         -->
         <div class="actionbar is-crowded" id="media-actionbar" hidden>
           <span class="actionbar-count" id="media-selection" data-i18n="app.nothingSelected">Nothing selected</span>
+          <span class="managed-mark" data-managed="viewOnly" hidden><span class="managed-text" data-i18n="policy.managed">Managed by your organisation</span></span>
           <span class="actionbar-gap"></span>
           <button class="btn btn-sm" id="media-select-filtered" data-i18n="media.selectShown">Select everything shown</button>
           <button class="btn btn-sm" id="media-select-none" hidden data-i18n="app.clearSelection">Clear selection</button>
@@ -873,6 +884,7 @@
           <button class="btn" id="chat-cancel" hidden data-i18n="app.stop">Stop</button>
           <button class="btn" id="chat-delete" hidden data-i18n="chat.delete">Move selected to Recycle Bin</button>
           <button class="btn btn-quiet" id="chat-quarantine" hidden data-i18n="chat.quarantine">Set aside instead…</button>
+          <span class="managed-mark" data-managed="viewOnly" hidden><span class="managed-text" data-i18n="policy.managed">Managed by your organisation</span></span>
           <span class="status" id="chat-status"></span>
         </div>
 
@@ -1178,6 +1190,7 @@
             <button class="btn btn-primary" id="auto-save" data-i18n="auto.save">Save settings</button>
             <button class="btn" id="auto-preview" data-i18n="auto.preview">Preview what it would delete</button>
             <button class="btn btn-danger" id="auto-run" data-i18n="auto.runNow">Run cleanup now…</button>
+            <span class="managed-mark" data-managed="run" hidden><span class="managed-text" data-i18n="policy.managed">Managed by your organisation</span></span>
             <button class="btn" id="auto-cancel" hidden data-i18n="app.stop">Stop</button>
             <span class="bar-state" id="auto-state" data-i18n="app.off">Off</span>
             <span class="spacer"></span>
@@ -1242,10 +1255,18 @@
 
         <div class="grid">
           <section class="card">
-            <h2 data-i18n="auto.scheduleTitle">Schedule</h2>
+            <div class="card-head">
+              <h2 data-i18n="auto.scheduleTitle">Schedule</h2>
+              <span class="managed-mark" data-managed="profile" hidden><span class="managed-text" data-i18n="policy.managed">Managed by your organisation</span></span>
+            </div>
+            <p class="card-note" data-managed-note="profile" hidden data-i18n="policy.profile.note">
+              This is your organisation’s profile. It runs for everyone who signs in to this computer, and only your
+              organisation can change it.
+            </p>
             <label class="check check-lead">
               <input type="checkbox" id="auto-enabled" />
               <span data-i18n="auto.enabled">Run cleanup automatically</span>
+              <span class="managed-mark" data-managed="automaticOff" hidden><span class="managed-text" data-i18n="policy.managed">Managed by your organisation</span></span>
             </label>
             <label class="check">
               <input type="checkbox" id="auto-dryrun" />
@@ -1335,7 +1356,10 @@
           </section>
 
           <section class="card">
-            <h2 data-i18n="auto.mayDeleteTitle">What it may delete</h2>
+            <div class="card-head">
+              <h2 data-i18n="auto.mayDeleteTitle">What it may delete</h2>
+              <span class="managed-mark" data-managed="categories" hidden><span class="managed-text" data-i18n="policy.managed">Managed by your organisation</span></span>
+            </div>
             <p class="card-note" data-i18n="auto.mayDeleteNote">
               Only categories the scan calls safe appear here. Anything marked “worth reviewing”
               is never deleted unattended, whatever this list says.
@@ -1370,6 +1394,7 @@
           <section class="card card-wide">
             <div class="card-head">
               <h2 data-i18n="auto.whitelistTitle">Never touch these</h2>
+              <span class="managed-mark" data-managed="protected" hidden><span class="managed-text" data-i18n="policy.managed">Managed by your organisation</span></span>
               <button class="btn btn-sm" id="auto-add-whitelist" data-i18n="app.addFolder">Add folder…</button>
             </div>
             <p class="card-note" data-i18n="auto.whitelistNote">
@@ -1395,7 +1420,10 @@
           </section>
 
           <section class="card">
-            <h2 data-i18n="purge.title">Freeing the space</h2>
+            <div class="card-head">
+              <h2 data-i18n="purge.title">Freeing the space</h2>
+              <span class="managed-mark" data-managed="viewOnly" hidden><span class="managed-text" data-i18n="policy.managed">Managed by your organisation</span></span>
+            </div>
             <label class="check check-lead">
               <input type="checkbox" id="purge-enabled" />
               <span data-i18n="purge.enabled">Permanently delete CleanDrive’s own recycled items after a grace period</span>
@@ -1716,7 +1744,10 @@
           </section>
 
           <section class="card" id="quarantine-card">
-            <h2 data-i18n="settings.quarantine.title">Move to another drive</h2>
+            <div class="card-head">
+              <h2 data-i18n="settings.quarantine.title">Move to another drive</h2>
+              <span class="managed-mark" data-managed="quarantine" hidden><span class="managed-text" data-i18n="policy.managed">Managed by your organisation</span></span>
+            </div>
             <p class="card-note" data-i18n="settings.quarantine.note">
               For files you may want back but not on this drive. Each one is copied to a folder on
               another drive and the copy is checked before the original is touched. Put them back
@@ -1756,6 +1787,7 @@
             <label class="check check-lead">
               <input type="checkbox" id="update-enabled" />
               <span data-i18n="update.enabled">Check for new versions</span>
+              <span class="managed-mark" data-managed="updates" hidden><span class="managed-text" data-i18n="policy.managed">Managed by your organisation</span></span>
             </label>
             <!-- This used to say "the only thing in this app that contacts the
                  internet". E4's map made that false, so it was changed rather
@@ -2130,6 +2162,8 @@
     <script src="candidates.js"></script>
     <script src="components.js"></script>
     <script src="app.js"></script>
+    <!-- After app.js, which defines `api`; before every screen, which asks it what is locked (H2). -->
+    <script src="managed.js"></script>
     <script src="roots.js"></script>
     <!-- Loaded before the screens: every one of them opens a file row. -->
     <script src="document.js"></script>
