@@ -68,15 +68,31 @@ function fakeJournal(log, { failAt = -1 } = {}) {
 
   console.log('\nactions: what can run\n');
 
-  check('the kinds with a handler so far: the Recycle Bin, another drive (B1), a whole folder to another drive (B2), NTFS compression (B4), OneDrive "free up space" (B3), a folder packed into one file (B5), and handing over to Windows (A1)',
-    ACTION_KINDS.filter((k) => handlerFor(k)).join(',') === 'recycle,quarantine,relocate,compress,dehydrate,archive,handoff',
+  // As of F4 every kind the contract names has a handler. That is worth
+  // asserting rather than assuming: the table in `handlers.js` is the only
+  // thing standing between an ActionKind and `execute` refusing it, and a
+  // kind added to the contract without one would fail silently at the point
+  // somebody pressed the button.
+  // `none` is the exception and always will be: it is how a candidate says it
+  // offers no action at all, so a handler for it would be a handler for doing
+  // nothing.
+  const ACTS = ACTION_KINDS.filter((k) => k !== 'none');
+  check('every kind the contract names has a handler (F4 was the last one without)',
+    ACTS.every((k) => handlerFor(k)),
+    ACTS.filter((k) => !handlerFor(k)).join(',') || `all ${ACTS.length}`);
+
+  check('the kinds with a handler: the Recycle Bin, another drive (B1), a whole folder to another drive (B2), NTFS compression (B4), OneDrive "free up space" (B3), a folder packed into one file (B5), joining copies into one file (F4), and handing over to Windows (A1)',
+    ACTION_KINDS.filter((k) => handlerFor(k)).join(',') === 'recycle,quarantine,relocate,compress,dehydrate,archive,hardlink,handoff',
     ACTION_KINDS.filter((k) => handlerFor(k)).join(','));
 
   {
     const shell = fakeShell();
-    // Was 'relocate' until B2 and 'compress' until B4. 'hardlink' is F4 and
-    // is the last kind in the contract with no handler.
-    const result = await execute({ kind: 'hardlink', items: files }, { deps: { shell } });
+    // This was 'relocate' until B2, 'compress' until B4 and 'hardlink' until
+    // F4 -- each time, the kind the contract named and no handler answered.
+    // There is no such kind left, so the check now uses one that was never in
+    // the contract at all: the refusal has to come from the handler table
+    // being consulted, not from the contract list happening to be short.
+    const result = await execute({ kind: 'shred', items: files }, { deps: { shell } });
     check('a kind with no handler is refused, not approximated',
       result.refused === 'unsupported' && shell.calls.length === 0);
   }

@@ -1336,6 +1336,78 @@ only small numbers count. `v2` is a version, but 2 of the 26 ending that way wer
 and send them to the Recycle Bin or to Quarantine like anything else. These
 never enter an automatic cleanup.
 
+### Joining copies into one file
+
+Off unless you switch it on in **Settings → Developer → Allow joining duplicate
+copies into one file**. It is the heaviest thing in the app and the only one
+that changes what a file *is*, so with the switch off the button does not exist
+at all — not greyed out, absent. It is part of Pro·Dev (`pro.dev`).
+
+**What it does.** The copies you tick stop being their own files and become
+extra names for the copy being kept. Nothing is deleted, nothing moves, every
+path goes on working, and the disk holds the contents once instead of three
+times. Unlike everything else on this screen, the space comes back
+*immediately* — there is no Recycle Bin standing between you and it.
+
+**What it costs.** The copies are now one file. Editing through one name
+changes what every name shows. Deleting one frees nothing until the last one is
+deleted. The confirmation says this, and you cannot press its button until you
+have scrolled the explanation to the end.
+
+**The failure mode, measured here rather than guessed at.** Some programs save
+a file by writing a new one over the top instead of writing into the one that
+is there. Word and Excel both do. A `.docx` written by Word, joined to a second
+name, then opened, edited and saved once:
+
+| | before | after one save |
+| --- | --- | --- |
+| `report.docx` | 13,457 B, shared | 13,540 B, **its own file again** |
+| `report-link.docx` | 13,457 B, shared | 13,457 B, **still the old contents** |
+
+The join silently comes apart, the space silently comes back, and nothing says
+so. Documents are skipped for that reason. But the rule underneath is not
+"Office" — measured on a joined pair: writing over a file **in place** keeps the
+join, and writing a temporary file and renaming it over the top **breaks** it.
+Any program doing an atomic save breaks it. The app cannot know which program
+will open a file later, so the list of skipped extensions is a stand-in for a
+rule it cannot express, and the dialog says so rather than letting the list look
+complete.
+
+**Also skipped:** copies on different drives (a hard link cannot cross one),
+drives that are not NTFS (asked by reading the volume, not assumed), anything
+inside OneDrive or another sync folder, anything in the folders the Photos
+screen manages, system locations, installed programs and network paths. The
+confirmation counts every refusal and says what each one was.
+
+**It re-reads both files before joining them.** The window sends pairs, but a
+hash from a scan minutes old is a claim about a file as it was — and joining on
+a stale claim destroys the copy. Both files are read and hashed again inside
+the same pass, and again immediately before the link is made.
+
+**Undoing it** is in the Restore Center, listed like any other session. Each
+name is split back into a file of its own, which needs room for a full copy of
+each. What it restores is their *separateness*, not their old contents: the
+copy's original bytes were freed the moment it was joined, so anything written
+while the names were joined is what every copy ends up with. The Restore Center
+says so.
+
+**It needs no administrator rights.** Hard links never have, unlike symbolic
+links.
+
+### Copies that are already one file
+
+Whether or not you ever use the button above, some files on a disk already
+share one file — a package manager, a backup tool or an installer may have done
+it. Those names hold identical bytes, so they are duplicates by every test this
+screen applies, and deleting one of them frees **nothing**.
+
+The screen counts files, not rows. A group of three names that are one file
+reads `0 B reclaimable`, each of its rows is tagged **one file · 3 names**
+instead of *identical*, and none of them counts towards the Reclaimable total
+at the top. The check costs nothing on an ordinary scan: the number of names a
+file has arrives with the information the scan already reads, and only groups
+that contain such a file are looked at a second time.
+
 ### Files in use stay visible and are never bulk-selected
 
 A copy is marked as a program component when its path runs through a dependency
@@ -1864,6 +1936,7 @@ are now**:
 | *in quarantine* | [Moved to another drive](#moving-to-another-drive-instead): its copy is in the quarantine folder, the size the journal recorded |
 | *not in the folder* | That copy is no longer in the quarantine folder — removed outside the app |
 | *drive not connected* | The drive it was on — or, for a quarantine, the drive its copy is on — is not there, so nothing can be said about it |
+| *one file with others* | [Joined into one file](#joining-copies-into-one-file): this name and at least one other still lead to the same file |
 
 That column is read from the disk every time the tab opens, not taken from the
 journal. The journal says what the app did; only the disk says what is true now,
@@ -1879,6 +1952,15 @@ A file moved to another drive comes back by copy: it is copied home, checked
 against the hash taken when it was quarantined, and only then taken out of the
 quarantine folder. A copy that no longer matches is not put back. Its original,
 if still in the Recycle Bin, is left there.
+
+A name that was joined into one file is the odd one here, because it never went
+anywhere: it is at its own path and always has been. What is put back is its
+*separateness* — the contents are copied beside it, checked, and moved over the
+top, which takes the name off the shared file and needs room for a full copy.
+That also means it restores separateness and not history: the copy's own bytes
+were freed the moment it was joined, so if anything wrote to the shared file in
+the meantime, every name ends up with an independent copy of the newer
+contents.
 
 When a file has appeared at the old path since, the confirmation asks rather
 than choosing: **keep both** (the restored one comes back as `name (restored)`),
@@ -2045,6 +2127,10 @@ Small on purpose. **Nothing in Settings changes what the app deletes**, with one
 exception, off until you switch it on: *Delete the original*, on the card for
 [moving files to another drive](#moving-to-another-drive-instead).
 
+One card does something different again: **Developer** does not change what any
+action does, it decides whether an action is offered at all. Its single switch
+is off out of the box and stays off when the app updates.
+
 | Card | What it holds |
 | --- | --- |
 | **Appearance** | Light, dark, follow the system, or your own colours |
@@ -2055,6 +2141,7 @@ exception, off until you switch it on: *Delete the original*, on the card for
 | **Company while scanning** | Which animal walks the progress bar, or none |
 | **Scan history** | How many folder snapshots to keep: the newest few, plus one a month |
 | **Move to another drive** | Where moved files go, how many days before the app mentions they are still there, the most that folder may hold, and *Delete the original* |
+| **Developer** | One switch, off: whether the Duplicates screen may [join copies into one file](#joining-copies-into-one-file) |
 | **Version and updates** | Which version you are running, the update controls, and the introduction again |
 
 The version lives here because "which version am I running" is the first thing

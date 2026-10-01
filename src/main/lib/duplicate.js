@@ -7,6 +7,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 
 const { CancelToken, pool, throttle, pathKey, isHiddenName, NOISE_DIR_NAMES } = require('./util');
+const hardlink = require('./hardlink');
 const { collectFiles } = require('./scanner');
 const { programComponentReason } = require('./advisor');
 const folderDupes = require('./folder-dupes');
@@ -414,6 +415,10 @@ async function findDuplicates(roots, options = {}, handlers = {}) {
           size: f.size,
           mtimeMs: f.mtimeMs,
           atimeMs: f.atimeMs,
+          // How many names this file has, straight off the walk's own stat.
+          // One is the ordinary answer; more means some of these rows are the
+          // same file already, and pass 3b works out which (F4).
+          links: Number.isFinite(f.links) ? f.links : 1,
           keeper: i === 0,
           protected: protectionReason !== null,
           protectionReason,
@@ -431,6 +436,13 @@ async function findDuplicates(roots, options = {}, handlers = {}) {
         hash,
         size: bucket[0].size,
         count: bucket.length,
+        // How many files these names actually lead to, and what that makes
+        // the group worth. Both are filled in by pass 3b, which is the only
+        // place that knows whether any of these rows are already one file.
+        // Until then they read as though every name were its own file, which
+        // is what they always were before F4 and is right for nearly every
+        // group.
+        distinctFiles: bucket.length,
         wastedBytes: bucket[0].size * (bucket.length - 1),
         // What "select all but the oldest copy" would actually reclaim here.
         selectableBytes: bucket[0].size * removable.length,
@@ -441,6 +453,25 @@ async function findDuplicates(roots, options = {}, handlers = {}) {
       });
     }
   }
+
+  /* --- pass 3b: which of these "copies" are already one file (F4) -------- */
+  //
+  // Everything above this line groups by *contents*. That is the right answer
+  // to "are these the same bytes" and the wrong answer to "how much would
+  // deleting them give back", because a hard link makes several names share
+  // one file and deleting one of them frees nothing at all.
+  //
+  // Before F4 nothing in this file had any notion of that, so the screen
+  // happily offered to reclaim space that was not there. F4 can *create* that
+  // situation deliberately, which would have turned a latent wrong number into
+  // one the app produces itself and then shows back to the user on the next
+  // scan. So the count of real files is settled here, once, for every group.
+  //
+  // The cost is bounded by design: `nlink` arrives free on the `lstat` the
+  // walk already pays for, so only the groups that contain a file with more
+  // than one name are read again -- and those are rare. On this machine a
+  // whole-drive scan touches this second read for a handful of files.
+  await resolveSharedFiles(groups, token);
 
   groups.sort((a, b) => b.wastedBytes - a.wastedBytes);
 
@@ -474,6 +505,82 @@ async function findDuplicates(roots, options = {}, handlers = {}) {
   return finish(token.cancelled, groups, folderResult, versionResult);
 
   /* ----------------------------------------------------------------------- */
+
+  /**
+   * Fill in, for every group, how many *files* its names actually lead to.
+   *
+   * A group of three names that are all one file wastes nothing; a group of
+   * three names that are three files wastes two copies' worth. Every figure
+   * the screen shows about reclaimable space is computed from this rather
+   * than from how many rows there are.
+   *
+   * Each file also learns which of its siblings it already shares a file
+   * with, so the screen can say so on the row instead of offering an action
+   * that would free nothing.
+   */
+  async function resolveSharedFiles(list, cancel) {
+    for (const group of list) {
+      if (cancel.cancelled) return;
+
+      // `nlink` came off the walk's own stat. One name means one file, and a
+      // group where every member has one name needs no further reads -- which
+      // is nearly all of them.
+      const linked = group.files.filter((f) => Number.isFinite(f.links) && f.links > 1);
+      if (linked.length === 0) {
+        for (const file of group.files) file.sharesWith = [];
+        group.distinctFiles = group.files.length;
+        settleBytes(group);
+        continue;
+      }
+
+      const identities = await hardlink.identifyAll(group.files.map((f) => f.path));
+      const byFile = hardlink.groupByFile(identities);
+
+      for (const file of group.files) {
+        const key = hardlink.fileKey(identities.get(file.path));
+        const names = key ? byFile.get(key) || [] : [];
+        file.sharesWith = names.filter((n) => n !== file.path);
+      }
+
+      // Names whose file could not be read at all still count as themselves:
+      // refusing to count them would understate the waste, and this figure is
+      // the one the screen promises against.
+      const unknown = group.files.filter((f) => !identities.get(f.path)).length;
+      group.distinctFiles = byFile.size + unknown;
+      settleBytes(group);
+    }
+  }
+
+  /**
+   * What a group is worth, given how many files its names really lead to.
+   *
+   * `wastedBytes` is the whole screen's promise -- it is what the "Reclaimable"
+   * figure adds up -- so it counts files, not rows. `selectableBytes` is the
+   * narrower promise made by "select all but the oldest copy", so it counts
+   * only the copies that button would tick *and* that would actually release
+   * something: a copy already sharing the keeper's file releases nothing when
+   * it goes.
+   */
+  function settleBytes(group) {
+    const size = group.size;
+    group.wastedBytes = size * Math.max(0, group.distinctFiles - 1);
+
+    const keeper = group.files.find((f) => f.keeper);
+    const keeperShares = new Set(keeper ? [keeper.path, ...(keeper.sharesWith || [])] : []);
+    const releasing = new Set();
+    for (const file of group.files) {
+      if (file.keeper || file.protected) continue;
+      if (keeperShares.has(file.path)) continue;
+      // Two copies that share a file with each other, and not with the keeper,
+      // release one copy's worth between them however many rows they are.
+      const key = [file.path, ...(file.sharesWith || [])].sort()[0];
+      releasing.add(key);
+    }
+    group.selectableBytes = size * releasing.size;
+    // True when every name here is already the same file: nothing to reclaim,
+    // and nothing for F4 left to do.
+    group.allOneFile = group.distinctFiles === 1 && group.count > 1;
+  }
 
   /**
    * The full hash of one file, for the folder pass.

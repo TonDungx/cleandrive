@@ -996,6 +996,200 @@ app.whenReady().then(async () => {
         fs.rmSync(f3Root, { recursive: true, force: true });
       }
     }
+    /* -- joining copies into one file (F4) -------------------------------- */
+    //
+    // Placed after every other block that leans on the Duplicates screen,
+    // because it scans a fixture of its own and leaves the screen showing that
+    // fixture. A new block that re-scans has to come after the ones that
+    // depend on what was scanned before it -- a lesson this suite has already
+    // learned once.
+    console.log('\nJoining copies into one file (F4):');
+
+    {
+      const js = (expr) => win.webContents.executeJavaScript(expr);
+
+      // On D:, like every other fixture here that reasons about volumes: the
+      // harness temp directory is inside AppData on C:, so a check about two
+      // files being on one drive would otherwise be run against a different
+      // drive from the one it names.
+      const f4Home = fs.existsSync('D:\\') ? 'D:\\' : os.tmpdir();
+      const f4Root = fs.mkdtempSync(path.join(f4Home, 'cleandrive-smoke-f4-'));
+      const folderBefore = await js('state.folder || null');
+      const body = Buffer.alloc(300 * 1024, 0x46);
+
+      try {
+        // All four hold the same bytes, so they are one group. Which of them
+        // is "the copy being kept" is decided by age, and four files written
+        // in the same millisecond fall back to sorting by name -- which made
+        // `copy.bin` the keeper and left the test ticking the one row that has
+        // nothing to be joined to. So the ages are set, not left to chance.
+        for (const [name, ageDays] of [['keep.bin', 40], ['copy.bin', 3], ['original.docx', 30], ['report.docx', 2]]) {
+          const file = path.join(f4Root, name);
+          fs.writeFileSync(file, body);
+          const when = new Date(Date.now() - ageDays * 86400000);
+          fs.utimesSync(file, when, when);
+        }
+
+        /* -- the switch, and what it reveals -- */
+        await js('document.querySelector(\'.tab[data-tab="settings"]\').click()');
+        await until(win, 'document.getElementById("developer-hardlink") !== null');
+
+        const off = await js(`({
+          checked: document.getElementById('developer-hardlink').checked,
+          line: document.getElementById('developer-hardlink-state').textContent,
+          buttonHidden: document.getElementById('hardlink-dupes').hidden,
+        })`);
+        check('the switch is off until somebody turns it on', off.checked === false);
+        check('and the line under it says what that means', off.line.length > 0, off.line);
+        check('with it off there is no join button at all, not a greyed-out one', off.buttonHidden === true);
+
+        await js(`(() => {
+          const box = document.getElementById('developer-hardlink');
+          box.checked = true;
+          box.dispatchEvent(new Event('change'));
+        })()`);
+        await until(win, 'document.getElementById("hardlink-dupes").hidden === false', 20000);
+
+        const saved = await js(`(async () => {
+          const out = await api.getSettings();
+          const s = out && out.data ? out.data : out;
+          return {
+            stored: Boolean(s && s.settings && s.settings.developer && s.settings.developer.hardlink),
+            line: document.getElementById('developer-hardlink-state').textContent,
+          };
+        })()`);
+        check('turning it on is written to settings, not only to the page', saved.stored === true);
+        check('and the line changes to say so', saved.line !== off.line, saved.line);
+
+        /* -- scan the fixture -- */
+        await js(`(() => {
+          setFolder(${JSON.stringify(f4Root)});
+          document.querySelector('.tab[data-tab="dupes"]').click();
+          document.getElementById('min-size').value = '102400';
+          document.getElementById('run-dupes').click();
+        })()`);
+        await until(win, 'document.getElementById("cancel-dupes").hidden === true', 90000);
+
+        /* -- the button follows the selection, like every other button here -- */
+        const picked = await js(`(() => {
+          const rows = [...document.querySelectorAll('#dupe-groups .file-row')];
+          const copy = rows.find((r) => /copy\\.bin/.test(r.textContent));
+          if (copy) copy.querySelector('input[type=checkbox]').click();
+          return {
+            found: Boolean(copy),
+            joinEnabled: document.getElementById('hardlink-dupes').disabled === false,
+          };
+        })()`);
+        check('the copy is on the screen', picked.found === true);
+        check('and ticking it turns the join button on', picked.joinEnabled === true);
+
+        const withDoc = await js(`(() => {
+          const rows = [...document.querySelectorAll('#dupe-groups .file-row')];
+          const doc = rows.find((r) => /report\\.docx/.test(r.textContent));
+          if (doc) doc.querySelector('input[type=checkbox]').click();
+          return { found: Boolean(doc), enabled: document.getElementById('hardlink-dupes').disabled === false };
+        })()`);
+        check('a Word document can still be ticked -- refusing it is the main process\u2019s job, not the button\u2019s',
+          withDoc.found === true && withDoc.enabled === true);
+
+        /* -- the confirmation, and the gate on it -- */
+        await js('document.getElementById("hardlink-dupes").click()');
+        await until(win, 'document.getElementById("hardlink").open === true', 90000);
+
+        const opened = await js(`({
+          goDisabled: document.getElementById('hardlink-go').disabled,
+          lead: document.getElementById('hardlink-lead').textContent,
+          rows: document.querySelectorAll('#hardlink-list .hardlink-row').length,
+          refusals: document.getElementById('hardlink-refusals').textContent,
+          end: document.getElementById('hardlink-end').textContent,
+          scrollable:
+            document.getElementById('hardlink-body').scrollHeight >
+            document.getElementById('hardlink-body').clientHeight + 2,
+        })`);
+        check('the explanation is long enough that it has to be scrolled', opened.scrollable === true);
+        check('and the button starts switched off', opened.goDisabled === true);
+        check('it says how many copies and how much space', /1/.test(opened.lead), opened.lead);
+        check('it lists the pair it would join', opened.rows === 1, String(opened.rows));
+        check('and says the document was left alone, in words rather than as a number',
+          /document|t\u00e0i li\u1ec7u/i.test(opened.refusals), opened.refusals);
+
+        // Forty pixels short of the end, not a fraction of the height: how far
+        // this body can actually scroll depends on the window, and a third of
+        // its *height* can be past the end of a body with only a little room
+        // to move. What is being checked is "not at the end is still locked",
+        // so the test has to stop somewhere that is definitely not the end.
+        const halfway = await js(`(() => {
+          const el = document.getElementById('hardlink-body');
+          const room = el.scrollHeight - el.clientHeight;
+          el.scrollTop = Math.max(0, room - 40);
+          el.dispatchEvent(new Event('scroll'));
+          return { locked: document.getElementById('hardlink-go').disabled, room };
+        })()`);
+        check('stopping short of the end leaves it locked', halfway.locked === true,
+          `${halfway.room}px of scroll, stopped 40px short`);
+
+        const atEnd = await js(`(() => {
+          const el = document.getElementById('hardlink-body');
+          el.scrollTop = el.scrollHeight;
+          el.dispatchEvent(new Event('scroll'));
+          return {
+            disabled: document.getElementById('hardlink-go').disabled,
+            end: document.getElementById('hardlink-end').textContent,
+          };
+        })()`);
+        check('reaching the end unlocks it', atEnd.disabled === false);
+        check('and the line says so rather than leaving it to be noticed', atEnd.end !== opened.end, atEnd.end);
+
+        /* -- do it -- */
+        await js('document.getElementById("hardlink-go").click()');
+        await until(win, 'document.getElementById("hardlink").open === false', 20000);
+        await until(win, 'document.getElementById("delete-progress").hidden === true', 90000);
+
+        const copyStat = fs.statSync(path.join(f4Root, 'copy.bin'), { bigint: true });
+        const keepStat = fs.statSync(path.join(f4Root, 'keep.bin'), { bigint: true });
+        const docStat = fs.statSync(path.join(f4Root, 'report.docx'), { bigint: true });
+
+        check('the copy and the copy being kept are now one file',
+          copyStat.ino === keepStat.ino && Number(copyStat.nlink) === 2, `nlink=${copyStat.nlink}`);
+        check('nothing was deleted -- both paths still hold the whole file',
+          fs.readFileSync(path.join(f4Root, 'copy.bin')).length === body.length &&
+          fs.readFileSync(path.join(f4Root, 'keep.bin')).length === body.length);
+        check('and the Word document was left exactly as it was', Number(docStat.nlink) === 1);
+
+        const after = await js(`({
+          waste: document.getElementById('dstat-waste').textContent,
+          joinedRowTickable: (() => {
+            const rows = [...document.querySelectorAll('#dupe-groups .file-row')];
+            const copy = rows.find((r) => /copy\\.bin/.test(r.textContent));
+            if (!copy) return 'gone';
+            const box = copy.querySelector('input[type=checkbox]');
+            return box ? String(!box.disabled) : 'none';
+          })(),
+        })`);
+        // 300 KB was the promise before; afterwards there is nothing left in
+        // this group to reclaim, and the screen has to stop saying otherwise.
+        check('the screen stops promising the space it has just given back',
+          !/300|307/.test(after.waste), after.waste);
+
+        const sessions = await js(`(async () => {
+          const out = await api.journalSessions();
+          const list = (out && out.data ? out.data : out) || [];
+          const joins = list.filter((s) => s.kind === 'hardlink');
+          return { count: joins.length, restorable: joins[0] ? joins[0].restorable.count : -1 };
+        })()`);
+        check('the Restore Center lists the join as a session of its own', sessions.count === 1);
+        check('and says it can be put back, rather than listing it and then refusing',
+          sessions.restorable === 1, String(sessions.restorable));
+      } finally {
+        await js(`(() => {
+          const box = document.getElementById('developer-hardlink');
+          if (box && box.checked) { box.checked = false; box.dispatchEvent(new Event('change')); }
+        })()`);
+        if (folderBefore) await js(`setFolder(${JSON.stringify(folderBefore)})`);
+        fs.rmSync(f4Root, { recursive: true, force: true });
+      }
+    }
+
     /* -- photos and video ------------------------------------------------ */
     //
     // Driven against a tree this harness builds, not against whatever the

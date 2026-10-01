@@ -51,8 +51,12 @@ const themePalette = require('../../shared/theme-palette');
  *            did, off (G3)
  *   8 -> 9   `backup.destination`: where a copy goes before files are
  *            deleted from the Photos screen, or null (E2)
+ *   9 -> 10  known apps' caches gain Zalo, by the same rule version 3 used
+ *            when Chrome and Edge arrived (D3)
+ *  10 -> 11  `developer.hardlink`: the hidden switch in front of joining
+ *            duplicate copies into one file, off (F4)
  */
-const SCHEMA_VERSION = 10;
+const SCHEMA_VERSION = 11;
 
 const MIGRATIONS = Object.freeze([
   {
@@ -200,6 +204,20 @@ const MIGRATIONS = Object.freeze([
       };
     },
   },
+  {
+    from: 10,
+    to: 11,
+    migrate(raw) {
+      // F4. Off for everybody, including anybody who had been running the app
+      // for a year: this is the only action that changes what a file *is*, and
+      // a migration is not consent.
+      return {
+        ...raw,
+        version: 11,
+        developer: { hardlink: false, ...(isObject(raw.developer) ? raw.developer : {}) },
+      };
+    },
+  },
 ]);
 
 /**
@@ -323,7 +341,7 @@ const LANGUAGES = ['system', ...i18n.CODES];
 /** The top-level groups `patch` merges one level into. */
 const SECTIONS = [
   'autoClean', 'purge', 'monitor', 'appearance', 'updates',
-  'trends', 'snapshots', 'quarantine', 'backup', 'explorer',
+  'trends', 'snapshots', 'quarantine', 'backup', 'explorer', 'developer',
 ];
 
 /** Hard ceilings. These are not preferences -- they bound the blast radius. */
@@ -516,6 +534,17 @@ function defaults() {
       // Explorer's right-click menu (I3). Off by default (decided 2026-09-25):
       // the app writes nothing to the registry until somebody asks it to.
       contextMenu: false,
+    },
+    developer: {
+      // Joining duplicate copies into one file (F4). Off, and it is the one
+      // setting in this file that guards an action rather than a preference:
+      // with it off, `ipc.js` refuses the request outright and the button on
+      // the Duplicates screen is not drawn at all.
+      //
+      // It is not a licence check -- `pro.dev` is that, and it is separate.
+      // This is the second of three gates, and the third is a confirmation
+      // that has to be scrolled to the end before it can be accepted.
+      hardlink: false,
     },
     updates: {
       // On by default. This is distributed to people with no support channel,
@@ -1062,6 +1091,9 @@ function coerceSettings(input, { minMinutes = 1 } = {}) {
       backup: { destination: backupDestination },
       explorer: {
         contextMenu: bool(isObject(raw.explorer) ? raw.explorer.contextMenu : undefined, base.explorer.contextMenu),
+      },
+      developer: {
+        hardlink: bool(isObject(raw.developer) ? raw.developer.hardlink : undefined, base.developer.hardlink),
       },
     },
     warnings,

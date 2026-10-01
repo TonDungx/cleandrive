@@ -670,12 +670,51 @@ const bars = {
   dupes: ActionBar({
     root: $('dupes-actionbar'),
     readout: $('selection-status'),
-    buttons: { quarantine: $('quarantine-dupes'), recycle: $('delete-dupes') },
+    // `hardlink` (F4) is here so the one rule that decides every other button
+    // decides this one too: offered only when every ticked row allows it. Its
+    // *visibility* is separate and belongs to hardlink.js, which hides it
+    // entirely unless Settings -> Developer switched it on.
+    buttons: { quarantine: $('quarantine-dupes'), recycle: $('delete-dupes'), hardlink: $('hardlink-dupes') },
     // The file groups, plus the files inside a folder that is a copy (F2).
     // `selectedIn` drops a path it has already seen, so a file that is both
     // is counted once.
     selected: () => selectedIn(dupeGroupsForSelection(), state.selectedDupes),
+    // Joining needs a pair. A ticked row that is itself the copy being kept,
+    // or that already shares a file with it, has nothing to join to -- and a
+    // button that lights up for those is a button that does nothing.
+    usable: { hardlink: () => window.selectedDupePairs().length > 0 },
   }),
+};
+
+/**
+ * The ticked copies that could be joined into one file, each with the copy it
+ * would be joined to (F4).
+ *
+ * The pair is the unit of work, and a path on its own does not say which group
+ * it came from -- so this walks the groups rather than the selection. Only the
+ * *file* groups are offered: a folder group's rows are files inside two
+ * folders that match, and "the copy being kept" there is a folder, which is
+ * not something a hard link can be made of.
+ *
+ * Rows that already share a file with the keeper are left out. They are the
+ * state the button is trying to reach, so offering them would be offering to
+ * do nothing.
+ */
+window.selectedDupePairs = () => {
+  const out = [];
+  const seen = new Set();
+  for (const group of (state.dupes && state.dupes.groups) || []) {
+    const keeper = group.files.find((f) => f.keeper);
+    if (!keeper) continue;
+    for (const file of group.files) {
+      if (file.keeper || file.protected) continue;
+      if (!state.selectedDupes.has(file.path) || seen.has(file.path)) continue;
+      if ((file.sharesWith || []).includes(keeper.path)) continue;
+      seen.add(file.path);
+      out.push({ path: file.path, keeper: keeper.path, bytes: file.size || 0 });
+    }
+  }
+  return out;
 };
 
 /** Everything on the Duplicates screen a tick can land on: files, then folders. */
@@ -1727,9 +1766,20 @@ function renderGroup(group) {
       onChange: updateSelectionStatus,
       meta: (file) => (file.protected ? `${timeLabel(file)} · ${tm(file.protectionReason)}` : timeLabel(file)),
       // Every copy says why it is where it is: the oldest, one an installed
-      // program uses, or simply identical -- which is the one thing on this
-      // screen the app is certain of.
+      // program uses, already another name for one of the others, or simply
+      // identical -- which is the one thing on this screen the app is certain
+      // of.
       badge: (file) => {
+        // Already one file with something else here (F4). The group header
+        // above says "0 B reclaimable", but a row that says only "identical"
+        // still reads as a copy worth deleting, and deleting it would free
+        // nothing. The screenshots showed exactly that gap.
+        if ((file.sharesWith || []).length > 0) {
+          return evidencePill(file, {
+            className: 'badge badge-confidence badge-button',
+            text: t('dupes.sharedNames', 'one file · {n} names', { n: formatCount(file.sharesWith.length + 1) }),
+          });
+        }
         if (file.protected) {
           return evidencePill(file, {
             className: 'badge badge-protected badge-button',
@@ -1854,6 +1904,82 @@ const onDupesAction = (kind) => async () => {
 $('delete-dupes').addEventListener('click', onDupesAction('recycle'));
 $('quarantine-dupes').addEventListener('click', onDupesAction('quarantine'));
 
+/**
+ * What the Duplicates screen looks like after copies have been joined (F4).
+ *
+ * Nothing was deleted, so no row goes away -- which is exactly why this has to
+ * be done rather than left alone. The rows are still there and still hold
+ * identical bytes, but they are no longer separate files, so every figure
+ * about reclaimable space is now wrong by the amount that was just freed. A
+ * screen that went on offering to reclaim it would be making a promise the
+ * disk can no longer keep, and the next scan would repeat it.
+ *
+ * So each joined row learns what it now shares a file with, loses its buttons,
+ * and stops counting towards the group's waste -- the same shape the engine
+ * produces from a cold scan, so the screen reads identically either way.
+ */
+window.rescanDupesAfterHardlink = (joined) => {
+  if (!state.dupes || !Array.isArray(joined) || joined.length === 0) return;
+  const keeperOf = new Map(joined.map((one) => [one.path, one.to]));
+
+  state.dupes.groups = state.dupes.groups.map((group) => {
+    if (!group.files.some((f) => keeperOf.has(f.path))) return group;
+
+    /*
+     * Which names are now one file.
+     *
+     * "Shares a file with" is transitive -- join B to A and C to A and all
+     * three are one file, though nobody joined B to C -- so this is the
+     * connected components of the pairs, not a pass over them. Doing it the
+     * short way would leave B and C each claiming two names for a file that
+     * has three, and the group's count of real files would come out wrong.
+     */
+    const parent = new Map(group.files.map((f) => [f.path, f.path]));
+    const find = (x) => {
+      while (parent.get(x) !== x) {
+        parent.set(x, parent.get(parent.get(x)));
+        x = parent.get(x);
+      }
+      return x;
+    };
+    const union = (a, b) => {
+      if (!parent.has(a) || !parent.has(b)) return;
+      const [ra, rb] = [find(a), find(b)];
+      if (ra !== rb) parent.set(ra, rb);
+    };
+    // What the scan already knew, plus what was just done.
+    for (const file of group.files) for (const other of file.sharesWith || []) union(file.path, other);
+    for (const [copy, keeper] of keeperOf) union(copy, keeper);
+
+    const members = new Map();
+    for (const file of group.files) {
+      const root = find(file.path);
+      if (!members.has(root)) members.set(root, []);
+      members.get(root).push(file.path);
+    }
+
+    const files = group.files.map((file) => {
+      const sharesWith = (members.get(find(file.path)) || []).filter((p) => p !== file.path);
+      return { ...file, sharesWith, links: sharesWith.length + 1 };
+    });
+    const distinctFiles = members.size;
+
+    return {
+      ...group,
+      files,
+      distinctFiles,
+      wastedBytes: group.size * Math.max(0, distinctFiles - 1),
+      selectableBytes: group.size * Math.max(0, distinctFiles - 1),
+      allOneFile: distinctFiles === 1 && files.length > 1,
+    };
+  });
+
+  state.dupes.reclaimableBytes = state.dupes.groups.reduce((n, g) => n + g.wastedBytes, 0);
+  state.selectedDupes.clear();
+  renderDupes(state.dupes);
+  if (window.SpaceMap) window.SpaceMap.refresh();
+};
+
 /* ------------------------------------------------------------------ delete */
 
 /** "about 2 minutes" / "about 1 hour 38 minutes" -- for a wait, not a duration stat. */
@@ -1910,6 +2036,7 @@ const DELETE_BUTTONS = [
   'quarantine-cleanup',
   'quarantine-dupes',
   'media-quarantine',
+  'hardlink-dupes',
 ];
 
 const progressPanel = {

@@ -728,6 +728,10 @@
           <span class="actionbar-count" id="selection-status" data-i18n="app.nothingSelected">Nothing selected</span>
           <span class="actionbar-gap"></span>
           <button class="btn btn-sm quarantine-go" id="quarantine-dupes" disabled>Move to another drive</button>
+          <!-- F4. Hidden entirely unless Settings -> Developer switches it on:
+               an action this heavy should not be a greyed-out button people
+               wonder about. hardlink.js shows and hides it. -->
+          <button class="btn btn-sm" id="hardlink-dupes" hidden disabled data-i18n="hardlink.button">Join into one file</button>
           <button class="btn btn-danger btn-sm" id="delete-dupes" disabled data-i18n="app.moveSelected">Move selected to Recycle Bin</button>
         </div>
         <p class="empty" id="dupes-empty" hidden></p>
@@ -1577,6 +1581,33 @@
             </div>
           </section>
 
+          <!--
+            Settings -> Developer (F4). One switch, and the only one in this
+            app that unlocks an *action* rather than changing a preference.
+            It is written out at length because somebody who turns it on
+            without reading it is exactly the person it protects.
+          -->
+          <section class="card card-wide" id="developer-card">
+            <h2 data-i18n="developer.title">Developer</h2>
+            <p class="card-note" data-i18n="developer.note">
+              Things that are useful if you know exactly what they do, and a nuisance otherwise.
+              Everything here is off until you switch it on.
+            </p>
+            <label class="check check-lead">
+              <input type="checkbox" id="developer-hardlink" />
+              <span data-i18n="developer.hardlink.enable">Allow joining duplicate copies into one file</span>
+            </label>
+            <p class="card-note" data-i18n="developer.hardlink.note">
+              Adds a third button to the Duplicates screen. It makes the copies you pick into
+              extra names for one file, so the disk holds the contents once. Nothing is deleted
+              and every name keeps working. Editing through one name then changes what all of
+              them show, and deleting one frees nothing until the last one goes. It only works
+              between copies on the same NTFS drive, and it skips documents, files in a sync
+              folder and files the Photos screen manages.
+            </p>
+            <p class="card-note" id="developer-hardlink-state" aria-live="polite"></p>
+          </section>
+
           <!-- Explorer's right-click menu (I3). explorer.js draws the state,
                which is read back from the registry, not from the setting. -->
           <section class="card" id="explorer-card">
@@ -1908,6 +1939,63 @@
       </div>
     </dialog>
 
+    <!--
+      F4's confirmation: the one dialog in this app that is not a native
+      message box.
+
+      The roadmap asks for an explanation that has to be scrolled all the way
+      through before the button works, and `dialog.showMessageBox` has no way
+      to do that. So it is here, and `hardlink.js` keeps the button disabled
+      until the text below has actually reached its end.
+
+      `data-i18n` is on the fixed prose only. Everything with a number in it is
+      written by hardlink.js and re-written on a language change, because a
+      `data-i18n` on an element JavaScript fills wipes it out the moment the
+      language switches -- which this project has now walked into three times.
+    -->
+    <dialog class="shortcuts hardlink-dialog" id="hardlink" aria-labelledby="hardlink-title">
+      <div class="shortcuts-head">
+        <h2 id="hardlink-title" data-i18n="hardlink.dialog.title">Join these copies into one file?</h2>
+        <span class="spacer"></span>
+        <button class="btn btn-sm" id="hardlink-cancel" data-i18n="app.cancel">Cancel</button>
+        <button class="btn btn-danger btn-sm" id="hardlink-go" disabled></button>
+      </div>
+      <div class="shortcuts-body hardlink-body" id="hardlink-body" tabindex="0">
+        <p class="hardlink-lead" id="hardlink-lead"></p>
+        <p class="notice notice-warn" data-i18n="hardlink.dialog.warn">
+          After this, the copies are one file. Editing one edits them all. Deleting one frees
+          nothing until every one of them is deleted.
+        </p>
+        <p class="card-note" data-i18n="hardlink.dialog.what">
+          Nothing is deleted and nothing moves. Each copy you picked stops being its own file and
+          becomes another name for the copy being kept. Every path goes on working, and every
+          program that opens one sees exactly what it saw before.
+        </p>
+        <p class="card-note" data-i18n="hardlink.dialog.measured">
+          There is one way this goes wrong quietly, and it was measured on this computer rather
+          than guessed at. Some programs save a file by writing a new one over the top instead of
+          writing into the one that is there. Word and Excel both do. When that happens the join
+          silently comes apart: the copy you saved keeps your changes, the other names stay at the
+          old contents, and the space comes back without anything saying so. Documents are skipped
+          for that reason — but the app cannot know how every program on your computer saves, so
+          this is a real limit and not a solved problem.
+        </p>
+        <p class="card-note" data-i18n="hardlink.dialog.skipped">
+          Also skipped: copies on different drives, drives that are not NTFS, anything inside
+          OneDrive or another sync folder, and anything in the folders the Photos screen manages.
+        </p>
+        <p class="card-note" data-i18n="hardlink.dialog.undo">
+          You can undo this from the Restore Center, which splits each name back into a file of
+          its own and needs room for a full copy of each. What it restores is their separateness,
+          not their old contents: anything written while they were joined is what every copy will
+          have.
+        </p>
+        <div id="hardlink-list" class="hardlink-list"></div>
+        <p class="card-note" id="hardlink-refusals" hidden></p>
+        <p class="hardlink-end" id="hardlink-end"></p>
+      </div>
+    </dialog>
+
     <script src="sidebar.js"></script>
     <script src="critters.js"></script>
     <script src="candidates.js"></script>
@@ -1946,6 +2034,9 @@
     <script src="theme-editor.js"></script>
     <!-- Explorer's right-click menu, in Settings. -->
     <script src="explorer.js"></script>
+    <!-- Joining duplicate copies (F4): the switch in Settings, the button on
+         the Duplicates screen, and the confirmation between them. -->
+    <script src="hardlink.js"></script>
     <!-- The introduction, last: it opens over a window that is already built. -->
     <script src="intro.js"></script>
   </body>

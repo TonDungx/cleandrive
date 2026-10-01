@@ -31,6 +31,22 @@ function identical(count) {
 const OLDEST = m('evidence.dupes.oldest', 'The oldest copy — suggested as the one to keep');
 
 /**
+ * A row that is not its own file (F4).
+ *
+ * Either the user joined these copies here, or something else on the machine
+ * did -- a package manager, a backup tool, an installer. Whichever it was, the
+ * row has to say so, because every other number on this screen is about space
+ * and this one would free none of it.
+ */
+function shared(names) {
+  return names === 1
+    ? m('evidence.dupes.shared.one', 'Already the same file as 1 other copy here — deleting it would free nothing')
+    : m('evidence.dupes.shared.other', 'Already the same file as {n} other copies here — deleting it would free nothing', {
+        n: names,
+      });
+}
+
+/**
  * How sure the app is that a copy belongs to a program rather than a person.
  *
  * A dependency folder or a system location is a strong signal; a file being a
@@ -43,11 +59,20 @@ function componentConfidence(reason) {
 
 function toCandidate(file, group) {
   const same = evidence(file.keeper || file.protected ? 2 : 1, identical(group.count));
+  const sharesWith = file.sharesWith || [];
   let verdict = 'review';
   let confidence = 'certain';
   let list = [same];
 
-  if (file.protected) {
+  if (sharesWith.length > 0) {
+    // This name and another are one file already. Deleting it frees nothing,
+    // joining it is a no-op, and calling it `review` would put it in front of
+    // somebody as a decision with no consequence. So it is `keep`, and the
+    // evidence says why rather than leaving the row looking arbitrary.
+    verdict = 'keep';
+    confidence = 'certain';
+    list = [evidence(1, shared(sharesWith.length)), same];
+  } else if (file.protected) {
     // Listed, never bulk-selected: for a program's components "identical" does
     // not mean "redundant". Still tickable by hand -- the guard is on what a
     // single click may take, not on what the user is allowed to do.
@@ -60,6 +85,27 @@ function toCandidate(file, group) {
     list = [evidence(1, OLDEST), same];
   }
 
+  /*
+   * Which buttons this row offers.
+   *
+   * `hardlink` (F4) is offered only where it would do something: a copy that
+   * is not the keeper, is not a program's own component, and is not already
+   * sharing a file with something. Whether the user may *press* it is a
+   * separate question with three more gates -- the Developer Pack, the hidden
+   * switch, and a confirmation that has to be read to the end -- and none of
+   * those belong to the analyzer.
+   *
+   * A program's component is never moved to another drive and never joined:
+   * it would be somewhere, or something, the program cannot rely on.
+   */
+  const actions = file.protected
+    ? ['recycle']
+    : sharesWith.length > 0
+      ? []
+      : file.keeper
+        ? ['recycle', 'quarantine']
+        : ['recycle', 'quarantine', 'hardlink'];
+
   return {
     id: candidateId(ID, file.path),
     path: file.path,
@@ -69,9 +115,7 @@ function toCandidate(file, group) {
     verdict,
     confidence,
     evidence: list,
-    // A program's own component is never moved to another drive: it would be
-    // somewhere the program cannot find it.
-    actions: file.protected ? ['recycle'] : ['recycle', 'quarantine'],
+    actions,
     unattendedEligible: false,
     meta: {
       group: group.hash,
@@ -79,6 +123,12 @@ function toCandidate(file, group) {
       component: file.protected,
       mtimeMs: file.mtimeMs,
       atimeMs: file.atimeMs,
+      // Which copy this one would be joined to, and whether it already is.
+      // The window sends the pair back when it asks for a join; the handler
+      // re-reads and re-hashes both before believing any of it.
+      keeperPath: (group.files.find((f) => f.keeper) || {}).path || null,
+      links: Number.isFinite(file.links) ? file.links : 1,
+      sharesWith,
     },
   };
 }

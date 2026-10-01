@@ -93,6 +93,16 @@
         );
         return;
       }
+      if (kind === 'hardlink') {
+        // Nothing is deleted at all, which is the part people most need to
+        // hear beside a button that gives space back (F4).
+        el.textContent = t('frees.hardlink', 'Frees the space, deletes nothing');
+        el.title = t(
+          'frees.hardlinkHint',
+          'The copies become extra names for one file. Every path goes on working; the disk holds the contents once.'
+        );
+        return;
+      }
       el.textContent = freesOnVolume
         ? t('frees.yes', 'Frees the space')
         : t('frees.bin', 'Not freed until the bin is emptied');
@@ -119,7 +129,10 @@
    * taking nothing, so its button carries no badge rather than a misleading one.
    */
   // The quarantine's badge words itself from the settings; see FreesBadge.
-  const FREES = { recycle: false, restore: null, dehydrate: true, quarantine: false };
+  // `hardlink` (F4) is true, and it is the only one here that is true without
+  // a caveat: the copy's blocks are released as its name starts pointing at
+  // the kept file. No bin to empty, no service to wait for.
+  const FREES = { recycle: false, restore: null, dehydrate: true, quarantine: false, hardlink: true };
 
   /* ------------------------------------------------------------ action bar */
 
@@ -137,6 +150,14 @@
    * @param {HTMLElement} options.readout    where "n selected · size" goes
    * @param {Object<string, HTMLButtonElement>} options.buttons  one per action kind
    * @param {() => object[]} options.selected  the selected views
+   * @param {Object<string, () => boolean>} [options.usable]  an extra condition
+   *   per kind, on top of "every selected row allows it".
+   *
+   * `usable` exists for F4, and for one reason: joining copies works on a
+   * *pair*, and the rows this bar is given are single rows. "Every row allows
+   * it" is true of a lone keeper, which has nothing to be joined to -- so the
+   * button would offer an action that does nothing. The screen that owns the
+   * model answers the pair question, and this asks it.
    */
   /**
    * A badge and the button it describes, kept together. With two actions on
@@ -151,7 +172,7 @@
     return pair;
   }
 
-  function ActionBar({ root, readout, buttons, selected }) {
+  function ActionBar({ root, readout, buttons, selected, usable = {} }) {
     const badges = {};
     for (const [kind, button] of Object.entries(buttons)) {
       if (FREES[kind] === null) continue;
@@ -177,7 +198,10 @@
       said = count > 0 ? key : '';
 
       for (const [kind, button] of Object.entries(buttons)) {
-        const allowed = count > 0 && rows.every((row) => !row.actions || row.actions.includes(kind));
+        const allowed =
+          count > 0 &&
+          rows.every((row) => !row.actions || row.actions.includes(kind)) &&
+          (typeof usable[kind] !== 'function' || usable[kind]());
         button.disabled = !allowed || actionRunning;
         if (badges[kind]) badges[kind].hidden = !allowed;
       }

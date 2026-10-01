@@ -662,7 +662,17 @@ async function collectFiles(rootPaths, options = {}, handlers = {}) {
       token,
       onFile: (full, stats) => {
         if (stats.size < minSize) return;
-        files.push({ path: full, size: stats.size, mtimeMs: stats.mtimeMs, atimeMs: stats.atimeMs });
+        // `nlink` costs nothing here -- it is already on the stat this walk
+        // pays for -- and it is what lets the duplicate engine tell "three
+        // copies" from "three names for one file" without reading anything
+        // twice (F4).
+        files.push({
+          path: full,
+          size: stats.size,
+          mtimeMs: stats.mtimeMs,
+          atimeMs: stats.atimeMs,
+          links: Number.isFinite(stats.nlink) ? stats.nlink : 1,
+        });
         emit();
       },
     });

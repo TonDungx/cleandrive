@@ -3015,6 +3015,107 @@
       'để xem cả ổ đã đi đâu.',
     'intro.3.system': 'Xem cả ổ đã đi đâu',
 
+    /* ---- nhập bản trùng thành một tệp (F4) ------------------------------ */
+
+    'developer.title': 'Nhà phát triển',
+    'developer.note':
+      'Những thứ hữu ích nếu bạn biết rõ nó làm gì, và phiền phức nếu không. Mọi mục ở đây đều tắt cho tới ' +
+      'khi bạn tự bật.',
+    'developer.hardlink.enable': 'Cho phép nhập các bản trùng thành một tệp',
+    'developer.hardlink.note':
+      'Thêm một nút thứ ba vào màn Trùng lặp. Nó biến các bản bạn chọn thành những cái tên khác của cùng một ' +
+      'tệp, nên đĩa chỉ còn giữ nội dung một lần. Không xoá gì cả và mọi đường dẫn vẫn dùng được. Nhưng sửa ' +
+      'qua một tên là sửa tất cả, và xoá một bản không giải phóng gì cho tới khi xoá hết. Chỉ làm được giữa ' +
+      'các bản trên cùng một ổ NTFS, và bỏ qua tài liệu, tệp trong thư mục đồng bộ, tệp do màn Ảnh quản lý.',
+    'developer.hardlink.on': 'Đang bật. Màn Trùng lặp có nút “Nhập thành một tệp”.',
+    'developer.hardlink.off': 'Đang tắt. Không gì trên màn Trùng lặp nhập được.',
+
+    'hardlink.button': 'Nhập thành một tệp',
+    'hardlink.checking': 'Đang kiểm tra bản nào nhập được',
+    'hardlink.joining': 'Đang nhập các bản thành một tệp',
+    'hardlink.done': 'Đã nhập {n} {items} · giải phóng {size}. Hoàn tác ở Trung tâm khôi phục.',
+    'hardlink.noneJoined': 'Không nhập được gì.',
+    'hardlink.noneEligible': 'Không bản nào trong số đó nhập được. Không có gì thay đổi.',
+    'hardlink.allAlready': 'Các bản đó vốn đã là một tệp — không có gì để nhập.',
+    'hardlink.off':
+      'Chức năng nhập bản trùng thành một tệp đang tắt. Cài đặt → Nhà phát triển → “Cho phép nhập các bản ' +
+      'trùng thành một tệp”.',
+
+    'hardlink.dialog.title': 'Nhập các bản này thành một tệp?',
+    'hardlink.dialog.lead': 'Có {n} bản trong số bạn chọn nhập được, giải phóng {size}. Đọc hết để tiếp tục.',
+    'hardlink.dialog.go': 'Nhập {n} bản thành một tệp',
+    'hardlink.dialog.warn':
+      'Sau việc này, các bản là cùng một tệp. Sửa một bản là sửa tất cả. Xoá một bản không giải phóng dung ' +
+      'lượng nào cho tới khi xoá hết.',
+    'hardlink.dialog.what':
+      'Không xoá gì và không di chuyển gì. Mỗi bản bạn chọn thôi là một tệp riêng và trở thành một cái tên ' +
+      'khác của bản được giữ. Mọi đường dẫn vẫn chạy, và mọi chương trình mở nó vẫn thấy đúng thứ trước đây.',
+    'hardlink.dialog.measured':
+      'Có đúng một cách việc này hỏng một cách âm thầm, và nó đã được đo trên chính máy này chứ không phải ' +
+      'phỏng đoán. Một số chương trình lưu tệp bằng cách ghi một tệp mới đè lên tệp cũ thay vì ghi vào tệp ' +
+      'đang có. Word và Excel đều vậy. Khi đó liên kết lặng lẽ đứt: bản bạn vừa lưu giữ thay đổi của bạn, ' +
+      'các tên còn lại đứng nguyên ở nội dung cũ, và dung lượng quay lại mà không có gì báo. Tài liệu bị bỏ ' +
+      'qua vì lý do đó — nhưng app không thể biết mọi chương trình trên máy bạn lưu kiểu gì, nên đây là một ' +
+      'giới hạn thật chứ không phải chuyện đã giải quyết xong.',
+    'hardlink.dialog.skipped':
+      'Cũng bị bỏ qua: bản nằm trên ổ khác, ổ không phải NTFS, thứ nằm trong OneDrive hay thư mục đồng bộ ' +
+      'khác, và thứ nằm trong các thư mục do màn Ảnh quản lý.',
+    'hardlink.dialog.undo':
+      'Bạn hoàn tác được ở Trung tâm khôi phục: nó tách từng cái tên trở lại thành một tệp riêng, và cần đủ ' +
+      'chỗ cho một bản sao đầy đủ của mỗi cái. Thứ được khôi phục là sự tách rời của chúng, không phải nội ' +
+      'dung cũ: những gì được ghi trong lúc chúng còn là một tệp chính là thứ mọi bản sẽ mang.',
+    'hardlink.dialog.becomes': 'trở thành tên khác của',
+    'hardlink.dialog.more': '…và {n} bản nữa',
+    'hardlink.dialog.keepReading': 'Cuộn tiếp — nút sẽ bật ở cuối.',
+    'hardlink.dialog.readEnd': 'Hết rồi. Nút đã bật.',
+
+    'dupes.sharedNames': 'một tệp · {n} tên',
+    'restore.title.hardlink': 'Đã nhập {n} {items}, mỗi bộ thành một tệp',
+    'hardlink.refused.head': 'Để nguyên: {list}.',
+    'hardlink.refused.office': '{n} {docs} (Word, Excel và loại tương tự)',
+    'hardlink.doc.one': 'tài liệu',
+    'hardlink.doc.other': 'tài liệu',
+    'hardlink.refused.synced': '{n} nằm trong thư mục đồng bộ',
+    'hardlink.refused.photos': '{n} nằm trong thư mục do màn Ảnh quản lý',
+    'hardlink.refused.otherVolume': '{n} nằm trên ổ khác',
+    'hardlink.refused.notNtfs': '{n} nằm trên ổ không phải NTFS',
+    'hardlink.refused.differs': '{n} không còn giống hệt nhau',
+    'hardlink.refused.system': '{n} nằm trong vùng hệ thống Windows',
+    'hardlink.refused.program': '{n} thuộc một chương trình đã cài',
+    'hardlink.refused.network': '{n} nằm trên ổ mạng',
+    'hardlink.refused.other': '{n} bị bỏ qua',
+    'hardlink.refused.already': '{n} vốn đã là một tệp',
+
+    'hardlink.why.notThere': 'Tệp đó không còn nữa',
+    'hardlink.why.notAFile': 'Chức năng này nhập tệp, mà đó không phải tệp',
+    'hardlink.why.noKeeper': 'Không có bản nào được chỉ định để giữ, nên không có gì để nhập vào',
+    'hardlink.why.keeperGone': 'Bản được giữ không còn nữa',
+    'hardlink.why.itself': 'Đó chính là bản được giữ',
+    'hardlink.why.already': 'Hai cái tên này vốn đã là một tệp',
+    'hardlink.why.otherVolume': 'Hai bản nằm trên hai ổ khác nhau, mà hardlink không đi qua ổ được',
+    'hardlink.why.notNtfs': 'Ổ này là {fs}, mà chỉ NTFS mới cho một tệp mang hai tên',
+    'hardlink.why.office':
+      'Word, Excel và loại tương tự lưu bằng cách ghi một tệp mới đè lên tệp cũ, làm đứt liên kết mà không ' +
+      'báo gì',
+    'hardlink.why.synced': 'Thứ này nằm trong {service}, nơi sẽ thấy một tệp mà nó không tự ghi ra',
+    'hardlink.why.photos': 'Thứ này nằm trong thư mục do màn Ảnh quản lý',
+    'hardlink.why.system': 'Đây là vùng hệ thống của Windows',
+    'hardlink.why.program': 'Thứ này thuộc một chương trình đã cài, nên được để yên',
+    'hardlink.why.network': 'Tệp trên ổ mạng được để yên',
+    'hardlink.why.root': 'Gốc ổ đĩa hoặc thư mục cá nhân không phải thứ để nhập',
+    'hardlink.why.differs':
+      'Vừa đọc lại ngay lúc này, hai bản không còn giống hệt nhau — nên nhập chúng sẽ phá huỷ bản này',
+    'hardlink.why.unreadable': 'Không đọc được ({error})',
+    'hardlink.why.notAcknowledged': 'Cảnh báo chưa được xác nhận, nên không nhập gì cả',
+
+    'evidence.dupes.shared.one': 'Vốn đã là cùng một tệp với 1 bản khác ở đây — xoá nó không giải phóng gì',
+    'evidence.dupes.shared.other':
+      'Vốn đã là cùng một tệp với {n} bản khác ở đây — xoá nó không giải phóng gì',
+
+    'frees.hardlink': 'Giải phóng dung lượng, không xoá gì',
+    'frees.hardlinkHint':
+      'Các bản trở thành những cái tên khác của cùng một tệp. Mọi đường dẫn vẫn chạy; đĩa giữ nội dung một lần.',
+
     /* ---- Explorer's right-click menu (I3) ---- */
     'explorer.menu.analyze': 'Phân tích bằng CleanDrive',
     'explorer.menu.copies': 'Tìm bản trùng bằng CleanDrive',

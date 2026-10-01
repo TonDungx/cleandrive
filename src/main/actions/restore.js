@@ -92,6 +92,10 @@ async function inspect(journal, { only = null, deps = {} } = {}) {
         // has no `to` to record.
         stored:
           (session.kind === 'quarantine' || session.kind === 'archive') && typeof line.to === 'string' ? line.to : null,
+        // F4: the copy this name was joined to. Not a place the app put
+        // anything -- both names are where they always were -- so it is not
+        // `stored`, and the Restore Center words it differently.
+        linkedTo: session.kind === 'hardlink' && typeof line.to === 'string' ? line.to : null,
         sha256: typeof line.sha256 === 'string' ? line.sha256 : null,
         original: line.original || null,
       });
@@ -120,7 +124,7 @@ async function inspect(journal, { only = null, deps = {} } = {}) {
   return { sessions, records, status };
 }
 
-const STATES = ['inBin', 'inQuarantine', 'inArchive', 'restored', 'purged', 'gone', 'unavailable'];
+const STATES = ['inBin', 'inQuarantine', 'inArchive', 'linked', 'restored', 'purged', 'gone', 'unavailable'];
 
 /** The states an item can be put back from: the Recycle Bin, or a quarantine folder. */
 /**
@@ -130,8 +134,15 @@ const STATES = ['inBin', 'inQuarantine', 'inArchive', 'restored', 'purged', 'gon
  * archive sessions and then said "0 items can be put back", which is the
  * worst of both: a record of something it will not undo. The screenshots
  * caught it.
+ *
+ * `linked` joined them with F4, and it is the odd one: the file never left its
+ * own path. What is being put back is not the file but its *separateness* --
+ * splitting one name of a shared file back into a file of its own. That is why
+ * `hardlink.undo` declares `inPlace`, and why the conflict check below skips
+ * those records: a file sitting at its own path is the normal state for this
+ * kind, not something in the way.
  */
-const RESTORABLE = new Set(['inBin', 'inQuarantine', 'inArchive']);
+const RESTORABLE = new Set(['inBin', 'inQuarantine', 'inArchive', 'linked']);
 
 /** One session as the Restore Center lists it: what happened, and where it all is now. */
 function summarise(session, records, status) {
@@ -393,12 +404,19 @@ module.exports = {
         failed.push({ path: record.path, error: refusal, code: 'EREFUSED' });
         continue;
       }
+      // An in-place undo acts on the file where it stands, so the file being
+      // there is the point rather than an obstacle. Asking the conflict
+      // question of one would answer "yes" every single time and, with the
+      // default `skip`, silently undo nothing.
+      const undoKind = undoFor(record.kind);
       let conflict = null;
-      try {
-        const there = await fsp.lstat(record.path);
-        conflict = there.isDirectory() ? 'folder' : 'file';
-      } catch {
-        conflict = null;
+      if (!(undoKind && undoKind.inPlace)) {
+        try {
+          const there = await fsp.lstat(record.path);
+          conflict = there.isDirectory() ? 'folder' : 'file';
+        } catch {
+          conflict = null;
+        }
       }
       if (conflict) conflicts += 1;
       if (conflict === 'folder') conflictFolders += 1;
@@ -517,11 +535,17 @@ module.exports = {
         }
 
         let target = item.path;
+        // The same exception the plan makes: a kind whose undo works on the
+        // file where it stands has no conflict to resolve, because the thing
+        // at that path *is* the thing being undone.
+        const inPlace = Boolean(undoFor(item.kind) && undoFor(item.kind).inPlace);
         let conflict = null;
-        try {
-          conflict = (await fsp.lstat(target)).isDirectory() ? 'folder' : 'file';
-        } catch {
-          conflict = null;
+        if (!inPlace) {
+          try {
+            conflict = (await fsp.lstat(target)).isDirectory() ? 'folder' : 'file';
+          } catch {
+            conflict = null;
+          }
         }
 
         if (conflict && onConflict === 'skip') {
@@ -610,6 +634,7 @@ module.exports = {
   },
 
   // Exposed for the IPC handlers and the harnesses.
+  RESTORABLE,
   inspect,
   listSessions,
   listItems,

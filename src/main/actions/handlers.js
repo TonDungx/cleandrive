@@ -3,10 +3,9 @@
 /**
  * Every action this build can carry out, by kind.
  *
- * The contract names nine kinds; only those with a handler here can run.
- * `hardlink` (F4) is the last one without, and arrives as one more entry in
- * this table and nothing else. `execute` refuses a kind that is not listed
- * rather than guessing at it.
+ * The contract names nine kinds, and as of F4 every one of them has a handler
+ * here. `execute` refuses a kind that is not listed rather than guessing at it,
+ * so the table staying complete is what keeps that true.
  *
  * Each handler declares:
  *
@@ -37,4 +36,5 @@ module.exports = Object.freeze({
   relocate: require('./relocate'),
   archive: require('./archive'),
   compress: require('./compress'),
+  hardlink: require('./hardlink'),
 });

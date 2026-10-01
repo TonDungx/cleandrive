@@ -62,6 +62,10 @@
           : t('restore.title.quarantineAnywhere', 'Moved {n} {items} to another drive', { n, items });
       case 'archive':
         return t('restore.title.archive', 'Packed {n} {items} into an archive', { n, items });
+      case 'hardlink':
+        // Nothing moved and nothing was deleted, so the words have to carry
+        // the whole meaning: what came back, and what putting it back does.
+        return t('restore.title.hardlink', 'Joined {n} {items} into one file each', { n, items });
       default:
         return t('restore.title.other', '{kind}: {n} {items}', { kind: s.kind, n, items });
     }

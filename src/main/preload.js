@@ -101,6 +101,13 @@ const api = {
   compress: (folders, options) => ipcRenderer.invoke('action:execute', { kind: 'compress', items: folders, options }),
   compressState: (folder) => ipcRenderer.invoke('compress:state', folder),
 
+  // F4: duplicate copies become extra names for one file. `options` carries
+  // which copy each one joins (`keepers`) and whether the confirmation was
+  // read to the end (`acknowledged`); the main process refuses without the
+  // second, and re-reads and re-hashes both files rather than trusting the
+  // first.
+  hardlink: (copies, options) => ipcRenderer.invoke('action:execute', { kind: 'hardlink', items: copies, options }),
+
   reveal: (target) => ipcRenderer.invoke('shell:reveal', target),
   open: (target) => ipcRenderer.invoke('shell:open', target),
 

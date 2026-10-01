@@ -88,6 +88,9 @@ let scanTreeSerial = 0;
  */
 const LEAVES_ITS_FOLDER = new Set(['recycle', 'quarantine']);
 
+/** A value the window sent that may be read as a bag of keys, and nothing else. */
+const isPlainObject = (value) => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+
 /**
  * How many pictures the side-by-side comparison holds at once (E1).
  *
@@ -801,6 +804,38 @@ function register() {
       const options = request.options && typeof request.options === 'object' ? request.options : {};
       if (list.length === 0) return { kind, moved: [], failed: [], movedBytes: 0, freedBytes: 0, requested: 0 };
 
+      /*
+       * F4's second gate, and the reason it is here rather than in the handler:
+       * this is a *setting*, and a handler that read settings would be a
+       * handler whose behaviour depended on a file it does not own.
+       *
+       * The refusal is spoken, never silent. A window that somehow asks with
+       * the switch off gets told which switch, in the same words the Settings
+       * screen uses -- the app never quietly downgrades a request into doing
+       * less than was asked.
+       */
+      if (kind === 'hardlink') {
+        const { developer } = await services().settings.get();
+        if (!developer || developer.hardlink !== true) {
+          return {
+            kind,
+            moved: [],
+            failed: list.map((item) => ({
+              path: item,
+              error: t(
+                'hardlink.off',
+                'Joining copies into one file is switched off. Settings → Developer → “Allow joining duplicate copies”.'
+              ),
+              code: 'EDISABLED',
+            })),
+            movedBytes: 0,
+            freedBytes: 0,
+            requested: list.length,
+            refused: 'disabled',
+          };
+        }
+      }
+
       if (tokens.trash) tokens.trash.cancel();
       const token = new CancelToken();
       tokens.trash = token;
@@ -839,6 +874,17 @@ function register() {
                 : {}),
               // B4 takes no destination, only the direction.
               ...(kind === 'compress' ? { uncompress: options.uncompress === true } : {}),
+              // F4 takes the pairs -- which copy is joined to which keeper --
+              // and the one flag the scrolled confirmation sets. The pairs are
+              // a claim the window is making, not a fact: `actions/hardlink.js`
+              // re-reads and re-hashes both files before it believes any of
+              // them.
+              ...(kind === 'hardlink'
+                ? {
+                    keepers: isPlainObject(options.keepers) ? options.keepers : {},
+                    acknowledged: options.acknowledged === true,
+                  }
+                : {}),
               // E2 takes where a copy goes before the originals are binned.
               // Absent or empty means no backup, which is what every delete
               // in the app did before this and still does everywhere but the
@@ -861,9 +907,11 @@ function register() {
                   ? relocateHarness || undefined
                   : kind === 'dehydrate' && cloudDeps
                   ? cloudDeps
-                  : kind === 'recycle' && appCacheHarness
-                    ? { appCacheEnv: appCacheHarness.env, runningProcessNames: appCacheHarness.runningProcessNames }
-                    : undefined,
+                  : kind === 'hardlink'
+                    ? { photoRoots: await photoRootPaths() }
+                    : kind === 'recycle' && appCacheHarness
+                      ? { appCacheEnv: appCacheHarness.env, runningProcessNames: appCacheHarness.runningProcessNames }
+                      : undefined,
             // Every item is journalled as it moves. Nothing is purged because
             // of that -- the purge has its own switch, its own grace period and
             // its own corroboration against the bin -- but without the record
@@ -2614,6 +2662,36 @@ function register() {
   /* ---- photos and video -------------------------------------------------- */
 
   /**
+   * The photo folders as real paths, for the one caller outside this screen
+   * that needs them: F4 refuses to join anything inside them.
+   *
+   * `candidateRoots` needs Electron's known-folder lookups, which is why this
+   * lives here and not in the handler. Built fresh rather than cached: the
+   * refusal has to be about where the photo folders are now.
+   */
+  const photoRootPaths = async () => {
+    try {
+      const list = mediaRoots.candidateRoots(
+        {
+          home: app.getPath('home'),
+          pictures: safePath('pictures'),
+          videos: safePath('videos'),
+          downloads: safePath('downloads'),
+        },
+        (p) => require('node:fs').existsSync(p),
+        () => []
+      );
+      return list.map((entry) => entry.path);
+    } catch {
+      // A lookup that fails must not turn into "nothing is a photo folder".
+      // The handler's own fallback -- the same folder names under the home
+      // directory -- is a worse answer than this one but a far better answer
+      // than none, so say nothing and let it use that.
+      return null;
+    }
+  };
+
+  /**
    * Where the scan can look, and which of those are on by default.
    *
    * Sent rather than assumed by the window, because only this process knows
@@ -3650,6 +3728,23 @@ async function confirmCompress(win, description) {
 }
 
 async function confirmAction(win, description, planned, options) {
+  /*
+   * F4 is the one action whose confirmation is not a native message box.
+   *
+   * The roadmap requires an explanation the person has to scroll all the way
+   * through before the button becomes pressable, and `dialog.showMessageBox`
+   * cannot do that -- E2 already established that its only control besides the
+   * buttons is a single checkbox. So the dialog is an HTML one in the window
+   * (`renderer/hardlink.js`), and what arrives here is the answer it produced.
+   *
+   * Being honest about what that is worth: this checks a flag the window sent,
+   * so it is not a guarantee against a window that lies. It is the same trust
+   * every other option crossing this boundary gets, and it is not the only
+   * thing standing there -- `actions/hardlink.js` refuses to link without the
+   * flag too, so a caller that skips the dialog gets nothing linked rather
+   * than a silent join.
+   */
+  if (description.kind === 'hardlink') return options.acknowledged === true;
   if (description.kind === 'quarantine') return confirmQuarantine(win, description, planned);
   if (description.kind === 'relocate') return confirmRelocate(win, description);
   if (description.kind === 'archive') return confirmArchive(win, description);

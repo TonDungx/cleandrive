@@ -50,6 +50,8 @@ const DYNAMIC_PREFIXES = [
   'dupes.copyWord.',
   // "1 set" / "2 sets" left out of the drafts section (F3).
   'dupes.versions.setWord.',
+  // "1 document" / "2 documents" left alone when copies are joined (F4).
+  'hardlink.doc.',
   'monitor.level.',
   'trends.measurement.',
   'trends.scan.',
