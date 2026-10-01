@@ -167,7 +167,13 @@ async function main() {
     // The specific fear the old comment named: "one export away from being a
     // location history". Read as source rather than exercised, the same way
     // `test-entitlements.js` proves its modules never load the licence.
-    const roots = ['report', 'snapshots'];
+    //
+    // `lib/media/mp4` joined this list with E3, and it is the sharpest case in
+    // it. That code writes a *video* file, and the format it writes has a box
+    // for a position -- so "keep the metadata" and this rule point in opposite
+    // directions, and the rule wins. The copy carries the capture date and the
+    // rotation and deliberately not the place.
+    const roots = ['report', 'snapshots', path.join('lib', 'media', 'mp4')];
     const files = [];
     const walk = (dir) => {
       for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {

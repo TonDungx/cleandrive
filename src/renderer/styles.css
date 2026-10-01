@@ -7681,3 +7681,136 @@ kbd {
   .similar-row { flex-wrap: wrap; }
   .similar-facts { flex-basis: 100%; order: 3; }
 }
+
+/* ==========================================================================
+   a smaller copy of a video (E3)
+   ========================================================================== */
+
+/* Wider than the hardlink dialog: each row carries a name, the facts about
+   the file and the estimate, and three columns at 680px put the estimate
+   under the name where it reads as part of it. */
+.shrink-dialog {
+  width: min(720px, calc(100vw - 32px));
+}
+
+.shrink-body {
+  max-height: min(60vh, 500px);
+  overflow-y: auto;
+}
+
+/* The two levels. A radio each, because they are a choice between two and
+   not a switch: "smaller" and "smallest" are both on. */
+.shrink-levels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 14px 0;
+}
+
+.shrink-level {
+  flex: 1 1 260px;
+  display: flex;
+  gap: 9px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.shrink-level:has(input:checked) {
+  border-color: var(--accent);
+  /* A tint of the accent rather than green or amber: those three are kept
+     for a verdict, and "which size did you pick" is not one. */
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+}
+
+.shrink-level:has(input:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.shrink-level strong {
+  font-size: 13px;
+}
+
+.shrink-level small {
+  color: var(--text-3);
+  font-size: 11.5px;
+}
+
+.shrink-estimate {
+  margin: 14px 0;
+  padding: 11px 12px;
+  border-radius: 8px;
+  background: var(--surface);
+  font-size: 13px;
+}
+
+.shrink-estimate .card-note {
+  margin: 6px 0 0;
+}
+
+.shrink-list {
+  margin: 12px 0 4px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.shrink-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) auto auto;
+  gap: 4px 12px;
+  align-items: baseline;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--border-soft);
+  font-size: 12px;
+}
+
+.shrink-name {
+  overflow-wrap: anywhere;
+}
+
+.shrink-facts {
+  color: var(--text-3);
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+
+.shrink-verdict {
+  color: var(--text-2);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* Green is reserved for a verdict, and a finished copy is one: this file is
+   now smaller and the app proved it could read it back. */
+.shrink-verdict.is-done { color: var(--good); }
+.shrink-verdict.is-failed { color: var(--danger-text); font-weight: 500; white-space: normal; }
+
+.shrink-dialog .progress {
+  margin: 12px 0 6px;
+}
+
+/* Narrow windows: three columns in a 560px dialog leave the name two words
+   wide, so the facts and the estimate drop to their own line. */
+@media (max-width: 620px) {
+  .shrink-row {
+    grid-template-columns: 1fr auto;
+  }
+
+  .shrink-name { grid-column: 1 / -1; }
+  .shrink-facts { white-space: normal; }
+}
+
+/* A video pane in the comparison (E3). It wears `.compare-img` as well, so
+   the shared zoom and pan reach it without a second rule — but the native
+   controls must not be scaled with the picture or they leave the frame, so
+   the transform is kept off the element at rest. */
+.compare-video {
+  background: #000;
+}
+
+.compare-video::-webkit-media-controls-panel {
+  transform: none;
+}

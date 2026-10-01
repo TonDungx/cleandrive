@@ -1132,6 +1132,12 @@ function requestThumbs(paths) {
         frame.prepend(img);
       } else if (placeholder) {
         placeholder.textContent = t('media.noPreview', 'no preview');
+        // Marked so a language change can find it again. This text is written
+        // here rather than by `renderGrid`, which rebuilds cells but reuses the
+        // ones whose file has not changed -- so without the mark the sentence
+        // stays in whichever language it was first written in. A screenshot of
+        // the Vietnamese interface caught a tile still saying "NO PREVIEW".
+        placeholder.classList.add('is-nopreview');
       }
     }
 
@@ -1236,11 +1242,17 @@ function updateSelection() {
   $('media-quarantine').hidden = count === 0;
   let bytes = 0;
   let synced = 0;
+  let videos = 0;
   for (const file of media.files) {
     if (!media.selected.has(file.path)) continue;
     bytes += file.size;
     if (file.cloudService) synced += 1;
+    if (file.kind === 'video') videos += 1;
   }
+
+  // E3. Hidden, not disabled: see the listener for why this bar cannot carry a
+  // seventh button for the photographs that are most of every library.
+  $('media-shrink').hidden = videos === 0;
 
   const status = $('media-selection');
   if (count === 0) {
@@ -1842,6 +1854,49 @@ const onMediaAction = (kind) => async () => {
 $('media-delete').addEventListener('click', onMediaAction('recycle'));
 $('media-quarantine').addEventListener('click', onMediaAction('quarantine'));
 
+/**
+ * A smaller copy of the videos that are ticked (E3).
+ *
+ * The button is hidden rather than disabled when the selection holds no video,
+ * and that is a measured decision rather than a tidy one: this bar already
+ * carries two more buttons than any other, and at 1180px a seventh pushed the
+ * delete button off the edge of the window — which is exactly how F4 broke the
+ * Duplicates bar, in the same week, for the same reason.
+ *
+ * Placeholders are not filtered out here. They are offered to the dialog and
+ * the dialog names them and leaves them out, because "308 of these are only in
+ * the cloud" is worth saying once rather than hiding by making the button
+ * quietly do less than it says.
+ */
+$('media-shrink').addEventListener('click', () => {
+  const picked = media.files.filter((f) => media.selected.has(f.path) && f.kind === 'video');
+  if (!picked.length) return;
+  if (window.VideoShrink) window.VideoShrink.open(picked.map((f) => f.path));
+});
+
+/**
+ * Put the new copies on the screen that made them.
+ *
+ * Without this the copy exists on the disk and not in the grid, so the
+ * comparison the roadmap asks for would be between a file that is listed and
+ * one that is not — and the next scan would make it appear as if from nowhere.
+ */
+media.refreshAfterEncode = async (paths) => {
+  if (!Array.isArray(paths) || !paths.length) return;
+  const roots = chosenRoots();
+  if (!roots.length) return;
+  const result = unwrap(await api.scanMedia(roots), t('media.label.scan', 'Photo scan'));
+  if (!result) return;
+  media.files = result.files.map(candidateView);
+  media.excluded = result.excluded || [];
+  // The copies arrive unticked. Nothing in this app ever ticks a file on
+  // somebody's behalf, and a copy that arrived already selected would be one
+  // keystroke from being deleted by a person who meant the original.
+  media.selected.clear();
+  renderExcluded();
+  applyFilters();
+};
+
 $('ov-traits-more').addEventListener('click', () => {
   media.traitsExpanded = !media.traitsExpanded;
   renderOverview();
@@ -2213,6 +2268,12 @@ onLanguageChange(() => {
   renderTokens();
   renderExcluded();
   renderGrid();
+  // The tiles whose label was written when a thumbnail came back rather than
+  // when the grid was drawn. `renderGrid` reuses a cell whose file has not
+  // changed, so these have to be re-said by hand.
+  for (const tile of $('media-canvas').querySelectorAll('.media-placeholder.is-nopreview')) {
+    tile.textContent = t('media.noPreview', 'no preview');
+  }
   updateSelection();
   const focused = media.shown.find((f) => f.path === media.focused);
   renderDetail(focused || null);

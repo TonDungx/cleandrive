@@ -2734,6 +2734,59 @@
     'compare.row.camera': 'Máy ảnh',
     'compare.row.iso': 'ISO',
     'compare.row.shutter': 'Tốc độ',
+    'compare.row.length': 'Thời lượng',
+    'compare.headingFiles': '{n} tệp đặt cạnh nhau',
+    'compare.hintVideo': 'Bấm phát, tạm dừng hay tua ở một khung là cả hai cùng chạy, nên bạn luôn nhìn đúng cùng một khoảnh khắc. Tiếng tắt khi so sánh. Phím 1–4 tick một tệp.',
+    'compare.noteLargest': 'Ô được tô là giá trị lớn nhất của hàng đó. Lớn hơn không có nghĩa là tốt hơn — với một bản được tạo ra để nhẹ đi, ô không được tô mới là ô đã làm đúng việc của nó.',
+    'compare.row.bitrate': 'Tốc độ dữ liệu',
+    'compare.kbps': '{n} kbps',
+
+    /* ---- tạo bản video nhẹ hơn (E3) ------------------------------------ */
+    'shrink.button': 'Tạo bản nhẹ hơn…',
+    'shrink.title': 'Tạo một bản nhẹ hơn?',
+    'shrink.label': 'Tạo bản video nhẹ hơn',
+    'shrink.what':
+      'Một tệp mới được ghi cạnh tệp gốc, tên kết thúc bằng .cleandrive.mp4. Không có gì bị xoá và không có gì bị ghi đè. '
+      + 'Bản gốc nằm nguyên chỗ cũ, và việc đưa nó vào Thùng rác là của bạn, sau khi đã xem cả hai.',
+    'shrink.growsLead': 'Việc này tốn thêm dung lượng chứ không bớt.',
+    'shrink.growsRest': 'Tới khi bạn xoá một bản gốc, ổ đĩa đang giữ cả hai bản của nó.',
+    'shrink.kept':
+      'Ngày chụp và chiều xoay được giữ lại. Vị trí, nếu video có, thì cố ý không: ghi toạ độ vào một tệp mới '
+      + 'là điều duy nhất ứng dụng này từ chối làm với một toạ độ.',
+    'shrink.levelsLabel': 'Nhẹ tới mức nào',
+    'shrink.level.balanced': 'Nhẹ hơn, giữ chất lượng',
+    'shrink.level.balancedNote': 'Giữ nguyên kích thước hình.',
+    'shrink.level.smallest': 'Nhỏ nhất',
+    'shrink.level.smallestNote': 'Thu nhỏ cả những video rộng quá 1280 điểm ảnh.',
+    'shrink.estimating': 'Đang encode thử {n} giây đầu của mỗi tệp để xem nhẹ được tới đâu…',
+    'shrink.likelyTotal': 'Nhiều khả năng còn khoảng {after}, từ {before}',
+    'shrink.madeTotal': '{n} bản · {before} còn {after}',
+    'shrink.likelyNote':
+      'Con số này đo được bằng cách encode thật phần đầu mỗi tệp, không phải dự đoán. Nửa sau dồn dập hơn thì bản mới sẽ lớn hơn. '
+      + 'Không có gì bị xoá: bản mới nằm cạnh bản gốc.',
+    'shrink.doneNote':
+      'Các bản mới nằm cạnh bản gốc. Chưa có gì bị xoá — bản gốc vẫn đúng chỗ cũ, và bạn tự đưa nó vào Thùng rác sau khi đã xem.',
+    'shrink.noGain': 'Những tệp này vốn đã gọn so với nội dung của chúng. Một bản mới không đáng chỗ nó chiếm.',
+    'shrink.go': 'Tạo các bản nhẹ hơn',
+    'shrink.compare': 'So với bản gốc',
+    'shrink.working': 'Đang encode {name} — {done} / {total} khung hình',
+    'shrink.progress': 'Đang tạo các bản nhẹ hơn',
+    'shrink.rowLikely': 'nhiều khả năng khoảng {size}',
+    'shrink.rowDone': 'bản mới {size}',
+    'shrink.kbps': '{n} kbps',
+    'shrink.toast': 'Đã tạo {n} bản nhẹ hơn. Bản gốc không bị đụng tới.',
+    'shrink.failed': 'không encode được',
+    'shrink.noEncoder': 'Máy này không có bộ mã hoá video nào ứng dụng dùng được',
+    'shrink.refusedLead': 'Bỏ ra {n} tệp:',
+    'shrink.refusedMore': '…và {n} tệp nữa',
+    'shrink.refused.dehydrated': 'chỉ nằm trên mây — đọc nó là tải nó về',
+    'shrink.refused.codec': 'là {codec}, ứng dụng này không mở được',
+    'shrink.refused.notBmff': 'không phải MP4 hay MOV',
+    'shrink.refused.noVideo': 'không có hình trong đó',
+    'shrink.refused.fragmented': 'bị chia thành nhiều mảnh, ứng dụng này chưa tách ra được',
+    'shrink.refused.noConfig': 'không mang theo thông số mà bộ giải mã cần',
+    'shrink.refused.noSamples': 'không có khung hình nào',
+    'shrink.refused.unreadable': 'không đọc được',
     'preview.error.compareCount': 'Chỉ so sánh được từ 2 tới {n} tệp một lúc',
 
     /* ---- sao lưu trước khi xoá (E2) ------------------------------------- */

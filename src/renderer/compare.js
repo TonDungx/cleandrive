@@ -62,6 +62,9 @@
   const panel = () => $('compare');
   const open = () => !panel().hidden;
 
+  /** Whether anything on screen is a video, which changes several sentences. */
+  const hasVideo = () => state.panes.some((p) => p.kind === 'video' || p.file.kind === 'video');
+
   /* ------------------------------------------------------------ ordering -- */
 
   /**
@@ -170,6 +173,31 @@
       text: (f) => shutter(f.exposureTime),
       bigger: 0,
     },
+    // The two rows that only a video has anything to put in (E3). A photograph
+    // leaves both empty, and an all-empty row is dropped rather than printed as
+    // a line of dashes -- so the table changes shape with what is in it instead
+    // of carrying two permanently blank lines for every library that is mostly
+    // pictures.
+    {
+      key: 'length',
+      label: () => t('compare.row.length', 'Length'),
+      value: (f) => (Number.isFinite(f.durationSec) && f.durationSec > 0 ? f.durationSec : null),
+      text: (f) => (Number.isFinite(f.durationSec) && f.durationSec > 0 ? formatSpan(f.durationSec * 1000) : null),
+      bigger: 0,
+    },
+    {
+      key: 'bitrate',
+      label: () => t('compare.row.bitrate', 'Data rate'),
+      value: (f) => (Number.isFinite(f.bitrateKbps) && f.bitrateKbps > 0 ? f.bitrateKbps : null),
+      text: (f) => (Number.isFinite(f.bitrateKbps) && f.bitrateKbps > 0
+        ? t('compare.kbps', '{n} kbps', { n: formatCount(f.bitrateKbps) })
+        : null),
+      // More bits a second is more of the original left in the picture, so it
+      // is the larger value that is tinted -- and, as everywhere in this table,
+      // tinted means larger and not better. On a copy made to be smaller, the
+      // untinted cell is the one that did its job.
+      bigger: 1,
+    },
   ];
 
   /** `0.008` as `1/125 s`, the way a camera says it. */
@@ -188,7 +216,7 @@
   async function openCompare(files, context = {}) {
     const list = (files || []).filter(Boolean).slice(0, MAX_PANES);
     if (list.length < 2) {
-      toast(t('compare.needTwo', 'Pick at least two photos to compare.'), true);
+      toast(t('compare.needTwo', 'Pick at least two files to compare.'), true);
       return;
     }
 
@@ -196,7 +224,7 @@
     state.returnFocus = state.returnFocus || document.activeElement;
     state.groups = Array.isArray(context.groups) ? context.groups : [];
     state.index = Number.isInteger(context.index) ? context.index : -1;
-    state.panes = suggestedOrder(list).map((file) => ({ file, token: null, error: null }));
+    state.panes = suggestedOrder(list).map((file) => ({ file, token: null, kind: null, error: null }));
     stopFlicker();
     resetView();
 
@@ -216,8 +244,15 @@
       const one = answers[i];
       // Each file answers for itself: one of four being unreadable costs that
       // pane, not the comparison. `preview:compare` is built the same way.
-      if (one && one.ok && one.data && one.data.token) pane.token = one.data.token;
-      else pane.error = one && one.error ? one.error : t('compare.unreadable', 'Could not be read');
+      if (one && one.ok && one.data && one.data.token) {
+        pane.token = one.data.token;
+        // What to build the pane out of. An `<img>` pointed at an MP4 draws
+        // nothing at all, which is what this screen did for every video until
+        // E3 needed to put an original and its smaller copy side by side.
+        pane.kind = one.data.kind;
+      } else {
+        pane.error = one && one.error ? one.error : t('compare.unreadable', 'Could not be read');
+      }
     });
     draw();
   }
@@ -349,7 +384,12 @@
 
   function drawHead() {
     const n = state.panes.length;
-    $('compare-heading').textContent = t('compare.heading', '{n} photos, side by side', { n: formatCount(n) });
+    // "2 photos, side by side" over two videos is the screen describing
+    // something that is not in front of you. A screenshot caught it the first
+    // time E3 put a video in here.
+    $('compare-heading').textContent = hasVideo()
+      ? t('compare.headingFiles', '{n} files, side by side', { n: formatCount(n) })
+      : t('compare.heading', '{n} photos, side by side', { n: formatCount(n) });
 
     const group = state.index >= 0 ? state.groups[state.index] : null;
     $('compare-where').textContent = group
@@ -403,7 +443,9 @@
 
       const frame = document.createElement('div');
       frame.className = 'compare-frame';
-      if (pane.token) {
+      if (pane.token && pane.kind === 'video') {
+        frame.appendChild(videoPane(pane));
+      } else if (pane.token) {
         const img = document.createElement('img');
         img.className = 'compare-img';
         img.src = `cleandrive://${pane.token}/`;
@@ -420,6 +462,54 @@
       box.append(head, frame);
       host.appendChild(box);
     });
+  }
+
+  /**
+   * One video pane (E3).
+   *
+   * ## The clocks are shared, for the reason the zoom is
+   *
+   * This file already argues that panes which scrolled independently would be
+   * showing two different things and the comparison would be worthless in
+   * exactly the case it exists for. Time is the same argument: an original and
+   * a re-encoded copy differ in how a particular moment survived, and two
+   * players drifting a second apart compare two different moments. So play,
+   * pause and seek on any pane are applied to all of them.
+   *
+   * ## And the sound is off
+   *
+   * Two to four videos playing at once is two to four soundtracks at once.
+   * `viewer.js` can leave the sound on because it only ever shows one file;
+   * here it would be noise, and the thing being compared is the picture.
+   */
+  function videoPane(pane) {
+    const video = document.createElement('video');
+    video.className = 'compare-img compare-video';
+    video.src = `cleandrive://${pane.token}/`;
+    video.controls = true;
+    // Never autoplay -- `viewer.js` carries the same line for the same reason.
+    video.preload = 'metadata';
+    video.muted = true;
+    video.playsInline = true;
+
+    const others = () => [...$('compare-panes').querySelectorAll('.compare-video')].filter((v) => v !== video);
+
+    video.addEventListener('play', () => {
+      for (const other of others()) {
+        if (Math.abs(other.currentTime - video.currentTime) > 0.25) other.currentTime = video.currentTime;
+        if (other.paused) other.play().catch(() => {});
+      }
+    });
+    video.addEventListener('pause', () => {
+      for (const other of others()) if (!other.paused) other.pause();
+    });
+    video.addEventListener('seeked', () => {
+      for (const other of others()) {
+        if (Math.abs(other.currentTime - video.currentTime) > 0.25) other.currentTime = video.currentTime;
+      }
+    });
+
+    return video;
   }
 
   function drawFacts() {
@@ -440,6 +530,13 @@
     });
     table.appendChild(headRow);
 
+    // Whether the note under the table may mention ISO. It is the one row
+    // where the tinted cell is the *smaller* number, so the explanation has to
+    // name it -- but naming a row that was dropped for having nothing in it is
+    // the table explaining something that is not there, which is what the
+    // first screenshot of two videos showed.
+    let drewIso = false;
+
     for (const row of ROWS) {
       const cells = state.panes.map((pane) => ({
         text: row.text(pane.file),
@@ -448,6 +545,7 @@
       // A row where nobody knows anything is left out rather than printed as a
       // line of dashes. On a burst from one phone half of these are empty.
       if (cells.every((c) => c.text === null || c.text === undefined || c.text === '')) continue;
+      if (row.key === 'iso') drewIso = true;
 
       let best = null;
       if (row.bigger !== 0) {
@@ -480,11 +578,17 @@
 
     const note = document.createElement('p');
     note.className = 'compare-note';
-    note.textContent = t(
-      'compare.note',
-      'Shaded cells are the value that stands out — largest, or lowest for ISO. They are not a recommendation, ' +
-        'and the order the photos are in is a suggestion, not a choice made for you.'
-    );
+    note.textContent = drewIso
+      ? t(
+        'compare.note',
+        'Shaded cells are the value that stands out — largest, or lowest for ISO. They are not a recommendation, ' +
+          'and the order the photos are in is a suggestion, not a choice made for you.'
+      )
+      : t(
+        'compare.noteLargest',
+        'Shaded cells are the largest value in their row. Larger is not better — on a copy made to be smaller, ' +
+          'the cell that is not shaded is the one that did its job.'
+      );
     host.appendChild(note);
   }
 
@@ -498,10 +602,18 @@
       });
       return;
     }
-    hint.textContent = t(
-      'compare.hint',
-      'Scroll to zoom, drag to pan — both move every photo together. 1–4 ticks a photo, ← and → change group.'
-    );
+    // Zooming and panning reach a picture; over a video they would fight the
+    // player's own controls, so the panes are left alone and the hint says what
+    // is actually true here -- that the clocks move together instead.
+    hint.textContent = hasVideo()
+      ? t(
+        'compare.hintVideo',
+        'Play, pause and seek on one moves them all, so you are always looking at the same moment. Sound is off while comparing. 1–4 ticks a file.'
+      )
+      : t(
+        'compare.hint',
+        'Scroll to zoom, drag to pan — both move every photo together. 1–4 ticks a photo, ← and → change group.'
+      );
   }
 
   /* --------------------------------------------------------------- ticking */

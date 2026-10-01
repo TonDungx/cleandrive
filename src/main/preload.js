@@ -134,6 +134,14 @@ const api = {
   // screen. Costly and explicit — see the handler for the measured figures.
   mediaMeasureAll: () => ipcRenderer.invoke('media:measureAll'),
   mediaMeasureCancel: () => ipcRenderer.invoke('media:measureCancel'),
+  // E3: a smaller copy of a video. The encoder is a web API, so the pixels
+  // stay in the window and only encoded bytes cross these six channels.
+  videoPlan: (paths) => ipcRenderer.invoke('video:plan', paths),
+  videoOpen: (filePath, level) => ipcRenderer.invoke('video:open', filePath, level),
+  videoRead: (jobId, from, count) => ipcRenderer.invoke('video:read', jobId, from, count),
+  videoWrite: (jobId, chunks) => ipcRenderer.invoke('video:write', jobId, chunks),
+  videoSave: (jobId, meta) => ipcRenderer.invoke('video:save', jobId, meta),
+  videoClose: (jobId) => ipcRenderer.invoke('video:close', jobId),
 
   /* automatic cleanup */
   getSettings: () => ipcRenderer.invoke('settings:get'),

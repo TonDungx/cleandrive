@@ -94,6 +94,13 @@ const INVOKE = Object.freeze([
   'media:measureAll',
   'media:measureCancel',
 
+  'video:plan',
+  'video:open',
+  'video:read',
+  'video:write',
+  'video:save',
+  'video:close',
+
   /* The map (E4). The window sends tile coordinates and gets PNG bytes; it
      cannot reach the network itself and this is the only way one is fetched. */
   'map:tiles',

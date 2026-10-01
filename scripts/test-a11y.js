@@ -735,6 +735,29 @@ app.whenReady().then(async () => {
   `));
   await run(`document.getElementById('report').close();`);
 
+  // The "make a smaller copy" dialog (E3): a radio group, a progress bar and
+  // a live region, all of it drawn by script. It is opened on a path that
+  // cannot be encoded on purpose -- the controls are the same either way, and
+  // an accessibility sweep has no business spending thirty seconds encoding a
+  // video to look at a pair of radio buttons.
+  await tab('media');
+  await run(`await window.VideoShrink.open([${JSON.stringify(path.join(tree, 'notes.txt'))}]);`);
+  await until(`document.getElementById('shrink').open === true`, 15000);
+  await settle();
+  open = await axeRun();
+  check('with the smaller-copy dialog open, no violations', open.violations.length === 0,
+    open.violations.map((v) => `${v.id}: ${v.nodes.join(' | ')}`).join(' || '));
+  check('both levels are labelled controls in one group', await js(`
+    document.querySelectorAll('#shrink-levels input[type=radio]').length === 2
+    && [...document.querySelectorAll('#shrink-levels input[type=radio]')]
+      .every((b) => b.closest('label') && b.closest('label').textContent.trim().length > 4)
+  `));
+  check('and the file it could not use is named with a reason', await js(`
+    document.getElementById('shrink-refusals').hidden === false
+    && document.getElementById('shrink-refusals').textContent.length > 10
+  `));
+  await run(`document.getElementById('shrink-close').click();`);
+
   await tab('usage');
   await run(`await openViewer(${JSON.stringify(path.join(tree, 'notes.txt'))});`);
   await until(`document.querySelector('#viewer-body pre, #viewer-body .doc, #viewer-body *')`, 10000);

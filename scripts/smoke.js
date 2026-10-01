@@ -4855,6 +4855,160 @@ app.whenReady().then(async () => {
       fs.rmSync(projBase, { recursive: true, force: true });
     }
 
+    /* -- a smaller copy of a video (E3) ------------------------------------ */
+
+    // Last on purpose. It writes files into a fixture of its own and then
+    // re-scans through the screen's own controls, and a block that re-scans
+    // must come after everything that depends on an earlier scan.
+    console.log('\nA smaller copy of a video (E3):');
+    {
+      const js = (expr) => win.webContents.executeJavaScript(expr);
+
+      // On D:, like every other fixture here: `os.tmpdir()` is inside AppData
+      // on C:, and this one has to be somewhere the media scan will walk.
+      const vidBase = fs.mkdtempSync(path.join('D:\\', 'cleandrive-smoke-e3-'));
+      let encoderWindow = null;
+      try {
+        const { openEncoder, writeClip } = require('./lib/video-fixture');
+        encoderWindow = await openEncoder(path.join(SANDBOX_USER_DATA, 'e3'));
+        const clip = await writeClip(encoderWindow, {
+          file: path.join(vidBase, 'clip.mp4'),
+          width: 640, height: 360, seconds: 3, seed: 5, ageDays: 20,
+        });
+        encoderWindow.destroy();
+        encoderWindow = null;
+
+        // A file that is a video by name and nothing by content.
+        fs.writeFileSync(path.join(vidBase, 'not-really.mp4'), Buffer.alloc(40 * 1024, 0x2a));
+
+        check('the fixture clip was encoded by a real encoder', clip.frames === 90, `${clip.frames} frames, ${clip.codec}`);
+
+        /* -- what the app says it could do with them ----------------------- */
+
+        const plan = await js(`(async () => {
+          const reply = await api.videoPlan(${JSON.stringify([path.join(vidBase, 'clip.mp4'), path.join(vidBase, 'not-really.mp4')])});
+          return reply.data || reply;
+        })()`);
+
+        const okRow = plan.find((r) => r.ok);
+        const noRow = plan.find((r) => !r.ok);
+        check('a real video is offered', Boolean(okRow) && okRow.codec.startsWith('avc1'), okRow && `${okRow.codec} ${okRow.width}x${okRow.height}`);
+        check('and a file that is only called one is refused by name and reason',
+          Boolean(noRow) && noRow.reason === 'notBmff', noRow && `${noRow.name}: ${noRow.reason}`);
+
+        /* -- what it would aim for ----------------------------------------- */
+
+        const opened = await js(`(async () => {
+          const reply = await api.videoOpen(${JSON.stringify(path.join(vidBase, 'clip.mp4'))}, "balanced");
+          const data = reply.data || reply;
+          await api.videoClose(data.jobId);
+          return data;
+        })()`);
+        check('the target never rises above what the source already spends',
+          opened.settings.bitrate < opened.settings.sourceBitrate,
+          `${opened.settings.bitrate} vs ${opened.settings.sourceBitrate}`);
+        check('the trial is a slice of the file, not the whole of it',
+          opened.trial.sampleCount > 0 && opened.trial.sampleCount < opened.source.sampleCount,
+          `${opened.trial.sampleCount} of ${opened.source.sampleCount} frames`);
+
+        /* -- and then actually do it, through the real dialog ---------------- */
+
+        await js(`(async () => {
+          document.querySelector('.tab[data-tab="media"]').click();
+          for (const root of media.roots) root.on = false;
+          media.extraRoots = [{ path: ${JSON.stringify(vidBase)}, name: 'E3', why: null, on: true }];
+          renderRoots();
+          document.getElementById('media-roots-card').hidden = true;
+          document.getElementById('media-scan').click();
+        })()`);
+        for (let i = 0; i < 100; i++) {
+          if (await js(`document.getElementById('media-cancel').hidden && media.files.length > 0`)) break;
+          await wait(300);
+        }
+
+        const before = fs.statSync(path.join(vidBase, 'clip.mp4'));
+
+        await js(`window.VideoShrink.open([${JSON.stringify(path.join(vidBase, 'clip.mp4'))}])`);
+        for (let i = 0; i < 300; i++) {
+          if (await js(`document.getElementById('shrink-go').disabled === false`)) break;
+          await wait(300);
+        }
+        const estimated = await js(`document.getElementById('shrink-estimate').textContent`);
+        check('the dialog puts a measured estimate on screen before anything is written',
+          /\d/.test(estimated) && estimated.length > 20, estimated.slice(0, 70));
+
+        await js(`document.getElementById('shrink-go').click()`);
+        for (let i = 0; i < 600; i++) {
+          if (await js(`document.getElementById('shrink-go').hidden === true`)) break;
+          await wait(300);
+        }
+
+        const copies = fs.readdirSync(vidBase).filter((n) => n.includes('.cleandrive.'));
+        check('a copy is written beside the original', copies.length === 1, copies.join(', ') || 'none');
+
+        if (copies.length === 1) {
+          const copy = fs.statSync(path.join(vidBase, copies[0]));
+          check('and it is smaller than what it was made from',
+            copy.size < before.size, `${copy.size} vs ${before.size}`);
+
+          const after = fs.statSync(path.join(vidBase, 'clip.mp4'));
+          check('the original is untouched — same size, same timestamp',
+            after.size === before.size && after.mtimeMs === before.mtimeMs,
+            `${after.size} vs ${before.size}`);
+
+          // The app's own reader, on the app's own output.
+          const bmff = require('../src/main/lib/media/bmff');
+          const { demux } = require('../src/main/lib/media/mp4/demux');
+          const bytes = fs.readFileSync(path.join(vidBase, copies[0]));
+          const moovBox = bmff.boxes(bytes).find((b) => b.type === 'moov');
+          const back = moovBox ? demux(bmff.bodyOf(bytes, moovBox)) : { video: null };
+          check('the copy holds every frame the original did',
+            back.video && back.video.samples.length === opened.source.sampleCount,
+            back.video ? `${back.video.samples.length} of ${opened.source.sampleCount}` : 'no video track');
+
+          // Metadata before media, which is what lets a player start without
+          // seeking to the end of the file.
+          const order = bmff.boxes(bytes).map((b) => b.type);
+          check('and is laid out metadata first',
+            order.indexOf('moov') < order.indexOf('mdat'), order.join(','));
+
+          const parsed = bmff.parseMoov(bmff.bodyOf(bytes, moovBox));
+          check('the capture date is carried over rather than set to now',
+            parsed.createdAt !== null && Math.abs(parsed.createdAt - (Date.now() - 20 * 86400000)) < 7 * 86400000,
+            parsed.createdAt ? new Date(parsed.createdAt).toISOString().slice(0, 10) : 'none');
+
+          // The rule the map had to be built around, applied to a file this
+          // app writes itself.
+          check('and no coordinate is anywhere in the bytes it wrote',
+            !/iso6709|\u00a9xyz/i.test(bytes.toString('latin1')), 'no location box');
+        }
+
+        await js(`document.getElementById('shrink-close').click()`);
+        await wait(300);
+
+        /* -- a second run must not overwrite the first ---------------------- */
+
+        await js(`window.VideoShrink.open([${JSON.stringify(path.join(vidBase, 'clip.mp4'))}])`);
+        for (let i = 0; i < 300; i++) {
+          if (await js(`document.getElementById('shrink-go').disabled === false`)) break;
+          await wait(300);
+        }
+        await js(`document.getElementById('shrink-go').click()`);
+        for (let i = 0; i < 600; i++) {
+          if (await js(`document.getElementById('shrink-go').hidden === true`)) break;
+          await wait(300);
+        }
+        await js(`document.getElementById('shrink-close').click()`);
+
+        const both = fs.readdirSync(vidBase).filter((n) => n.includes('.cleandrive.'));
+        check('a second copy takes a new name rather than replacing the first',
+          both.length === 2 && both.some((n) => n.includes('(2)')), both.join(', '));
+      } finally {
+        if (encoderWindow) encoderWindow.destroy();
+        fs.rmSync(vidBase, { recursive: true, force: true });
+      }
+    }
+
     /* -- console cleanliness --------------------------------------------- */
     console.log('\nConsole:');
     check('no renderer errors', rendererErrors.length === 0, rendererErrors.join(' | '));

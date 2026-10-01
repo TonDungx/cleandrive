@@ -674,6 +674,15 @@
           <button class="btn btn-sm" id="media-select-none" hidden data-i18n="app.clearSelection">Clear selection</button>
           <button class="btn btn-sm quarantine-go" id="media-quarantine" disabled hidden>Move to another drive</button>
           <!--
+            E3. Shown only when the selection actually holds a video, which is
+            the rule that keeps this bar from carrying a seventh button for the
+            photographs that are most of every library. The dialog behind it is
+            an HTML one rather than a native message box, because the roadmap
+            asks for two levels to choose between and a message box can hold a
+            checkbox but not a pair of radio buttons — the same wall E2 hit.
+          -->
+          <button class="btn btn-sm" id="media-shrink" hidden data-i18n="shrink.button">Make a smaller copy…</button>
+          <!--
             E2. The switch itself is in the confirmation dialog, where the
             roadmap asks for it; a native message box can hold a checkbox but
             not a folder browser, so the folder is named here and the yes-or-no
@@ -2017,6 +2026,58 @@
       `data-i18n` on an element JavaScript fills wipes it out the moment the
       language switches -- which this project has now walked into three times.
     -->
+    <!--
+      E3. A smaller copy of a video.
+
+      Not a native message box: the roadmap asks for a choice between two
+      levels and for an estimate that appears after the dialog is already
+      open, and `dialog.showMessageBox` can carry neither. Everything with a
+      number in it is written by `encode.js` and redrawn on a language change,
+      so none of those elements carries `data-i18n` — that attribute would wipe
+      what was written the moment somebody switched language.
+    -->
+    <dialog class="shortcuts shrink-dialog" id="shrink" aria-labelledby="shrink-title">
+      <div class="shortcuts-head">
+        <h2 id="shrink-title" data-i18n="shrink.title">Make a smaller copy?</h2>
+        <span class="spacer"></span>
+        <button class="btn btn-sm" id="shrink-compare" hidden data-i18n="shrink.compare">Compare with the original</button>
+        <button class="btn btn-sm" id="shrink-close" data-i18n="app.cancel">Cancel</button>
+        <button class="btn btn-primary btn-sm" id="shrink-go" disabled></button>
+      </div>
+      <div class="shortcuts-body shrink-body" id="shrink-body" tabindex="0">
+        <!--
+          No tag inside an element that carries `data-i18n`. `translateDom`
+          assigns `textContent`, so a `<strong>` or a `<code>` in here is
+          destroyed on the first pass and the emphasis the markup promises
+          never reaches anybody — in either language. The word that has to
+          stand out is therefore an element of its own, with a key of its own.
+        -->
+        <p class="card-note" data-i18n="shrink.what">
+          A new file is written next to the original, with .cleandrive.mp4 added to its name.
+          Nothing is deleted and nothing is replaced. The original stays exactly where it is, and
+          putting it in the Recycle Bin afterwards is yours to do, once you have looked at both.
+        </p>
+        <p class="notice">
+          <strong data-i18n="shrink.growsLead">This uses more space, not less.</strong>
+          <span data-i18n="shrink.growsRest">Until you delete an original, the drive is holding both copies of it.</span>
+        </p>
+        <div class="shrink-levels" id="shrink-levels" role="radiogroup" aria-labelledby="shrink-levels-label"></div>
+        <span id="shrink-levels-label" class="sr-only" data-i18n="shrink.levelsLabel">How small</span>
+        <div class="shrink-estimate" id="shrink-estimate" aria-live="polite"></div>
+        <div class="shrink-list" id="shrink-list"></div>
+        <div class="card-note" id="shrink-refusals" hidden></div>
+        <div class="progress" id="shrink-progress" hidden role="progressbar" aria-valuemin="0" aria-valuemax="100" data-i18n-aria="shrink.progress" aria-label="Making smaller copies">
+          <div class="progress-bar" id="shrink-progress-bar"></div>
+        </div>
+        <p class="status" id="shrink-progress-text"></p>
+        <p class="card-note" data-i18n="shrink.kept">
+          The capture date and the rotation are carried over. The location, if the video had one, is
+          deliberately not: writing it into a new file is the one thing this app refuses to do with
+          a coordinate.
+        </p>
+      </div>
+    </dialog>
+
     <dialog class="shortcuts hardlink-dialog" id="hardlink" aria-labelledby="hardlink-title">
       <div class="shortcuts-head">
         <h2 id="hardlink-title" data-i18n="hardlink.dialog.title">Join these copies into one file?</h2>
@@ -2079,6 +2140,7 @@
     <!-- After media.js: the map card reads the library through hooks it sets. -->
     <script src="map.js"></script>
     <script src="compare.js"></script>
+    <script src="encode.js"></script>
     <script src="automatic.js"></script>
     <script src="trends.js"></script>
     <script src="changes.js"></script>

@@ -1143,8 +1143,9 @@ opposite of what *Free up space* just did.
 
 ### Side by side
 
-**Compare** on any group, or two to four photos you ticked yourself, opens them
-next to each other.
+**Compare** on any group, or two to four files you ticked yourself, opens them
+next to each other. **Videos open here too**, which is what makes a smaller copy
+worth looking at before you decide anything about the original.
 
 - **Zoom and pan are locked together.** Scroll to zoom, drag to pan, and every
   photo moves with it. Comparing sharpness means looking at the same corner of
@@ -1155,9 +1156,15 @@ next to each other.
   between two pictures side by side. In the same place, one after the other, it
   jumps out.
 - **A table of the facts that differ**: dimensions, megapixels, size, detail,
-  when it was taken, camera, ISO and shutter. A row no photo carries is left out
-  rather than filled with dashes.
-- `1`–`4` ticks a photo, `←` and `→` move between groups, `Esc` closes.
+  when it was taken, camera, ISO and shutter, and for videos their length and
+  data rate. A row nothing on screen carries is left out rather than filled with
+  dashes, so the table changes shape with what is in it.
+- **With videos, the clocks are locked together instead of the zoom.** Play,
+  pause or seek one and they all follow, so you are always comparing the same
+  moment — for the same reason the zoom is shared between pictures. The sound is
+  off: two to four soundtracks at once is noise, and the thing being compared is
+  the picture.
+- `1`–`4` ticks a file, `←` and `→` move between groups, `Esc` closes.
 
 **Nothing here decides for you.** The photos are *ordered* by resolution, then
 detail, then size, and the screen says that is an order and not a recommendation.
@@ -1167,6 +1174,52 @@ The shading deliberately is not green: in this app green, amber and red mean
 *safe to delete*, *your call* and *keep*, and borrowing one here would be picking
 the photograph for you. Nothing arrives ticked, and closing the panel ticks
 nothing.
+
+### Making a smaller copy of a video
+
+Tick one or more videos and **Make a smaller copy…** appears on the bar. It
+offers two levels — *Smaller, keeping the quality*, and *Smallest*, which also
+brings anything wider than 1280 pixels down to it.
+
+**The size it quotes is measured, not predicted.** Before anything is written,
+the app encodes the opening of each file for real and multiplies, which is why
+it says *likely*: a recording whose second half is busier will come out larger.
+On the machine this was built on that trial costs about three seconds for three
+clips.
+
+What it does, and does not do:
+
+- **The copy goes beside the original**, with `.cleandrive.mp4` added to the
+  name. If that name is taken it becomes ` (2)` — nothing is ever overwritten.
+- **Nothing is deleted.** The original stays exactly where it is. Putting it in
+  the Recycle Bin afterwards is yours to do, through the ordinary button, once
+  you have looked at both.
+- **Until you do, this uses more space, not less** — for a while the drive is
+  holding both copies. The dialog says so rather than leaving you to find out.
+- **The capture date and the rotation are carried over.** A phone shoots a
+  portrait video as landscape pixels plus a quarter turn, and a copy that lost
+  that would be lying on its side.
+- **The location is deliberately not carried over.** If the video records where
+  it was taken, that stays in the original and does not go into the new file.
+  Writing a coordinate into a file this app creates is the one thing it refuses
+  to do with one, and the dialog says it is refusing.
+- **The sound is copied across untouched** rather than re-encoded, so it loses
+  nothing. The rare video whose audio is in a format that cannot be copied comes
+  out silent, and the screen says which.
+- **The copy is opened and read back before you are told it exists.** A smaller
+  file that nothing can play is worse than no file, so one that will not read
+  back is deleted rather than left looking like a result.
+
+Some files are left out, and each one is named with the reason:
+
+- **Videos stored online only.** Reading one would download it, and it is not
+  taking up room on this drive to begin with. On the machine this was built on
+  that is 308 of 381 videos — 4.6 GB by name, nothing at all on the disk.
+- **Anything that is not an MP4 or a MOV**, and MP4s split into fragments, which
+  this cannot take apart yet.
+
+No encoder is downloaded and none is bundled: this uses the video encoder
+already in the app, and the one in your computer behind it.
 
 ### Deleting from here
 

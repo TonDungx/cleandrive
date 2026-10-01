@@ -40,8 +40,23 @@ process.env.CLEANDRIVE_TASK_SUFFIX = process.env.CLEANDRIVE_TASK_SUFFIX || 'idle
 require('../src/main/lib/preview/serve').registerScheme();
 
 let failures = 0;
+
+/**
+ * What failed, kept rather than only printed.
+ *
+ * This harness has now failed intermittently twice, and **both times the line
+ * that failed was lost** -- once to a shell loop that counted the output and
+ * threw it away, once to a run of four suites whose output was summarised to a
+ * pair of numbers. An intermittent failure nobody can name is not a clue, and
+ * §11 of the roadmap has been carrying it as an open item on that basis.
+ * `test-a11y.js` solved the same problem the same way.
+ */
+const failed = [];
 const check = (label, cond, detail = '') => {
-  if (!cond) failures++;
+  if (!cond) {
+    failures++;
+    failed.push(`${label}${detail ? `  -- ${detail}` : ''}`);
+  }
   console.log(`  ${cond ? 'PASS' : 'FAIL'}  ${label}${detail ? `  -- ${detail}` : ''}`);
 };
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -361,6 +376,15 @@ app.whenReady().then(async () => {
   fs.rmSync(work, { recursive: true, force: true });
   removeAfterExit(SANDBOX);
 
+  if (failures > 0) {
+    try {
+      const report = path.join(os.tmpdir(), `cleandrive-idle-failures-${Date.now()}.txt`);
+      fs.writeFileSync(report, `${failures} failures\n\n${failed.map((l) => `FAIL  ${l}`).join('\n')}\n`, 'utf8');
+      console.log(`\n  the same list, kept: ${report}`);
+    } catch (err) {
+      console.log(`\n  (could not write the list: ${err.message})`);
+    }
+  }
   console.log(failures === 0 ? '\nALL PASS\n' : `\n${failures} FAILURE(S)\n`);
   app.exit(failures === 0 ? 0 : 1);
 }).catch((err) => {

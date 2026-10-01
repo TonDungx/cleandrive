@@ -9,6 +9,7 @@ const mediaRoots = require('./lib/media/roots');
 const cloud = require('./lib/media/cloud');
 const thumbs = require('./lib/media/thumbs');
 const perceptual = require('./lib/media/perceptual');
+const videoEncode = require('./lib/media/mp4/encode');
 const mapTiles = require('./map/tiles');
 const { MediaCache } = require('./lib/media/cache');
 const { preview } = require('./lib/preview');
@@ -3016,6 +3017,230 @@ function register() {
   handle('media:measureCancel', () =>
     guard(async () => {
       if (tokens.measureAll) tokens.measureAll.cancel();
+      return true;
+    })
+  );
+
+  /* ---- a smaller copy of a video (E3) ------------------------------------ */
+
+  /**
+   * Six channels for one feature, because the encoder is in the window.
+   *
+   * `VideoEncoder` is a web API and the main process does not have one;
+   * `fs` is a Node API and the window does not have one. So a run is a
+   * conversation: this side finds the frames and writes the file, the window
+   * turns the frames into smaller frames, and the two halves pass batches back
+   * and forth. A `VideoFrame` never crosses -- it is a handle to the window's
+   * own memory and would not survive the trip.
+   *
+   * The job holds the sample index, which is small, and the encoded output as
+   * it arrives. The source bytes are read from the disk a batch at a time
+   * rather than held, because the index is a few hundred kilobytes and the file
+   * can be hundreds of megabytes.
+   */
+  const videoJobs = new Map();
+  let videoJobSeq = 0;
+
+  const forgetVideoJob = (jobId) => {
+    const job = videoJobs.get(jobId);
+    if (!job) return;
+    videoJobs.delete(jobId);
+  };
+
+  /**
+   * What could be done with each of these files, before anything is encoded.
+   *
+   * Every file answers for itself. A cloud placeholder and a Matroska file are
+   * ordinary things to find in a list somebody ticked, and both are reported
+   * rather than thrown -- the dialog names them and leaves them out, which is
+   * the same shape `preview:compare` uses for a file that will not open.
+   */
+  handle('video:plan', (event, paths) =>
+    guard(async () => {
+      const wanted = Array.isArray(paths) ? paths.filter((p) => typeof p === 'string' && p.trim()) : [];
+      if (!wanted.length) throw new Error(t('preview.error.noPath', 'No file was named'));
+
+      const out = [];
+      for (const filePath of wanted) {
+        const source = await videoEncode.open(filePath);
+        if (!source.ok) {
+          out.push({
+            ok: false,
+            path: filePath,
+            name: path.basename(filePath),
+            reason: source.reason,
+            detail: source.detail || null,
+            size: source.size || 0,
+          });
+          continue;
+        }
+        out.push({
+          ok: true,
+          path: filePath,
+          name: path.basename(filePath),
+          size: source.size,
+          durationSec: Math.round(source.durationSec * 10) / 10,
+          width: source.video.width,
+          height: source.video.height,
+          codec: source.video.codec,
+          hasAudio: Boolean(source.audio),
+          audioDropped: source.audioDropped,
+        });
+      }
+      return out;
+    })
+  );
+
+  /** Begin one file: the sample index, and what the encoder should aim for. */
+  handle('video:open', (event, filePath, level) =>
+    guard(async () => {
+      if (typeof filePath !== 'string' || !filePath.trim()) {
+        throw new Error(t('preview.error.noPath', 'No file was named'));
+      }
+      const source = await videoEncode.open(filePath);
+      if (!source.ok) throw new Error(`cannot encode: ${source.reason}`);
+
+      const settings = videoEncode.settings(source, level === 'smallest' ? 'smallest' : 'balanced');
+      const trialCount = videoEncode.trialSampleCount(source.video.samples, videoEncode.TRIAL_SECONDS);
+      const trialSeconds = source.video.samples[Math.min(trialCount, source.video.samples.length - 1)].timestamp / 1e6
+        || videoEncode.TRIAL_SECONDS;
+
+      videoJobSeq += 1;
+      const jobId = `v${videoJobSeq}`;
+      videoJobs.set(jobId, { source, settings, chunks: [], bytes: 0 });
+
+      return {
+        jobId,
+        settings,
+        source: {
+          codec: source.video.codec,
+          // The configuration record a decoder cannot start without. It is a
+          // few dozen bytes, so it goes over whole rather than by reference.
+          description: source.video.description ? Array.from(source.video.description) : null,
+          width: source.video.width,
+          height: source.video.height,
+          sampleCount: source.video.samples.length,
+          durationSec: source.durationSec,
+          audioBytes: source.audio ? source.audio.bytes : 0,
+        },
+        trial: { sampleCount: trialCount, seconds: Math.max(0.1, trialSeconds) },
+      };
+    })
+  );
+
+  /** A batch of source frames, as bytes. */
+  handle('video:read', (event, jobId, from, count) =>
+    guard(async () => {
+      const job = videoJobs.get(jobId);
+      if (!job) throw new Error('that job has already finished');
+      return videoEncode.readSamples(
+        job.source.path,
+        job.source.video.samples,
+        Math.max(0, Number(from) || 0),
+        Math.max(1, Math.min(512, Number(count) || 1))
+      );
+    })
+  );
+
+  /** A batch of encoded frames, on their way back. */
+  handle('video:write', (event, jobId, chunks) =>
+    guard(async () => {
+      const job = videoJobs.get(jobId);
+      if (!job) throw new Error('that job has already finished');
+      for (const chunk of Array.isArray(chunks) ? chunks : []) {
+        const data = Buffer.from(chunk.data);
+        job.bytes += data.length;
+        job.chunks.push({
+          data,
+          timestamp: Number(chunk.timestamp) || 0,
+          duration: Number(chunk.duration) || 0,
+          key: Boolean(chunk.key),
+        });
+      }
+      return { frames: job.chunks.length, bytes: job.bytes };
+    })
+  );
+
+  /**
+   * Mux what came back, write it beside the original, and read it back.
+   *
+   * The read-back is the point. A smaller file nothing can open is worse than
+   * no file at all, and this project has already met that exact shape once --
+   * E5 measured Zalo's re-encoded copies as both smaller and undrawable. So the
+   * copy is parsed with the app's own reader before anyone is told it exists,
+   * and a copy that will not parse is deleted rather than reported.
+   */
+  handle('video:save', (event, jobId, meta) =>
+    guard(async () => {
+      const job = videoJobs.get(jobId);
+      if (!job) throw new Error('that job has already finished');
+      if (!job.chunks.length) throw new Error('nothing was encoded');
+      if (!meta || !meta.codecConfig || !meta.codecConfig.length) {
+        throw new Error('the encoder did not describe its own output');
+      }
+
+      const { source, settings } = job;
+      const spec = {
+        createdAt: source.createdAt,
+        video: {
+          fourcc: meta.fourcc === 'hvc1' ? 'hvc1' : 'avc1',
+          codecConfig: Buffer.from(meta.codecConfig),
+          width: Number(meta.width) || settings.width,
+          height: Number(meta.height) || settings.height,
+          framerate: Number(meta.framerate) || settings.framerate,
+          // The rotation the source carried. Dropping it would lay a portrait
+          // phone video on its side; the position it may also carry is
+          // deliberately not passed on, and the screen says so.
+          matrix: source.video.matrix || null,
+          samples: job.chunks,
+        },
+      };
+
+      if (source.audio) {
+        const audioSamples = await videoEncode.readSamples(
+          source.path,
+          source.audio.samples,
+          0,
+          source.audio.samples.length
+        );
+        spec.audio = {
+          fourcc: 'mp4a',
+          config: source.audio.description,
+          channels: source.audio.channels,
+          sampleRate: source.audio.sampleRate,
+          timescale: source.audio.timescale,
+          samples: audioSamples.map((s, i) => ({
+            data: s.data,
+            durationTicks: Math.max(1, Math.round((source.audio.samples[i].duration / 1e6) * source.audio.timescale)),
+          })),
+        };
+      }
+
+      const destination = await videoEncode.destinationFor(source.path);
+      const verified = await videoEncode.write(source, spec, destination);
+      forgetVideoJob(jobId);
+
+      return {
+        path: destination,
+        name: path.basename(destination),
+        size: verified.size,
+        was: source.size,
+        codec: verified.codec,
+        width: verified.width,
+        height: verified.height,
+        frames: verified.frames,
+        hasAudio: verified.hasAudio,
+        durationSec: verified.durationSec,
+        audioDropped: source.audioDropped,
+        locationDropped: Boolean(source.video.hasLocation),
+      };
+    })
+  );
+
+  /** Forget a job, whether it finished or was stopped. Writes nothing. */
+  handle('video:close', (event, jobId) =>
+    guard(async () => {
+      forgetVideoJob(jobId);
       return true;
     })
   );
