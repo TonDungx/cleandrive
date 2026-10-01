@@ -405,6 +405,8 @@
     'run.anotherRunning':
       'Một lượt dọn dẹp tự động khác đang chạy, nên lượt này bị bỏ qua. Nó sẽ tới lượt lại theo lịch của chính nó.',
     'run.waitedForLock': 'Đã đợi {s}s cho hồ sơ khác chạy xong rồi mới bắt đầu.',
+    'run.cliBusy':
+      'Sau 90 giây vẫn còn một lượt dọn dẹp tự động khác đang chạy, nên lượt chạy từ dòng lệnh này bị bỏ qua.',
     'run.noZone': 'Hồ sơ này chuyển tệp sang ổ khác, nhưng chưa chọn thư mục nào để chứa',
     'run.zoneAway': 'Ổ đĩa để chuyển tệp sang hiện không có: {zone}',
     'run.note.keepsOriginal':
@@ -1048,6 +1050,7 @@
     'auto.notice.adjusted': 'Cài đặt đã được điều chỉnh khi nạp: {warnings}',
 
     'auto.result.byHand': '{when} (chạy tay)',
+    'auto.result.fromCli': '{when} (chạy từ dòng lệnh)',
     'auto.result.scanned': 'Số tệp đã quét',
     'auto.result.selected': 'Đã chọn',
     'auto.result.moved': 'Đã chuyển vào Thùng rác',
@@ -1937,6 +1940,7 @@
     'restore.source.manual': 'từ một màn hình',
     'restore.source.autoclean': 'dọn dẹp tự động, chạy bằng tay',
     'restore.source.scheduled': 'lần chạy theo lịch',
+    'restore.source.cli': 'từ dòng lệnh',
     'restore.source.migrated': 'từ bản ghi cũ',
     'restore.source.purge': 'dọn chọn lọc Thùng rác',
     'restore.source.restore': 'chuyển ra để nhường chỗ cho tệp được khôi phục',

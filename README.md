@@ -37,6 +37,7 @@ and the notifications.
 - [The file viewer](#the-file-viewer)
 - [Deleting](#deleting)
 - [Disk alerts and the tray](#disk-alerts-and-the-tray)
+- [The command line](#the-command-line)
 - [Rules the interface will not break](#rules-the-interface-will-not-break)
 - [What it deliberately does not do](#what-it-deliberately-does-not-do)
 - [Limits worth knowing before you plan around it](#limits-worth-knowing-before-you-plan-around-it)
@@ -2539,6 +2540,128 @@ the disk is, so the question can be answered without clicking anything.
 
 ---
 
+## The command line
+
+The same program, started from a terminal, for whoever looks after the machine
+and for the scripts they write. It reads, suggests, compares, measures, runs a
+profile and puts things back — the things the window does — and nothing the
+window would not.
+
+```
+cleandrive scan <folder...> [--mft] [--snapshot] [--json]
+cleandrive suggest <folder...> [--category <c>] [--verdict safe|review] [--json]
+cleandrive snapshots [<folder>] [--json]
+cleandrive diff <snapshot> <snapshot> [--json]
+cleandrive system [--json]
+cleandrive profiles [--json]
+cleandrive run --profile <id> [--report-only] [--json]
+cleandrive journal list | show <session> | verify [--json]
+cleandrive restore <session> [--dry-run] [--json]
+cleandrive version | help [<command>]
+```
+
+It is part of CleanDrive Business. Until licences exist, an installed copy has
+Business closed, so every command except `journal`, `restore`, `version` and
+`help` answers with exit code 3 and a sentence saying so — never a smaller run
+instead. Those four are never asked about the licence at all: reading what the
+app did, and putting it back, are there whatever the licence says.
+
+### Starting it
+
+It is installed as **`bin\cleandrive.cmd`** inside the folder CleanDrive was
+installed to:
+
+```
+"C:\Program Files\CleanDrive\bin\cleandrive.cmd" scan D:\Projects
+```
+
+The installer does not add that folder to `PATH`; add it yourself, or through
+whatever manages the machine, to type `cleandrive` alone.
+
+Use the batch file, not `CleanDrive.exe --cli` directly. CleanDrive.exe is a
+Windows program rather than a console one, and PowerShell and cmd do not wait
+for one to finish: typed bare, its output arrives after the next prompt and its
+exit code is lost, and `$x = & CleanDrive.exe --cli …` captures nothing at all.
+A batch file is waited for, so through `cleandrive.cmd` both come back as they
+should. That file holds no logic of its own; what it starts is the executable.
+
+### What it will and will not do
+
+- **Two commands change anything: `run --profile` and `restore`.** There is no
+  command that deletes a path you give it.
+- **`run` goes through every gate the 02:00 run passes**, because it is the same
+  code: the profile's categories, whitelist, age, disk threshold, open
+  programs, and the delete guards. A profile that is switched off is refused,
+  not run anyway. A profile in report-only mode stays in it; `--report-only` can
+  make a live profile report, and nothing can make a report-only one act. It
+  takes the same lock as the scheduled run and waits up to 90 seconds for one
+  already running. The run is in the run log like any other, and the Automatic
+  tab marks it *from the command line*.
+- **`restore` never overwrites.** A file now sitting where one used to be is
+  skipped, named, and the exit code is 2; the Restore Center is where you choose
+  to keep both or replace it. `--dry-run` says what would come back and touches
+  nothing. Sessions and their files show in the Restore Center as *from the
+  command line*.
+- **Everything else only reads.** `scan` writes nothing at all unless you ask
+  for `--snapshot` — not even a point on the Trends chart, which a script
+  scanning every hour would otherwise draw.
+- **It never raises a UAC prompt.** `system` and `scan --mft` need an elevated
+  terminal and say so (exit code 4) in an ordinary one; a script nobody is
+  watching would otherwise wait for a click that never comes. `scan --mft` is
+  stricter than the window's *Fast scan* switch: a folder that is not a whole
+  NTFS drive is refused rather than walked instead.
+- **It runs beside the window and beside the scheduled run.** It takes no
+  single-instance lock.
+
+`profiles` lists the ids `run --profile` takes — a profile's name is optional,
+so the id is the one thing every profile has. `snapshots` lists the ids `diff`
+takes. `scan --snapshot` prints the id of the one it keeps, and a live `run`
+prints the session to undo it with.
+
+### Exit codes
+
+| Code | Meaning |
+| --- | --- |
+| 0 | Done |
+| 1 | Failed; the message says why |
+| 2 | Refused by a gate: a profile switched off, a disk below its threshold, another run holding the lock, a file in the way, nothing to put back |
+| 3 | Not in this licence; nothing was done |
+| 4 | Needs an elevated terminal; nothing was done |
+| 5 | Started and stopped short: the record of what moved could not be written |
+| 6 | `journal verify` found a sealed session changed, removed or duplicated |
+| 64 | The command line names nothing this program can act on |
+
+**Ctrl+C is not 5.** It ends the program at once and Windows reports
+`0xC000013A`; measured, no handler inside the program gets to run. Every file
+already moved is in the journal by then, so Restore still finds it. Through the
+batch file, cmd then asks *Terminate batch job (Y/N)?* — either answer is fine.
+
+### `--json`
+
+One JSON document on standard output, with `"schema": "cleandrive.<command>/1"`
+saying what it is; a refusal is `cleandrive.error/1`. Every character past
+plain ASCII is written as a `\u` escape, so a folder called `Ảnh của tôi` comes
+through any console code page intact. Messages — progress, warnings, refusals —
+always go to standard error. In Windows PowerShell 5.1:
+
+```
+$scan = (& cleandrive scan D:\Projects --json) -join "`n" | ConvertFrom-Json
+$scan.cleanup.safeBytes
+```
+
+`journal verify --json` is the Restore Center's own check, report and all
+(`cleandrive.journal-verify/1`).
+
+### Language
+
+The command line speaks English, whatever the window is set to. On the machine
+it was built on, a Windows console runs code page 437 and shows Vietnamese as
+garbage, and a program cannot change that from inside — it was tried, two ways.
+Paths are printed as they are, so they read correctly in a console set to UTF-8
+(`chcp 65001`, measured) and in any file the output is sent to.
+
+---
+
 ## Rules the interface will not break
 
 | Rule | Where you see it |
@@ -2557,6 +2680,9 @@ the disk is, so the question can be answered without clicking anything.
 
 - **No shred, no force, and no "empty the Recycle Bin" button.**
 - **No folder deletion from the interface.**
+- **No command-line delete.** [The command line](#the-command-line) moves files
+  only through a profile's own rules, and puts back only what the journal says
+  the app moved.
 - **No background service and no resident timer** for the scheduled cleanup. It
   is a Windows task that starts the app, works with no window, and exits.
 - **No telemetry, no crash reporting, no identifiers.** The app makes two kinds
@@ -2688,6 +2814,10 @@ for somebody deleting them.
   They can rewrite it and sign it again, and nobody can tell that its newest
   sessions were taken out. It catches edits by anything else.
   [Details](#whether-the-journal-is-still-as-it-was).
+- **The command line is English, and needs its batch file.** Started as
+  `CleanDrive.exe --cli` directly, PowerShell and cmd do not wait for it. Ctrl+C
+  ends it at once rather than letting it finish the file it is on. Business
+  only, and closed on an installed copy until licences exist.
 - **The scheduled task only fires while somebody is logged on.** A machine left
   at the login screen at 02:00 runs the cleanup at the next opportunity instead.
 - **Moving the app** relocates the executable the scheduled task points at. The
@@ -2709,7 +2839,17 @@ npm run dev          # run it with developer tools
 npm test             # the unit suites
 npm run test:e2e     # boot the real app, click its own buttons, read the DOM back
 npm run build        # a Windows installer in dist/
+npm run cli -- scan D:\Projects   # the command line, from a checkout
 ```
+
+`npm run test:cli` runs every command against the real modules under plain
+Node; `npm run verify:cli` starts the real program — exit codes out of a real
+process, a live run through the real Recycle Bin and back, a journal edited by
+hand, and a hidden console read back from its own screen to see that the batch
+file waits — and `-- --packaged <win-unpacked folder>` does the same to a build,
+through its own `bin\cleandrive.cmd`. `-- --elevated`, from an elevated
+terminal, adds `system` and `scan --mft`. `npm run verify:scheduled-exit` checks
+that a failed scheduled run reaches Task Scheduler as a failure.
 
 The interface is plain HTML, CSS and JavaScript — no framework and no build step,
 so what is in `src/renderer/` is what runs. All filesystem work happens in a
@@ -2815,7 +2955,7 @@ that boots the real application and reads its rendered interface back out.
 `npm run test:explorer` the right-click menu's card and what the menu asks for.
 `npm run verify:restore` puts throwaway files back from the real Recycle Bin.
 `npm run shoot:lists`, `shoot:media`, `shoot:viewer`, `shoot:restore`, `shoot:seal`,
-`shoot:system`, `shoot:treemap`, `shoot:changes`, `shoot:cloud`, `shoot:appcaches`, `shoot:quarantine`, `shoot:a11y`, `shoot:intro` and `shoot:explorer` take screenshots of the real screens.
+`shoot:system`, `shoot:treemap`, `shoot:changes`, `shoot:cloud`, `shoot:appcaches`, `shoot:quarantine`, `shoot:a11y`, `shoot:intro`, `shoot:explorer` and `shoot:cli` take screenshots of the real screens.
 
 Harnesses run against a sandbox userData and a suffixed task name, so they cannot
 reach anything of yours. They used to leave something of their own behind all the

@@ -176,7 +176,10 @@ async function main() {
     //
     // The whole of `journal` with H4, not just `journal.js`: the seal is a line
     // the journal writes, and the key is a file of its own.
-    const roots = ['report', 'snapshots', 'journal', path.join('lib', 'media', 'mp4')];
+    //
+    // And the command line with H1: what `--json` prints is a file the moment
+    // anybody redirects it, so it is held to the same rule.
+    const roots = ['report', 'snapshots', 'journal', path.join('lib', 'media', 'mp4'), 'cli'];
     const files = [];
     const walk = (dir) => {
       for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -192,6 +195,7 @@ async function main() {
     const named = files.map((f) => path.basename(f));
     check('the journal, its seal and its key are among what is read',
       ['journal.js', 'seal.js', 'seal-key.js'].every((name) => named.includes(name)), named.filter((n) => /journal|seal/.test(n)).join(', '));
+    check('and so is the command line', files.some((file) => /[\\/]cli[\\/]output\.js$/.test(file)) && files.some((file) => /[\\/]cli[\\/]commands[\\/]scan\.js$/.test(file)));
 
     const guilty = files.filter((file) => {
       const src = fs.readFileSync(file, 'utf8');

@@ -12,27 +12,35 @@ const appearance = require('./appearance');
 const intro = require('./intro');
 const launchTarget = require('./launch-target');
 
-const isDev = process.argv.includes('--dev');
+// The command line (H1): `CleanDrive.exe --cli <command> ...`, and only when
+// `--cli` is the first argument. Decided before every other mode, and it
+// switches the others off: the flags below are found anywhere on the command
+// line, so `cleandrive scan "--helper"` -- a folder with an unlucky name --
+// would otherwise start the elevated helper's branch instead.
+const isCli = require('./cli/args').wanted(process.argv, app.isPackaged);
+const modeArgs = isCli ? [] : process.argv;
+
+const isDev = modeArgs.includes('--dev');
 
 // Task Scheduler starts the same executable with this flag. There is no window
 // in that mode: a cleanup that popped a window open at 02:00 would be worse
 // than no cleanup at all.
-const isScheduledRun = process.argv.includes('--scheduled-run');
+const isScheduledRun = modeArgs.includes('--scheduled-run');
 
 // And with this one for the daily disk measurement the Trends tab is drawn
 // from. It is a different mode rather than a second job for the cleanup task,
 // because measuring a disk needs no permission to delete anything.
-const isSampleOnly = process.argv.includes('--sample-only');
+const isSampleOnly = modeArgs.includes('--sample-only');
 
 // The elevated helper: this same executable, started through a UAC prompt the
 // user answered, to read the few things only an administrator can. It opens
 // no window and answers only the fixed, read-only list in helper/ops.js.
-const isHelper = process.argv.includes('--helper');
+const isHelper = modeArgs.includes('--helper');
 
 // Started from Explorer's right-click menu (I3): a folder to analyse, or a
 // file whose copies to find. Read here, before the single-instance lock, so a
 // second copy can hand it to the first.
-const launchedFor = launchTarget.parse(process.argv);
+const launchedFor = isCli ? null : launchTarget.parse(process.argv);
 
 // Required lazily, inside the windowed branch. Between them these pull in the
 // scanner, the duplicate finder, the tray and the updater, and the two headless
@@ -210,7 +218,26 @@ function revealWindow() {
 // scheduled run's toast is attributed to "electron.exe", or dropped entirely.
 app.setAppUserModelId('com.cleandrive.app');
 
-if (isHelper) {
+if (isCli) {
+  /*
+   * The command line. No window, no tray, no updater, and no single-instance
+   * lock: it runs beside an open window and beside the 02:00 run, and the one
+   * thing it must not do at the same time as the latter -- an unattended run --
+   * takes the same run lock the scheduled run takes (`cli/commands/run.js`).
+   *
+   * It does not wait for `app.whenReady()` either; Electron starts Chromium
+   * regardless, and nothing here needs a browser. It ends with
+   * `app.exit(code)`, the one ending measured to carry the code out.
+   */
+  const cliArgs = require('./cli/args');
+  require('./cli')
+    .main(cliArgs.tokensOf(process.argv, app.isPackaged))
+    .then((code) => app.exit(code))
+    .catch((err) => {
+      console.error('cleandrive:', err && err.message ? err.message : err);
+      app.exit(1);
+    });
+} else if (isHelper) {
   /*
    * Like the sampler, this never waits for `app.whenReady()` -- there is no
    * window to paint -- and it takes no single-instance lock, because the app

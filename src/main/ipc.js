@@ -4,6 +4,7 @@ const path = require('node:path');
 const { ipcMain, dialog, shell, app, BrowserWindow, nativeTheme, screen } = require('electron');
 
 const analyzers = require('./analyzers');
+const scanSession = require('./scan-session');
 const manifest = require('./ipc-manifest');
 const mediaRoots = require('./lib/media/roots');
 const cloud = require('./lib/media/cloud');
@@ -36,7 +37,6 @@ const snapshotDiff = require('./snapshots/diff');
 const reportCollect = require('./report/collect');
 const reportHtml = require('./report/html');
 const reportRedact = require('./report/redact');
-const mftRead = require('./system/mft-read');
 const planner = require('./planner/plan');
 const { HelperClient, appLauncher } = require('./helper/client');
 const licenseState = require('./license/state');
@@ -449,77 +449,15 @@ function register() {
 
   /* ---- scan ------------------------------------------------------------ */
 
-  /**
-   * One UAC prompt, then one catalogue read per eligible drive.
-   *
-   * Returns a map from drive root to the source a walk can be run against,
-   * plus what to tell the user when there is nothing in it. A refusal here is
-   * never fatal: every root falls back to the ordinary walk, and the status
-   * line says which scanner answered.
-   */
-  async function prepareFastScan(roots, { can, token, onProgress }) {
-    if (!can('pro.scan.mft')) return { sources: new Map(), refused: 'locked' };
-
-    const eligible = [];
-    const reasons = new Map();
-    for (const info of roots) {
-      const why = scanRoots.whyNotFast(info);
-      if (why) reasons.set(pathKey(info.root), why);
-      else if (!eligible.some((e) => pathKey(e.root) === pathKey(info.root))) eligible.push(info);
-    }
-    if (eligible.length === 0) {
-      return { sources: new Map(), reasons, refused: reasons.values().next().value || 'notWholeDrive' };
-    }
-
-    const client = helperClientFor();
-    onProgress({ phase: 'prompt' });
-    try {
-      await client.start();
-    } catch (err) {
-      if (err && err.code === 'EDECLINED') return { sources: new Map(), reasons, refused: 'declined' };
-      return { sources: new Map(), reasons, refused: 'helper' };
-    }
-
-    const sources = new Map();
-    const summaries = [];
-    try {
-      const ping = await client.request('ping');
-      if (!ping || !ping.elevated) return { sources, reasons, refused: 'notElevated' };
-
-      for (const info of eligible) {
-        if (token.cancelled) break;
-        try {
-          const read = await mftRead.readElevated(client, info.volume, {
-            onProgress: (p) => onProgress({ phase: 'mft', root: info.root, records: p.records, of: p.of }),
-          });
-          const built = mftRead.sourceFor(read, info.root);
-          sources.set(pathKey(info.root), { source: built.source, summary: read.summary });
-          summaries.push(read.summary);
-        } catch (err) {
-          // One drive's catalogue being unreadable is a reason to walk that
-          // drive, not a reason to fail the scan.
-          reasons.set(pathKey(info.root), 'unreadable');
-          console.error('[mft]', info.volume, err && err.message);
-        }
-      }
-    } finally {
-      // One prompt, one set of answers. Closing the pipe is what makes the
-      // helper leave; the table is already in this process.
-      client.stop();
-    }
-    return { sources, reasons, summaries, refused: sources.size === 0 ? 'unreadable' : null };
-  }
-
   // The window names folders, and one thing about how to read them: `fast`,
   // which is the "Fast scan" switch (A2). It used to be able to pass the
   // scanner's whole configuration through -- follow links, stop skipping
   // system folders, name every file in the tree -- and nothing in the window
   // ever did, so nothing else it sends is read.
   //
-  // One folder, or several (A4). Each is scanned on its own, as one always
-  // was, and keeps its own point in the history and its own snapshot, so a
-  // comparison with the last scan of the same folder still means what it
-  // meant. The reply joins them.
+  // One folder, or several (A4). The scan itself is scan-session.js, which the
+  // command line runs too; what is here is what only a window needs -- the
+  // progress events, and the folder tree it reads a level at a time.
   handle('scan:run', (event, folders, fast) =>
     guard(async () => {
       if (tokens.scan) tokens.scan.cancel();
@@ -527,93 +465,35 @@ function register() {
       tokens.scan = token;
 
       try {
-        const listing = await (scanHarness && scanHarness.volumes ? scanHarness.volumes() : volumes.list());
-        const prepared = await scanRoots.prepareRoots(folders, { drives: listing.drives });
-        if (prepared.roots.length === 0) {
-          const why = prepared.refused[0] ? prepared.refused[0].reason : 'missing';
-          throw Object.assign(new Error(why === 'notFolder' ? 'That is not a folder' : 'That folder is not there any more'), { code: 'ENOENT', quiet: true });
-        }
         const can = licenseState.canNow();
-        if (prepared.roots.length > 1 && !can('pro.scan.multiroot')) {
-          throw Object.assign(new Error('Scanning several folders at once is part of CleanDrive Pro'), { code: 'ELOCKED', quiet: true });
-        }
-
-        // Asked for before any folder is scanned: one UAC prompt covers every
-        // drive in the list, and a refusal only means the ordinary walk runs.
-        const plan = fast === true
-          ? await prepareFastScan(prepared.roots, {
-            can,
-            token,
-            onProgress: (payload) => {
-              if (!event.sender.isDestroyed()) event.sender.send('scan:progress', { ...payload, roots: prepared.roots.length });
-            },
-          })
-          : null;
-
-        const parts = [];
-        for (const [index, info] of prepared.roots.entries()) {
-          if (token.cancelled) break;
-          const send = (payload) => {
-            if (!event.sender.isDestroyed()) {
-              event.sender.send('scan:progress', { ...payload, root: info.root, rootIndex: index, roots: prepared.roots.length });
-            }
-          };
-          const fromTable = plan ? plan.sources.get(pathKey(info.root)) : null;
-          const collected = await analyzers.collect(
-            'scan',
-            // cloudFiles: which OneDrive files could be made online-only (B3).
-            {
-              root: info.root,
-              options: {
-                collectTree: true,
-                cloudFiles: info.readOnly === null,
-                // The one option that changes where the walk's answers come
-                // from rather than what it does with them (A2). Unset, and
-                // the walk is exactly the walk it was.
-                ...(fromTable ? { source: fromTable.source } : {}),
-                ...(appCacheHarness && appCacheHarness.env ? { appCacheEnv: appCacheHarness.env } : {}),
-              },
-              deps: {
-                ...(cloudDeps ? { cloud: cloudDeps } : {}),
-                ...(appCacheHarness && appCacheHarness.runningProcessNames ? { runningProcessNames: appCacheHarness.runningProcessNames } : {}),
-              },
-            },
-            { token, onProgress: send, can }
-          );
-          // The tree stays in this process: the snapshot store keeps it, and the
-          // window reads it a level at a time through scan:children.
-          const { tree, treeFiles, ...summary } = collected.summary;
-
-          // A cancelled scan reports partial totals; recording those as a point
-          // on the trend would put a dip in the series that never happened.
-          if (!summary.cancelled) await recordSnapshot(summary, 'scan');
-          // The snapshot keeps even a stopped scan, marked incomplete: comparing
-          // against it later is allowed, and labelled a guess.
-          if (tree) await saveTreeSnapshot({ ...summary, tree });
-
-          const candidates = info.readOnly
-            ? collected.candidates.map((c) => scanRoots.readOnlyCandidate(c, info.readOnly))
-            : collected.candidates;
-          const unscanned = await scanRoots.unscannedOnDrive(info, summary, scanHarness && scanHarness.statfs ? { statfs: scanHarness.statfs } : {});
-          // Which scanner answered for this folder, and -- when the fast one
-          // was asked for and did not -- why not. The window says so on the
-          // status line: a measurement nobody can attribute is a measurement
-          // nobody can check.
-          const scanner = fromTable
-            ? {
-              scanner: 'mft',
-              mft: {
-                bytes: fromTable.summary.mftBytes,
-                records: fromTable.summary.recordsRead,
-                files: fromTable.summary.fileCount,
-                folders: fromTable.summary.folderCount,
-                torn: fromTable.summary.torn,
-                ms: fromTable.summary.ms,
-              },
-            }
-            : { scanner: 'walk', ...(plan ? { fastRefused: plan.reasons.get(pathKey(info.root)) || plan.refused } : {}) };
-          parts.push({ info: { ...info, unscanned, ...scanner }, summary, candidates, tree, treeFiles });
-        }
+        const deps = {
+          ...(scanHarness && scanHarness.volumes ? { volumes: scanHarness.volumes } : {}),
+          ...(scanHarness && scanHarness.statfs ? { statfs: scanHarness.statfs } : {}),
+          ...(cloudDeps ? { cloud: cloudDeps } : {}),
+          ...(appCacheHarness && appCacheHarness.env ? { appCacheEnv: appCacheHarness.env } : {}),
+          ...(appCacheHarness && appCacheHarness.runningProcessNames ? { runningProcessNames: appCacheHarness.runningProcessNames } : {}),
+        };
+        const prepared = await scanSession.prepare(folders, { can, deps });
+        const send = (payload) => {
+          if (!event.sender.isDestroyed()) event.sender.send('scan:progress', payload);
+        };
+        const { parts } = await scanSession.scanPrepared(prepared, {
+          fast: fast === true,
+          can,
+          token,
+          deps,
+          helperClient: helperClientFor,
+          onProgress: send,
+          onFastProgress: (payload) => send({ ...payload, roots: prepared.roots.length }),
+          afterCollect: async ({ summary, tree }) => {
+            // A cancelled scan reports partial totals; recording those as a point
+            // on the trend would put a dip in the series that never happened.
+            if (!summary.cancelled) await recordSnapshot(summary, 'scan');
+            // The snapshot keeps even a stopped scan, marked incomplete: comparing
+            // against it later is allowed, and labelled a guess.
+            if (tree) await saveTreeSnapshot({ ...summary, tree });
+          },
+        });
 
         const trees = parts.filter((p) => p.tree).map((p) => new ScanTree({
           root: p.summary.root,
@@ -632,18 +512,7 @@ function register() {
           scanTree = { id: treeId, tree: trees.length === 1 ? trees[0] : new MultiScanTree(trees) };
         }
 
-        const summary = parts.length === 1 ? parts[0].summary : scanRoots.mergeScans(parts);
-        return {
-          ...summary,
-          // A stop between two folders leaves the rest unscanned; say so.
-          cancelled: summary.cancelled || parts.length < prepared.roots.length,
-          roots: parts.map((p) => p.info),
-          notScanned: prepared.roots.slice(parts.length).map((r) => r.root),
-          merged: prepared.merged,
-          refused: prepared.refused,
-          treeId,
-          candidates: parts.flatMap((p) => p.candidates),
-        };
+        return { ...scanSession.joined(prepared, parts), treeId };
       } finally {
         if (tokens.scan === token) tokens.scan = null;
       }

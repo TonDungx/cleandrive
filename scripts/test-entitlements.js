@@ -170,6 +170,10 @@ console.log('\nentitlements: what never goes through can()\n');
     'src/main/actions/recycle.js',
     'src/main/actions/restore.js',
     'src/main/actions/execute.js',
+    // The command line's two doors to the same things (H1): `journal` and
+    // `restore` are a terminal's Restore Center, held to its rule.
+    'src/main/cli/commands/journal.js',
+    'src/main/cli/commands/restore.js',
   ];
   const offenders = mustNotGate.filter((rel) => /license\/(entitlements|state)/.test(fs.readFileSync(path.join(ROOT, rel), 'utf8')));
   check('the journal, the ledger, the purge and the Recycle Bin never consult a licence', offenders.length === 0,
@@ -194,6 +198,17 @@ console.log('\nentitlements: what never goes through can()\n');
     /canNow\(\)\('biz\.audit'\)/.test(servicesSrc) && /new ActionJournal\([^)]*sealer/.test(servicesSrc));
   check('and the check of the seals is one of the Restore Center’s handlers, ungated',
     restoreBlock.includes("handle('journal:verify'"));
+
+  // And on the command line, the table that decides: everything is behind
+  // biz.cli except reading the journal, putting things back, and describing
+  // the program -- and those are not asked about at all.
+  const { COMMANDS } = require('../src/main/cli/args');
+  const free = Object.entries(COMMANDS).filter(([, spec]) => spec.feature === null).map(([name]) => name).sort();
+  const gated = Object.entries(COMMANDS).filter(([, spec]) => spec.feature !== null);
+  check('the command line never asks about journal, restore, version or help',
+    free.join(',') === 'help,journal,restore,version', free.join(','));
+  check('and every other command needs biz.cli', gated.length > 0 && gated.every(([, spec]) => spec.feature === 'biz.cli'),
+    gated.map(([name, spec]) => `${name}:${spec.feature}`).join(' '));
 }
 
 console.log(failures === 0 ? '\nALL PASS\n' : `\n${failures} FAILURE(S)\n`);

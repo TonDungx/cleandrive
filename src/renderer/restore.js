@@ -87,6 +87,8 @@
         return t('restore.source.autoclean', 'automatic cleanup, started by hand');
       case 'scheduled':
         return t('restore.source.scheduled', 'scheduled cleanup');
+      case 'cli':
+        return t('restore.source.cli', 'from the command line');
       case 'migrated':
         return t('restore.source.migrated', 'from the older record');
       case 'purge':

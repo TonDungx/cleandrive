@@ -872,7 +872,9 @@ function renderRunResult(run) {
   const left = document.createElement('span');
   left.textContent = run.manual
     ? t('auto.result.byHand', '{when} (started by hand)', { when: formatWhen(run.startedAt) })
-    : formatWhen(run.startedAt);
+    : run.via === 'cli'
+      ? t('auto.result.fromCli', '{when} (from the command line)', { when: formatWhen(run.startedAt) })
+      : formatWhen(run.startedAt);
   const right = document.createElement('span');
   right.textContent = tm(run.reason) || run.outcome;
   outcome.append(left, right);
@@ -1387,7 +1389,10 @@ api.onDataChanged(async (payload) => {
   if (!data || !data.lastRun || data.lastRun.startedAt === before) return;
 
   const run = data.lastRun;
-  if (run.manual) return; // the manual path reports its own result already
+  // The manual path reports its own result already, and so does the command
+  // line -- in the terminal it was started from. Announcing either here as a
+  // "Scheduled cleanup" would name something that did not happen.
+  if (run.manual || run.via === 'cli') return;
 
   toast(
     run.outcome === 'dry-run'

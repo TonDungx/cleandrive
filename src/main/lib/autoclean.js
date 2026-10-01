@@ -455,6 +455,9 @@ async function runAutoClean(options) {
   run.trashed.files = executed.moved.length;
   run.trashed.bytes = executed.movedBytes;
   run.trashed.failed = executed.failed.length;
+  // The journal session the files went into, so a run can be undone by name
+  // (`cleandrive restore <session>`) rather than found again by its date.
+  run.session = executed.session || null;
   // What the drive being cleaned actually got back, which for `recycle` is
   // nothing (the bin is on the same volume) and for `quarantine` is the bytes
   // only if the originals went. Read from the handler rather than assumed --

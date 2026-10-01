@@ -75,6 +75,16 @@ function mb(bytes) {
   fs.writeFileSync(nshPath, require('../src/main/lib/context-menu').uninstallerScript());
   console.log(`uninstall   ${path.relative(ROOT, nshPath)}  (Explorer menu keys)\n`);
 
+  /* ---- the command line's way in (H1) ------------------------------------ */
+  // `bin\cleandrive.cmd`, beside the app rather than inside app.asar: cmd has
+  // to be able to run it. Nothing touches PATH (decided 2026-10-01) -- the
+  // README gives the full path, and an IT department can add the folder.
+  const binDir = path.join(BUILD, 'bin');
+  fs.mkdirSync(binDir, { recursive: true });
+  const shimPath = path.join(binDir, 'cleandrive.cmd');
+  fs.writeFileSync(shimPath, require('../src/main/cli/shim').shimText(), 'ascii');
+  console.log(`cli         ${path.relative(ROOT, shimPath)}\n`);
+
   /* ---- which build this is ----------------------------------------------- */
   // Written for the packager and removed straight after, so it only ever
   // exists inside an installer. A checkout without it is the `dev` channel,
@@ -109,6 +119,8 @@ function mb(bytes) {
       // ship a verify-autoclean.js that deletes real files, to a machine whose
       // owner never asked for it.
       files: ['src/**/*', 'package.json'],
+      // The command line's batch file, as `<install folder>\bin\cleandrive.cmd`.
+      extraFiles: [{ from: binDir, to: 'bin' }],
 
       win: {
         icon: icoPath,
