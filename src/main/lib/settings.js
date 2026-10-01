@@ -55,8 +55,12 @@ const themePalette = require('../../shared/theme-palette');
  *            when Chrome and Edge arrived (D3)
  *  10 -> 11  `developer.hardlink`: the hidden switch in front of joining
  *            duplicate copies into one file, off (F4)
+ *  11 -> 12  `map.enabled`: whether the Photos screen may show where pictures
+ *            were taken, off -- it is the only thing besides the update check
+ *            that reaches the network, and the only thing that reads a
+ *            coordinate out of a file (E4)
  */
-const SCHEMA_VERSION = 11;
+const SCHEMA_VERSION = 12;
 
 const MIGRATIONS = Object.freeze([
   {
@@ -205,6 +209,17 @@ const MIGRATIONS = Object.freeze([
     },
   },
   {
+    from: 11,
+    to: 12,
+    migrate(raw) {
+      // Off for everybody, including anybody already running the app. Turning
+      // it on means two things at once -- positions are read out of pictures,
+      // and map tiles are fetched over the network -- and a migration is not
+      // consent to either.
+      return { ...raw, version: 12, map: { enabled: false, ...(isObject(raw.map) ? raw.map : {}) } };
+    },
+  },
+  {
     from: 10,
     to: 11,
     migrate(raw) {
@@ -341,7 +356,7 @@ const LANGUAGES = ['system', ...i18n.CODES];
 /** The top-level groups `patch` merges one level into. */
 const SECTIONS = [
   'autoClean', 'purge', 'monitor', 'appearance', 'updates',
-  'trends', 'snapshots', 'quarantine', 'backup', 'explorer', 'developer',
+  'trends', 'snapshots', 'quarantine', 'backup', 'explorer', 'developer', 'map',
 ];
 
 /** Hard ceilings. These are not preferences -- they bound the blast radius. */
@@ -534,6 +549,14 @@ function defaults() {
       // Explorer's right-click menu (I3). Off by default (decided 2026-09-25):
       // the app writes nothing to the registry until somebody asks it to.
       contextMenu: false,
+    },
+    map: {
+      // Where pictures were taken, on a map (E4). Off, and it is the switch in
+      // this file with the widest reach: with it on, `analyzers/media.js` lets
+      // coordinates cross to the window, and the map fetches tiles -- which
+      // makes it the second thing in the app to touch the network, after the
+      // update check. The card that turns it on says both.
+      enabled: false,
     },
     developer: {
       // Joining duplicate copies into one file (F4). Off, and it is the one
@@ -1094,6 +1117,9 @@ function coerceSettings(input, { minMinutes = 1 } = {}) {
       },
       developer: {
         hardlink: bool(isObject(raw.developer) ? raw.developer.hardlink : undefined, base.developer.hardlink),
+      },
+      map: {
+        enabled: bool(isObject(raw.map) ? raw.map.enabled : undefined, base.map.enabled),
       },
     },
     warnings,

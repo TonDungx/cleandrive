@@ -1569,6 +1569,142 @@ app.whenReady().then(async () => {
           JSON.stringify(withoutChat));
       }
     }
+    /* -- the timeline, and the map (E4) ----------------------------------- */
+    //
+    // Nothing here touches the network. The tile server rate-limits repeat
+    // runs, and a suite that depended on it would fail for reasons that are
+    // not about this code -- so what is checked is the card's two states and
+    // the switch between them. `test-media-map.js` drives the fetching itself
+    // against a fake.
+    console.log('\nTimeline and map (E4):');
+
+    {
+      const js = (expr) => win.webContents.executeJavaScript(expr);
+
+      const level = () => js(`({
+        trail: document.getElementById('ov-when-trail').textContent,
+        trailHidden: document.getElementById('ov-when-trail').hidden,
+        bars: document.querySelectorAll('#ov-years .ov-year').length,
+        active: document.querySelectorAll('#ov-years .ov-year.is-active').length,
+        note: document.getElementById('ov-when-dated').textContent,
+        token: document.getElementById('media-tokens').textContent,
+        shown: media.shown.length,
+      })`);
+
+      const years = await level();
+      check('the timeline opens on years', years.bars >= 2 && years.trailHidden === true,
+        `${years.bars} bars`);
+      check('and says where its dates came from', years.note.length > 0, years.note.slice(0, 60));
+
+      // Drill in by clicking the tallest bar, whatever year the fixture put
+      // the weight in -- the assertion is about the levels, not about a date.
+      const intoYear = await js(`(() => {
+        const bars = [...document.querySelectorAll('#ov-years .ov-year:not(:disabled)')];
+        const tallest = bars.sort((a, b) =>
+          parseFloat(b.querySelector('.ov-year-fill').style.height) -
+          parseFloat(a.querySelector('.ov-year-fill').style.height))[0];
+        if (!tallest) return null;
+        tallest.click();
+        return tallest.getAttribute('aria-label');
+      })()`);
+      check('a year can be clicked', Boolean(intoYear), String(intoYear).slice(0, 40));
+
+      const months = await level();
+      check('clicking a year shows its twelve months', months.bars === 12, `${months.bars} bars`);
+      check('and a trail back out appears', months.trailHidden === false && months.trail.length > 0, months.trail);
+      check('the grid is filtered to that year too -- zoom and filter are one gesture',
+        months.shown > 0 && months.shown < years.shown, `${months.shown} of ${years.shown}`);
+      check('and a chip says so', months.token.length > 0, months.token);
+
+      const intoMonth = await js(`(() => {
+        const bars = [...document.querySelectorAll('#ov-years .ov-year:not(:disabled)')];
+        const tallest = bars.sort((a, b) =>
+          parseFloat(b.querySelector('.ov-year-fill').style.height) -
+          parseFloat(a.querySelector('.ov-year-fill').style.height))[0];
+        if (!tallest) return null;
+        tallest.click();
+        return tallest.getAttribute('aria-label');
+      })()`);
+      check('a month can be clicked', Boolean(intoMonth), String(intoMonth).slice(0, 40));
+
+      const days = await level();
+      check('clicking a month shows that month’s days', days.bars >= 28 && days.bars <= 31, `${days.bars} bars`);
+      check('and narrows the grid again', days.shown > 0 && days.shown <= months.shown,
+        `${days.shown} of ${months.shown}`);
+
+      // Gaps are drawn rather than closed: a day with nothing in it is a fact
+      // about the library, and a view that skipped empty days would quietly
+      // redraw somebody's history.
+      //
+      // Asserted as "every day of that calendar month has a bar" rather than
+      // as "some bar is empty". The first version counted empty bars and
+      // failed on a library busy enough to have something on all thirty days
+      // -- a test that passes only when the data is sparse is a test about the
+      // data.
+      const calendar = await js(`(() => {
+        const { year, month } = media.filters.when;
+        return {
+          inMonth: new Date(year, month + 1, 0).getDate(),
+          bars: document.querySelectorAll('#ov-years .ov-year').length,
+          empty: document.querySelectorAll('#ov-years .ov-year:disabled').length,
+        };
+      })()`);
+      check('every day of the month gets a bar, whether or not anything is in it',
+        calendar.bars === calendar.inMonth,
+        `${calendar.bars} bars for a ${calendar.inMonth}-day month, ${calendar.empty} of them empty`);
+
+      // Back out by the trail, which is the other half of the gesture.
+      await js(`(() => {
+        const steps = [...document.querySelectorAll('#ov-when-trail .ov-trail-step')];
+        if (steps[0]) steps[0].click();
+      })()`);
+      const back = await level();
+      check('the trail walks all the way back out', back.trailHidden === true && back.bars === years.bars);
+      check('and the grid is whole again', back.shown === years.shown, `${back.shown} of ${years.shown}`);
+
+      /* -- the map card ---------------------------------------------------- */
+
+      const mapCard = await js(`({
+        present: document.getElementById('ov-map-card').hidden === false,
+        consent: document.getElementById('ov-map-consent').hidden === false,
+        body: document.getElementById('ov-map-body').hidden === false,
+        why: document.getElementById('ov-map-why').textContent,
+        count: document.getElementById('ov-map-count').textContent,
+        located: window.mediaFiles().filter((f) => f.hasGps).length,
+        coords: window.mediaFiles().filter((f) => Number.isFinite(f.lat)).length,
+      })`);
+
+      check('no picture in this fixture records a position, so there is no map card at all',
+        mapCard.located === 0 ? mapCard.present === false : mapCard.present === true,
+        `${mapCard.located} located, card ${mapCard.present ? 'shown' : 'absent'}`);
+
+      // Whatever the fixture holds, the scan ran with the map off -- so no
+      // coordinate may have crossed. This is the same line `test-media-map.js`
+      // holds at the analyzer; this one holds it end to end, through the real
+      // IPC, in the real window.
+      check('and with the map off, not one coordinate reached the window',
+        mapCard.coords === 0, `${mapCard.coords} with coordinates`);
+
+      if (mapCard.present) {
+        check('the card asks before it fetches anything', mapCard.consent === true && mapCard.body === false);
+        check('and says what turning it on would send',
+          /tile|map/i.test(mapCard.why) && mapCard.why.length > 80, mapCard.why.slice(0, 70));
+      }
+
+      /* -- the tiles it kept, in Settings ---------------------------------- */
+
+      await js(`document.querySelector('.tab[data-tab="settings"]').click()`);
+      await until(win, `document.getElementById('map-cache-state').textContent.length > 0`, 20000);
+      const cache = await js(`({
+        line: document.getElementById('map-cache-state').textContent,
+        disabled: document.getElementById('map-cache-clear').disabled,
+      })`);
+      check('the Settings card says what the map has kept', cache.line.length > 0, cache.line);
+      check('and offers nothing to remove when it has kept nothing', cache.disabled === true);
+
+      await js(`document.querySelector('.tab[data-tab="media"]').click()`);
+    }
+
     /* -- the file viewer ---------------------------------------------------- */
     //
     // The viewer is the answer to "what is in this thing", asked from a list

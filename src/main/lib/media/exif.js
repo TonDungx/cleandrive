@@ -35,6 +35,13 @@ const TAG = {
   EXIF_IFD: 0x8769,
   GPS_IFD: 0x8825,
 
+  /* GPS IFD. Only these four; the altitude, the bearing, the timestamp and the
+     rest of the GPS block are not read, because nothing asks for them. */
+  GPS_LAT_REF: 0x0001,
+  GPS_LAT: 0x0002,
+  GPS_LON_REF: 0x0003,
+  GPS_LON: 0x0004,
+
   /* ExifIFD */
   DATETIME_ORIGINAL: 0x9003,
   DATETIME_DIGITIZED: 0x9004,
@@ -147,6 +154,22 @@ function readTiff(buf, tiffStart = 0) {
 
       if (valueAt < 0 || valueAt + Math.min(bytes, 1) > buf.length) continue;
 
+      // A latitude is three rationals -- degrees, minutes, seconds -- and
+      // `readValue` answers with the first one, which is the degrees alone.
+      // That is right for every other rational tag this file reads (an
+      // exposure time is one) and useless for a coordinate, so the GPS block
+      // gets its own read rather than a change that would alter the others.
+      if (into === gps && (tag === TAG.GPS_LAT || tag === TAG.GPS_LON) && type === 5 && components === 3) {
+        const parts = [];
+        for (let k = 0; k < 3; k++) {
+          const num = u32(valueAt + k * 8);
+          const den = u32(valueAt + k * 8 + 4);
+          parts.push(den === 0 ? 0 : num / den);
+        }
+        gps.set(tag, parts);
+        continue;
+      }
+
       const value = readValue(buf, valueAt, type, components, { u16, u32, i32 });
       if (value !== null && value !== undefined && value !== '') into.set(tag, value);
     }
@@ -195,6 +218,35 @@ function readValue(buf, at, type, components, read) {
     default:
       return null;
   }
+}
+
+/**
+ * One of the two coordinates, as a signed number of degrees.
+ *
+ * EXIF stores a position the way a nautical chart does -- degrees, minutes and
+ * seconds, all unsigned -- and puts which side of the equator or the meridian
+ * it is on in a separate one-letter tag. A reader that forgets the letter puts
+ * the southern hemisphere in the northern one.
+ *
+ * @param {Map} gps        the GPS IFD
+ * @param {number} tag     the coordinate tag
+ * @param {number} refTag  the tag holding N/S or E/W
+ * @param {string} negative  the letter that means "subtract"
+ * @param {number} limit   90 for a latitude, 180 for a longitude
+ */
+function coordinate(gps, tag, refTag, negative, limit) {
+  const parts = gps.get(tag);
+  if (!Array.isArray(parts) || parts.length !== 3) return null;
+  if (!parts.every((n) => typeof n === 'number' && Number.isFinite(n))) return null;
+
+  const degrees = parts[0] + parts[1] / 60 + parts[2] / 3600;
+  if (!Number.isFinite(degrees) || degrees > limit) return null;
+
+  const ref = gps.get(refTag);
+  const signed = typeof ref === 'string' && ref.trim().toUpperCase().startsWith(negative) ? -degrees : degrees;
+  // 0,0 is in the Gulf of Guinea, and it is also what a camera writes when its
+  // GPS has never had a fix. Treated as no position rather than as a place.
+  return signed === 0 ? null : signed;
 }
 
 /** `2024:03:17 14:05:09` is EXIF's own format, and it is local time with no zone. */
@@ -248,10 +300,34 @@ function shape(tags, gps) {
     focalLength: number(TAG.FOCAL_LENGTH),
     pixelX: number(TAG.PIXEL_X),
     pixelY: number(TAG.PIXEL_Y),
-    // Only whether a position was recorded, never the position. This app has no
-    // reason to know where a photo was taken, and a scan result that carried
-    // coordinates would be one export away from being a location history.
     hasGps: gps.size > 0,
+    // The position itself, in degrees.
+    //
+    // ## This reverses a decision, and the decision is worth reading first
+    //
+    // Until E4 this file returned `hasGps` and nothing else, with the reason
+    // written beside it: the app had no need to know where a photo was taken,
+    // and a scan result carrying coordinates is one "export" away from being a
+    // location history. `bmff.js` redacted video positions for the same
+    // reason, after a verification run printed the author's own home
+    // coordinates to six decimal places.
+    //
+    // The user reversed it on 2026-10-01 to build the map half of E4, having
+    // been shown what it costs. What replaces the old guarantee is not a
+    // promise in a comment but a boundary with a test on it:
+    //
+    //   - a position leaves this module, but it crosses to a window only when
+    //     the map is switched on, which it is not by default. The gate is in
+    //     `analyzers/media.js`, which is the last place before the IPC
+    //     boundary, and `test-media-map.js` fails if a coordinate gets past it
+    //     with the map off;
+    //   - nothing that writes a file -- the HTML report, the JSON and CSV
+    //     exports, the snapshots, the journal -- is given them at all, which
+    //     is the specific fear the old comment named.
+    //
+    // Null when the file records no position, or records one this cannot read.
+    latitude: coordinate(gps, TAG.GPS_LAT, TAG.GPS_LAT_REF, 'S', 90),
+    longitude: coordinate(gps, TAG.GPS_LON, TAG.GPS_LON_REF, 'W', 180),
     tagCount: tags.size,
   };
 }

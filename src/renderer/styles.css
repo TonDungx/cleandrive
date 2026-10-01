@@ -5268,6 +5268,166 @@ html[data-i18n-pending] body {
   height: 56px;
 }
 
+/* ==========================================================================
+   where the pictures were taken (E4)
+   ========================================================================== */
+
+.ov-map-card { flex: 1 1 100%; }
+
+.ov-map-consent {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.ov-map {
+  position: relative;
+  height: 280px;
+  overflow: hidden;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  /* The colour showing through where a tile has not arrived yet. Quiet enough
+     that a half-loaded map reads as loading rather than as broken. */
+  background: var(--surface);
+}
+
+.map-tiles,
+.map-pins {
+  position: absolute;
+  inset: 0;
+}
+
+.map-tile {
+  position: absolute;
+  width: 256px;
+  height: 256px;
+  /* Tiles are drawn edge to edge; without this a fractional device pixel ratio
+     leaves hairlines between them. */
+  outline: 0.5px solid transparent;
+}
+
+/* OpenStreetMap's own tiles are drawn for a light page. Rather than fetch a
+   second set from a provider whose terms do not fit a product that is sold,
+   the one set is turned down in dark mode -- the roads stay legible and the
+   paper stops glowing. */
+:root:not([data-theme='light']) .map-tile,
+:root[data-theme='dark'] .map-tile {
+  filter: invert(1) hue-rotate(180deg) brightness(0.86) contrast(0.92);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .map-tile {
+    filter: invert(1) hue-rotate(180deg) brightness(0.86) contrast(0.92);
+  }
+}
+
+.map-pins { pointer-events: none; }
+
+.map-pin {
+  position: absolute;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 5px;
+  transform: translate(-50%, -50%);
+  border: 2px solid var(--bg-elevated);
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  cursor: pointer;
+  pointer-events: auto;
+  box-shadow: var(--shadow-sm);
+}
+
+.map-pin:hover { filter: brightness(1.1); }
+
+/* Required by the tile licence, and true. */
+.map-credit {
+  position: absolute;
+  right: 4px;
+  bottom: 3px;
+  padding: 1px 5px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  color: var(--text-3);
+  font-size: 10.5px;
+  opacity: 0.9;
+}
+
+.ov-map-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.ov-map-note {
+  color: var(--text-3);
+  font-size: 11.5px;
+  text-align: right;
+}
+
+@media (max-width: 720px) {
+  .ov-map { height: 220px; }
+  .ov-map-note { text-align: left; width: 100%; }
+}
+
+/* The timeline's trail back out (E4): "All years · 2026 · September". Each
+   step but the last is a button; the last is where you are. */
+.ov-trail {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 4px;
+  margin: 0 0 8px;
+  font-size: 12px;
+}
+
+.ov-trail-step,
+.ov-trail-here {
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.ov-trail-step {
+  border: 0;
+  background: none;
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.ov-trail-step:hover { background: var(--surface); }
+
+/* The separator is drawn rather than written, so no string has to carry it
+   into the dictionary and no language has to argue about the character. */
+.ov-trail-step::after {
+  content: '›';
+  margin-left: 6px;
+  color: var(--text-3);
+}
+
+.ov-trail-here {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* Where the dates on screen came from. Quiet, because it is a qualification
+   rather than a result -- but always present, because at day level it is the
+   difference between "when this was taken" and "when this was written". */
+.ov-when-dated {
+  margin: 10px 0 0;
+  color: var(--text-3);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
 .ov-year {
   position: relative;
   display: flex;

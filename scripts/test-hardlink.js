@@ -169,8 +169,12 @@ async function main() {
     const fresh = settings.coerceSettings({});
     check('off out of the box', fresh.settings.developer.hardlink === false);
 
+    // Migrated all the way to today's schema, not to 11: E4 added one after
+    // this, and a check pinned to "11" would start failing every time the
+    // schema moves for reasons that have nothing to do with F4.
     const migrated = settings.migrate({ version: 10, explorer: { contextMenu: true } });
-    check('a settings file from before F4 migrates to 11', migrated.raw.version === 11);
+    check('a settings file from before F4 migrates forward', migrated.raw.version === settings.SCHEMA_VERSION,
+      `${migrated.raw.version} vs ${settings.SCHEMA_VERSION}`);
     check('and lands with the switch off -- a migration is not consent', migrated.raw.developer.hardlink === false);
 
     const junk = settings.coerceSettings({ version: 11, developer: { hardlink: 'yes' } });

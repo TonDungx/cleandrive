@@ -534,13 +534,53 @@
             <div class="ov-legend" id="ov-origin-legend"></div>
           </div>
 
+          <!--
+            The timeline (E4): years, then the months of a year, then the days
+            of a month. The trail and the note under the bars are written by
+            media.js and carry numbers, so neither takes a `data-i18n` -- that
+            attribute would wipe what was written the moment the language
+            changed, which this project has walked into three times.
+          -->
           <div class="ov-card ov-years" id="ov-years-card">
             <div class="ov-head">
-              <h2 data-i18n="media.chip.year">Year</h2>
+              <h2 data-i18n="media.chip.when">When</h2>
               <span class="ov-total" id="ov-years-note"></span>
             </div>
+            <div class="ov-trail" id="ov-when-trail" hidden></div>
             <div class="ov-hist" id="ov-years"
-              data-i18n-aria="media.chip.year" aria-label="Year" role="group"></div>
+              data-i18n-aria="media.chip.when" aria-label="When" role="group"></div>
+            <p class="ov-when-dated" id="ov-when-dated"></p>
+          </div>
+
+          <!--
+            Where the pictures were taken (E4). The card is absent when nothing
+            in the library recorded a position, and shows the consent panel
+            rather than a map until the switch is on. Every element map.js
+            writes into is free of `data-i18n`, which would otherwise wipe what
+            was written the moment the language changed.
+          -->
+          <div class="ov-card ov-map-card card-wide" id="ov-map-card" hidden>
+            <div class="ov-head">
+              <h2 data-i18n="media.map.title">Where they were taken</h2>
+              <span class="ov-total" id="ov-map-count"></span>
+            </div>
+
+            <div class="ov-map-consent" id="ov-map-consent">
+              <p class="card-note" id="ov-map-why"></p>
+              <button class="btn btn-sm" id="ov-map-turn-on"></button>
+            </div>
+
+            <div class="ov-map-body" id="ov-map-body" hidden>
+              <div class="ov-map" id="ov-map"
+                data-i18n-aria="media.map.title" aria-label="Where they were taken" role="group"></div>
+              <div class="ov-map-controls">
+                <button class="btn btn-sm" id="ov-map-out" data-i18n="media.map.out">Zoom out</button>
+                <button class="btn btn-sm" id="ov-map-in" data-i18n="media.map.in">Zoom in</button>
+                <button class="btn btn-sm" id="ov-map-fit" data-i18n="media.map.fit">Fit all</button>
+                <span class="spacer"></span>
+                <span class="ov-map-note" id="ov-map-note" aria-live="polite"></span>
+              </div>
+            </div>
           </div>
 
           <div class="ov-card ov-traits" id="ov-traits-card">
@@ -1582,6 +1622,25 @@
           </section>
 
           <!--
+            The tiles the map kept (E4). In a disk cleanup tool, anything the
+            app itself caches has to be visible and removable; this is the
+            only thing in the app that downloads files, so it is the only card
+            of its kind.
+          -->
+          <section class="card" id="map-cache-card">
+            <h2 data-i18n="map.cache.title">Map tiles</h2>
+            <p class="card-note" data-i18n="map.cache.note">
+              When the Photos screen shows where pictures were taken, the pieces of map it
+              fetches are kept here so the same view costs nothing the second time. Removing
+              them frees the space; the map fetches them again next time it is opened.
+            </p>
+            <p class="card-note" id="map-cache-state" aria-live="polite"></p>
+            <div class="panel-actions panel-actions-tight">
+              <button class="btn btn-sm" id="map-cache-clear" data-i18n="map.cache.clear">Remove the kept tiles</button>
+            </div>
+          </section>
+
+          <!--
             Settings -> Developer (F4). One switch, and the only one in this
             app that unlocks an *action* rather than changing a preference.
             It is written out at length because somebody who turns it on
@@ -1685,10 +1744,15 @@
               <input type="checkbox" id="update-enabled" />
               <span data-i18n="update.enabled">Check for new versions</span>
             </label>
+            <!-- This used to say "the only thing in this app that contacts the
+                 internet". E4's map made that false, so it was changed rather
+                 than left standing. -->
             <p class="card-note" data-i18n="update.note">
-              The only thing in this app that contacts the internet. It fetches one file from
-              the release page and sends nothing — no identifiers, no usage data. Switch it off
-              and the app makes no network requests at all.
+              It fetches one file from the release page and sends nothing — no identifiers, no
+              usage data. One other thing in the app reaches the network, and only once you
+              switch it on: the map on the Photos screen, which fetches pieces of map for the
+              area your pictures were taken in. With update checks off and that map off, the
+              app makes no network requests at all.
             </p>
             <p class="card-note" id="update-detail"></p>
             <div class="progress" id="update-progress" hidden role="progressbar" aria-valuemin="0" aria-valuemax="100" data-i18n-aria="progress.update" aria-label="Downloading the update">
@@ -2012,6 +2076,8 @@
     <script src="cloud.js"></script>
     <!-- All four share app.js's globals; must load after it. -->
     <script src="media.js"></script>
+    <!-- After media.js: the map card reads the library through hooks it sets. -->
+    <script src="map.js"></script>
     <script src="compare.js"></script>
     <script src="automatic.js"></script>
     <script src="trends.js"></script>

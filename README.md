@@ -956,7 +956,7 @@ pictures a chat app has resized and stripped, empty and unreadable files, and fo
 video the duration, resolution, bitrate and whether it has sound. A file can
 carry several of these at once, so they are tags rather than a category.
 
-### Four axes, four different controls
+### Five axes, four different controls
 
 The first version of this screen shipped with thirty-three filter chips wrapped
 over five rows — four hundred pixels of controls, in a bar that did not scroll
@@ -968,9 +968,10 @@ The mistake was using one control for three different shapes of data:
 | Axis | Shape | Control | What the shape buys |
 | --- | --- | --- | --- |
 | Where from | A partition — each file is in exactly one | **One proportional bar**, segments sized by bytes | The *share* each source takes, not merely that it exists. 3,450 screenshots at 674 MB should not look bigger than 463 photographs at 1.3 GB |
-| Year | An axis — ordered, with gaps | **A histogram** | The shape of a library over time, and its empty years, in the space three chips used |
+| When | An axis — ordered, with gaps, and three levels deep | **A histogram you can walk into**: years, then months, then days | The shape of a library over time, its empty stretches, and the single day an event filled — in the space three chips used |
 | What it is | Overlapping tags | **Chips**, which genuinely fit | Unchanged — but far fewer of them |
 | Conversation | A partition of *part* of the library — most photographs came from no chat at all | **One proportional bar**, over the chat pictures only | Which conversation took the room. The card is absent entirely when nothing came from a chat |
+| Where taken | Points on the earth, which is not a list at all | **A map**, off until you switch it on | Which trip, rather than which folder. Absent when nothing recorded a position, and it is the one axis that reaches the network — see *Where they were taken* |
 
 Two smaller rules came with it:
 
@@ -983,6 +984,83 @@ Two smaller rules came with it:
   active filters as removable tokens. The tokens matter because the overview
   scrolls away, and a filtered grid three screens down would otherwise look
   exactly like the whole library.
+
+### When they were taken
+
+The card called **When** is a histogram you can walk into. It opens on years;
+click one and the bars become that year's twelve months; click a month and they
+become its days. A trail above them — *All years › 2026 › September* — walks
+back out again.
+
+Zooming in and filtering are the same gesture on purpose. The bar you clicked
+is the bar you are looking at, and the grid below shows exactly what it
+counts. Clicking the bar you are already on steps back out.
+
+**Empty bars are drawn, not skipped.** A month with nothing in it is a fact
+about your library, and closing up the gap would quietly redraw its history.
+
+**It says where its dates came from, at every level**, and that line is the
+most important thing on the card. Measured on the machine this was built on,
+of 11,419 pictures and videos:
+
+| | |
+| --- | --- |
+| a date from the picture or video itself | 513 (4.5%) |
+| only the file's own date | 10,906 (95.5%) |
+
+That sounds alarming and mostly is not. A screenshot has no capture date and
+never will; the moment the file was written *is* the moment it was taken. A
+picture from a chat is dated when it arrived, which is what somebody clearing
+space means by "when". The one case where the two can really differ is a
+photograph copied off a camera — and of the 513 files carrying both dates,
+**98.1% agree to the day** and not one is more than a year out.
+
+So the timeline draws from whichever date exists and tells you which, rather
+than hiding the difference or refusing to go past years.
+
+### Where they were taken
+
+Off until you switch it on, and the card explains what switching it on does
+before it does anything. It is absent entirely from a library where nothing
+recorded a position — not an empty card, not an explanation of a feature you
+cannot use.
+
+**Two things happen when you turn it on**, and both are in the card:
+
+- The position stored inside each picture is read. Nothing else in this app
+  reads one. Until this feature existed the code deliberately refused to, and
+  the reason is still in the comments.
+- Pieces of map are fetched for the area your pictures are in — so whoever
+  serves those pieces learns roughly where your pictures were taken. That is
+  the real cost, and it is not reduced by the map being useful.
+
+This is the second thing in the app that reaches the network. The first is the
+update check, and the Settings card for it used to say it was the only one;
+that sentence has been changed rather than left standing.
+
+**The window itself still never touches the network.** It runs under a policy
+that forbids it, and that policy was not loosened: the main process fetches
+each piece of map and hands the bytes back, which is the same route thumbnails
+have always taken.
+
+Pins that land on top of each other become one with a count on it. Clicking it
+filters the grid to the pictures it holds. **Zoom out**, **Zoom in** and **Fit
+all** are the only controls — there is no dragging, which is where a
+hand-written map goes wrong first.
+
+**When the pieces of map cannot be fetched**, the pins are still drawn in the
+right places and a line says why the background is missing. Where your
+pictures were taken is not in doubt because a server did not answer.
+
+Map pieces come from OpenStreetMap, are credited on the map as its licence
+requires, and are kept on your computer after the first time — **Settings →
+Map tiles** says how many and how much, and removes them.
+
+**One number worth knowing before you turn it on.** On the machine this was
+built on, 38 of 11,419 pictures and videos recorded a position at all — 0.3%,
+and nearly all of them from phones a decade old. Screenshots never do, chat
+pictures almost never do, and most modern phones have the setting off. The
+feature works; there may simply not be much for it to show.
 
 ### Which conversation a picture arrived in
 
@@ -2141,6 +2219,7 @@ is off out of the box and stays off when the app updates.
 | **Company while scanning** | Which animal walks the progress bar, or none |
 | **Scan history** | How many folder snapshots to keep: the newest few, plus one a month |
 | **Move to another drive** | Where moved files go, how many days before the app mentions they are still there, the most that folder may hold, and *Delete the original* |
+| **Map tiles** | What the [map](#where-they-were-taken) has downloaded and kept, and a button that removes it |
 | **Developer** | One switch, off: whether the Duplicates screen may [join copies into one file](#joining-copies-into-one-file) |
 | **Version and updates** | Which version you are running, the update controls, and the introduction again |
 
@@ -2371,10 +2450,15 @@ the disk is, so the question can be answered without clicking anything.
 - **No folder deletion from the interface.**
 - **No background service and no resident timer** for the scheduled cleanup. It
   is a Windows task that starts the app, works with no window, and exits.
-- **No telemetry, no crash reporting, no identifiers.** The app makes exactly one
-  kind of network request — asking the release feed whether there is a newer
-  version — and that can be switched off, in which case it makes none. The
-  interface itself is forbidden from reaching the network at all.
+- **No telemetry, no crash reporting, no identifiers.** The app makes two kinds
+  of network request and no others. One asks the release feed whether there is a
+  newer version. The other fetches pieces of map, and only after you switch on
+  [the map of where pictures were taken](#where-they-were-taken), which ships
+  off — that one is *about* your pictures, in that the pieces fetched are for
+  the area they are in, and the card says so before you turn it on. Switch both
+  off and the app makes no network requests at all. The interface itself is
+  forbidden from reaching the network either way: both requests are made by the
+  main process.
 - **No automatic optimisation, defragmentation or registry cleaning.** It does
   not claim to make anything faster.
 - **No system change of its own.** Hibernation, restore points, the component

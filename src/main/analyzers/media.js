@@ -32,11 +32,25 @@ function toCandidate(record, context) {
   const nature = describeNature(record, context);
   const chat = conversationOf(record.path);
 
-  // The year a photograph belongs to, in the order the user would mean it:
+  // When a photograph belongs, in the order the user would mean it:
   // when it was taken, else when it was recorded, else when the file was last
   // written. A file copied off a camera has today's mtime and a capture date
   // from years ago, and filing it under this year would be wrong.
+  //
+  // `year` used to be sent beside this. E4 replaced the year histogram with a
+  // timeline that goes down to the day, which works from `at` directly, and a
+  // field nothing reads is a field that goes quietly wrong -- so it was taken
+  // out rather than left to look like a feature waiting for a screen.
   const at = record.takenAt || record.recordedAt || record.mtimeMs;
+
+  // Which of those three it turned out to be. The timeline (E4) drills down to
+  // a single day, and at that depth the difference matters: measured on this
+  // machine, only 4.5% of 11,419 files carry a date from the picture or the
+  // video itself, and the rest are dated by the file. A day-level bar built on
+  // the second kind is a bar about when files were written, which is a
+  // different question -- so the screen says which it is drawing rather than
+  // letting both look alike.
+  const dateFrom = record.takenAt ? 'taken' : record.recordedAt ? 'recorded' : 'file';
 
   return {
     id: candidateId(ID, record.path),
@@ -80,7 +94,7 @@ function toCandidate(record, context) {
       takenAt: record.takenAt || null,
       mtimeMs: record.mtimeMs,
       at,
-      year: at ? new Date(at).getFullYear() : null,
+      dateFrom,
       origin: origin.origin,
       app: origin.app,
       // Which chat this arrived in, where the folder says so (E5). Read off
@@ -92,6 +106,33 @@ function toCandidate(record, context) {
       conversation: chat ? chat.conversation : null,
       conversationApp: chat ? chat.app : null,
       traits: nature.traits,
+      /*
+       * Where it was taken (E4), and the one gate that decides whether a
+       * coordinate ever leaves this process.
+       *
+       * `lib/media/exif.js` and `lib/media/bmff.js` used to refuse to read a
+       * position at all, and the comment in each says what that was protecting
+       * against: a scan result holding coordinates is one export away from
+       * being a location history, and an early run of the video parser printed
+       * the author's own home to six decimal places. The user reversed that on
+       * 2026-10-01 so the map half of E4 could exist.
+       *
+       * This line is what replaced it. It is the last thing before the IPC
+       * boundary, so it is the whole of the new guarantee:
+       *
+       *   - with the map off -- which is how it ships -- `lat` and `lon` are
+       *     not in the payload at all. Not null, not zero: absent.
+       *   - `hasGps` crosses either way, because it has since the subsystem
+       *     shipped and it is what the "Records where it was taken" trait is
+       *     drawn from.
+       *
+       * `scripts/test-media-map.js` fails if a coordinate gets past here with
+       * the map off, and fails if anything that writes a file is handed one.
+       */
+      ...(context.coordinates === true && Number.isFinite(record.latitude) && Number.isFinite(record.longitude)
+        ? { lat: record.latitude, lon: record.longitude }
+        : {}),
+      hasGps: Boolean(record.hasGps),
     },
   };
 }
@@ -108,7 +149,7 @@ const analyzer = {
    * program's artwork and are hidden; the summary's `visibleIds` is the final
    * set, in order, rather than the scan holding everything back until it knows.
    *
-   * @param {object} ctx  { roots, options, context: { displays }, deps: { scanMedia } }
+   * @param {object} ctx  { roots, options, context: { displays, coordinates }, deps: { scanMedia } }
    */
   async *run(ctx, token) {
     const scan = (ctx.deps && ctx.deps.scanMedia) || scanMedia;

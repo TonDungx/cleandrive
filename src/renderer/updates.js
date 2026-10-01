@@ -204,7 +204,7 @@ $('update-enabled').addEventListener('change', async () => {
   toast(
     enabled
       ? t('update.toast.on', 'Update checks are on.')
-      : t('update.toast.off', 'Update checks are off. The app makes no network requests.')
+      : t('update.toast.off', 'Update checks are off.')
   );
 });
 

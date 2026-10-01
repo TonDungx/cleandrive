@@ -1455,9 +1455,10 @@
     'update.label': 'Cập nhật',
     'update.enabled': 'Kiểm tra phiên bản mới',
     'update.note':
-      'Đây là thứ duy nhất trong ứng dụng có kết nối internet. Nó tải về một tệp từ trang phát hành và ' +
-      'không gửi đi gì cả — không định danh, không dữ liệu sử dụng. Tắt nó đi thì ứng dụng không thực ' +
-      'hiện bất kỳ yêu cầu mạng nào.',
+      'Nó tải về một tệp từ trang phát hành và không gửi đi gì cả — không định danh, không dữ liệu sử ' +
+      'dụng. Còn đúng một thứ nữa trong app có chạm tới mạng, và chỉ khi bạn tự bật: bản đồ ở màn Ảnh, ' +
+      'nó tải các mảnh bản đồ của vùng có ảnh của bạn. Tắt kiểm tra cập nhật và tắt bản đồ thì ứng dụng ' +
+      'không thực hiện bất kỳ yêu cầu mạng nào.',
     'update.download': 'Tải về',
     'update.install': 'Khởi động lại và cài',
     'update.notNow': 'Để sau',
@@ -1497,7 +1498,7 @@
     'update.pill.fetchingHint': 'Đang tải bản cập nhật; bạn sẽ được hỏi trước khi nó được cài',
     'update.pill.installHint': 'Cài bản cập nhật rồi khởi động lại — mất vài giây',
     'update.toast.on': 'Đã bật kiểm tra cập nhật.',
-    'update.toast.off': 'Đã tắt kiểm tra cập nhật. Ứng dụng không thực hiện yêu cầu mạng nào.',
+    'update.toast.off': 'Đã tắt kiểm tra cập nhật.',
     'update.toast.latest': 'Bạn đang dùng phiên bản mới nhất ({version}).',
     'update.toast.noFeed': 'Bản dựng này không có nguồn phát hành để kiểm tra.',
     'update.toast.deferred': 'Bản cập nhật sẽ được cài vào lần khởi động lại kế tiếp.',
@@ -1672,7 +1673,54 @@
     'media.conversation.why':
       'Hiện bằng id: cái tên nằm trong database tin nhắn của app chat, mà app này không mở database tin nhắn.',
     'media.token.conversation': 'Cuộc trò chuyện {id}',
-    'media.chip.year': 'Năm',
+    /* ---- bản đồ: nơi ảnh được chụp (E4) ---------------------------------- */
+
+    'media.map.title': 'Nơi ảnh được chụp',
+    'media.map.count': '{n} tấm có ghi nơi chụp',
+    'media.map.turnOn': 'Hiện bản đồ',
+    'media.map.why':
+      'Hiện chúng lên bản đồ nghĩa là hai việc. Vị trí lưu bên trong mỗi tấm ảnh sẽ được đọc — thứ mà bình ' +
+      'thường app này không làm. Và các mảnh bản đồ của vùng có ảnh sẽ được tải về — nên bên cung cấp mảnh ' +
+      'bản đồ biết được đại khái ảnh của bạn chụp ở đâu. Mảnh bản đồ lấy từ OpenStreetMap, đi qua app chứ ' +
+      'không phải từ trang, và mỗi mảnh được giữ lại trên máy sau lần đầu.',
+    'media.map.in': 'Phóng to',
+    'media.map.out': 'Thu nhỏ',
+    'media.map.fit': 'Vừa hết',
+    'media.map.shown': '{n} trên bản đồ',
+    'media.map.pinMany': '{n} tấm chụp ở đây',
+    'media.map.pinOne': 'Chụp ở đây: {name}',
+    'media.map.rescan':
+      'Quét lại để đọc vị trí — lượt quét trước đã bỏ qua chúng vì bản đồ đang tắt.',
+    'media.map.noNetwork':
+      'Không tải được mảnh bản đồ — có thể không có mạng, hoặc mạng này đang chặn. Vị trí vẫn đúng; chỉ ' +
+      'thiếu phần nền.',
+    'media.map.slow':
+      'Máy chủ bản đồ không trả lời kịp. Vị trí vẫn đúng; chỉ thiếu phần nền.',
+    'media.map.problem':
+      'Không tải được mảnh bản đồ ({code}). Vị trí vẫn đúng; chỉ thiếu phần nền.',
+    'media.map.refused': 'Bản đồ đang tắt.',
+    // Giấy phép của mảnh bản đồ đòi đúng dòng này, nguyên văn, ở mọi ngôn ngữ.
+    'media.map.credit': '© OpenStreetMap contributors',
+    'media.token.place': '{n} tấm ở một chỗ',
+
+    'map.cache.title': 'Mảnh bản đồ đã giữ',
+    'map.cache.note':
+      'Khi màn Ảnh hiện nơi ảnh được chụp, các mảnh bản đồ tải về được giữ lại ở đây để lần sau xem cùng ' +
+      'một vùng không tốn gì. Xoá đi thì lấy lại được dung lượng; lần mở bản đồ sau sẽ tải lại.',
+    'map.cache.clear': 'Xoá các mảnh đã giữ',
+    'map.cache.empty': 'Chưa giữ gì.',
+    'map.cache.held': '{n} mảnh bản đồ · {size}',
+    'map.cache.removed': 'Đã xoá {n} mảnh bản đồ · giải phóng {size}',
+
+    /* ---- dòng thời gian: năm → tháng → ngày (E4) ------------------------ */
+    'media.chip.when': 'Thời gian',
+    'media.when.allYears': 'Mọi năm',
+    'media.when.inView': '{n} tệp',
+    'media.when.allDated': 'Tất cả đều mang ngày từ chính bức ảnh.',
+    'media.when.noneDated':
+      'Không tệp nào mang ngày từ chính bức ảnh — chúng được xếp theo ngày của tệp.',
+    'media.when.someDated':
+      '{n} trong {total} mang ngày từ chính bức ảnh; số còn lại xếp theo ngày của tệp.',
     'media.noPreview': 'không xem trước được',
     'media.videoShort': 'video',
     'media.cloudBadge': 'Đang đồng bộ với {service} — xoá ở đây là xoá trên mọi thiết bị',

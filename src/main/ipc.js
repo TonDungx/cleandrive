@@ -9,6 +9,7 @@ const mediaRoots = require('./lib/media/roots');
 const cloud = require('./lib/media/cloud');
 const thumbs = require('./lib/media/thumbs');
 const perceptual = require('./lib/media/perceptual');
+const mapTiles = require('./map/tiles');
 const { MediaCache } = require('./lib/media/cache');
 const { preview } = require('./lib/preview');
 const previewServe = require('./lib/preview/serve');
@@ -416,6 +417,11 @@ function register() {
     .settings.get()
     .then((settings) => language.apply(settings.appearance.language))
     .catch(() => {});
+
+  // Where tiles are cached and what the tile server is told we are (E4). Named
+  // here rather than at import time because it needs `app.getPath`, which only
+  // answers once Electron is ready.
+  mapTiles.configure();
 
   // Started here rather than in main.js because it is part of the same job as
   // the handlers below: keeping the renderer's view of the app true. The
@@ -2659,6 +2665,33 @@ function register() {
     })
   );
 
+  /* ---- the map (E4) ------------------------------------------------------ */
+
+  /*
+   * Tiles, fetched here because the window cannot fetch anything.
+   *
+   * `index.html` runs under `default-src 'none'` and that is not widened for
+   * this: the window sends tile coordinates and gets PNG bytes back as `data:`
+   * URIs, which `img-src` has allowed since thumbnails were built. The same
+   * arrangement phase 6 settled on for payments.
+   *
+   * Refused outright when the map is switched off, which is how it ships. That
+   * is not only tidiness -- it is what stops a window asking this process to
+   * make a network request the user did not turn on.
+   */
+  handle('map:tiles', (event, list) =>
+    guard(async () => {
+      const { map } = await services().settings.get();
+      if (!map || map.enabled !== true) return { tiles: [], attribution: mapTiles.ATTRIBUTION, refused: 'off' };
+      return mapTiles.fetchTiles(Array.isArray(list) ? list : []);
+    })
+  );
+
+  /** What the tile cache holds, for the card in Settings that offers to clear it. */
+  handle('map:cache', () => guard(() => mapTiles.cacheSize()));
+
+  handle('map:clearCache', () => guard(() => mapTiles.clearCache()));
+
   /* ---- photos and video -------------------------------------------------- */
 
   /**
@@ -2741,7 +2774,12 @@ function register() {
         if (!event.sender.isDestroyed()) event.sender.send(channel, payload);
       };
 
-      const context = { displays: displayResolutions() };
+      // `coordinates` is the gate in front of E4's map: with it false, which is
+      // how the app ships, `analyzers/media.js` leaves positions out of the
+      // payload entirely. Read here rather than remembered, so switching the
+      // map off and scanning again really does stop sending them.
+      const { map } = await services().settings.get();
+      const context = { displays: displayResolutions(), coordinates: Boolean(map && map.enabled) };
       // Replaced rather than added to: a file that has been deleted or moved
       // since the last scan must stop being remembered, or a thumbnail request
       // would look it up under a size and time it no longer has.

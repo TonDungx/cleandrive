@@ -108,6 +108,13 @@ const api = {
   // first.
   hardlink: (copies, options) => ipcRenderer.invoke('action:execute', { kind: 'hardlink', items: copies, options }),
 
+  // E4's map. The window never fetches a tile itself -- it cannot, under
+  // `default-src 'none'` -- so it sends coordinates and gets PNG bytes back as
+  // data: URIs. Refused by the main process when the map is switched off.
+  mapTiles: (list) => ipcRenderer.invoke('map:tiles', list),
+  mapCache: () => ipcRenderer.invoke('map:cache'),
+  mapClearCache: () => ipcRenderer.invoke('map:clearCache'),
+
   reveal: (target) => ipcRenderer.invoke('shell:reveal', target),
   open: (target) => ipcRenderer.invoke('shell:open', target),
 

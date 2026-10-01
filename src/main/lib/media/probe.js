@@ -176,8 +176,14 @@ function applyExif(record, tags) {
   if (tags.iso) record.iso = tags.iso;
   if (tags.focalLength) record.focalLength = tags.focalLength;
   if (tags.exposureTime) record.exposureTime = tags.exposureTime;
-  // Whether a position was recorded, never the position itself. See `exif.js`.
+  // Both the fact and, since E4, the position. `exif.js` carries the note about
+  // what that reversed and what is enforced in its place; the gate that decides
+  // whether either ever reaches a window is in `analyzers/media.js`.
   if (tags.hasGps) record.hasGps = true;
+  if (Number.isFinite(tags.latitude) && Number.isFinite(tags.longitude)) {
+    record.latitude = tags.latitude;
+    record.longitude = tags.longitude;
+  }
   record.hasExif = true;
 }
 
@@ -247,6 +253,10 @@ async function describeVideo(record, head, handle, stats) {
   // strongest evidence of what it is and the most legible thing to show.
   if (tags.title) record.title = tags.title;
   if (tags.hasLocation) record.hasGps = true;
+  if (Number.isFinite(tags.latitude) && Number.isFinite(tags.longitude)) {
+    record.latitude = tags.latitude;
+    record.longitude = tags.longitude;
+  }
 }
 
 /* -------------------------------------------------------------------------- */

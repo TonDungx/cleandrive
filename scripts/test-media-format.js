@@ -652,19 +652,40 @@ console.log('\nmedia: moov, which is at the end of the file\n');
   check('a file with no device tags reports none',
     untagParsed && Object.keys(untagParsed.tags).length === 0);
 
-  // Every phone writes an ISO 6709 position into `©xyz`. A first run of this
-  // parser against the development machine's own files printed the author's
-  // home to six decimal places -- this app has no reason to know where anything
-  // was filmed, and `exif.js` already refuses to carry GPS out of a photo.
+  // Every phone writes an ISO 6709 position into `©xyz`. This parser used to
+  // throw the value away -- a first run against the development machine's own
+  // files printed the author's home to six decimal places, which is how that
+  // rule came to exist. E4 reverses it (user's decision, 2026-10-01) so the
+  // map has something to draw, and the guarantee moves from "never read" to
+  // "never crosses to a window unless the map is on": see `bmff.js` for the
+  // note and `test-media-map.js` for the test that holds the new line.
   const geotagged = makeMp4TrailingMoov({ tags: { '©xyz': '+21.0967+105.3767/', '©mak': 'samsung' } });
   const locFound = await bmff.locateMoov(readerFor(geotagged), geotagged.length, geotagged.subarray(0, 64 * 1024));
   const locParsed = locFound ? bmff.parseMoov(locFound.moov) : null;
   check('a video that recorded a position says so', locParsed && locParsed.tags.hasLocation === true);
-  check('but the coordinates are not carried out of the file',
-    locParsed && !JSON.stringify(locParsed.tags).includes('21.0967'),
-    locParsed ? JSON.stringify(locParsed.tags) : 'none');
+  check('and the position is read, latitude first and signed',
+    locParsed && Math.abs(locParsed.tags.latitude - 21.0967) < 1e-9 &&
+      Math.abs(locParsed.tags.longitude - 105.3767) < 1e-9,
+    locParsed ? `${locParsed.tags.latitude}, ${locParsed.tags.longitude}` : 'none');
   check('the rest of the tags on the same file survive that',
     locParsed && locParsed.tags.make === 'samsung', locParsed && locParsed.tags.make);
+
+  // The southern and western halves of the world, which an unsigned reader
+  // would put in the wrong hemisphere.
+  const south = makeMp4TrailingMoov({ tags: { '©xyz': '-33.8688+151.2093/' } });
+  const southFound = await bmff.locateMoov(readerFor(south), south.length, south.subarray(0, 64 * 1024));
+  const southParsed = southFound ? bmff.parseMoov(southFound.moov) : null;
+  check('a southern position stays southern',
+    southParsed && southParsed.tags.latitude < 0 && southParsed.tags.longitude > 0,
+    southParsed ? `${southParsed.tags.latitude}, ${southParsed.tags.longitude}` : 'none');
+
+  // What a device writes when its receiver never had a fix. It is a real place
+  // in the Gulf of Guinea, which is why it has to be refused deliberately.
+  const nofix = makeMp4TrailingMoov({ tags: { '©xyz': '+00.0000+000.0000/' } });
+  const nofixFound = await bmff.locateMoov(readerFor(nofix), nofix.length, nofix.subarray(0, 64 * 1024));
+  const nofixParsed = nofixFound ? bmff.parseMoov(nofixFound.moov) : null;
+  check('a null island position is no position at all',
+    nofixParsed && nofixParsed.tags.latitude === undefined && nofixParsed.tags.hasLocation === true);
 }
 
 console.log('\nmedia: containers that are broken or hostile\n');

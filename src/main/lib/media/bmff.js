@@ -287,17 +287,24 @@ const UDTA_TAGS = new Map(
 );
 
 /**
- * Tags whose presence is recorded but whose value is thrown away.
+ * `©xyz`, the position a phone writes into every video it takes.
  *
- * `©xyz` is an ISO 6709 position, and a phone writes it into every video it
- * takes. `exif.js` already refuses to carry GPS coordinates out of a photo --
- * this app has no reason to know where anything was filmed, and a scan result
- * holding coordinates would be one "export" away from being a location history
- * -- so the same rule has to apply here. It did not, at first: a verification
- * run against this machine's own files printed the author's home coordinates to
- * six decimal places, which is how this came to be written down.
+ * ## What this used to do, and why the change is not a tidy-up
+ *
+ * This value used to be thrown away the moment it was read. The reason was
+ * written here and it was not theoretical: a verification run against this
+ * machine's own files **printed the author's home coordinates to six decimal
+ * places**, which is how the rule came to exist. `exif.js` refused photo
+ * coordinates for the same reason.
+ *
+ * The user reversed both on 2026-10-01, to build the map half of E4, knowing
+ * what it costs. The guarantee that replaces "we never read it" is narrower
+ * and is enforced rather than promised: a position reaches a window only with
+ * the map switched on, which it is not by default, and nothing that writes a
+ * file is given one. `exif.js` carries the full note; `analyzers/media.js`
+ * holds the gate.
  */
-const REDACTED_TAGS = new Set(['location']);
+const LOCATION_TAG = 'location';
 
 function readUdta(udtaBody, into) {
   for (const box of boxes(udtaBody)) {
@@ -320,13 +327,40 @@ function readUdta(udtaBody, into) {
   }
 }
 
-/** Keep the fact, drop the value, for anything in REDACTED_TAGS. */
+/** Record a tag; a position is also parsed into numbers. */
 function store(into, name, text) {
-  if (REDACTED_TAGS.has(name)) {
+  if (name === LOCATION_TAG) {
     into.hasLocation = true;
+    const at = parseIso6709(text);
+    if (at) {
+      into.latitude = at.latitude;
+      into.longitude = at.longitude;
+    }
     return;
   }
   into[name] = text;
+}
+
+/**
+ * ISO 6709, as QuickTime writes it: `+21.0285+105.8542/` or
+ * `+21.0285+105.8542+012.345/`, each number signed, latitude first, and an
+ * optional altitude this does not keep.
+ *
+ * Degrees only -- the degrees-minutes-seconds form the standard also allows is
+ * not what any phone writes, and guessing at it would turn `+2103.00` into a
+ * latitude of 2,103 degrees rather than 21°03'.
+ */
+function parseIso6709(text) {
+  if (typeof text !== 'string') return null;
+  const match = /^([+-]\d{1,3}(?:\.\d+)?)([+-]\d{1,3}(?:\.\d+)?)/.exec(text.trim());
+  if (!match) return null;
+  const latitude = Number(match[1]);
+  const longitude = Number(match[2]);
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+  if (Math.abs(latitude) > 90 || Math.abs(longitude) > 180) return null;
+  // As in `exif.js`: 0,0 is what a device writes when it never had a fix.
+  if (latitude === 0 && longitude === 0) return null;
+  return { latitude, longitude };
 }
 
 /** iTunes-style metadata: each entry is a type box wrapping a `data` box. */
@@ -472,6 +506,7 @@ module.exports = {
   parseIspe,
   locateMoov,
   bmffTime,
+  parseIso6709,
   skipVersionFlags,
   EPOCH_OFFSET_SEC,
   MAX_MOOV_BYTES,
