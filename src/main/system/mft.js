@@ -67,7 +67,16 @@ const MAX_RECORDS = 40_000_000;
  */
 async function openVolume(letter, { sectorSize = DEFAULT_SECTOR, open = fsp.open } = {}) {
   if (!/^[A-Za-z]$/.test(String(letter))) throw new Error('not a drive letter');
-  const handle = await open(`\\\\.\\${letter.toUpperCase()}:`, 'r');
+  // A Buffer, not a string, and that is the whole fix for a bug that kept the
+  // fast scan from ever working in the app. `fs.open` passes a string path
+  // through `path.toNamespacedPath`, and the Node inside Electron 33 (20.18)
+  // turns `\\.\D:` into `\\.\D:\` there -- the drive's root *folder*. Measured
+  // 2026-10-01: that opens without administrator rights and every read is
+  // EISDIR. Node 24, which verify-mft.js runs under, leaves the string alone,
+  // so the reader passed there and failed in the helper. A Buffer is handed
+  // to Windows as it is, in both: unelevated it is refused EPERM, which is the
+  // volume itself saying no.
+  const handle = await open(Buffer.from(`\\\\.\\${letter.toUpperCase()}:`, 'utf8'), 'r');
 
   let sector = sectorSize;
   const read = async (offset, length) => {

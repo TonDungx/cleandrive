@@ -44,6 +44,7 @@
     "test:recap": "node scripts/test-recap.js",
     "test:docversions": "node scripts/test-doc-versions.js",
     "verify:mft": "node scripts/verify-mft.js",
+    "verify:mft-pipe": "electron scripts/verify-mft-pipe.js",
     "verify:trash": "electron scripts/verify-trash.js",
     "verify:autoclean": "electron scripts/verify-autoclean.js",
     "verify:monitor": "electron scripts/verify-monitor.js",

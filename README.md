@@ -424,6 +424,15 @@ network or read-only drive, when the prompt is declined, and when the
 catalogue cannot be read. Fast scan is a Pro feature (`pro.scan.mft`); until
 licences exist it is open to everyone.
 
+**In 0.4.0 and every version before it, the switch never actually read the
+catalogue.** The figures above were measured by a test harness reading the
+drive in its own process. The app hands the read to its administrator helper,
+and inside the helper the drive's name was turned into its root *folder* —
+so every fast scan quietly fell back to the walk and said the catalogue
+"could not be read". Found on 2026-10-01 and fixed after 0.4.0. Measured
+since, as administrator, through the helper itself: `D:`'s 518,136 files in
+4.7 s, the same table a helper run under plain Node reads.
+
 ### The four figures at the top
 
 Total size · file count · folder count · how long the scan took — including
