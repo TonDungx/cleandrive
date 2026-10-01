@@ -48,6 +48,19 @@ const TASK_FOLDER = 'CleanDrive';
 const TASK_NAME = 'AutomaticCleanup';
 const SAMPLE_TASK_NAME = 'DiskSample';
 
+/*
+ * The two programs this file starts, by absolute path and never through PATH.
+ *
+ * The rule the elevated helper was built on (ROADMAP 4.5): on this machine PATH
+ * has Git's `whoami.exe` ahead of Windows' own, and a process that finds a
+ * program by name runs whichever comes first. The window and the command line
+ * can both be started from an elevated terminal, and both reach this file --
+ * every launch reconciles the tasks -- so the same rule holds here.
+ */
+const windowsDir = () => process.env.SystemRoot || 'C:\\Windows';
+const SCHTASKS = () => path.join(windowsDir(), 'System32', 'schtasks.exe');
+const POWERSHELL = () => path.join(windowsDir(), 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
+
 // The XML element names, which are a Windows schema and never translated.
 const WEEKDAY_ELEMENTS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
@@ -565,7 +578,7 @@ function cleanupHarnessTasks() {
     HARNESS_TASKS.delete(taskPath);
     if (!IS_WIN) continue;
     try {
-      execFileSync('schtasks.exe', ['/Delete', '/TN', taskPath, '/F'], {
+      execFileSync(SCHTASKS(), ['/Delete', '/TN', taskPath, '/F'], {
         stdio: 'ignore',
         windowsHide: true,
         timeout: 15000,
@@ -606,7 +619,7 @@ async function register({ taskPath, xml, tempDir, invocation }) {
   await fsp.writeFile(xmlPath, Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(xml, 'utf16le')]));
 
   try {
-    const result = await run('schtasks.exe', ['/Create', '/TN', taskPath, '/XML', xmlPath, '/F']);
+    const result = await run(SCHTASKS(), ['/Create', '/TN', taskPath, '/XML', xmlPath, '/F']);
     if (!result.ok) {
       return { ok: false, error: cleanMessage(result) || 'Task Scheduler refused the task', code: result.code };
     }
@@ -708,7 +721,7 @@ function buildSamplerTask(options = {}) {
 async function uninstall(taskPath = cleanupTaskPath()) {
   if (!IS_WIN) return { ok: true, unsupported: true };
   if (!(await isInstalled(taskPath))) return { ok: true, alreadyGone: true };
-  const result = await run('schtasks.exe', ['/Delete', '/TN', taskPath, '/F']);
+  const result = await run(SCHTASKS(), ['/Delete', '/TN', taskPath, '/F']);
   if (result.ok) forgetHarnessTask(taskPath);
   return result.ok ? { ok: true } : { ok: false, error: cleanMessage(result) };
 }
@@ -716,7 +729,7 @@ async function uninstall(taskPath = cleanupTaskPath()) {
 /** Existence by exit code, never by reading localised output. */
 async function isInstalled(taskPath = cleanupTaskPath()) {
   if (!IS_WIN) return false;
-  const result = await run('schtasks.exe', ['/Query', '/TN', taskPath]);
+  const result = await run(SCHTASKS(), ['/Query', '/TN', taskPath]);
   return result.ok;
 }
 
@@ -730,7 +743,7 @@ async function isInstalled(taskPath = cleanupTaskPath()) {
 async function readTaskXml(taskPath = cleanupTaskPath()) {
   if (!IS_WIN) return null;
 
-  const result = await run('schtasks.exe', ['/Query', '/TN', taskPath, '/XML'], { encoding: 'buffer' });
+  const result = await run(SCHTASKS(), ['/Query', '/TN', taskPath, '/XML'], { encoding: 'buffer' });
   if (!result.ok) return null;
 
   // schtasks writes this document as UTF-16; decoding it as UTF-8 yields a
@@ -961,7 +974,7 @@ async function verify({ schedule, invocation, taskPath = cleanupTaskPath() }) {
 /** Ask Task Scheduler to run the task now, exactly as it would on schedule. */
 async function runNow(taskPath = cleanupTaskPath()) {
   if (!IS_WIN) return { ok: false, error: 'Scheduling is implemented for Windows only' };
-  const result = await run('schtasks.exe', ['/Run', '/TN', taskPath]);
+  const result = await run(SCHTASKS(), ['/Run', '/TN', taskPath]);
   return result.ok ? { ok: true } : { ok: false, error: cleanMessage(result) };
 }
 
@@ -1050,7 +1063,7 @@ async function listCleanupTasks() {
   try {
     await fsp.writeFile(scriptPath, script, 'utf8');
     result = await run(
-      'powershell.exe',
+      POWERSHELL(),
       ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', scriptPath],
       { timeout: 60000 }
     );
@@ -1147,7 +1160,7 @@ async function taskInfo(taskPaths = cleanupTaskPath()) {
   try {
     await fsp.writeFile(scriptPath, script, 'utf8');
     result = await run(
-      'powershell.exe',
+      POWERSHELL(),
       ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', scriptPath],
       // Autoloading the ScheduledTasks module alone takes about five seconds on
       // a cold PowerShell, which is most of this call.

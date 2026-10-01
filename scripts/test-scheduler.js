@@ -13,6 +13,7 @@
 // names are derived from it.
 process.env.CLEANDRIVE_TASK_SUFFIX = process.env.CLEANDRIVE_TASK_SUFFIX || 'selftest';
 
+const fs = require('node:fs');
 const path = require('node:path');
 
 const {
@@ -463,6 +464,38 @@ const BASE = {
       harnessTasks().length === 0, harnessTasks().join(', '));
   } else {
     console.log('\n  (skipping live Task Scheduler registration; pass --live to include it)\n');
+  }
+
+  // Found while preparing H2 (2026-10-01): this file alone started schtasks.exe
+  // and powershell.exe by name, so through PATH, while every other module used
+  // the absolute System32 path. The window and the command line can both be
+  // started elevated, and an elevated process that finds a program by name runs
+  // whichever comes first on PATH (Git's whoami.exe does, on this machine).
+  console.log('\nscheduler: Windows programs by absolute path, never through PATH\n');
+
+  {
+    const ROOT = path.join(__dirname, '..', 'src', 'main');
+    const offenders = [];
+    const walk = (dir) => {
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) walk(full);
+        else if (entry.name.endsWith('.js')) {
+          const text = fs.readFileSync(full, 'utf8');
+          // A program named by a bare string as the first argument of anything
+          // that starts a process: `run('x.exe'`, `execFile('x.exe'`, or the
+          // name alone on the line after an opening parenthesis.
+          const bare = /\b(?:run|execFile|execFileSync|spawn|spawnSync)\(\s*'[A-Za-z0-9_-]+\.exe'/g;
+          for (const m of text.matchAll(bare)) offenders.push(`${path.relative(ROOT, full)}: ${m[0].replace(/\s+/g, ' ')}`);
+        }
+      }
+    };
+    walk(ROOT);
+    check('no module in src/main starts a .exe by its bare name', offenders.length === 0, offenders.join('; '));
+
+    const source = fs.readFileSync(path.join(ROOT, 'lib', 'scheduler.js'), 'utf8');
+    check('schtasks.exe and powershell.exe are both found under System32',
+      /'System32', 'schtasks\.exe'/.test(source) && /'System32', 'WindowsPowerShell', 'v1\.0', 'powershell\.exe'/.test(source));
   }
 
   console.log(failures === 0 ? '\nALL PASS\n' : `\n${failures} FAILURE(S)\n`);
