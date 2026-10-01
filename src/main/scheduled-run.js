@@ -191,10 +191,13 @@ async function recordHistory(history, settings, run) {
  * "freed 2.3 GB" when the files are sitting in the Recycle Bin on the same disk
  * would be the single most misleading thing this app could say, so the wording
  * distinguishes moved from freed.
+ *
+ * Whether Windows can show a toast at all is `lib/notify.js`'s question. This
+ * function used to ask it itself, of a `Notification` it no longer imported,
+ * and so threw at the end of every run that had anything to say -- after the
+ * run log was written, so the run was recorded, but no toast was ever shown.
  */
 function notify(run) {
-  if (!Notification.isSupported()) return;
-
   let title;
   let body;
 

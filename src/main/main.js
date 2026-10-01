@@ -249,6 +249,12 @@ if (isHelper) {
    * night the user happened to have the app open. A maintenance task that
    * silently skips itself whenever you are using the app is the worst of both
    * worlds: it looks configured and does nothing.
+   *
+   * It ends with `app.exit(code)` because nothing else carries the code out:
+   * measured under Electron 33, `process.exitCode = 1` followed by
+   * `app.quit()` exits 0. Task Scheduler records that number and the
+   * Automatic tab reads it back, so a run that ended with `app.quit()` was a
+   * success to Windows however it had failed.
    */
   app.whenReady().then(async () => {
     try {
@@ -257,7 +263,7 @@ if (isHelper) {
       console.error('[scheduled] run failed:', err);
       process.exitCode = 1;
     } finally {
-      app.quit();
+      app.exit(process.exitCode || 0);
     }
   });
 } else if (!app.requestSingleInstanceLock(launchedFor ? { target: launchedFor } : undefined)) {
