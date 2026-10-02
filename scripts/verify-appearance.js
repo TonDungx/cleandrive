@@ -23,7 +23,7 @@ app.setName(require('../package.json').name);
 
 process.env.CLEANDRIVE_TASK_SUFFIX = process.env.CLEANDRIVE_TASK_SUFFIX || 'appearance';
 const SANDBOX = fs.mkdtempSync(path.join(os.tmpdir(), 'cleandrive-verify-appearance-'));
-app.setPath('userData', SANDBOX);
+app.setPath('userData', require('./lib/sandbox').removeAfterExit(SANDBOX));
 
 const ipc = require('../src/main/ipc');
 

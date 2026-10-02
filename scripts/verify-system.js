@@ -22,7 +22,7 @@ const { app } = require('electron');
 
 const SANDBOX = fs.mkdtempSync(path.join(os.tmpdir(), 'cleandrive-verify-system-'));
 app.setName(require('../package.json').name);
-app.setPath('userData', SANDBOX);
+app.setPath('userData', require('./lib/sandbox').removeAfterExit(SANDBOX));
 
 const measure = require('../src/main/system/measure');
 const { HelperClient, appLauncher } = require('../src/main/helper/client');

@@ -49,7 +49,7 @@ app.setName(require('../package.json').name);
  */
 const PRODUCTION_USER_DATA = app.getPath('userData');
 const SANDBOX_USER_DATA = fs.mkdtempSync(path.join(os.tmpdir(), 'cleandrive-smoke-userdata-'));
-app.setPath('userData', SANDBOX_USER_DATA);
+app.setPath('userData', require('./lib/sandbox').removeAfterExit(SANDBOX_USER_DATA));
 
 // The viewer's scheme has to be privileged before the app is ready, exactly as
 // in main.js -- registering it afterwards is silently ignored, and the smoke
@@ -430,12 +430,8 @@ app.whenReady().then(async () => {
         walked.buckets.all && walked.buckets.all.logical === bytes && Number.isFinite(walked.buckets.all.allocated) &&
           walked.buckets.all.allocated >= bytes, walked.buckets.all ? JSON.stringify(walked.buckets.all) : 'nothing');
       // Electron keeps the archive open once its own fs has looked inside it,
-      // so it may refuse to go until this process exits.
-      try {
-        realFs.rmSync(asarRoot, { recursive: true, force: true });
-      } catch {
-        /* a 50 KB file left in %TEMP% */
-      }
+      // so it may refuse to go until this process exits: removed after that.
+      require('./lib/sandbox').removeAfterExit(asarRoot);
     }
 
     /* -- cleanup advice --------------------------------------------------- */

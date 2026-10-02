@@ -15,6 +15,8 @@ const { formatBytes } = require('../src/main/lib/util');
 async function buildFixture() {
   const dir = path.join(os.tmpdir(), 'cleandrive-fixture');
   await fsp.rm(dir, { recursive: true, force: true });
+  // Plain Node holds nothing open, so it can go as this process ends.
+  process.on('exit', () => fs.rmSync(dir, { recursive: true, force: true }));
   await fsp.mkdir(path.join(dir, 'nested'), { recursive: true });
 
   const text = 'x'.repeat(2048);

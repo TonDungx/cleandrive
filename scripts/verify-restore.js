@@ -22,7 +22,7 @@ const { app, shell } = require('electron');
 
 const SANDBOX = path.join(os.tmpdir(), `cleandrive-verify-restore-${process.pid}`);
 app.setName(require('../package.json').name);
-app.setPath('userData', SANDBOX);
+app.setPath('userData', require('./lib/sandbox').removeAfterExit(SANDBOX));
 
 const { ActionJournal } = require('../src/main/journal/journal');
 const { execute } = require('../src/main/actions/execute');

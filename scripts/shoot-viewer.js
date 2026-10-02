@@ -16,7 +16,7 @@ const fsp = require('node:fs/promises');
 const { app, BrowserWindow, nativeTheme } = require('electron');
 
 app.setName(require('../package.json').name);
-app.setPath('userData', fs.mkdtempSync(path.join(os.tmpdir(), 'cleandrive-shootview-')));
+app.setPath('userData', require('./lib/sandbox').removeAfterExit(fs.mkdtempSync(path.join(os.tmpdir(), 'cleandrive-shootview-'))));
 process.env.CLEANDRIVE_TASK_SUFFIX = process.env.CLEANDRIVE_TASK_SUFFIX || 'shootview';
 
 require('../src/main/lib/preview/serve').registerScheme();

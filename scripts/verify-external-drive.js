@@ -23,7 +23,7 @@ const crypto = require('node:crypto');
 const { execFileSync } = require('node:child_process');
 const { app, shell } = require('electron');
 
-app.setPath('userData', fs.mkdtempSync(path.join(os.tmpdir(), 'cleandrive-verify-external-')));
+app.setPath('userData', require('./lib/sandbox').removeAfterExit(fs.mkdtempSync(path.join(os.tmpdir(), 'cleandrive-verify-external-'))));
 
 const volumes = require('../src/main/lib/volumes');
 const { planTrash } = require('../src/main/lib/trash');

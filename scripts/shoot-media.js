@@ -27,7 +27,7 @@ const fs = require('node:fs');
 const { app, BrowserWindow, nativeTheme } = require('electron');
 
 app.setName(require('../package.json').name);
-app.setPath('userData', fs.mkdtempSync(path.join(os.tmpdir(), 'cleandrive-shoot-')));
+app.setPath('userData', require('./lib/sandbox').removeAfterExit(fs.mkdtempSync(path.join(os.tmpdir(), 'cleandrive-shoot-'))));
 process.env.CLEANDRIVE_TASK_SUFFIX = process.env.CLEANDRIVE_TASK_SUFFIX || 'shoot';
 
 const ipc = require('../src/main/ipc');

@@ -31,7 +31,7 @@ app.setName(require('../package.json').name);
 process.env.CLEANDRIVE_TASK_SUFFIX = process.env.CLEANDRIVE_TASK_SUFFIX || 'verify';
 const PRODUCTION_USER_DATA = app.getPath('userData');
 const SANDBOX = fs.mkdtempSync(path.join(os.tmpdir(), 'cleandrive-verify-schedule-'));
-app.setPath('userData', SANDBOX);
+app.setPath('userData', require('./lib/sandbox').removeAfterExit(SANDBOX));
 
 const ipc = require('../src/main/ipc');
 const { cleanupTaskPath, sampleTaskPath } = require('../src/main/lib/scheduler');

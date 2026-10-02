@@ -35,7 +35,7 @@ const { app, BrowserWindow } = require('electron');
 app.setName(require('../package.json').name);
 const PRODUCTION_USER_DATA = app.getPath('userData');
 const SANDBOX = fs.mkdtempSync(path.join(os.tmpdir(), 'cleandrive-idle-userdata-'));
-app.setPath('userData', SANDBOX);
+app.setPath('userData', require('./lib/sandbox').removeAfterExit(SANDBOX));
 process.env.CLEANDRIVE_TASK_SUFFIX = process.env.CLEANDRIVE_TASK_SUFFIX || 'idle';
 require('../src/main/lib/preview/serve').registerScheme();
 
@@ -60,28 +60,6 @@ const check = (label, cond, detail = '') => {
   console.log(`  ${cond ? 'PASS' : 'FAIL'}  ${label}${detail ? `  -- ${detail}` : ''}`);
 };
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-
-/**
- * Chromium holds its own files in userData until this process has exited, so
- * the throwaway directory is removed by a small Node process that waits for
- * that. (The other harnesses try once and say "left behind".)
- */
-function removeAfterExit(dir) {
-  const script = `
-    const fs = require('node:fs');
-    const alive = () => { try { process.kill(${process.pid}, 0); return true; } catch { return false; } };
-    let tries = 0;
-    const tick = () => {
-      if (!alive() || tries > 60) {
-        try { fs.rmSync(${JSON.stringify(dir)}, { recursive: true, force: true }); return; } catch {}
-      }
-      if (++tries < 120) setTimeout(tick, 250);
-    };
-    tick();`;
-  require('node:child_process')
-    .spawn(process.execPath, ['-e', script], { detached: true, stdio: 'ignore', env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' } })
-    .unref();
-}
 
 app.on('window-all-closed', () => {});
 
@@ -374,7 +352,6 @@ app.whenReady().then(async () => {
   const realAfter = fs.existsSync(realSettings) ? fs.statSync(realSettings).mtimeMs : null;
   check('the real settings.json was not touched', realBefore === realAfter);
   fs.rmSync(work, { recursive: true, force: true });
-  removeAfterExit(SANDBOX);
 
   if (failures > 0) {
     try {

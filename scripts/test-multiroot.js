@@ -26,7 +26,7 @@ const { app, BrowserWindow } = require('electron');
 app.setName(require('../package.json').name);
 const PRODUCTION_USER_DATA = app.getPath('userData');
 const SANDBOX = fs.mkdtempSync(path.join(os.tmpdir(), 'cleandrive-multiroot-userdata-'));
-app.setPath('userData', SANDBOX);
+app.setPath('userData', require('./lib/sandbox').removeAfterExit(SANDBOX));
 process.env.CLEANDRIVE_TASK_SUFFIX = process.env.CLEANDRIVE_TASK_SUFFIX || 'multiroot';
 require('../src/main/lib/preview/serve').registerScheme();
 

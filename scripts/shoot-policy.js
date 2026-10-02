@@ -29,7 +29,7 @@ process.env.CLEANDRIVE_ENTITLEMENTS = 'all';
 
 app.setName(require('../package.json').name);
 const SANDBOX = fs.mkdtempSync(path.join(os.tmpdir(), 'cleandrive-shootpolicy-'));
-app.setPath('userData', SANDBOX);
+app.setPath('userData', require('./lib/sandbox').removeAfterExit(SANDBOX));
 process.env.CLEANDRIVE_TASK_SUFFIX = process.env.CLEANDRIVE_TASK_SUFFIX || 'shootpolicy';
 // On D:, so the scan sees it (os.tmpdir() is inside AppData, which it refuses).
 const FIXTURE = path.join('D:', path.sep, `cleandrive-shootpolicy-${crypto.randomBytes(3).toString('hex')}`);

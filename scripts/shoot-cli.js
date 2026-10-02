@@ -26,7 +26,7 @@ const { app, BrowserWindow, nativeTheme } = require('electron');
 
 app.setName(require('../package.json').name);
 const SANDBOX = fs.mkdtempSync(path.join(os.tmpdir(), 'cleandrive-shootcli-'));
-app.setPath('userData', SANDBOX);
+app.setPath('userData', require('./lib/sandbox').removeAfterExit(SANDBOX));
 process.env.CLEANDRIVE_TASK_SUFFIX = process.env.CLEANDRIVE_TASK_SUFFIX || 'shootcli';
 require('../src/main/lib/preview/serve').registerScheme();
 
