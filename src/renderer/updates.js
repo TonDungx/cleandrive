@@ -43,6 +43,14 @@ function describeUpdate(s) {
     case 'checking':
       return t('update.detail.checking', 'Asking the release page whether there is a newer version.');
     case 'available':
+      // Held, not fetched: it would end the Pro this version keeps (§7.6).
+      if (s.licenceHold) {
+        return t(
+          'update.detail.held',
+          'Version {version} was released after your Pro licence ended on {date}, so it would not include Pro. This version keeps Pro for good, so it has not been downloaded. Download gets it anyway; renewing the licence brings Pro to the new version as well.',
+          { version: s.version, date: new Date(s.licenceHold.expires).toLocaleDateString(uiLocale(), { dateStyle: 'medium' }) }
+        );
+      }
       return t(
         'update.detail.available',
         'Version {version} found. Downloading it now — you will be asked before anything is installed.',
@@ -191,7 +199,10 @@ function applyUpdateState(next) {
   pill.hidden = false;
   pill.classList.toggle('is-busy', next.status === 'downloading');
 
-  if (next.status === 'available') {
+  if (next.status === 'available' && next.licenceHold) {
+    pill.textContent = t('update.pill.held', '{version} available', { version: next.version });
+    pill.title = t('update.pill.heldHint', 'Not downloaded: it would not include the Pro this version keeps');
+  } else if (next.status === 'available') {
     pill.textContent = t('update.pill.downloadingVersion', 'Downloading {version}…', { version: next.version });
     pill.title = t('update.pill.fetchingHint', 'Fetching the update; you will be asked before it installs');
     pill.classList.add('is-busy');

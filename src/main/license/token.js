@@ -142,4 +142,25 @@ function effective(p, { now, releaseDate }) {
   return { ...base, state: 'expired' };
 }
 
-module.exports = { VERSION, KEYS, emailHash, encode, verifyToken, effective, wellFormed };
+/**
+ * Whether installing a release would take Pro away (§7.6 meets auto-update).
+ *
+ * A yearly licence keeps Pro on the versions released before it ended, so an
+ * update released after that day would quietly end it. The updater asks this
+ * before it downloads, and holds such an update for the person to choose.
+ * Lifetime, Business and trials: never -- lifetime covers every version, and
+ * the other two have no fallback to lose.
+ *
+ * @param {object} lic          a stored licence (state.js)
+ * @param {string} releaseDate  the update's, from latest.yml
+ * @returns {null | { expires: string }}
+ */
+function holdsUpdate(lic, releaseDate) {
+  if (!lic || lic.tier !== 'pro' || lic.trial || !lic.expires) return null;
+  if (lic.state !== 'active' && lic.state !== 'expired') return null;
+  const released = Date.parse(releaseDate);
+  if (!Number.isFinite(released)) return null;
+  return released > Date.parse(lic.expires) ? { expires: lic.expires } : null;
+}
+
+module.exports = { VERSION, KEYS, emailHash, encode, verifyToken, effective, wellFormed, holdsUpdate };

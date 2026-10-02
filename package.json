@@ -117,6 +117,7 @@
     "guard:release": "node scripts/release-guard.js",
     "test:guard": "node scripts/test-release-guard.js",
     "verify:release-guard": "node scripts/verify-release-guard.js",
+    "verify:expiry": "node scripts/verify-expiry.js",
     "verify:install": "node scripts/verify-install-location.js",
     "verify:updater": "electron scripts/verify-updater.js",
     "bench:media": "electron scripts/bench-media.js",

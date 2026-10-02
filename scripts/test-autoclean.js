@@ -334,6 +334,12 @@ function file(p, size, mtimeMs = OLD, atimeMs = 0) {
       !already.notes.some((n) => n && /^run\.note\.licence/.test(n.i18n)) && JSON.stringify(already.lacking) === '["pro.automatic.profiles"]');
 
     reached = 0;
+    const lapsed = await runAutoClean({ settings: two, profile: second, can: none, licenceExpired: true, deps: realDeps, now: NOW });
+    check('a licence that ran out is said as that, once, not as "part of Pro" (§7.1)', lapsed.outcome === 'dry-run' && reached === 0 &&
+      lapsed.notes.filter((n) => n && /^run\.note\.licence/.test(n.i18n)).map((n) => n.i18n).join() === 'run.note.licenceExpired',
+      lapsed.notes.map(render).join(' | '));
+
+    reached = 0;
     const noGate = await runAutoClean({ settings: two, profile: second, deps: realDeps, now: NOW });
     check('a caller that hands in no licence is not gated here (the pipeline rule)', noGate.outcome !== 'dry-run' && reached === 1);
   }

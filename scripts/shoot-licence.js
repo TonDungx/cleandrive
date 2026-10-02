@@ -44,7 +44,21 @@ app.whenReady().then(async () => {
   const commerce = require('../src/main/commerce');
 
   // Someone who used 0.5.0, while Pro was open.
-  fs.writeFileSync(path.join(SANDBOX, 'settings.json'), JSON.stringify({ version: 12, trends: { dailySample: false, sampleTime: '12:00' }, updates: { enabled: false, lastVersion: '0.5.0' } }));
+  // Two profiles of their own, the second made while Pro was open (§7.1),
+  // over a folder of this script's own on D: (the scan refuses %TEMP%).
+  const FIXTURE = path.join('D:', path.sep, `cleandrive-shootlicence-${require('node:crypto').randomBytes(3).toString('hex')}`);
+  fs.mkdirSync(path.join(FIXTURE, 'Temp'), { recursive: true });
+  for (let i = 0; i < 5; i += 1) fs.writeFileSync(path.join(FIXTURE, 'Temp', `f${i}.tmp`), Buffer.alloc(20000 + i * 1000, i));
+  process.on('exit', () => {
+    if (/^D:\\cleandrive-shootlicence-[0-9a-f]{6}$/.test(FIXTURE) && !fs.lstatSync(FIXTURE).isSymbolicLink()) fs.rmSync(FIXTURE, { recursive: true, force: true });
+  });
+  const profile = (id, name, over) => ({ id, name, enabled: true, dryRun: false, roots: [path.join(FIXTURE, 'Temp')], categories: ['temp'], skipIfRunning: [], ...over });
+  fs.writeFileSync(path.join(SANDBOX, 'settings.json'), JSON.stringify({
+    version: 12,
+    trends: { dailySample: false, sampleTime: '12:00' },
+    updates: { enabled: false, lastVersion: '0.5.0' },
+    autoClean: { profiles: [profile('main', 'Hằng tuần', { dryRun: true }), profile('pcaches01', 'Cache hằng ngày', {})] },
+  }));
   require('../src/main/lib/preview/serve').serve();
   const ipc = require('../src/main/ipc');
   ipc.register();
@@ -356,6 +370,45 @@ app.whenReady().then(async () => {
   await js(`document.querySelector('#panel-planner .upgrade-hint-plans').click();`);
   await until(`document.getElementById('plans').open`, 3000, 'the dialog from the hint');
   await js(`document.getElementById('plans').close();`);
+
+  /* -- 8. a yearly licence that ran out (6.5) ------------------------------------------------------ */
+
+  const lapsed = require('../src/main/license/mock-issuer').issue({ plan: 'pro-annual', tier: 'pro', seats: 3, expires: new Date(Date.now() - 10 * DAY).toISOString() });
+  if (!(await licence.activate(lapsed.token, {})).ok) throw new Error('could not set up a lapsed licence');
+  await tab('settings');
+  await until(`document.getElementById('licence-badge').textContent.trim() === 'Hết hạn'`, 10000, 'the expired badge');
+  await need('the card says read-only, all data still here, and offers to renew', `/Pro đã hết hạn\. Tính năng Pro đang ở chế độ chỉ đọc; mọi dữ liệu vẫn còn\./.test(document.getElementById('licence-notes').textContent) && document.getElementById('licence-plans').textContent.trim() === 'Gia hạn'`);
+  await js(`document.querySelector('main').scrollTop = 0;`);
+  await both('licence-expired-vi');
+
+  await tab('auto');
+  await js(`document.querySelector('.profile-chip[data-profile-id="pcaches01"]').click();`);
+  await until(`!document.getElementById('auto-licence').hidden`, 10000, 'the licence line on Automatic');
+  await need('Automatic says why this profile only reports (§7.1)', `/Pro đã hết hạn.*Hồ sơ này cần nhiều hơn một hồ sơ, nên nó chỉ báo cáo/.test(document.getElementById('auto-licence-text').textContent) && document.getElementById('auto-state').textContent.trim() === 'Chỉ báo cáo: bản quyền' && document.getElementById('auto-licence-plans').textContent.trim() === 'Gia hạn'`);
+  await both('auto-expired-vi');
+  await js(`document.querySelector('.profile-chip[data-profile-id="main"]').click();`);
+  await wait(500);
+  await need('the first profile carries no such line', `document.getElementById('auto-licence').hidden`);
+
+  // The Changes card: two scans of the fixture, both taken after the licence ended.
+  await js(`await setFolder(${JSON.stringify(path.join(FIXTURE, 'Temp'))});`);
+  for (let k = 0; k < 2; k += 1) {
+    await js(`document.getElementById('run-scan').click();`);
+    await until(`document.getElementById('scan-stats').hidden === false && !document.getElementById('run-scan').disabled`, 60000, 'a scan');
+    await wait(1200);
+  }
+  await tab('trends');
+  await js(`await window.Changes.load(); await window.Changes.open(${JSON.stringify(path.join(FIXTURE, 'Temp'))});`);
+  await until(`/Pro đã hết hạn ngày .*, và thư mục này có ít hơn hai lần quét trước ngày đó/.test(document.getElementById('panel-trends').textContent)`, 10000, 'the Changes card refusing scans taken after expiry');
+  await shoot('changes-expired-vi-light');
+
+  // An update released after the licence ended, held back (§7.6).
+  await tab('settings');
+  await js(`applyUpdateState({ supported: true, enabled: true, checking: false, status: 'available', version: '0.7.0', progress: 0, error: null, checkedAt: Date.now(), currentVersion: '0.6.0', signed: false, justUpdated: null, managed: false, licenceHold: { expires: ${JSON.stringify(new Date(Date.now() - 10 * DAY).toISOString())} } });`);
+  await need('the update card says why it was not fetched', `/phát hành sau ngày bản quyền Pro của bạn hết hạn/.test(document.getElementById('update-detail').textContent) && !document.getElementById('update-download').hidden && /Có bản 0\.7\.0/.test(document.getElementById('update-pill').textContent)`);
+  await js(`document.getElementById('update-detail').scrollIntoView({ block: 'center' });`);
+  await both('update-held-vi');
+  await licence.deactivate();
 
   /* -- narrow, and English -------------------------------------------------------------------- */
 

@@ -129,6 +129,21 @@ function fakeDpapi() {
     check('an expired licence opens nothing', !can(at(annual, after, iso(NOW + 366 * DAY)), 'pro.diff'));
   }
 
+  console.log('\nlicence: an update that would end Pro (§7.6 meets auto-update)\n');
+
+  {
+    const v = (over) => token.effective(token.verifyToken(sign(over), { channel: 'stable' }).payload, { now: NOW + 400 * DAY, releaseDate: iso(NOW + 100 * DAY) });
+    const kept = v();
+    check('a yearly licence past its end: a release after that end is held', token.holdsUpdate(kept, iso(NOW + 380 * DAY)) !== null &&
+      token.holdsUpdate(kept, iso(NOW + 380 * DAY)).expires === kept.expires);
+    check('a release before the end is not', token.holdsUpdate(kept, iso(NOW + 200 * DAY)) === null);
+    check('lifetime never holds one', token.holdsUpdate(v({ plan: 'pro-lifetime', expires: null }), iso(NOW + 9000 * DAY)) === null);
+    check('nor Business, which has nothing to keep', token.holdsUpdate(v({ tier: 'business', plan: 'business-annual' }), iso(NOW + 380 * DAY)) === null);
+    check('nor a trial', token.holdsUpdate(v({ trial: true, plan: 'pro-trial', expires: iso(NOW + 14 * DAY) }), iso(NOW + 380 * DAY)) === null);
+    check('nor Free', token.holdsUpdate({ state: 'free' }, iso(NOW)) === null);
+    check('a feed without a release date holds nothing', token.holdsUpdate(kept, undefined) === null);
+  }
+
   console.log('\nlicence: the file, and the licence a build runs under\n');
 
   const dir = removeAfterExit(fs.mkdtempSync(path.join(os.tmpdir(), 'cleandrive-licence-')));

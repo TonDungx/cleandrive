@@ -114,6 +114,7 @@ async function runScheduled() {
             // Read fresh for this run: the licence may have changed since the
             // task was registered, and nobody is here to be asked.
             can: require('./license/state').canNow(),
+            licenceExpired: require('./license/state').currentLicense().state === 'expired',
           });
           run.warnings = store.warnings;
           if (lock.waitedMs > 1000) {

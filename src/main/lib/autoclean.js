@@ -233,6 +233,9 @@ const LACKING_NOTE = Object.freeze({
     m('run.note.licenceQuarantine', 'Moving files to another drive is part of CleanDrive Pro, so this profile only reported what it would do. Nothing was moved.'),
 });
 
+const EXPIRED_NOTE = () =>
+  m('run.note.licenceExpired', 'The Pro licence has expired, so this profile only reported what it would do. Nothing was moved; renew to let it act again.');
+
 /**
  * @param {object}  options
  * @param {object}  options.settings   validated settings (see settings.js)
@@ -244,6 +247,7 @@ const LACKING_NOTE = Object.freeze({
  * @param {CancelToken} [options.token]
  * @param {(stage: object) => void} [options.onStage]
  * @param {(feature: string) => boolean} [options.can]  the licence, asked by the caller
+ * @param {boolean} [options.licenceExpired]  whether that licence is one that ran out
  */
 async function runAutoClean(options) {
   const settings = options.settings;
@@ -345,7 +349,10 @@ async function runAutoClean(options) {
     run.lacking = lacking;
     if (!run.dryRun) {
       run.dryRun = true;
-      for (const feature of lacking) run.notes.push(LACKING_NOTE[feature]());
+      // A licence that ran out is said as that (§7.1): it is not the same as
+      // never having had one, and the person may only need to renew.
+      if (options.licenceExpired === true) run.notes.push(EXPIRED_NOTE());
+      else for (const feature of lacking) run.notes.push(LACKING_NOTE[feature]());
     }
   }
 

@@ -61,9 +61,13 @@ app.whenReady().then(async () => {
   // The first version made the user click three times: check, download,
   // restart. That was the wrong line -- downloading costs bandwidth, installing
   // is what changes the app. These assert the corrected policy.
+  //
+  // Since Phase 6 the fetch is started by the app's own handler rather than by
+  // the library, so that one kind of update can be held (part 4).
   {
     const { autoUpdater } = require('electron-updater');
-    check('an update is fetched without being asked for', autoUpdater.autoDownload === true);
+    updater.loadForHarness();
+    check('the library does not fetch by itself: the app decides, update by update', autoUpdater.autoDownload === false);
     check('a declined update still installs on the next real quit',
       autoUpdater.autoInstallOnAppQuit === true);
   }
@@ -209,6 +213,56 @@ app.whenReady().then(async () => {
     await wait(800);
     check('the same version is not offered as an update', notAvailable === true,
       `feed said ${current}`);
+
+    /* ---- 4. an update that would end Pro (§7.6) ------------------------- */
+    // A yearly licence keeps Pro on the versions released before it ended.
+    // The feed above says its release is today; a licence that ended a month
+    // ago must hold it back, and nothing else may.
+    console.log('\n  an update that would end Pro\n');
+    server.removeAllListeners('request');
+    server.on('request', (req, res) => {
+      if (!pathOf(req.url).endsWith('latest.yml')) { res.writeHead(404); res.end(); return; }
+      res.writeHead(200, { 'content-type': 'text/yaml' });
+      res.end(feed);
+    });
+    const licence = require('../src/main/license/state');
+    const issuer = require('../src/main/license/mock-issuer');
+    const licDir = require('./lib/sandbox').removeAfterExit(fs.mkdtempSync(path.join(os.tmpdir(), 'cleandrive-updlicence-')));
+    licence.setFileForHarness(path.join(licDir, 'license.dat'));
+    check('isolated: the licence is the harness\'s own', licence.licenceFile().startsWith(licDir));
+    autoUpdater.removeAllListeners('update-available');
+    autoUpdater.removeAllListeners('update-not-available');
+    updater.loadForHarness();
+    let downloads = 0;
+    autoUpdater.downloadUpdate = async () => { downloads += 1; return []; };
+    const DAY = 24 * 60 * 60 * 1000;
+    const ask = async () => { await autoUpdater.checkForUpdates().catch(() => {}); await wait(800); return updater.snapshot(); };
+
+    const ended = issuer.issue({ plan: 'pro-annual', tier: 'pro', seats: 3, expires: new Date(Date.now() - 30 * DAY).toISOString() });
+    await licence.activate(ended.token, {});
+    let s = await ask();
+    check('released after a yearly licence ended: held, not fetched', downloads === 0 && s.status === 'available' && s.licenceHold && s.licenceHold.expires === licence.storedLicence().expires,
+      `downloads ${downloads}, hold ${JSON.stringify(s.licenceHold)}`);
+
+    const running = issuer.issue({ plan: 'pro-annual', tier: 'pro', seats: 3, expires: new Date(Date.now() + 300 * DAY).toISOString() });
+    await licence.activate(running.token, {});
+    s = await ask();
+    check('a licence still running: fetched at once, as before', downloads === 1 && !s.licenceHold, `downloads ${downloads}`);
+
+    const lifetime = issuer.issue({ plan: 'pro-lifetime', tier: 'pro', seats: 3, expires: null });
+    await licence.activate(lifetime.token, {});
+    s = await ask();
+    check('lifetime covers every later version: fetched', downloads === 2 && !s.licenceHold, `downloads ${downloads}`);
+
+    const business = issuer.issue({ plan: 'business-annual', tier: 'business', seats: 5, expires: new Date(Date.now() - 30 * DAY).toISOString() });
+    await licence.activate(business.token, {});
+    s = await ask();
+    check('Business has no fallback to lose: fetched', downloads === 3 && !s.licenceHold, `downloads ${downloads}`);
+
+    await licence.deactivate();
+    s = await ask();
+    check('and Free: fetched', downloads === 4 && !s.licenceHold, `downloads ${downloads}`);
+    licence.setFileForHarness(null);
   } finally {
     server.close();
     fs.rmSync(dir, { recursive: true, force: true });

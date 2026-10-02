@@ -286,11 +286,48 @@ function heldByPolicy(profile) {
 }
 
 /** A word for what a profile is doing, for its row in the list. */
+/** What the licence leaves this profile without, from the main process (§7.1). */
+function licenceLacking(profile) {
+  const licence = state.auto && state.auto.licence;
+  return (licence && profile && licence.lacking[profile.id]) || null;
+}
+
 function profileStateWord(profile) {
   if (!profile.enabled) return t('app.off', 'Off');
   if (heldByPolicy(profile)) return t('auto.state.held', 'Held: view only');
+  if (!profile.dryRun && licenceLacking(profile)) return t('auto.state.reportOnlyLicence', 'Report only: licence');
   return profile.dryRun ? t('auto.state.reportOnly', 'Report only') : t('app.on', 'On');
 }
+
+/** The line under the profiles when the one on screen only reports because of the licence. */
+function renderLicenceLine(profile) {
+  const host = $('auto-licence');
+  const lacking = licenceLacking(profile);
+  if (!lacking) {
+    host.hidden = true;
+    return;
+  }
+  const expired = state.auto.licence.expired;
+  const what = lacking
+    .map((f) => (f === 'pro.quarantine'
+      ? t('auto.licence.quarantine', 'moving files to another drive')
+      : t('auto.licence.profiles', 'more than one profile')))
+    .join(', ');
+  setText($('auto-licence-text'), expired
+    ? t('auto.licence.expired', 'Pro has expired. Pro features are read-only; all your data is still here. This profile needs {what}, so it only reports what it would do.', { what })
+    : t('auto.licence.needsPro', 'This profile needs CleanDrive Pro for {what}, so it only reports what it would do. Nothing is moved.', { what }));
+  setText($('auto-licence-plans'), expired ? t('licence.renew', 'Renew') : t('licence.seePlans', 'See the plans'));
+  host.hidden = false;
+}
+
+$('auto-licence-plans').addEventListener('click', () => {
+  if (window.LicenceUI) window.LicenceUI.open({ opener: $('auto-licence-plans') });
+});
+// A licence bought, entered or run out changes which profiles act: the screen
+// asks again rather than showing the old answer until the next visit.
+api.onLicenseChanged(() => {
+  if (state.auto) refreshAutoState({ form: false });
+});
 
 function renderProfileList(data) {
   const list = profilesIn(data);
@@ -310,8 +347,10 @@ function renderProfileList(data) {
     name.textContent = profileTitle(profile, index);
 
     const state = document.createElement('span');
-    state.className = `profile-chip-state${profile.enabled && !profile.dryRun && !heldByPolicy(profile) ? ' is-on' : ''}${
-      profile.enabled && profile.dryRun ? ' is-dry' : ''
+    // A profile the licence turns into a report is drawn as one, never as running.
+    const reports = profile.dryRun || Boolean(licenceLacking(profile));
+    state.className = `profile-chip-state${profile.enabled && !reports && !heldByPolicy(profile) ? ' is-on' : ''}${
+      profile.enabled && reports ? ' is-dry' : ''
     }`;
     state.textContent = profileStateWord(profile);
 
@@ -426,6 +465,7 @@ function applyAutoState(data, { form = true } = {}) {
   syncScheduleRows();
 
   const stateWord = profileStateWord(auto);
+  renderLicenceLine(auto);
 
   setText($('astat-state'), stateWord);
 
@@ -433,8 +473,8 @@ function applyAutoState(data, { form = true } = {}) {
   // question it answers -- is any of this actually running -- does not.
   const chip = $('auto-state');
   setText(chip, stateWord);
-  chip.classList.toggle('is-on', auto.enabled && !auto.dryRun && !heldByPolicy(auto));
-  chip.classList.toggle('is-dry', auto.enabled && auto.dryRun);
+  chip.classList.toggle('is-on', auto.enabled && !auto.dryRun && !heldByPolicy(auto) && !licenceLacking(auto));
+  chip.classList.toggle('is-dry', auto.enabled && (auto.dryRun || Boolean(licenceLacking(auto))));
   // The figures are about the profile on screen, not about whichever profile
   // happens to be first or ran most recently (G4).
   const task = taskOf(data, auto);

@@ -28,7 +28,20 @@
   const newerSelect = $('changes-newer');
   const body = $('changes-body');
 
-  const view = { roots: [], allowed: true, root: null, older: null, newer: null, diff: null, request: 0, loaded: false };
+  const view = { roots: [], allowed: true, readUntil: null, root: null, older: null, newer: null, diff: null, request: 0, loaded: false };
+
+  /**
+   * The scans that may be compared. All of them, unless the licence has
+   * expired: then only those taken before it did (option A, Phase 6).
+   */
+  function usable(entry) {
+    if (!entry) return [];
+    if (!view.readUntil) return entry.snapshots;
+    const end = Date.parse(view.readUntil);
+    return entry.snapshots.filter((s) => Date.parse(s.takenAt) <= end);
+  }
+
+  const endedOn = () => new Date(view.readUntil).toLocaleDateString(uiLocale(), { dateStyle: 'medium' });
 
   const signed = (n) => (n >= 0 ? `+${formatBytes(n)}` : `−${formatBytes(-n)}`);
   const when = (iso) => new Date(iso).toLocaleString(uiLocale(), { dateStyle: 'medium', timeStyle: 'short' });
@@ -86,10 +99,11 @@
     rootSelect.replaceChildren(...view.roots.map((r) => option(r.root, elide(r.root, 60), same(r.root, view.root))));
     rootSelect.disabled = view.roots.length <= 1;
 
-    const snaps = entry ? entry.snapshots : [];
+    const snaps = usable(entry);
     if (entry && !(snaps.some((s) => s.file === view.older) && snaps.some((s) => s.file === view.newer))) {
-      view.older = entry.pair && entry.pair.ok ? entry.pair.older : snaps[1] ? snaps[1].file : null;
-      view.newer = entry.pair && entry.pair.ok ? entry.pair.newer : snaps[0] ? snaps[0].file : null;
+      const pairUsable = entry.pair && entry.pair.ok && snaps.some((s) => s.file === entry.pair.older) && snaps.some((s) => s.file === entry.pair.newer);
+      view.older = pairUsable ? entry.pair.older : snaps[1] ? snaps[1].file : null;
+      view.newer = pairUsable ? entry.pair.newer : snaps[0] ? snaps[0].file : null;
     }
     olderSelect.replaceChildren(...snaps.map((s) => option(s.file, snapshotLabel(s), s.file === view.older)));
     newerSelect.replaceChildren(...snaps.map((s) => option(s.file, snapshotLabel(s), s.file === view.newer)));
@@ -128,6 +142,7 @@
     if (!reply) return;
     view.roots = reply.roots;
     view.allowed = reply.allowed;
+    view.readUntil = reply.readUntil || null;
     view.loaded = true;
     if (!view.root || !entryFor(view.root)) view.root = bestRoot(view.roots);
     fillPickers();
@@ -156,6 +171,10 @@
       body.replaceChildren(...(hint ? [hint] : []));
       return;
     }
+    if (view.readUntil && usable(entry).length < 2) {
+      refuse(t('changes.expiredFew', 'Pro ended on {date}, and fewer than two scans of this folder were taken before then — only those can still be compared.', { date: endedOn() }));
+      return;
+    }
     if (!view.older || !view.newer || view.older === view.newer) {
       refuse(t('changes.pickTwo', 'Pick two different scans to compare.'));
       return;
@@ -168,6 +187,10 @@
     if (!diff) return;
     view.diff = diff;
     render(diff);
+    // Said every time, so nobody reads a comparison of old scans as current.
+    if (view.readUntil && diff.ok) {
+      body.prepend(RefusalNote(t('changes.expired', 'Pro ended on {date}: the scans taken before then can still be compared, later ones cannot.', { date: endedOn() })));
+    }
   }
 
   /* ---------------------------------------------------------------- drawing */
@@ -180,6 +203,15 @@
   }
 
   function refusalFor(diff) {
+    // Refused by the licence, not by the scans: said as that, never as
+    // "measured in different ways".
+    if (diff.locked) {
+      return diff.expired
+        ? t('changes.expiredLater', 'Pro ended on {date}, and one of these scans was taken after that, so they cannot be compared.', {
+            date: new Date(diff.expired).toLocaleDateString(uiLocale(), { dateStyle: 'medium' }),
+          })
+        : t('changes.upgrade', 'Comparing two scans of a folder is part of CleanDrive Pro.');
+    }
     switch (diff.reason) {
       case 'onlyOne':
         return t('changes.onlyOne', 'Scanned only once — it takes two scans of the same folder to compare.');

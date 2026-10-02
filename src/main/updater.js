@@ -55,6 +55,8 @@ const state = {
   currentVersion: app.getVersion(),
   signed: false,
   justUpdated: null, // the version updated *from*, on the first run afterwards
+  // An update held back because it would end Pro: { expires } of the licence (§7.6).
+  licenceHold: null,
   // The organisation has switched update checks off (H2). Then nothing here
   // contacts the release host, not even the "Check now" button.
   managed: false,
@@ -91,8 +93,9 @@ function load() {
   const { autoUpdater } = require('electron-updater');
 
   // Fetch without asking; install only on a yes. See the note above about
-  // where the line belongs.
-  autoUpdater.autoDownload = true;
+  // where the line belongs. The fetch is started here rather than by the
+  // library, so that one kind of update can be held: see 'update-available'.
+  autoUpdater.autoDownload = false;
 
   // If the prompt is declined, the update still goes on the next real quit
   // rather than being downloaded again and again and never applied.
@@ -112,13 +115,26 @@ function load() {
     state.checking = false;
     state.version = info.version;
     state.checkedAt = Date.now();
+    // A yearly licence keeps Pro on the versions released before it ended
+    // (§7.6). Installing one released after would quietly take Pro away, so
+    // that update waits for the person to choose it; every other one is
+    // fetched at once, as before.
+    state.licenceHold = licenceHoldFor(info);
     emit();
+    if (!state.licenceHold) {
+      autoUpdater.downloadUpdate().catch((err) => {
+        state.status = 'error';
+        state.error = String((err && err.message) || err);
+        emit();
+      });
+    }
   });
 
   autoUpdater.on('update-not-available', () => {
     state.status = 'idle';
     state.checking = false;
     state.version = null;
+    state.licenceHold = null;
     state.checkedAt = Date.now();
     emit();
   });
@@ -155,6 +171,16 @@ function load() {
 
   updater = autoUpdater;
   return updater;
+}
+
+/** The hold for an update, or null: asked of the licence this account stores. */
+function licenceHoldFor(info) {
+  try {
+    const lic = require('./license/state').storedLicence();
+    return require('./license/token').holdsUpdate(lic, info && info.releaseDate);
+  } catch {
+    return null;
+  }
 }
 
 /* -------------------------------------------------------------------------- */
@@ -395,4 +421,10 @@ module.exports = {
   promptToInstall,
   stop,
   INTERVAL_MS,
+  // verify-updater.js: the handlers, registered afresh, against a local
+  // stand-in for the feed.
+  loadForHarness: () => {
+    updater = null;
+    return load();
+  },
 };

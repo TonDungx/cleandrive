@@ -1520,7 +1520,12 @@ function register() {
           pair: snapshotDiff.defaultPair(list),
         });
       }
-      return { roots, allowed: licenseState.canNow()('pro.diff') };
+      // An expired licence still compares the scans it paid for (option A):
+      // the window is told up to when, and offers only those.
+      const lic = licenseState.currentLicense();
+      const full = entitlements.can(lic, 'pro.diff');
+      const readUntil = !full && entitlements.canRead(lic, 'pro.diff') ? lic.expires : null;
+      return { roots, allowed: full || Boolean(readUntil), readUntil };
     })
   );
 
@@ -1531,7 +1536,8 @@ function register() {
    */
   handle('snapshot:diff', (_event, request = {}) =>
     guard(async () => {
-      if (!licenseState.canNow()('pro.diff')) return { ok: false, locked: 'pro.diff' };
+      const lic = licenseState.currentLicense();
+      if (!entitlements.canRead(lic, 'pro.diff')) return { ok: false, locked: 'pro.diff' };
       const store = services().snapshots;
       const asked = request && typeof request.root === 'string' ? request.root : null;
       const root = asked ? (await store.roots()).find((r) => pathKey(r) === pathKey(asked)) : null;
@@ -1539,9 +1545,12 @@ function register() {
         throw Object.assign(new Error('No such snapshot'), { code: 'ENOENT', quiet: true });
       };
       if (!root) refuse();
-      const listed = new Set((await store.list(root)).map((s) => s.file));
+      const index = await store.list(root);
+      const listed = new Set(index.map((s) => s.file));
       const names = [request.older, request.newer];
       if (!names.every((name) => typeof name === 'string' && listed.has(name)) || names[0] === names[1]) refuse();
+      const takenAt = names.map((name) => index.find((s) => s.file === name).takenAt);
+      if (!entitlements.canReadMadeAt(lic, 'pro.diff', takenAt)) return { ok: false, locked: 'pro.diff', expired: lic.expires || null };
       const [a, b] = await Promise.all(names.map((name) => store.load(root, name)));
       return snapshotDiff.diffSnapshots(a, b, { files: names });
     })
@@ -2125,6 +2134,7 @@ function register() {
             source: 'manual',
             quarantine: settings.quarantine,
             can: licenseState.canNow(),
+            licenceExpired: licenseState.currentLicense().state === 'expired',
             token,
             onStage: send,
             onConfirm: dryRun ? undefined : (selection) => confirmAutoDelete(win, selection, profile, settings),
@@ -3710,6 +3720,19 @@ async function readState() {
     // The last run of each profile, so a card can show its own result rather
     // than whichever profile happened to run most recently.
     lastRunByProfile: lastRunPerProfile(runLog.runs, settingsLib.profilesOf(settings)),
+    // Which profiles the licence turns into reports, and why (§7.1): worked
+    // out by the same function the run itself asks, so the screen and the
+    // 02:00 run cannot disagree about it.
+    licence: (() => {
+      const lic = licenseState.currentLicense();
+      const can = (feature) => entitlements.can(lic, feature);
+      const lacking = {};
+      for (const p of settingsLib.profilesOf(settings)) {
+        const needs = require('./lib/autoclean').licenceLacks(settings, p, can);
+        if (needs.length > 0) lacking[p.id] = needs;
+      }
+      return { expired: lic.state === 'expired', lacking };
+    })(),
   };
 }
 

@@ -2384,6 +2384,21 @@ warning and the journal. A licence that runs out never deletes or hides anything
 the app made: what is in quarantine, the snapshots, the reports and the journal
 are all still there.
 
+**When a licence runs out** the card says *Pro has expired*, offers to renew,
+and the app goes back to Free — with one thing kept: the scans already taken
+can still be compared on Trends, as long as both were taken before the licence
+ended, and the card says which. Every Pro analysis does not simply keep running:
+a trial ends the same way, and that would make every trial permanent. Automatic
+profiles keep their place and their settings; the ones that need Pro run in
+report only, and both the Automatic screen and each run's log entry say it is
+because the licence ran out. When Business runs out, the command line answers
+with exit code 3 except for `journal`, `restore`, `policy`, `version` and
+`help`; the console refuses until it is renewed (it asks again when its window
+comes back to the front); the organisation's own profile and quarantine folder
+stop applying while everything an organisation *takes away* still does; and
+new sessions are no longer sealed, while every seal already made can still be
+checked.
+
 **Pro was open to everyone up to 0.5.0**, while there was nothing to buy. From
 0.6.0 Pro and the Developer Pack are part of a licence again. Someone upgrading
 from an earlier version is told so on the card and, once, in a strip at the top
@@ -2397,14 +2412,21 @@ dialog. *Not now* puts it away; the trial one comes back at most once a day.
 
 ### Updates
 
-**Checking, downloading and installing are three separate clicks.** Replacing the
-application binary follows the same rule as deleting a file: nothing happens on
-its own. Update checks can be switched off entirely, and the scheduled cleanup
+**Checking and downloading happen by themselves; installing waits for a yes.**
+Replacing the application binary follows the same rule as deleting a file: it
+never happens on its own. Update checks can be switched off entirely, and the scheduled cleanup
 never checks — a 2am maintenance task that replaced the program is not something
 anybody asked for. An organisation can switch them off for you
 ([Managed by an organisation](#managed-by-an-organisation)); then the switch
 and *Check now* carry a padlock, and nothing contacts the release page, not
 even when the button is pressed.
+
+**An update that would take Pro away is not downloaded on its own.** A yearly
+licence keeps Pro on the versions released while it was paid for. When it has
+ended and a newer version was released after that day, installing it would
+quietly end Pro — so that one update waits: the card says why, and *Download*
+fetches it if you want it anyway. Lifetime licences, Business, trials and Free
+are never held.
 
 ---
 

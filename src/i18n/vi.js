@@ -3912,5 +3912,19 @@
     'result.busy': 'Đang có một lần thanh toán khác.',
     'result.failed': 'Không thực hiện được thanh toán ({code}). Bạn chưa bị trừ tiền.',
     'licence.devChannel': 'Kênh: dev · Thanh toán: giả lập',
+
+    /* ---- hết hạn (Giai đoạn 6) ----------------------------------------- */
+    'run.note.licenceExpired': 'Bản quyền Pro đã hết hạn, nên hồ sơ này chỉ báo cáo những gì nó sẽ làm. Chưa có gì bị chuyển đi; gia hạn để nó làm việc trở lại.',
+    'changes.expired': 'Pro đã hết hạn ngày {date}: các lần quét trước ngày đó vẫn so sánh được, các lần sau thì không.',
+    'changes.expiredFew': 'Pro đã hết hạn ngày {date}, và thư mục này có ít hơn hai lần quét trước ngày đó — chỉ những lần đó còn so sánh được.',
+    'changes.expiredLater': 'Pro đã hết hạn ngày {date}, và một trong hai lần quét này diễn ra sau ngày đó, nên không so sánh được.',
+    'auto.state.reportOnlyLicence': 'Chỉ báo cáo: bản quyền',
+    'auto.licence.quarantine': 'chuyển tệp sang ổ khác',
+    'auto.licence.profiles': 'nhiều hơn một hồ sơ',
+    'auto.licence.expired': 'Pro đã hết hạn. Tính năng Pro đang ở chế độ chỉ đọc; mọi dữ liệu vẫn còn. Hồ sơ này cần {what}, nên nó chỉ báo cáo những gì nó sẽ làm.',
+    'auto.licence.needsPro': 'Hồ sơ này cần CleanDrive Pro để {what}, nên nó chỉ báo cáo những gì nó sẽ làm. Chưa có gì bị chuyển đi.',
+    'update.detail.held': 'Bản {version} phát hành sau ngày bản quyền Pro của bạn hết hạn ({date}), nên sẽ không có Pro. Bản đang dùng giữ Pro vĩnh viễn, nên bản mới chưa được tải. Bấm Tải để lấy nó; gia hạn bản quyền thì bản mới cũng có Pro.',
+    'update.pill.held': 'Có bản {version}',
+    'update.pill.heldHint': 'Chưa tải: bản này sẽ không có Pro mà phiên bản đang dùng vẫn giữ',
   };
 });

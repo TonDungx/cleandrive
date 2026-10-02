@@ -60,7 +60,19 @@ console.log('\nentitlements: running out\n');
 
 const expired = L('expired', 'pro');
 check('an expired licence acts on nothing paid', !can(expired, 'pro.quarantine') && !can(expired, 'pro.diff'));
-check('but can still read what it made', canRead(expired, 'pro.quarantine') && canRead(expired, 'pro.diff'));
+// Option A (decided 2026-10-02): expired is Free plus the scans already taken.
+// Not every Pro analysis -- a trial ends as expired too.
+check('but can still compare the scans it paid for', canRead(expired, 'pro.diff'));
+check('and nothing else: expired is not "every analysis keeps running"',
+  !canRead(expired, 'pro.games') && !canRead(expired, 'pro.scan.mft') && !canRead(expired, 'pro.chat') && !canRead(expired, 'pro.planner'));
+{
+  const { canReadMadeAt } = require('../src/main/license/entitlements');
+  const ended = { ...expired, expires: '2027-01-01T00:00:00.000Z' };
+  check('scans taken before it ended may be compared', canReadMadeAt(ended, 'pro.diff', ['2026-11-01T00:00:00Z', '2026-12-31T23:59:59Z']));
+  check('a pair with one scan after it ended may not', !canReadMadeAt(ended, 'pro.diff', ['2026-12-01T00:00:00Z', '2027-01-02T00:00:00Z']));
+  check('a licence that includes it compares anything', canReadMadeAt(L('active', 'pro'), 'pro.diff', ['2099-01-01T00:00:00Z']));
+  check('Free compares nothing', !canReadMadeAt({ state: 'free' }, 'pro.diff', ['2000-01-01T00:00:00Z']));
+}
 check('and free features never lapse', can(expired, 'free'));
 check('a free licence reads nothing paid either', !canRead({ state: 'free' }, 'pro.diff'));
 

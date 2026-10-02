@@ -73,11 +73,34 @@ function can(lic, feature) {
 }
 
 /**
- * An expired licence keeps everything readable: snapshots, reports, what is in
- * quarantine. Only acting is locked.
+ * What an expired licence may still *look at*: the Pro data that was made
+ * while it was valid (decided 2026-10-02, option A). Today that is one
+ * thing -- comparing the scans already taken. Everything else a lapsed
+ * licence leaves behind is reachable without asking at all: Restore and the
+ * journal never ask, what is in quarantine is in Restore, a report is a file.
+ *
+ * Deliberately not "every Pro analysis keeps running": a 14-day trial ends as
+ * `expired` too, and that reading would make every trial permanent Pro.
  */
+const READ_AFTER_EXPIRY = Object.freeze(['pro.diff']);
+
 function canRead(lic, feature) {
-  return can(lic, feature) || Boolean(lic && lic.state === 'expired' && FEATURES[feature]);
+  return can(lic, feature) || Boolean(lic && lic.state === 'expired' && READ_AFTER_EXPIRY.includes(feature));
+}
+
+/**
+ * Whether data made at these moments may be read: always while `feature` is
+ * included, and when it has expired only data made before it did.
+ *
+ * @param {License} lic
+ * @param {string} feature
+ * @param {string[]} madeAt   ISO times
+ */
+function canReadMadeAt(lic, feature, madeAt) {
+  if (can(lic, feature)) return true;
+  if (!canRead(lic, feature) || !lic.expires) return false;
+  const end = Date.parse(lic.expires);
+  return madeAt.length > 0 && madeAt.every((at) => Date.parse(at) <= end);
 }
 
 /** Why a feature is not available, as a key the window can word. */
@@ -101,4 +124,4 @@ function forRenderer(lic) {
     .map((feature) => ({ feature, allowed: can(lic, feature), reason: reasonFor(lic, feature) }));
 }
 
-module.exports = { FEATURES, FREE, can, canRead, reasonFor, forRenderer };
+module.exports = { FEATURES, FREE, READ_AFTER_EXPIRY, can, canRead, canReadMadeAt, reasonFor, forRenderer };

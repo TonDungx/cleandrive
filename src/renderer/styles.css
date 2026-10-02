@@ -8566,6 +8566,11 @@ button.is-managed {
   display: none;
 }
 
+/* The same strip inside the Automatic screen, where the panel already gives it its gutters. */
+.licence-strip.auto-licence {
+  margin: 0 0 16px;
+}
+
 .licence-strip-text {
   flex: 1 1 240px;
   min-width: 0;
