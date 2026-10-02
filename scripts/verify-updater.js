@@ -105,10 +105,13 @@ app.whenReady().then(async () => {
   // day someone moves the call above the branch.
   {
     const mainSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'main', 'main.js'), 'utf8');
-    const scheduledBranch = mainSource.slice(
-      mainSource.indexOf('if (isScheduledRun)'),
-      mainSource.indexOf('} else if (!app.requestSingleInstanceLock())')
-    );
+    // The end is the call's prefix: since I3 the lock takes an argument, and the
+    // old full-call marker stopped matching -- the slice then ran to the end of
+    // main.js and this check failed on the window's own branch.
+    const start = mainSource.indexOf('if (isScheduledRun)');
+    const end = mainSource.indexOf('} else if (!app.requestSingleInstanceLock(');
+    check('both ends of the scheduled-run branch are found in main.js', start >= 0 && end > start, `${start}..${end}`);
+    const scheduledBranch = mainSource.slice(start, end);
     check('the scheduled-run branch never touches the updater',
       scheduledBranch.length > 100 && !/updater\./.test(scheduledBranch),
       `${scheduledBranch.length} chars examined`);
