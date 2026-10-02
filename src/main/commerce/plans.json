@@ -1,0 +1,46 @@
+{
+  "format": "cleandrive.plans",
+  "version": 1,
+  "sample": true,
+  "currency": "VND",
+  "vatIncluded": true,
+  "plans": [
+    {
+      "id": "pro-annual",
+      "tier": "pro",
+      "period": "annual",
+      "defaultSeats": 3,
+      "seats": [
+        { "n": 1, "price": 299000 },
+        { "n": 3, "price": 499000 },
+        { "n": 5, "price": 699000 }
+      ],
+      "addons": { "dev": 199000 }
+    },
+    {
+      "id": "pro-lifetime",
+      "tier": "pro",
+      "period": "lifetime",
+      "defaultSeats": 3,
+      "seats": [
+        { "n": 1, "price": 899000 },
+        { "n": 3, "price": 1490000 },
+        { "n": 5, "price": 1990000 }
+      ],
+      "addons": { "dev": 499000 }
+    },
+    {
+      "id": "business-annual",
+      "tier": "business",
+      "period": "annual",
+      "defaultSeats": 10,
+      "seats": [
+        { "n": 5, "price": 2490000 },
+        { "n": 10, "price": 4490000 },
+        { "n": 25, "price": 9990000 }
+      ],
+      "addons": {}
+    }
+  ],
+  "trial": { "plan": "pro-trial", "tier": "pro", "days": 14 }
+}

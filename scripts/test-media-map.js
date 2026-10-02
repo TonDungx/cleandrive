@@ -182,7 +182,10 @@ async function main() {
     //
     // And `fleet` with H3: the machine report is a file on a share that every
     // reporting machine can read, and the console writes a CSV.
-    const roots = ['report', 'snapshots', 'journal', path.join('lib', 'media', 'mp4'), 'cli', 'fleet'];
+    //
+    // And `license` and `commerce` with Phase 6: license.dat, orders.json and
+    // the key a person saves to a file are all files.
+    const roots = ['report', 'snapshots', 'journal', path.join('lib', 'media', 'mp4'), 'cli', 'fleet', 'license', 'commerce'];
     const files = [];
     const walk = (dir) => {
       for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -201,6 +204,9 @@ async function main() {
     check('and so is the command line', files.some((file) => /[\\/]cli[\\/]output\.js$/.test(file)) && files.some((file) => /[\\/]cli[\\/]commands[\\/]scan\.js$/.test(file)));
     check('and so are the machine report and the console (H3)',
       ['report.js', 'collect.js', 'share.js', 'console-model.js'].every((name) => files.some((file) => file.endsWith(path.join('fleet', name)))));
+    check('and so are the licence file, the orders and the provider (Phase 6)',
+      [path.join('license', 'store.js'), path.join('license', 'state.js'), path.join('commerce', 'mock-provider.js'), path.join('commerce', 'index.js')]
+        .every((rel) => files.some((file) => file.endsWith(rel))));
 
     const guilty = files.filter((file) => {
       const src = fs.readFileSync(file, 'utf8');

@@ -39,4 +39,23 @@ function fromEnv(env = process.env) {
   return Object.freeze({ ...preset, source: 'dev' });
 }
 
-module.exports = { PRESETS, fromEnv };
+/**
+ * How the mock payment provider should answer, for a harness on the `dev`
+ * channel -- every outcome §7.4 lists, and how long it takes:
+ *
+ *   CLEANDRIVE_MOCK_OUTCOME    = succeeded | failed:card_declined | failed:network
+ *                                | failed:timeout | cancelled | pending
+ *   CLEANDRIVE_MOCK_LATENCY_MS = 0 .. 60000
+ *
+ * A release build never reads either: on it, "Pay" succeeds after the
+ * provider's own pause (decided 2026-10-02).
+ */
+function mockOptions(env = process.env) {
+  const out = {};
+  if (env.CLEANDRIVE_MOCK_OUTCOME) out.outcome = String(env.CLEANDRIVE_MOCK_OUTCOME).trim().toLowerCase();
+  const ms = Number(env.CLEANDRIVE_MOCK_LATENCY_MS);
+  if (env.CLEANDRIVE_MOCK_LATENCY_MS !== undefined && Number.isInteger(ms) && ms >= 0 && ms <= 60000) out.latencyMs = ms;
+  return out;
+}
+
+module.exports = { PRESETS, fromEnv, mockOptions };

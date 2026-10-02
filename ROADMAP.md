@@ -2647,6 +2647,16 @@ export class MockPaymentProvider {
 | `cancelled` | "Bạn đã huỷ thanh toán." | Quay lại |
 | `pending` (chuyển khoản QR) | "Đang chờ xác nhận chuyển khoản." | Kiểm tra lại · Nhập mã khi nhận được email |
 
+> **✅ Đã code xong (2026-10-02), mục 6.3 — provider, mock, bảng giá, `machineId`** (§7.3, §7.4, phần `machineId` của §7.5). Code: `commerce/provider.js` (interface, JSDoc), `commerce/mock-provider.js`, `commerce/plans.json`, `commerce/quote.js`, `commerce/index.js`, `license/mock-issuer.js`, `license/machine.js`. Khác đặc tả, và vì sao:
+> - **CJS, không `import … with { type: 'json' }`**; harness là `test-commerce.js` (58 kiểm tra, trong `npm test`).
+> - **Mock ở mọi kênh, và trên stable nó luôn thành công** (người dùng chốt). `CLEANDRIVE_MOCK_OUTCOME` và `CLEANDRIVE_MOCK_LATENCY_MS` chỉ được đọc ở kênh `dev`, qua `dev-overrides.js` — bản phát hành không đọc được biến nào, cùng luật với entitlements. Có test.
+> - **Chỉ VND, giá mẫu** (người dùng chốt), `plans.json` mang `"sample": true`. Đặc tả chỉ có hai con số (Pro năm 499.000 ₫, Dev 199.000 ₫); **các số còn lại là tôi đặt để có đủ bảng**, cũng là dữ liệu mẫu: Pro năm 1/3/5 máy = 299.000/499.000/699.000 ₫; Pro trọn đời = 899.000/1.490.000/1.990.000 ₫, Dev trọn đời 499.000 ₫; Business năm 5/10/25 máy = 2.490.000/4.490.000/9.990.000 ₫. Business **gồm** Developer Pack nên không bán add-on. Số máy đổi giá — nếu không thì chọn ít máy hơn chẳng để làm gì. [Speculation] Giá thật cần khảo sát.
+> - **Giá tính ở một chỗ** (`quote.js`): con số trên nút Thanh toán được gửi kèm đơn, và mock **từ chối** đơn có tổng khác — hai con số không thể lệch nhau. Đơn sai (email, phương thức, tiền tệ, số máy) bị từ chối **trước** khi chờ.
+> - **`pending` và `failed:timeout` có lối ra:** lần `status(orderId)` sau trả licence (xác nhận tới muộn) — đó là việc của nút "Kiểm tra lại", và chỉ một lần.
+> - **Hoá đơn sống qua lần khởi động lại:** mock ghi `orders.json` trong userData (gói, giá, phương thức, `machineId` dạng hash — **không có email, không có licence**; có test đọc tệp). Đặc tả giữ đơn trong RAM, nên mục "Hoá đơn gần đây" sẽ trống sau mỗi lần mở app.
+> - **`machineId`** = SHA-256(`cleandrive.machine/1:` + MachineGuid). Đo: đọc không cần quyền quản trị, `reg.exe` 14–25 ms; dự phòng PowerShell khi `reg.exe` bị chặn (H2). GUID gốc không rời khỏi hàm.
+> - **Kích hoạt sau khi trả tiền đi đúng cửa của "Nhập mã bản quyền"** (`state.activate`), nên cùng luật từ chối và cùng cách niêm email. Cửa sổ nhận mã để hiện và sao chép, **không bao giờ nhận email**.
+
 ### 7.5. License: định dạng & phát hành
 
 **Định dạng token:**
@@ -2749,7 +2759,7 @@ export function effectiveState(lic, build = BUILD_INFO) {
 > - **Dấu dùng thử nằm trong `license.dat`**, không phải HKCU (người dùng để nguyên đề xuất): token trial, một khi đã có, được giữ lại sau khi hết hạn hoặc sau khi mua.
 > - **Licence đổi được khi app đang chạy.** `state.onChange` báo cho `services.js`, nơi hỏi lại sealer (`journal.useSealer` — mỗi phiên giữ sealer của lúc nó mở, nên không phiên nào bị nửa niêm phong; có test) và nửa "làm thay" của policy. Cửa sổ nhận sự kiện `license:changed` và nạp lại entitlements. Console được đưa *câu hỏi* `() => canNow()('biz.console')` thay vì câu trả lời, và hỏi lại khi được focus. Một hẹn giờ báo lúc trial hoặc năm hết hạn. Đọc tệp: một `stat` mỗi lần hỏi, chỉ đọc lại và kiểm chữ ký khi tệp đổi.
 > - **`pro.photos` đã xoá** (khoá chết). `test-entitlements.js` nay đòi **mọi khoá đều được hỏi ở đâu đó trong `src/`**.
-> - **Harness:** `test-license.js` (62 kiểm tra, có hai lời gọi DPAPI thật) thay cho `license-verify.mjs`; thêm vào `test-journal-seal.js` (5), `test-fleet.js` (1); `test-entitlements.js` và `test-dev.js` đổi khẳng định "stable mở Pro" thành "stable không licence là Free".
+> - **Harness:** `test-license.js` (61 kiểm tra, có hai lời gọi DPAPI thật) thay cho `license-verify.mjs`; thêm vào `test-journal-seal.js` (5), `test-fleet.js` (1); `test-entitlements.js` và `test-dev.js` đổi khẳng định "stable mở Pro" thành "stable không licence là Free".
 
 ### 7.7. Mạng & bảo mật cho luồng thanh toán
 
