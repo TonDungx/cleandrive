@@ -544,6 +544,38 @@ async function main() {
     check('a session sealed with it checks', (await check_(dir, next)).sessions[s.id].state === 'sealed');
   }
 
+  console.log('\njournal seal: a licence that changes while the app runs (Phase 6)\n');
+
+  {
+    // Business bought, then lapsing, with sessions open across both moments.
+    // services.js hands the journal the new answer; a session keeps the one it
+    // began with, so none is ever half chained.
+    const dir = path.join(root, 'switch');
+    fs.mkdirSync(dir, { recursive: true });
+    const { journal, key } = sealed(dir);
+    const sealer = journal.sealer;
+    journal.useSealer(null);
+
+    const before = await journal.begin('recycle', { count: 1 }, { source: 'manual' });
+    await journal.record(before, { path: 'C:\\fixture\\switch\\0.bin', size: 10, trashedAt: Date.now() });
+    journal.useSealer(sealer); // bought, mid-session
+    await journal.end(before, { done: 1, movedBytes: 10 });
+    const after = await session(journal, 2, 'switch-after');
+
+    const open = await journal.begin('recycle', { count: 1 }, { source: 'manual' });
+    journal.useSealer(null); // lapsed, mid-session
+    await journal.end(open, { done: 0, movedBytes: 0 });
+    const lapsed = await session(journal, 1, 'switch-lapsed');
+
+    const report = await check_(dir, key);
+    const stateOf = (s) => (report.sessions[s.id] ? report.sessions[s.id].state : 'absent');
+    check('a session begun before the purchase stays unsealed, not half chained', stateOf(before) === 'legacy', stateOf(before));
+    check('the first session after it is sealed', stateOf(after) === 'sealed', stateOf(after));
+    check('a session begun before the licence lapsed is still sealed at its end', stateOf(open) === 'sealed', stateOf(open));
+    check('and the next one is not', stateOf(lapsed) === 'legacy', stateOf(lapsed));
+    check('nothing reads as altered', report.counts.altered === 0, JSON.stringify(report.counts));
+  }
+
   console.log(failures === 0 ? '\nALL PASS\n' : `\n${failures} FAILURE(S)\n`);
   process.exit(failures === 0 ? 0 : 1);
 }

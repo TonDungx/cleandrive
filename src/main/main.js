@@ -250,12 +250,14 @@ if (isCli) {
    * an administrator may well have both open -- and none of the window's
    * machinery (tray, updater, tasks). Whether this copy includes it
    * (`biz.console`) is asked here and handed in; nothing under fleet/ loads
-   * the licence.
+   * the licence. Handed in as a question rather than an answer: a licence
+   * bought in the app's own window, while the console is open, opens it
+   * the next time the console asks.
    */
   const { canNow } = require('./license/state');
   require('./fleet/console-main').start({
     share: consoleArgs.shareOf(process.argv, app.isPackaged),
-    allowed: canNow()('biz.console'),
+    allowed: () => canNow()('biz.console'),
   });
 } else if (isHelper) {
   /*
@@ -451,6 +453,13 @@ if (isCli) {
         },
       });
     }
+
+    // A purchase, a key entered or a trial running out opens or closes
+    // features at once, without a restart (§7.2.4): the window is told, and
+    // asks again what this copy may use. It is never sent the licence.
+    require('./license/state').onChange(() => {
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('license:changed');
+    });
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow();

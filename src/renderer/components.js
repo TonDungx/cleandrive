@@ -569,6 +569,20 @@
     return entitlements;
   }
 
+  // The licence changed while the window was open (Phase 6): ask again, and
+  // take down every hint about something this copy now includes. The next
+  // action asks the main process afresh in any case; this is so the screen
+  // stops saying otherwise.
+  if (root.cleandrive && typeof root.cleandrive.onLicenseChanged === 'function') {
+    root.cleandrive.onLicenseChanged(async () => {
+      await loadEntitlements();
+      for (const el of document.querySelectorAll('.upgrade-hint[data-feature]')) {
+        const known = entitlements.get(el.dataset.feature);
+        if (known && known.allowed) el.remove();
+      }
+    });
+  }
+
   /**
    * A line of text where a paid limit is reached, or nothing.
    *

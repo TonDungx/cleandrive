@@ -107,10 +107,21 @@ class ActionJournal {
     await fsp.appendFile(file, texts.map((text) => `${text}\n`).join(''), 'utf8');
   }
 
+  /**
+   * Seal the sessions that begin from now on, or stop sealing them.
+   *
+   * The licence can change while the app runs (Phase 6), and whoever builds
+   * the journal hands it the new answer here -- the journal still never asks.
+   * A session keeps the sealer it began with, so none is ever half chained.
+   */
+  useSealer(sealer) {
+    this.sealer = sealer || null;
+  }
+
   _stateOf(session) {
     let state = this._open.get(session);
     if (!state) {
-      state = { head: null, count: 0, queue: Promise.resolve() };
+      state = { head: null, count: 0, queue: Promise.resolve(), sealer: this.sealer };
       this._open.set(session, state);
     }
     return state;
@@ -133,9 +144,9 @@ class ActionJournal {
   _chain(state, lines) {
     let { head, count } = state;
     const texts = lines.map((line) => {
-      if (this.sealer) line.prev = head;
+      if (state.sealer) line.prev = head;
       const text = JSON.stringify(line);
-      if (this.sealer) {
+      if (state.sealer) {
         head = hashLine(text);
         count += 1;
       }
@@ -162,11 +173,11 @@ class ActionJournal {
    * of what happened to somebody's files comes first; the seal on it second.
    */
   async _finish(session, lines) {
-    if (!this.sealer) return this._write(session, lines);
     const state = this._stateOf(session);
+    if (!state.sealer) return this._write(session, lines);
     let ticket = null;
     try {
-      ticket = await this.sealer.open((isGenuine) => this._lastSeal(isGenuine));
+      ticket = await state.sealer.open((isGenuine) => this._lastSeal(isGenuine));
       this.sealError = null;
     } catch (err) {
       this.sealError = err;

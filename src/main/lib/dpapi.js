@@ -1,8 +1,9 @@
 'use strict';
 
 /**
- * Windows DPAPI, for the one secret the app keeps: the key that seals the
- * journal (H4).
+ * Windows DPAPI, for the two secrets the app keeps: the key that seals the
+ * journal (H4), and the email address a licence was bought with (Phase 6).
+ * Each has its own entropy string, so one cannot be opened as the other.
  *
  * ## Scope: the user, not the machine
  *
@@ -45,9 +46,11 @@ const powershell = () => path.join(windowsDir(), 'System32', 'WindowsPowerShell'
  * Bound to this app, so another program running as the same user cannot hand
  * the blob to `Unprotect` and get the key back without knowing it. That is
  * not secrecy -- the string is in this file -- only a refusal to be a
- * general-purpose decryption oracle.
+ * general-purpose decryption oracle. The journal's is the default, as it was
+ * before there was a second; the licence's email passes its own.
  */
 const ENTROPY = 'cleandrive.journal-seal/1';
+const LICENCE_EMAIL_ENTROPY = 'cleandrive.licence-email/1';
 
 /**
  * Exit 3 means DPAPI itself refused the blob -- the one failure that says the
@@ -63,7 +66,7 @@ const SCRIPT = [
   '  Add-Type -AssemblyName System.Security',
   '  $op = [Console]::In.ReadLine()',
   '  $data = [Convert]::FromBase64String([Console]::In.ReadLine())',
-  `  $entropy = [Text.Encoding]::UTF8.GetBytes('${ENTROPY}')`,
+  '  $entropy = [Text.Encoding]::UTF8.GetBytes([Console]::In.ReadLine())',
   '  $scope = [Security.Cryptography.DataProtectionScope]::CurrentUser',
   "  if ($op -eq 'protect') { $out = [Security.Cryptography.ProtectedData]::Protect($data, $entropy, $scope) }",
   "  elseif ($op -eq 'unprotect') { $out = [Security.Cryptography.ProtectedData]::Unprotect($data, $entropy, $scope) }",
@@ -78,7 +81,11 @@ const SCRIPT = [
 
 const ENCODED = Buffer.from(SCRIPT, 'utf16le').toString('base64');
 
-function run(op, data, { timeoutMs = 20_000 } = {}) {
+function run(op, data, { timeoutMs = 20_000, entropy = ENTROPY } = {}) {
+  // One line of plain text on stdin: no newline, nothing PowerShell would read as anything else.
+  if (typeof entropy !== 'string' || !/^[\x20-\x7e]{1,128}$/.test(entropy)) {
+    return Promise.reject(Object.assign(new Error(`DPAPI ${op}: unusable entropy`), { code: 'EDPAPI', refused: false }));
+  }
   return new Promise((resolve, reject) => {
     let child;
     let out = '';
@@ -122,7 +129,7 @@ function run(op, data, { timeoutMs = 20_000 } = {}) {
       finish(null, Buffer.from(text, 'base64'));
     });
     child.stdin.on('error', () => {});
-    child.stdin.end(`${op}\n${Buffer.from(data).toString('base64')}\n`, 'utf8');
+    child.stdin.end(`${op}\n${Buffer.from(data).toString('base64')}\n${entropy}\n`, 'utf8');
   });
 }
 
@@ -132,4 +139,4 @@ const protect = (data, options) => run('protect', data, options);
 /** @param {Buffer} blob @returns {Promise<Buffer>} */
 const unprotect = (blob, options) => run('unprotect', blob, options);
 
-module.exports = { protect, unprotect, SCOPE: 'CurrentUser', ENTROPY };
+module.exports = { protect, unprotect, SCOPE: 'CurrentUser', ENTROPY, LICENCE_EMAIL_ENTROPY };

@@ -381,7 +381,7 @@ counts allocation, the scan counts file sizes) and it opens the
 [System](#screen-2--system) screen, which says what it is.
 
 Scanning more than one folder at once, or a whole drive, is a Pro feature
-(`pro.scan.multiroot`); until licences exist it is open to everyone.
+(`pro.scan.multiroot`).
 Choosing `C:\` in the folder dialog stays what it always was.
 
 ### Fast scan
@@ -424,8 +424,7 @@ Windows happens to have cached.
 It falls back to the ordinary walk, and says why on the status line, when the
 drive is not NTFS (FAT, exFAT and ReFS have no catalogue), when it is a
 network or read-only drive, when the prompt is declined, and when the
-catalogue cannot be read. Fast scan is a Pro feature (`pro.scan.mft`); until
-licences exist it is open to everyone.
+catalogue cannot be read. Fast scan is a Pro feature (`pro.scan.mft`).
 
 **In 0.4.0 and every version before it, the switch never actually read the
 catalogue.** The figures above were measured by a test harness reading the
@@ -773,8 +772,7 @@ Two sources are left out on purpose, and each says why on the screen:
 A source that fails to measure is named too, and the plan is built from the
 rest rather than abandoned.
 
-The Space Planner is a Pro feature (`pro.planner`); until licences exist it is
-open to everyone.
+The Space Planner is a Pro feature (`pro.planner`).
 ## Screen 4 — What to delete
 
 The same scan, read a different way: not "what is big" but "what is disposable".
@@ -2576,8 +2574,7 @@ cleandrive policy validate [<file.reg>] | apply [--json]
 cleandrive version | help [<command>]
 ```
 
-It is part of CleanDrive Business. Until licences exist, an installed copy has
-Business closed, so every command except `journal`, `restore`, `policy`,
+It is part of CleanDrive Business. Without it, every command except `journal`, `restore`, `policy`,
 `version` and `help` answers with exit code 3 and a sentence saying so — never
 a smaller run instead. Those five are never asked about the licence at all:
 reading what the app did, putting it back, and checking what an organisation's
@@ -2720,8 +2717,7 @@ Group Policy can be given the same values with `reg import`.
 The ones that only take something away apply to every copy of CleanDrive: an
 organisation's *view only* that a missing licence could quietly switch off
 would be a safety rail that is not there. The three that make the app act on the
-organisation's behalf are CleanDrive Business, and Business is closed on an
-installed copy until licences exist — so on one, `cleandrive policy validate`
+organisation's behalf are CleanDrive Business — so on a copy without it, `cleandrive policy validate`
 and the line at the top of the window both say which policies were set but not
 applied.
 
@@ -2769,7 +2765,7 @@ every value they write is one the app is tested to read.
 One window over every computer an organisation manages, with no server and no
 cloud: each computer writes a small file to a shared folder on the
 organisation's own network, and the console reads the folder. Both halves are
-CleanDrive Business, closed on an installed copy until licences exist.
+CleanDrive Business.
 
 ### What each computer writes
 
@@ -2929,7 +2925,12 @@ handed their exit code to Windows.
   report](#what-each-computer-writes), which names no file or folder. The
   console, when someone opens it, keeps the seal numbers it has seen in its own
   data folder, and writes a CSV only where it is told to. The app reads an
-  organisation's policy and never writes it.
+  organisation's policy and never writes it. And `license.dat`, once you have a
+  licence or a trial: the signed key in the clear — it holds no email address,
+  only a salted hash of one — the address it was bought with, encrypted for
+  your Windows account with DPAPI and opened only when the licence screen shows
+  it, and, once this copy has had a trial, that trial's key, which is how it
+  knows not to offer another.
 - **Settings upgrade forward, once.** The settings file is versioned; the first
   save after an upgrade keeps the previous file as `settings.v1.json`, and the
   version before this one still reads the new file (that is tested against the
@@ -3033,7 +3034,7 @@ for somebody deleting them.
 - **The command line is English, and needs its batch file.** Started as
   `CleanDrive.exe --cli` directly, PowerShell and cmd do not wait for it. Ctrl+C
   ends it at once rather than letting it finish the file it is on. Business
-  only, and closed on an installed copy until licences exist.
+  only.
 - **An organisation's policy is machine-wide and read through `reg.exe`** — or
   through PowerShell when `reg.exe` is blocked, which it is (measured) wherever
   *Prevent access to registry editing tools* is on. There is no per-user half yet. The
@@ -3092,15 +3093,18 @@ Three further environment variables exist for development only:
 
 ```
 CLEANDRIVE_CHANNEL=beta npm run build         # which channel a build is (default: stable)
-CLEANDRIVE_ENTITLEMENTS=free npm start        # narrow a checkout to one tier: free, pro, pro+dev, business, all
+CLEANDRIVE_ENTITLEMENTS=free npm start        # narrow a checkout to one tier: free, pro, pro+dev, business, all -- or stored
 CLEANDRIVE_COPIES_SCOPE=D:\x npm start        # where "Find duplicates" looks, instead of Home (a checkout only)
 ```
 
 A checkout opens every feature by default and honours `CLEANDRIVE_ENTITLEMENTS`.
 A built installer cannot be told a tier at all: the module that reads the
-variable is left out of every build but the `dev` channel. Until licences
-exist, an installed copy has Pro and the developer add-on open to everyone and
-Business closed.
+variable is left out of every build but the `dev` channel. An installed copy
+is Free until `license.dat` in its data folder holds a licence whose signature
+it believes. Pro and the developer add-on were open to everyone on installed
+copies from 0.1.x to 0.5.0, while there was nothing to buy; 0.6.0 closes them
+again. `CLEANDRIVE_ENTITLEMENTS=stored` makes a checkout read `license.dat` the
+way an installed copy does.
 
 **The release guard.** `npm run build` checks what it actually packed — after
 the app folder is made and before the installer is — and stops if a build that

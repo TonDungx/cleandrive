@@ -147,8 +147,9 @@ function services() {
      * as before. Checking seals is reading, and is never gated -- a lapsed
      * licence stops new seals and leaves every old one checkable.
      *
-     * Asked once per process, which is right while a licence cannot change
-     * under a running app. Phase 6 makes it able to, and must ask again.
+     * Asked once, and again whenever the licence changes (see the end of
+     * this function): the journal is then handed the new answer for the
+     * sessions that begin after it.
      */
     get sealer() {
       if (sealer === undefined) {
@@ -175,8 +176,8 @@ function services() {
      * The tightening half applies to every copy; the acting half -- the
      * organisation's own profile, its quarantine folder -- is `biz.policy`
      * (decided 2026-10-01). Asked here and handed in, the way the journal is
-     * handed a sealer: nothing under policy/ loads the licence. Asked once
-     * per process, for the same reason as the seal.
+     * handed a sealer: nothing under policy/ loads the licence. Asked again
+     * when the licence changes, like the seal.
      */
     get policy() {
       if (!policy) {
@@ -205,6 +206,21 @@ function services() {
   // every one of them reads it through the policy (H2): see policy/store.js.
   const { ManagedSettingsStore } = require('./policy/store');
   cached.settings = new ManagedSettingsStore(new SettingsStore(path.join(dir, 'settings.json'), { minMinutes }), () => cached.policy);
+
+  // The licence can change while this process runs -- a purchase, a key
+  // entered, a trial ending (Phase 6). The two Business answers decided here
+  // are asked again and handed in again, so the journal and the policy still
+  // never ask for themselves (test-entitlements.js).
+  require('./license/state').onChange(() => {
+    if (sealer !== undefined) {
+      sealer = undefined;
+      if (journal) journal.useSealer(cached.sealer);
+    }
+    if (policy) {
+      policy.acting = require('./license/state').canNow()('biz.policy');
+      policy.refresh().catch(() => {});
+    }
+  });
   return cached;
 }
 

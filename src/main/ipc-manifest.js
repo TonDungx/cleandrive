@@ -175,6 +175,8 @@ const EVENTS = Object.freeze([
   'update:state',
   'app:data-changed',
   'app:target',
+  // The licence changed under the open window (Phase 6); it carries nothing.
+  'license:changed',
 ]);
 
 /**

@@ -335,11 +335,11 @@ async function main() {
       !can({ state: 'active', tier: 'pro', addons: [] }, 'pro.dev') &&
         can({ state: 'active', tier: 'pro', addons: ['dev'] }, 'pro.dev'));
     check('Business includes it without the add-on', can({ state: 'active', tier: 'business' }, 'pro.dev'));
-    // Decided 2026-09-26, like Pro before it: open until Phase 6.
-    const stable = currentLicense({ channel: 'stable', env: {} });
-    check('a release build has the dev add-on open today, and the key still exists to take it back',
-      can(stable, 'pro.dev') && stable.addons.includes('dev') && !can(stable, 'biz.cli'),
-      JSON.stringify(stable));
+    // Open on release builds from 2026-09-26 until Phase 6, like Pro; closed
+    // again 2026-10-02 -- it is a separate add-on, bought on its own.
+    const stable = currentLicense({ channel: 'stable', env: {}, file: null });
+    check('a release build with no licence does not include the dev add-on',
+      !can(stable, 'pro.dev') && stable.state === 'free', JSON.stringify(stable));
   } finally {
     await fsp.rm(root, { recursive: true, force: true }).catch(() => {});
   }

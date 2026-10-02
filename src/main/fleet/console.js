@@ -24,7 +24,8 @@ class ConsoleService {
   /**
    * @param {object} options
    * @param {string|null} options.share
-   * @param {boolean} options.allowed            biz.console, decided by the caller
+   * @param {boolean|(() => boolean)} options.allowed  biz.console, decided by the caller --
+   *   or the question, asked afresh each time, so a licence bought while the console is open counts
    * @param {{load: Function, save: Function}} options.memory
    * @param {(code: number) => string|null} [options.describeResult]  Task Scheduler code in words
    * @param {Function} [options.readReports]
@@ -32,13 +33,17 @@ class ConsoleService {
    */
   constructor({ share = null, allowed = false, memory, describeResult = () => null, readReports = shareLib.readReports, now = () => Date.now() }) {
     this.share = share;
-    this.allowed = allowed;
+    this._allowed = allowed;
     this.memory = memory;
     this.describeResult = describeResult;
     this.readReports = readReports;
     this.now = now;
     this.last = null;
     this.pending = null;
+  }
+
+  get allowed() {
+    return typeof this._allowed === 'function' ? Boolean(this._allowed()) : Boolean(this._allowed);
   }
 
   info() {

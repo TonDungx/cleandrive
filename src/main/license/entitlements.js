@@ -37,7 +37,9 @@ const FEATURES = Object.freeze({
   'pro.apps.lastused': { tier: 'pro' },
   'pro.games': { tier: 'pro' },
   'pro.chat': { tier: 'pro' },
-  'pro.photos': { tier: 'pro' },
+  // No `pro.photos`: nothing ever asked for it. The Photos screen and E1-E5
+  // were each decided free when they were built, and a key nobody checks is a
+  // promise of a lock that does not exist (removed in Phase 6).
   'pro.dupes.advanced': { tier: 'pro' },
   'pro.reports': { tier: 'pro' },
   'pro.automatic.profiles': { tier: 'pro' },

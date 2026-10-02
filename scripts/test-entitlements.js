@@ -87,35 +87,24 @@ check('and the override narrows it for testing a tier',
   currentLicense({ channel: 'dev', env: { CLEANDRIVE_ENTITLEMENTS: 'free' } }).state === 'free' &&
     currentLicense({ channel: 'dev', env: { CLEANDRIVE_ENTITLEMENTS: 'pro' } }).tier === 'pro');
 {
-  // Decided 2026-09-24: until licences exist (Phase 6) a release build has Pro
-  // open to everyone. The `dev` add-on joined it on 2026-09-26 when the
-  // Developer Pack was built, for the same reason -- there is still no way to
-  // buy either. Business stays closed, and the keys stay separate so Phase 6
-  // can still take each back on its own.
-  const stable = currentLicense({ channel: 'stable', env: { CLEANDRIVE_ENTITLEMENTS: 'all' } });
-  const beta = currentLicense({ channel: 'beta', env: { CLEANDRIVE_ENTITLEMENTS: 'free' } });
-  check('a release build has Pro open, whatever the override says',
-    stable.state === 'active' && stable.tier === 'pro' && stable.source === 'open' &&
-      beta.tier === 'pro' && beta.state === 'active', `${stable.state} ${stable.tier}`);
-  check('and the dev add-on with it, as its own key rather than folded into Pro',
-    stable.addons.length === 1 && stable.addons[0] === 'dev' && FEATURES['pro.dev'].addon === 'dev',
-    JSON.stringify(stable.addons));
-  const onStable = canNow({ channel: 'stable', env: { CLEANDRIVE_ENTITLEMENTS: 'all' } });
-  check('so the snapshot comparison runs there', onStable('pro.diff') && onStable('pro.quarantine'));
-  check('and so does the Developer Pack', onStable('pro.dev'));
-  check('but Business does not unlock in a release by setting a variable',
-    !onStable('biz.cli') && !onStable('biz.audit') && !onStable('biz.console') && !onStable('biz.policy'));
-  // The add-on is only open because this build says so, not because the
-  // entitlement rules stopped distinguishing it.
-  check('and a Pro licence without the add-on still does not include it',
-    !can({ state: 'active', tier: 'pro', addons: [] }, 'pro.dev'));
+  // Pro and the dev add-on were open to everyone on a release build from
+  // 2026-09-24 until Phase 6, while there was nothing to buy. Closed again
+  // 2026-10-02: a release build is Free until license.dat says otherwise
+  // (test-license.js covers the file), and no variable changes that.
+  const stable = currentLicense({ channel: 'stable', env: { CLEANDRIVE_ENTITLEMENTS: 'all' }, file: null });
+  const beta = currentLicense({ channel: 'beta', env: { CLEANDRIVE_ENTITLEMENTS: 'business' }, file: null });
+  check('a release build with no licence is Free, whatever the override says',
+    stable.state === 'free' && stable.source === 'none' && beta.state === 'free', `${stable.state} ${stable.source}`);
+  const onStable = canNow({ channel: 'stable', env: { CLEANDRIVE_ENTITLEMENTS: 'all' }, file: null });
+  check('so nothing paid runs there without one',
+    !onStable('pro.diff') && !onStable('pro.quarantine') && !onStable('pro.dev') && !onStable('biz.cli') && onStable('free'));
+  check('and the dev add-on is its own key, not folded into Pro (decided 2026-10-02: a separate add-on)',
+    FEATURES['pro.dev'].addon === 'dev' && !can({ state: 'active', tier: 'pro', addons: [] }, 'pro.dev'));
 }
 // The games library (D2) was the first analyzer behind a feature key; the chat
 // apps (D3) made `pro.chat` the second key in use -- it had been declared in
 // `entitlements.js` and reached by nothing at all until that screen existed.
-// Every other analyzer is free, and all of these still run today because a
-// release build has Pro open until Phase 6, which is what this checks rather
-// than that no analyzer is ever gated.
+// Every other analyzer is free.
 {
   const paid = registry.list().filter((a) => a.feature !== 'free');
   check('the analyzers behind a feature key are the games library, the chat apps and the Developer Pack',
@@ -129,9 +118,23 @@ check('and the override narrows it for testing a tier',
   check('every analyzer names a feature that exists',
     registry.list().every((a) => a.feature === 'free' || FEATURES[a.feature]),
     registry.list().map((a) => a.feature).join(', '));
-  const open = canNow({ channel: 'stable', env: {} });
-  check('and on a release build today it still runs for everyone',
-    registry.list().every((a) => open(a.feature)));
+  const free = canNow({ channel: 'stable', env: {}, file: null });
+  check('and on a release build with no licence only the free ones run',
+    registry.list().every((a) => free(a.feature) === (a.feature === 'free')));
+}
+
+{
+  // No dead keys: a feature key nothing asks for is a lock that does not exist
+  // (`pro.photos` was one until Phase 6). Every key but 'free' must be named
+  // somewhere under src/ besides the table itself.
+  const SRC = path.join(__dirname, '..', 'src');
+  const walk = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) =>
+    e.isDirectory() ? walk(path.join(d, e.name)) : /\.(js|html)$/.test(e.name) ? [path.join(d, e.name)] : []);
+  const table = path.join(SRC, 'main', 'license', 'entitlements.js');
+  const corpus = walk(SRC).filter((f) => f !== table).map((f) => fs.readFileSync(f, 'utf8')).join('\n');
+  const unasked = Object.keys(FEATURES).filter((k) => k !== 'free' && !corpus.includes(`'${k}'`));
+  check('every feature key is asked for somewhere', unasked.length === 0, unasked.join(', ') || 'all asked');
+  check('pro.photos is gone (E1-E5 were decided free)', !FEATURES['pro.photos']);
 }
 
 console.log('\nentitlements: what the window learns\n');
@@ -198,7 +201,7 @@ console.log('\nentitlements: what never goes through can()\n');
     'src/main/fleet/console-main.js',
     'src/main/sample-only.js',
   ];
-  const offenders = mustNotGate.filter((rel) => /license\/(entitlements|state)/.test(fs.readFileSync(path.join(ROOT, rel), 'utf8')));
+  const offenders = mustNotGate.filter((rel) => /license\//.test(fs.readFileSync(path.join(ROOT, rel), 'utf8')));
   check('the journal, the ledger, the purge and the Recycle Bin never consult a licence', offenders.length === 0,
     offenders.join(', '));
 
@@ -226,11 +229,12 @@ console.log('\nentitlements: what never goes through can()\n');
   check('and the check of the seals is one of the Restore Center’s handlers, ungated',
     restoreBlock.includes("handle('journal:verify'"));
 
-  // H3: the console is biz.console, asked where the mode starts and handed in.
+  // H3: the console is biz.console, asked where the mode starts and handed in
+  // -- since Phase 6 as the question, so a licence bought meanwhile counts.
   const mainSrc = fs.readFileSync(path.join(ROOT, 'src/main/main.js'), 'utf8');
   const consoleBranch = mainSrc.slice(mainSrc.indexOf('} else if (isConsole) {'), mainSrc.indexOf('} else if (isHelper) {'));
   check('whether the console opens is decided where its mode starts, from biz.console',
-    consoleBranch.length > 0 && /allowed: canNow\(\)\('biz\.console'\)/.test(consoleBranch));
+    consoleBranch.length > 0 && /allowed: \(\) => canNow\(\)\('biz\.console'\)/.test(consoleBranch));
   const fleetDir = path.join(ROOT, 'src/main/fleet');
   const listed = fs.readdirSync(fleetDir).filter((f) => f.endsWith('.js')).map((f) => `src/main/fleet/${f}`);
   check('and every module under fleet/ is on the list above', listed.every((rel) => mustNotGate.includes(rel)), listed.filter((rel) => !mustNotGate.includes(rel)).join(', '));

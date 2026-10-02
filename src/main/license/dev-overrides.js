@@ -6,7 +6,10 @@
  * A checkout opens every feature by default, so a developer sees the whole
  * app, and `CLEANDRIVE_ENTITLEMENTS` narrows it to test one tier:
  *
- *   CLEANDRIVE_ENTITLEMENTS = all | free | pro | pro+dev | business
+ *   CLEANDRIVE_ENTITLEMENTS = all | free | pro | pro+dev | business | stored
+ *
+ * `stored` is "as a release would": the licence in `license.dat`, Free when
+ * there is none -- how the purchase screens are tried from a checkout.
  *
  * This file is left out of every build that is not the `dev` channel
  * (`scripts/build.js`), and `scripts/release-guard.js` fails such a build if
@@ -24,12 +27,14 @@ const PRESETS = Object.freeze({
 });
 
 /**
- * The licence the variable asks for. Unset or unknown means everything.
+ * The licence the variable asks for: null for `stored`, everything when unset
+ * or unknown.
  *
  * @param {object} [env]
  */
 function fromEnv(env = process.env) {
   const wanted = String(env.CLEANDRIVE_ENTITLEMENTS || 'all').trim().toLowerCase();
+  if (wanted === 'stored') return null;
   const preset = PRESETS[wanted] || PRESETS.all;
   return Object.freeze({ ...preset, source: 'dev' });
 }

@@ -747,6 +747,17 @@
   }
   $('console-detail-close').addEventListener('click', () => select(null));
 
+  // A licence bought in the app's own window while this one was refusing:
+  // asked again whenever the console comes back to the front, so it opens
+  // without being started again. Only while refused -- an open console is
+  // never re-read behind somebody's back.
+  window.addEventListener('focus', async () => {
+    if (!view.info || view.info.allowed) return;
+    await loadInfo();
+    if (view.info.allowed) await read();
+    else draw();
+  });
+
   /** For the screenshot harness: which machines are drawn, in order. */
   window.ConsoleView = { state: () => view, read, select };
 

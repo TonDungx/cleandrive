@@ -532,6 +532,14 @@ function personalInputs({ topFolders = false, now = Date.now() } = {}) {
     const refused = new ConsoleService({ share: '\\\\srv\\r', allowed: false, memory: svcMemory, readReports: async () => { calls += 1; return { ok: true, files: [] }; } });
     const r = await refused.read();
     check('without biz.console nothing is read at all', r.allowed === false && calls === 1 && !(await refused.forget('PC-SOON')));
+    // Phase 6: handed the question, asked each time -- Business bought in the
+    // app's window while the console is open counts at its next read.
+    let business = false;
+    const asking = new ConsoleService({ share: '\\\\srv\\r', allowed: () => business, memory: svcMemory, readReports: async () => ({ ok: true, files: [] }) });
+    const no = await asking.read();
+    business = true;
+    const yes = await asking.read();
+    check('a console handed the question asks it again at each read', no.allowed === false && yes.allowed === true && asking.info().allowed === true);
     const dead = new ConsoleService({ share: '\\\\10.255.255.1\\r', allowed: true, memory: svcMemory, readReports: async () => ({ ok: false, code: 'UNKNOWN', error: 'The network path was not found' }) });
     const d = await dead.read();
     check('a share that does not answer is a result the window can word, with the code', d.ok === false && d.code === 'UNKNOWN');

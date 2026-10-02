@@ -2405,7 +2405,7 @@ Có thể xem lại trong Settings → Giới thiệu.
 | Xác nhận, cảnh báo cloud, nhãn tin cậy, Restore Center (I1) | ✅ | ✅ | ✅ | ✅ |
 | A1 Bóc tách hệ thống | ✅ | ✅ | ✅ | ✅ |
 | A3 Treemap cơ bản | ✅ | ✅ | ✅ | ✅ |
-| A3 Treemap tô màu theo tuổi / verdict / nguồn | — | ✅ | ✅ | ✅ |
+| ~~A3 Treemap tô màu theo tuổi / verdict / nguồn~~ **chưa làm** (dời ở Giai đoạn 1), nên không có trong cột tính năng của modal | — | — | — | — |
 | B3 OneDrive dehydrate | ✅ | ✅ | ✅ | ✅ |
 | D1 Danh sách app + dung lượng | ✅ | ✅ | ✅ | ✅ |
 | D4 Cache app phổ biến | ✅ | ✅ | ✅ | ✅ |
@@ -2417,7 +2417,7 @@ Có thể xem lại trong Settings → Giới thiệu.
 | B1 Quarantine | — | ✅ | ✅ | ✅ |
 | B2 Relocate · B4 Nén · B5 Đóng gói | — | ✅ | ✅ | ✅ |
 | D1 Lần dùng cuối · D2 Game · D3 Chat | — | ✅ | ✅ | ✅ |
-| E1–E5 Ảnh & video nâng cao | — | ✅ | ✅ | ✅ |
+| E1–E5 Ảnh & video nâng cao — **Free**: mỗi mục đã chốt không khoá khi làm, và khoá `pro.photos` không ai hỏi nên đã xoá ở Giai đoạn 6 | ✅ | ✅ | ✅ | ✅ |
 | F1–F3 Trùng lặp nâng cao | — | ✅ | ✅ | ✅ |
 | G1 Planner · G2 Báo cáo · G3 Tóm tắt | — | ✅ | ✅ | ✅ |
 | G4 Không giới hạn hồ sơ tự động | — | ✅ | ✅ | ✅ |
@@ -2739,6 +2739,17 @@ export function effectiveState(lic, build = BUILD_INFO) {
   return 'expired';
 }
 ```
+
+> **✅ Đã code xong (2026-10-02), mục 6.2 — lõi licence** (§7.5 + §7.6, cùng phần §4.4 phải đổi). Code: `license/token.js` (định dạng, khoá được tin, `effective`), `license/store.js` (`license.dat`), `license/state.js` (đọc, sự kiện đổi, kích hoạt). Khác đặc tả, và vì sao:
+> - **Pro và Pro·Dev khoá lại trên stable** (người dùng chốt 2026-10-02). `OPEN_PRO` đã gỡ: bản cài là Free cho tới khi `license.dat` có licence mà chữ ký nó tin. Checkout vẫn mở hết theo mặc định; giá trị mới `CLEANDRIVE_ENTITLEMENTS=stored` cho checkout đọc `license.dat` như bản cài.
+> - **Một khoá, không phải hai.** Đặc tả có khoá `dev-*` chỉ kênh dev tin. Nhưng người dùng chốt "bấm Thanh toán là thành công" **ở mọi kênh**, nên khoá ký của mock (`mock-2026-10`, khoá riêng ở `license/mock-key.pem`) **ship và được tin ở cả ba kênh**. Ai mở app ra cũng tự ký được licence — bằng đúng việc bấm Thanh toán. Giai đoạn 7 thôi tin khoá này trên stable (người dùng chốt: hết hiệu lực khi bắt đầu bán, nói trước trên màn Gói & bản quyền); bảng `KEYS` đã có trường `channels` cho việc đó và có test.
+> - **Token không mang email**, chỉ mang hash có salt (`emailHash`). Người dùng chốt "làm sao cũng được, miễn bảo mật được thông tin": `license.dat` được **mọi** tiến trình đọc (cửa sổ, 02:00, phép đo hằng ngày, từng lệnh CLI, Console), nên mã hoá cả tệp bằng DPAPI là thêm ~0,4–0,5 s PowerShell cho mỗi tiến trình. Thay vào đó **chỉ địa chỉ email** được niêm bằng DPAPI (entropy riêng `cleandrive.licence-email/1`, đo được: không mở được bằng entropy của journal), và chỉ được mở khi màn licence hiện nó. Đo trên máy này: hai lời gọi DPAPI thật **853 ms**. Blob của `dpapi.js` cũ vẫn mở được bằng bản mới và ngược lại (đã đo), nên khoá niêm phong H4 có sẵn không bị ảnh hưởng.
+> - **Token ghi gói và add-on, không bao giờ ghi danh sách tính năng** — tính năng sau này thêm vào gói tự mở cho người đã mua (người dùng chốt).
+> - **Trọn đời = mọi phiên bản về sau** (người dùng chốt), nên không có `perpetualUpTo`, cũng không có `satisfiesMajor`. Gói năm giữ đúng §7.6 theo `releaseDate`; **checkout có `releaseDate: null` và được coi là mới hơn mọi hạn** (không có fallback). Business và trial không có fallback. `currentMajorPlusOneYear()` của §7.4 bị bỏ: nó trộn số major với ngày.
+> - **Dấu dùng thử nằm trong `license.dat`**, không phải HKCU (người dùng để nguyên đề xuất): token trial, một khi đã có, được giữ lại sau khi hết hạn hoặc sau khi mua.
+> - **Licence đổi được khi app đang chạy.** `state.onChange` báo cho `services.js`, nơi hỏi lại sealer (`journal.useSealer` — mỗi phiên giữ sealer của lúc nó mở, nên không phiên nào bị nửa niêm phong; có test) và nửa "làm thay" của policy. Cửa sổ nhận sự kiện `license:changed` và nạp lại entitlements. Console được đưa *câu hỏi* `() => canNow()('biz.console')` thay vì câu trả lời, và hỏi lại khi được focus. Một hẹn giờ báo lúc trial hoặc năm hết hạn. Đọc tệp: một `stat` mỗi lần hỏi, chỉ đọc lại và kiểm chữ ký khi tệp đổi.
+> - **`pro.photos` đã xoá** (khoá chết). `test-entitlements.js` nay đòi **mọi khoá đều được hỏi ở đâu đó trong `src/`**.
+> - **Harness:** `test-license.js` (62 kiểm tra, có hai lời gọi DPAPI thật) thay cho `license-verify.mjs`; thêm vào `test-journal-seal.js` (5), `test-fleet.js` (1); `test-entitlements.js` và `test-dev.js` đổi khẳng định "stable mở Pro" thành "stable không licence là Free".
 
 ### 7.7. Mạng & bảo mật cho luồng thanh toán
 

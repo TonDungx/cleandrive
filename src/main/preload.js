@@ -222,6 +222,8 @@ const api = {
   onDataChanged: (cb) => subscribe('app:data-changed', cb),
   // Explorer's right-click menu asked for a folder or a file (I3).
   onTarget: (cb) => subscribe('app:target', cb),
+  /** The licence changed: ask `entitlements()` again. */
+  onLicenseChanged: (cb) => subscribe('license:changed', cb),
 };
 
 function subscribe(channel, cb) {
