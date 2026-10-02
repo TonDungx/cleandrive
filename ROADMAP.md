@@ -2845,6 +2845,7 @@ export async function getProvider() {
 > - **Phần ghi đè của dev tách sang `license/dev-overrides.js`**, bị loại khỏi `files` ở mọi kênh trừ `dev`, và chỉ được `state.js` nạp khi kênh là `dev`. Rào từ chối bốn thứ: module đó hoặc tên biến trong bất kỳ tệp chữ nào, bất cứ gì dưới `scripts/`, một devDependency (axe-core, Electron), và `build-info.json` thiếu hoặc ghi kênh khác.
 > - **Không thêm dependency:** bộ đọc asar tự viết (~40 dòng). Đối chiếu với `@electron/asar` trên bản 0.5.0: **1.334/1.334 tệp, 11,0 MB, khớp từng byte**. Chạy trên chính bản đó, rào bắt **đúng hai tệp** trên.
 > - **CJS, `.js`:** `scripts/release-guard.js` (`npm run guard:release`), `test-release-guard.js` trong `npm test` (asar dựng tay theo định dạng, mỗi luật một ca hỏng và một ca sạch, cộng phép kiểm cây nguồn), `verify-release-guard.js` (`npm run verify:release-guard`, ba lần build thật, ~15 s mỗi lần): **13/0** — build stable có một tệp cài sẵn tên biến ghi đè **fail ở `afterPack` và không để lại installer**; build stable sạch qua rào, exe đóng gói khởi động được khi thiếu `dev-overrides.js` và **bỏ qua** `CLEANDRIVE_ENTITLEMENTS=business` (CLI vẫn đóng); build dev mang tệp đó và **làm theo** biến.
+> - **Sửa lúc phát hành 0.6.0:** `npm run guard:release -- dist\win-unpacked` báo "usage" — không có `--channel` thì tham số đầu tiên bị bỏ qua như thể là giá trị của nó (`afterPack` gọi thẳng hàm nên không dính). Đã sửa, 3 kiểm tra mới cho dòng lệnh của rào; chạy trên bản build 0.6.0: sạch cho stable.
 
 ### 7.9. Kiểm thử thương mại
 

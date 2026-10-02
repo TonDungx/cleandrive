@@ -153,10 +153,18 @@ function checkPackage(target, { channel, devDependencies = [] }) {
 
 module.exports = { DEV_ONLY, OVERRIDE_VARIABLE, excludedFor, readAsar, asarOf, checkPackage };
 
+/** The folder or asar named on the command line, skipping the value of --channel. */
+function targetOf(args) {
+  const at = args.indexOf('--channel');
+  return args.find((a, i) => !a.startsWith('--') && (at < 0 || i !== at + 1)) || null;
+}
+
+module.exports.targetOf = targetOf;
+
 if (require.main === module) {
   const args = process.argv.slice(2);
   const at = args.indexOf('--channel');
-  const target = args.find((a, i) => !a.startsWith('--') && i !== at + 1);
+  const target = targetOf(args);
   if (!target) {
     console.error('usage: release-guard <app.asar | win-unpacked folder> [--channel stable]');
     process.exit(64);

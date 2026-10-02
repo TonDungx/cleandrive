@@ -150,6 +150,17 @@ console.log('\nrelease guard: a dev build\n');
     ['stable', 'beta'].every((c) => guard.DEV_ONLY.every((rel) => guard.excludedFor(c).includes(`!${rel}`))));
 }
 
+console.log('\nrelease guard: its command line\n');
+
+{
+  // `npm run guard:release -- dist\win-unpacked` read nothing at first: with no
+  // --channel the first argument was skipped as if it were its value.
+  check('a folder alone is the target', guard.targetOf(['dist\\win-unpacked']) === 'dist\\win-unpacked');
+  check('so is a folder before --channel, and after it', guard.targetOf(['x', '--channel', 'beta']) === 'x' &&
+    guard.targetOf(['--channel', 'beta', 'x']) === 'x');
+  check('the channel itself is never taken for the target', guard.targetOf(['--channel', 'beta']) === null);
+}
+
 console.log('\nrelease guard: the source tree it guards\n');
 
 {
