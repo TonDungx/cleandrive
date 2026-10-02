@@ -411,6 +411,10 @@
     'run.zoneAway': 'Ổ đĩa để chuyển tệp sang hiện không có: {zone}',
     'run.note.keepsOriginal':
       'Bản gốc được giữ lại, nên lượt này không giải phóng byte nào trên ổ vừa dọn — nó còn chép thêm sang ổ kia',
+    'run.note.licenceProfiles':
+      'Không có CleanDrive Pro thì chỉ được một hồ sơ, nên hồ sơ này chỉ báo cáo những gì nó sẽ làm. Chưa có gì bị chuyển đi.',
+    'run.note.licenceQuarantine':
+      'Chuyển tệp sang ổ khác là tính năng của CleanDrive Pro, nên hồ sơ này chỉ báo cáo những gì nó sẽ làm. Chưa có gì bị chuyển đi.',
     'run.cancelledBefore': 'Đã huỷ trước khi có gì bị xoá',
     'run.allRefused': 'Mọi ứng viên đều bị các lớp bảo vệ từ chối',
     'run.note.noDiskUsage': 'Không đọc được dung lượng đĩa; ngưỡng phần trăm không được áp dụng',

@@ -111,6 +111,9 @@ async function runScheduled() {
             journal: services().journal,
             source: 'scheduled',
             quarantine: settings.quarantine,
+            // Read fresh for this run: the licence may have changed since the
+            // task was registered, and nobody is here to be asked.
+            can: require('./license/state').canNow(),
           });
           run.warnings = store.warnings;
           if (lock.waitedMs > 1000) {

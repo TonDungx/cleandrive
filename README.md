@@ -2196,6 +2196,13 @@ for another without it is refused in words rather than by a button that does
 nothing. There is a ceiling of eight, because each is a process that wakes up
 and reads the disk.
 
+Profiles made while the licence included them are kept when it no longer does,
+and they do not stop. The first of your profiles still runs as it is set; every
+other one — and any profile that moves files to another drive, which is Pro
+(`pro.quarantine`) on its own — **runs in report only** and its entry in the
+run log says why, whether it was the 02:00 run, the *Run now* button or
+`cleandrive run`. Nothing it would have moved is moved.
+
 **Every new profile starts switched off and in report-only**, whatever the one
 beside it is doing.
 

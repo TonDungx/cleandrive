@@ -2044,6 +2044,7 @@ function register() {
             journal: services().journal,
             source: 'manual',
             quarantine: settings.quarantine,
+            can: licenseState.canNow(),
             token,
             onStage: send,
             onConfirm: dryRun ? undefined : (selection) => confirmAutoDelete(win, selection, profile, settings),

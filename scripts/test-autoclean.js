@@ -273,6 +273,128 @@ function file(p, size, mtimeMs = OLD, atimeMs = 0) {
       run.notes.map(render).join(' | '));
   }
 
+  console.log('\nautoclean: what the licence includes\n');
+
+  {
+    // Two profiles of the person's own, and a licence that says no to
+    // everything: the first still runs, the second becomes a report and says
+    // why. Nothing may reach the Recycle Bin for the second.
+    const two = coerceSettings({
+      autoClean: {
+        profiles: [
+          { id: 'main', enabled: true, roots: [root], dryRun: false, skipIfRunning: [] },
+          { id: 'psecond', enabled: true, roots: [root], dryRun: false, skipIfRunning: [] },
+        ],
+      },
+    }).settings;
+    const [first, second] = profilesOf(two);
+    // Free features are always allowed, as the real `can` answers.
+    const none = (f) => f === 'free';
+    let reached = 0;
+    const realDeps = {
+      scan: fakeScan(bigCache),
+      planTrash: async (paths) => {
+        reached += 1;
+        return {
+          plan: paths.map((p) => ({ path: p, size: 1024 })),
+          failed: [], needsAdmin: [], inUse: [], totalBytes: 1024 * paths.length, cancelled: false, estimatedMs: 0,
+        };
+      },
+      executeTrash: async (plan) => ({ moved: plan, failed: [], freedBytes: 0, cancelled: false, remaining: 0, durationMs: 1 }),
+    };
+
+    const ran = await runAutoClean({ settings: two, profile: first, can: none, deps: realDeps, now: NOW });
+    check('the first profile is free: it runs for real without Pro', ran.outcome !== 'dry-run' && reached === 1,
+      `${ran.outcome}, planTrash reached ${reached}`);
+    check('and carries no licence note', !ran.lacking && !ran.notes.some((n) => n && /^run\.note\.licence/.test(n.i18n)));
+
+    reached = 0;
+    const reported = await runAutoClean({ settings: two, profile: second, can: none, deps: realDeps, now: NOW });
+    check('a second profile without Pro only reports', reported.outcome === 'dry-run' && reached === 0,
+      `${reported.outcome}, planTrash reached ${reached}`);
+    check('it still counts what it would have taken', reported.selected.files === 1, String(reported.selected.files));
+    check('and says why, as a message the log can translate later',
+      reported.notes.some((n) => n && n.i18n === 'run.note.licenceProfiles'), reported.notes.map(render).join(' | '));
+    check('the run names what was missing', JSON.stringify(reported.lacking) === '["pro.automatic.profiles"]',
+      JSON.stringify(reported.lacking));
+    check('a report-only run is recorded as one', reported.dryRun === true);
+
+    reached = 0;
+    const allowed = await runAutoClean({
+      settings: two, profile: second, can: (f) => f === 'free' || f === 'pro.automatic.profiles', deps: realDeps, now: NOW,
+    });
+    check('with Pro the second profile runs for real', allowed.outcome !== 'dry-run' && reached === 1,
+      `${allowed.outcome}, planTrash reached ${reached}`);
+
+    reached = 0;
+    const already = await runAutoClean({
+      settings: two, profile: { ...second, dryRun: true }, can: none, deps: realDeps, now: NOW,
+    });
+    check('a profile already in report only gains no licence note', already.outcome === 'dry-run' &&
+      !already.notes.some((n) => n && /^run\.note\.licence/.test(n.i18n)) && JSON.stringify(already.lacking) === '["pro.automatic.profiles"]');
+
+    reached = 0;
+    const noGate = await runAutoClean({ settings: two, profile: second, deps: realDeps, now: NOW });
+    check('a caller that hands in no licence is not gated here (the pipeline rule)', noGate.outcome !== 'dry-run' && reached === 1);
+  }
+
+  {
+    // Moving to another drive is Pro on its own, even as the free profile.
+    const zone = path.join(dir, 'zone');
+    const settings = coerceSettings({
+      autoClean: { profiles: [{ id: 'main', enabled: true, roots: [root], dryRun: false, skipIfRunning: [], action: 'quarantine' }] },
+    }).settings;
+    const run = await runAutoClean({
+      settings,
+      profile: profilesOf(settings)[0],
+      quarantine: { zone, maxGB: 0, retentionDays: 30 },
+      can: () => false,
+      deps: {
+        scan: fakeScan(bigCache),
+        zoneReady: async () => true,
+        planTrash: async () => { throw new Error('a report must not reach the pipeline'); },
+      },
+      now: NOW,
+    });
+    check('a quarantine profile without Pro only reports', run.outcome === 'dry-run', render(run.reason));
+    check('in the words of moving to another drive', /other drive/.test(render(run.reason)), render(run.reason));
+    check('and says why', run.notes.some((n) => n && n.i18n === 'run.note.licenceQuarantine'));
+  }
+
+  {
+    // The organisation's profile (H2) is there only when Business is, so it is
+    // neither counted nor asked about; the person's first profile stays free.
+    const { licenceLacks } = require('../src/main/lib/autoclean');
+    const own = { id: 'main', enabled: true, roots: [root] };
+    const org = { id: 'porganisation', managed: true, enabled: true, roots: [root] };
+    const settings = { autoClean: { profiles: [org, own] } };
+    check('the organisation\'s profile asks the licence nothing', licenceLacks(settings, org, () => false).length === 0);
+    check('and does not push the person\'s first profile into second place',
+      licenceLacks(settings, own, () => false).length === 0);
+  }
+
+  {
+    // Every door into an unattended run hands it the licence. A door without
+    // it would run the profile whatever the licence says.
+    const fs = require('node:fs');
+    const SRC = path.join(__dirname, '..', 'src', 'main');
+    const walk = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) =>
+      e.isDirectory() ? walk(path.join(d, e.name)) : e.name.endsWith('.js') ? [path.join(d, e.name)] : []);
+    const calls = [];
+    for (const f of walk(SRC)) {
+      const text = fs.readFileSync(f, 'utf8');
+      let at = text.indexOf('runAutoClean({');
+      while (at !== -1) {
+        const end = text.indexOf('});', at);
+        calls.push({ file: path.relative(SRC, f), passes: /\bcan:/.test(text.slice(at, end)) });
+        at = text.indexOf('runAutoClean({', at + 1);
+      }
+    }
+    const missing = calls.filter((c) => !c.passes).map((c) => c.file);
+    check('every caller of runAutoClean hands it the licence', calls.length === 3 && missing.length === 0,
+      `${calls.length} calls; without can: ${missing.join(', ') || 'none'}`);
+  }
+
   console.log('\nautoclean: the run log\n');
 
   {

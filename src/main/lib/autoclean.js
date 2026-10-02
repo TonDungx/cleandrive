@@ -204,6 +204,36 @@ function emptyRun(startedAt) {
 }
 
 /**
+ * What this profile needs that the licence does not include, as feature keys.
+ *
+ * One profile is free and the rest are `pro.automatic.profiles`; which one is
+ * free is the first of the person's own, in the order the Automatic tab lists
+ * them. Moving files to another drive is `pro.quarantine` wherever it runs.
+ *
+ * @param {object} settings
+ * @param {object} profile
+ * @param {(feature: string) => boolean} can
+ * @returns {string[]}
+ */
+function licenceLacks(settings, profile, can) {
+  if (!profile || profile.managed === true) return [];
+  const own = profilesOf(settings).filter((p) => p && p.managed !== true);
+  const index = own.findIndex((p) => p.id === profile.id);
+  const needs = [];
+  if (index > 0) needs.push('pro.automatic.profiles');
+  if (profile.action === 'quarantine') needs.push('pro.quarantine');
+  return needs.filter((feature) => !can(feature));
+}
+
+/** The note a run carries for each thing it could not do, as messages. */
+const LACKING_NOTE = Object.freeze({
+  'pro.automatic.profiles': () =>
+    m('run.note.licenceProfiles', 'One profile is included without CleanDrive Pro, so this one only reported what it would do. Nothing was moved.'),
+  'pro.quarantine': () =>
+    m('run.note.licenceQuarantine', 'Moving files to another drive is part of CleanDrive Pro, so this profile only reported what it would do. Nothing was moved.'),
+});
+
+/**
  * @param {object}  options
  * @param {object}  options.settings   validated settings (see settings.js)
  * @param {object}  [options.profile]  which unattended policy to run (G4).
@@ -213,6 +243,7 @@ function emptyRun(startedAt) {
  * @param {object}  [options.deps]     injectable { scan, planTrash, executeTrash, shell }
  * @param {CancelToken} [options.token]
  * @param {(stage: object) => void} [options.onStage]
+ * @param {(feature: string) => boolean} [options.can]  the licence, asked by the caller
  */
 async function runAutoClean(options) {
   const settings = options.settings;
@@ -299,6 +330,23 @@ async function runAutoClean(options) {
   if (auto.roots.length === 0) return finish('skipped', m('run.noFolders', 'No folders are configured'));
   if (limits.categories.length === 0) {
     return finish('skipped', m('run.noCategories', 'No cleanup categories are enabled'));
+  }
+
+  /* -- gate: the licence -------------------------------------------------- */
+  //
+  // Asked by the caller and handed in as `can`, the way the pipeline is: the
+  // window's button, the 02:00 run and the command line each pass their own.
+  // A profile that needs what the licence does not include still runs -- as a
+  // report, saying why -- because a schedule that stops without a word is the
+  // one outcome the roadmap rules out (§7.1). The organisation's own profile
+  // is not counted: it is there only when Business is (H2's acting half).
+  const lacking = typeof options.can === 'function' ? licenceLacks(settings, auto, options.can) : [];
+  if (lacking.length > 0) {
+    run.lacking = lacking;
+    if (!run.dryRun) {
+      run.dryRun = true;
+      for (const feature of lacking) run.notes.push(LACKING_NOTE[feature]());
+    }
   }
 
   /* -- gate 0: can this profile's action actually happen (G4) -------------- */
@@ -457,6 +505,9 @@ async function runAutoClean(options) {
       // Already refused above when it is set; handed on so the pipeline's own
       // gate holds even if that one is ever moved.
       viewOnly: Boolean(managed && managed.viewOnly),
+      // The same: the licence gate above already turned such a run into a
+      // report, and the pipeline's own gate is the second lock on that door.
+      ...(typeof options.can === 'function' ? { can: options.can } : {}),
       deps: {
         planTrash: deps.planTrash,
         executeTrash: deps.executeTrash,
@@ -608,6 +659,7 @@ class RunLog {
 module.exports = {
   runAutoClean,
   emptyRun,
+  licenceLacks,
   selectFiles,
   lastTouched,
   blockingApps,

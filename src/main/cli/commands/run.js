@@ -95,6 +95,7 @@ async function run(args, ctx) {
         journal: svc.journal,
         source: 'cli',
         quarantine: settings.quarantine,
+        can: ctx.can,
         token: ctx.token,
         onStage: (s) => STAGES[s.stage] && ctx.out.note(STAGES[s.stage](s)),
       });
