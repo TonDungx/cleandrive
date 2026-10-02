@@ -177,7 +177,26 @@ const EVENTS = Object.freeze([
   'app:target',
 ]);
 
+/**
+ * The console's window (H3, `--console`), which is a different window with a
+ * preload of its own (console-preload.js) and asks for these and nothing
+ * else. It runs in its own process, which registers only these, in
+ * fleet/console-main.js -- not ipc.js, which would pull the scanner, the tray
+ * and the updater into a window that reads JSON files. The main window's
+ * process never registers them, and its preload cannot name them.
+ * Read-only, apart from a CSV the person saves and the console's own memory
+ * of seals.
+ */
+const CONSOLE_INVOKE = Object.freeze([
+  'console:info',
+  'console:read',
+  'console:pick',
+  'console:exportCsv',
+  'console:forget',
+]);
+
 const INVOKE_SET = new Set(INVOKE);
+const CONSOLE_SET = new Set(CONSOLE_INVOKE);
 const EVENT_SET = new Set(EVENTS);
 
 function assertInvokable(channel) {
@@ -186,8 +205,15 @@ function assertInvokable(channel) {
   }
 }
 
+/** The console's process registers through this, and only these. */
+function assertConsoleInvokable(channel) {
+  if (!CONSOLE_SET.has(channel)) {
+    throw new Error(`IPC channel ${channel} is not in the console's list in ipc-manifest.js -- add it there first`);
+  }
+}
+
 function isEvent(channel) {
   return EVENT_SET.has(channel);
 }
 
-module.exports = { INVOKE, EVENTS, assertInvokable, isEvent };
+module.exports = { INVOKE, CONSOLE_INVOKE, EVENTS, assertInvokable, assertConsoleInvokable, isEvent };

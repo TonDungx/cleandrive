@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <!--
+      The console's window (H3, `CleanDrive.exe --console <folder>`). Tighter
+      than the main window's policy: it previews nothing, so it has no
+      `cleandrive:` scheme and no media. No network, no inline script.
+    -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:;" />
+    <title>CleanDrive Console</title>
+    <link rel="stylesheet" href="styles.css" />
+    <!-- In <head>, as in index.html: the theme and the language must be in
+         place before the first paint. -->
+    <script src="../i18n/index.js"></script>
+    <script src="../i18n/vi.js"></script>
+    <script src="language.js"></script>
+    <script src="../shared/theme-palette.js"></script>
+    <script src="theme.js"></script>
+  </head>
+  <body class="console-body">
+    <main class="console" id="console">
+      <header class="console-head">
+        <div class="console-title">
+          <h1 data-i18n="console.title">CleanDrive Console</h1>
+          <p class="console-share" id="console-share"></p>
+        </div>
+        <div class="console-actions">
+          <button type="button" class="btn" id="console-pick" data-i18n="console.pick">Choose folder…</button>
+          <button type="button" class="btn" id="console-reload" data-i18n="console.reload">Read again</button>
+          <button type="button" class="btn btn-primary" id="console-csv" data-i18n="console.csv">Export CSV</button>
+        </div>
+      </header>
+
+      <p class="console-status" id="console-status" role="status" aria-live="polite"></p>
+
+      <!-- Written by console.js: no licence, no folder, a folder with nothing in it. -->
+      <section class="card console-gate" id="console-gate" hidden>
+        <h2 id="console-gate-title"></h2>
+        <p class="card-note" id="console-gate-text"></p>
+        <p class="console-command" id="console-gate-command" hidden><code>CleanDrive.exe --console \\server\folder</code></p>
+        <p class="card-note" id="console-gate-after" hidden></p>
+      </section>
+
+      <div class="console-tools" id="console-tools" hidden>
+        <label class="field console-search">
+          <span data-i18n="console.search">Find a computer</span>
+          <input type="text" id="console-search" autocomplete="off" spellcheck="false" />
+        </label>
+        <div class="console-filters" id="console-filters" role="group" aria-labelledby="console-filters-label">
+          <span class="sr-only" id="console-filters-label" data-i18n="console.filters">Show</span>
+        </div>
+      </div>
+
+      <div class="console-table-wrap" id="console-table-wrap" hidden>
+        <table class="console-table" id="console-table">
+          <caption class="sr-only" data-i18n="console.caption">Computers that report to this folder</caption>
+          <thead>
+            <tr>
+              <th scope="col" data-sort="host"><button type="button" class="console-sort" data-i18n="console.col.host">Computer</button></th>
+              <th scope="col" data-sort="used"><button type="button" class="console-sort" data-i18n="console.col.drive">Drive</button></th>
+              <th scope="col" data-sort="growth"><button type="button" class="console-sort" data-i18n="console.col.growth">Growth</button></th>
+              <th scope="col" data-sort="full"><button type="button" class="console-sort" data-i18n="console.col.full">Full in</button></th>
+              <th scope="col" data-sort="run"><button type="button" class="console-sort" data-i18n="console.col.run">Last automatic run</button></th>
+              <th scope="col" data-sort="report"><button type="button" class="console-sort" data-i18n="console.col.report">Report</button></th>
+              <th scope="col" data-sort="attention"><button type="button" class="console-sort" data-i18n="console.col.attention">Needs a look</button></th>
+            </tr>
+          </thead>
+          <tbody id="console-rows"></tbody>
+        </table>
+      </div>
+
+      <p class="console-unreadable" id="console-unreadable" hidden></p>
+
+      <section class="card console-detail" id="console-detail" hidden aria-labelledby="console-detail-title">
+        <div class="card-head">
+          <h2 id="console-detail-title"></h2>
+          <button type="button" class="btn btn-sm" id="console-detail-close" data-i18n="console.detail.close">Close</button>
+        </div>
+        <div class="console-detail-body" id="console-detail-body"></div>
+      </section>
+
+      <p class="console-foot" id="console-foot"></p>
+    </main>
+    <script src="console.js"></script>
+  </body>
+</html>

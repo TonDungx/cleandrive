@@ -35,6 +35,7 @@ const HANDLERS = Object.freeze({
   system: () => require('./commands/system'),
   profiles: () => require('./commands/profiles'),
   run: () => require('./commands/run'),
+  report: () => require('./commands/report'),
   journal: () => require('./commands/journal'),
   restore: () => require('./commands/restore'),
   policy: () => require('./commands/policy'),

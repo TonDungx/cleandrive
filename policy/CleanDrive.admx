@@ -261,5 +261,20 @@
         <text id="QuarantineFolderPath" key="Software\Policies\CleanDrive" valueName="QuarantineFolder" required="true" expandable="true" />
       </elements>
     </policy>
+    <policy name="MachineReport" class="Machine" displayName="$(string.MachineReport)" explainText="$(string.MachineReport_Explain)" presentation="$(presentation.MachineReport)" key="Software\Policies\CleanDrive">
+      <parentCategory ref="CleanDrive" />
+      <supportedOn ref="SUPPORTED_CleanDrive_0_5" />
+      <elements>
+        <text id="ReportFolder" key="Software\Policies\CleanDrive" valueName="ReportFolder" required="true" expandable="true" />
+        <boolean id="ReportTopFolders" key="Software\Policies\CleanDrive" valueName="ReportTopFolders">
+          <trueValue>
+            <decimal value="1" />
+          </trueValue>
+          <falseValue>
+            <decimal value="0" />
+          </falseValue>
+        </boolean>
+      </elements>
+    </policy>
   </policies>
 </policyDefinitions>

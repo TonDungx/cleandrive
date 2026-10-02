@@ -119,6 +119,15 @@
       if ((m.protectedFolders || []).length > 0) what.push(t('policy.banner.protected', 'folders automatic cleanup never touches'));
       if (m.updatesOff) what.push(t('policy.banner.updates', 'update checks are off'));
       if (m.quarantineZone) what.push(t('policy.banner.quarantine', 'where files moved to another drive go'));
+      // Said in full, folder and all: the person at the computer should know
+      // what leaves it and where to (H3).
+      if (m.report) {
+        what.push(
+          m.report.topFolders
+            ? t('policy.banner.reportTop', 'a daily summary of this computer’s drives and tasks, with the largest folders of the last scan, goes to {folder}', { folder: m.report.folder })
+            : t('policy.banner.report', 'a daily summary of this computer’s drives and tasks goes to {folder}, naming no file or folder', { folder: m.report.folder })
+        );
+      }
       parts.push(t('policy.banner.lead', 'Your organisation manages some of CleanDrive on this computer: {list}.', { list: what.join('; ') }));
     }
     if (m && (m.notApplied || []).length > 0) {
@@ -145,6 +154,7 @@
     decorate();
     drawBanner();
     show('viewOnly', viewOnly());
+    show('report', Boolean(current && current.report));
     if (typeof refreshActionBars === 'function') refreshActionBars();
     if (!changed) return;
     for (const fn of listeners) {

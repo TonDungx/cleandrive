@@ -18,7 +18,13 @@ const launchTarget = require('./launch-target');
 // line, so `cleandrive scan "--helper"` -- a folder with an unlucky name --
 // would otherwise start the elevated helper's branch instead.
 const isCli = require('./cli/args').wanted(process.argv, app.isPackaged);
-const modeArgs = isCli ? [] : process.argv;
+
+// The organisation's console (H3): `CleanDrive.exe --console [<folder>]`, by
+// the same rule -- first argument only, and every other mode switched off --
+// so a share whose name happens to contain `--helper` is a folder to read.
+const consoleArgs = require('./fleet/console-args');
+const isConsole = !isCli && consoleArgs.wanted(process.argv, app.isPackaged);
+const modeArgs = isCli || isConsole ? [] : process.argv;
 
 const isDev = modeArgs.includes('--dev');
 
@@ -40,7 +46,7 @@ const isHelper = modeArgs.includes('--helper');
 // Started from Explorer's right-click menu (I3): a folder to analyse, or a
 // file whose copies to find. Read here, before the single-instance lock, so a
 // second copy can hand it to the first.
-const launchedFor = isCli ? null : launchTarget.parse(process.argv);
+const launchedFor = isCli || isConsole ? null : launchTarget.parse(process.argv);
 
 // Required lazily, inside the windowed branch. Between them these pull in the
 // scanner, the duplicate finder, the tray and the updater, and the two headless
@@ -237,6 +243,20 @@ if (isCli) {
       console.error('cleandrive:', err && err.message ? err.message : err);
       app.exit(1);
     });
+} else if (isConsole) {
+  /*
+   * The console: one window over the reports on a share, read-only. No
+   * single-instance lock -- it shares nothing with the app's own window, and
+   * an administrator may well have both open -- and none of the window's
+   * machinery (tray, updater, tasks). Whether this copy includes it
+   * (`biz.console`) is asked here and handed in; nothing under fleet/ loads
+   * the licence.
+   */
+  const { canNow } = require('./license/state');
+  require('./fleet/console-main').start({
+    share: consoleArgs.shareOf(process.argv, app.isPackaged),
+    allowed: canNow()('biz.console'),
+  });
 } else if (isHelper) {
   /*
    * Like the sampler, this never waits for `app.whenReady()` -- there is no

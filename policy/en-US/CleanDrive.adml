@@ -80,6 +80,18 @@ May use %USERPROFILE% and other variables.
 
 Needs CleanDrive Business; a copy without it reports this policy as not applied.</string>
       <string id="QuarantineFolderPath">Folder:</string>
+      <string id="MachineReport">Daily report for the CleanDrive console</string>
+      <string id="MachineReport_Explain">Enabled: once a day, each computer writes one file, &lt;computer name&gt;.cleandrive.json, to the folder given here — normally a share on the organisation’s own network. There is no CleanDrive server and nothing goes to the internet. Open the files with “CleanDrive.exe --console &lt;folder&gt;”.
+
+The file holds: how full each drive is, how fast it is growing and when it would fill (or why that cannot be said yet), the state of the scheduled cleanup tasks with the last run and its exit code, which policies took effect, the number of the newest seal on CleanDrive’s journal, and, from the last scan someone ran by hand, how much each cleanup category held. It names no file and no folder, and no cleanup profile by the name a person gave it.
+
+“Include the largest folders” adds the names and sizes of the largest folders from that last scan. Folder names can be people’s names, so it is off unless ticked.
+
+The file is written with the rights of the person signed in, so they need permission to create and change files in the folder. The daily disk measurement that writes it is kept on while this policy is set.
+
+Needs CleanDrive Business; a copy without it reports this policy as not applied and writes nothing.</string>
+      <string id="ReportFolder">Folder (for example \\server\cleandrive):</string>
+      <string id="ReportTopFolders">Include the largest folders from the last scan</string>
       <string id="Category_temp">Temporary files</string>
       <string id="Category_cache">Caches</string>
       <string id="Category_crashdump">Crash dumps</string>
@@ -131,6 +143,12 @@ Needs CleanDrive Business; a copy without it reports this policy as not applied.
         <textBox refId="QuarantineFolderPath">
           <label>$(string.QuarantineFolderPath)</label>
         </textBox>
+      </presentation>
+      <presentation id="MachineReport">
+        <textBox refId="ReportFolder">
+          <label>$(string.ReportFolder)</label>
+        </textBox>
+        <checkBox refId="ReportTopFolders" defaultChecked="false">$(string.ReportTopFolders)</checkBox>
       </presentation>
     </presentationTable>
   </resources>

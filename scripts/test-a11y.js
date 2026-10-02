@@ -1218,6 +1218,106 @@ app.whenReady().then(async () => {
   check('the list of keys is in Vietnamese', title === 'Phím tắt', title);
   await run(`document.getElementById('shortcuts').close();`);
 
+  /* ---- the console's window (H3) ---- */
+
+  console.log('\nThe console window (--console), in Vietnamese:');
+  {
+    // Its own window, preload and handlers, over three reports written by the
+    // real builder: one fine, one silent, one whose task failed.
+    const reportLib = require('../src/main/fleet/report');
+    const share = path.join(work, 'share');
+    fs.mkdirSync(share, { recursive: true });
+    const base = (host, at, lastResult) =>
+      reportLib.build({
+        host,
+        now: at,
+        app: { version: '0.5.0', channel: 'stable' },
+        volumes: [{ root: 'c:\\', latest: { at, totalBytes: 512e9, usedBytes: 3e11, freeBytes: 2.12e11, usedPercent: 58.6 }, growth: { ok: true, bytesPerDay: 2e8, r2: 0.9, n: 20, spanDays: 19 }, prediction: { ok: true, days: 120, at: at + 120 * DAY } }],
+        lastScan: { root: 'C:\\', at, totalBytes: 1e11, totalFiles: 1000, byCategory: { temp: 1e9 }, topFolders: [] },
+        topFolders: false,
+        tasks: { supported: true, profiles: [{ profileId: 'main', wanted: true, dryRun: false, action: 'recycle', installed: true, verified: true, os: { lastRunAt: at - DAY, lastResult } }], sampler: { installed: true, verified: true, os: null } },
+        runs: [],
+        journal: null,
+        managed: { status: 'present', applied: ['MachineReport'], notApplied: [], refused: [] },
+      });
+    const now = Date.now();
+    for (const r of [base('A11Y-OK', now - 3600e3, 0), base('A11Y-SILENT', now - 5 * DAY, 0), base('A11Y-FAILED', now - 3600e3, 1)]) {
+      fs.writeFileSync(path.join(share, reportLib.fileNameFor(r.host)), reportLib.serialize(r));
+    }
+    const consoleMain = require('../src/main/fleet/console-main');
+    const service = await consoleMain.serviceFor({ share, allowed: true });
+    let cwin = null;
+    consoleMain.registerHandlers(service, () => cwin);
+    cwin = consoleMain.createWindow({ width: 1180, height: 820 });
+    await new Promise((r) => cwin.webContents.once('did-finish-load', r));
+    const cjs = (expr) => cwin.webContents.executeJavaScript(expr);
+    const cuntil = async (expr, ms = 20000) => {
+      const start = Date.now();
+      while (!(await cjs(expr))) {
+        if (Date.now() - start > ms) return false;
+        await wait(150);
+      }
+      return true;
+    };
+    check('the console draws the three machines', await cuntil(`document.querySelectorAll('#console-rows tr[data-host]').length === 3`));
+    check('in Vietnamese, and says so', (await cjs(`document.documentElement.lang`)) === 'vi');
+    await cjs(AXE);
+    const consoleAxe = () =>
+      cjs(`axe.run(document, { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'] }, resultTypes: ['violations'] })
+        .then((r) => r.violations.map((v) => v.id + ' (' + v.nodes.length + '): ' + v.nodes.slice(0, 2).map((n) => n.target.join(' ')).join(' | ')))`);
+    const consoleTheme = async (mode) => {
+      nativeTheme.themeSource = mode;
+      await cjs(`ThemeSwitch.adopt(${JSON.stringify(mode)})`);
+      // Both inks on one side, and the background the mode asked for (§11 item 9).
+      return cuntil(`(() => {
+        const lum = (c) => { const [r, g, b] = (String(c).match(/[\\d.]+/g) || [0, 0, 0]).slice(0, 3).map((n) => { const x = n / 255; return x <= 0.03928 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4); }); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
+        const bg = lum(getComputedStyle(document.body).backgroundColor);
+        const inks = ['.console-title h1', '.console-sort', '.console-host'].map((s) => lum(getComputedStyle(document.querySelector(s)).color));
+        return ${JSON.stringify(mode)} === 'dark' ? bg < 0.1 && inks.every((n) => n > 0.2) : bg > 0.7 && inks.every((n) => n < 0.4);
+      })()`, 8000);
+    };
+    for (const mode of ['light', 'dark']) {
+      check(`console: the ${mode} palette reaches the page`, await consoleTheme(mode));
+      await wait(300);
+      let v = await consoleAxe();
+      check(`console ${mode}: the list has no violations`, v.length === 0, v.join(' || '));
+      await cjs(`document.querySelector('#console-rows tr[data-host="a11y-failed"] .console-host').click()`);
+      await cuntil(`!document.getElementById('console-detail').hidden`);
+      v = await consoleAxe();
+      check(`console ${mode}: a machine opened has no violations`, v.length === 0, v.join(' || '));
+      await cjs(`document.getElementById('console-detail-close').click()`);
+      cwin.setContentSize(560, 820);
+      await wait(500);
+      v = await consoleAxe();
+      check(`console ${mode} at 560: the stacked list has no violations`, v.length === 0, v.join(' || '));
+      cwin.setContentSize(1180, 820);
+      await wait(300);
+    }
+    const sortable = await cjs(`[...document.querySelectorAll('#console-table th[data-sort]')].every((th) => th.hasAttribute('aria-sort') && th.querySelector('button'))`);
+    check('console: every column header is a button and says how it is sorted', sortable);
+    const pressed = await cjs(`[...document.querySelectorAll('#console-filters button')].every((b) => b.getAttribute('aria-pressed') === 'true' || b.getAttribute('aria-pressed') === 'false')`);
+    check('console: every filter says whether it is on', pressed);
+    // From the keyboard: the rows are drawn again when a machine opens, and
+    // focus must come back to that machine's button, not fall to the page.
+    const keyed = await cjs(`(() => {
+      const b = document.querySelector('#console-rows tr[data-host="a11y-ok"] .console-host');
+      b.focus();
+      b.click();
+      const now = document.activeElement;
+      return { focusedHost: now && now.classList.contains('console-host') ? now.closest('tr').dataset.host : now && now.tagName, expanded: now && now.getAttribute('aria-expanded') };
+    })()`);
+    check('console: opening a machine keeps the keyboard on its name, which says it is open', keyed.focusedHost === 'a11y-ok' && keyed.expanded === 'true', JSON.stringify(keyed));
+    const closed = await cjs(`(() => {
+      document.getElementById('console-detail-close').focus();
+      document.getElementById('console-detail-close').click();
+      const now = document.activeElement;
+      return { focusedHost: now && now.classList.contains('console-host') ? now.closest('tr').dataset.host : now && now.tagName, expanded: now && now.getAttribute('aria-expanded') };
+    })()`);
+    check('and closing it from its Close button puts the keyboard back on that name', closed.focusedHost === 'a11y-ok' && closed.expanded === 'false', JSON.stringify(closed));
+    cwin.destroy();
+    nativeTheme.themeSource = 'light';
+  }
+
   /* ---- the end ---- */
 
   console.log('\nConsole:');

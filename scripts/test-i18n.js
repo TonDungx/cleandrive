@@ -81,6 +81,8 @@ const DYNAMIC_PREFIXES = [
   'quarantine.type.',
   // The colour editor names each colour from the table in theme-palette.js.
   'theme.key.',
+  // The console (H3) counts computers and files through `word()`.
+  'console.word.',
 ];
 
 /* -------------------------------------------------------------------------- */

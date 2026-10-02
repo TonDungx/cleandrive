@@ -148,16 +148,20 @@
     }
 
     // The preference behind the resolved language, so the control can show
-    // "Auto" rather than the language Auto happened to pick.
-    window.cleandrive
-      .getLanguage()
-      .then((envelope) => {
-        if (envelope && envelope.ok) {
-          current = envelope.data.preference;
-          markActive();
-        }
-      })
-      .catch(() => {});
+    // "Auto" rather than the language Auto happened to pick. The console's
+    // window (H3) has a bridge of its own without it, and no control to mark:
+    // a throw here would leave that page hidden behind data-i18n-pending.
+    if (window.cleandrive && typeof window.cleandrive.getLanguage === 'function') {
+      window.cleandrive
+        .getLanguage()
+        .then((envelope) => {
+          if (envelope && envelope.ok) {
+            current = envelope.data.preference;
+            markActive();
+          }
+        })
+        .catch(() => {});
+    }
 
     translate();
   }

@@ -201,7 +201,13 @@ const isAscii = (text) => /^[\x00-\x7e]*$/.test(text);
     check('and every other mode reads modeArgs, which is empty for the command line',
       ['--dev', '--scheduled-run', '--sample-only', '--helper'].every((flag) => src.includes(`modeArgs.includes('${flag}')`)) &&
       !/process\.argv\.includes\(/.test(src));
-    check('Explorer\'s --analyze= is not read on the command line', /launchedFor = isCli \? null :/.test(src));
+    check('Explorer\'s --analyze= is not read on the command line', /launchedFor = isCli(?: \|\| isConsole)? \? null :/.test(src));
+    // The console (H3) is decided the same way, right after: first argument
+    // only, and it empties modeArgs too.
+    check('nor in the console, which is decided next and switches the other modes off',
+      /const isConsole = !isCli && consoleArgs\.wanted\(/.test(src) && /const modeArgs = isCli \|\| isConsole \? \[\] : process\.argv;/.test(src) &&
+        src.indexOf('const isConsole =') < modes.filter((at) => at > 0).reduce((a, b) => Math.min(a, b), Infinity) &&
+        /launchedFor = isCli \|\| isConsole \? null :/.test(src));
     const chain = src.slice(src.indexOf('if (isCli) {'), src.indexOf('} else if (isHelper) {'));
     check('its branch comes first, and ends with app.exit(code)', src.indexOf('if (isCli) {') > 0 && /\.then\(\(code\) => app\.exit\(code\)\)/.test(chain));
     check('and it takes no single-instance lock', !/requestSingleInstanceLock/.test(chain));
@@ -243,7 +249,7 @@ const isAscii = (text) => /^[\x00-\x7e]*$/.test(text);
 
   {
     const gated = Object.entries(COMMANDS).filter(([, spec]) => spec.feature);
-    const sample = { scan: ['scan', 'C:\\'], suggest: ['suggest', 'C:\\'], snapshots: ['snapshots'], diff: ['diff', 'a', 'b'], system: ['system'], profiles: ['profiles'], run: ['run', '--profile', 'main'] };
+    const sample = { scan: ['scan', 'C:\\'], suggest: ['suggest', 'C:\\'], snapshots: ['snapshots'], diff: ['diff', 'a', 'b'], system: ['system'], profiles: ['profiles'], run: ['run', '--profile', 'main'], report: ['report'] };
     let all = true;
     let said = true;
     let touched = false;

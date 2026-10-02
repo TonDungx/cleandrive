@@ -18,9 +18,10 @@ const SUMMARY = Object.freeze({
   system: 'What the system drive holds besides your files. Needs an elevated terminal.',
   profiles: 'The automatic cleanup profiles, by the id run takes.',
   run: 'One automatic cleanup now, through every gate the scheduled one passes. The only command that moves files.',
+  report: 'What this computer sends to the organisation\'s console once a day when a policy asks for it (--json: the file itself). Writes nothing.',
   journal: 'What the app did (list, show) and whether that record is as it was written (verify).',
   restore: 'Put back what one session moved. Never overwrites: a file in the way is skipped.',
-  policy: 'What the organisation\'s policy sets here, value by value (validate, or validate a .reg file before rolling it out), and this account\'s scheduled cleanups brought into line with it now (apply).',
+  policy: 'What the organisation\'s policy sets here, value by value (validate, or validate a .reg file before rolling it out), and this account\'s scheduled cleanups brought into line with it now (apply) -- with the daily measurement and one machine report at once, when the policy asks for a report.',
   version: 'This copy, and where it keeps its data.',
   help: 'This list, or one command\'s usage.',
 });

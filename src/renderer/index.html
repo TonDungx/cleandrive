@@ -1056,6 +1056,9 @@
               <input type="checkbox" id="trend-daily" />
               <span data-i18n="trends.daily">Measure the disk once a day</span>
             </label>
+            <!-- H3: kept on while the organisation's policy asks this machine
+                 for a daily report, which rides on this measurement. -->
+            <span class="managed-mark" data-managed="report" hidden><span class="managed-text" data-i18n="policy.managed">Managed by your organisation</span></span>
             <label class="field field-row" id="trend-time-row">
               <span data-i18n="app.at">At</span>
               <input type="time" id="trend-time" />

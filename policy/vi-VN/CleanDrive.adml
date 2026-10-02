@@ -80,6 +80,18 @@ Tắt hoặc không cấu hình: người dùng tự quyết, và mặc định 
 
 Cần CleanDrive Business; bản không có sẽ báo chính sách này là không áp dụng.</string>
       <string id="QuarantineFolderPath">Thư mục:</string>
+      <string id="MachineReport">Báo cáo hằng ngày cho CleanDrive Console</string>
+      <string id="MachineReport_Explain">Bật: mỗi ngày một lần, mỗi máy ghi một tệp, &lt;tên máy&gt;.cleandrive.json, vào thư mục nêu ở đây — thường là một thư mục chia sẻ trong mạng nội bộ của tổ chức. Không có máy chủ của CleanDrive và không gì đi ra internet. Mở các tệp đó bằng “CleanDrive.exe --console &lt;thư mục&gt;”.
+
+Tệp chứa: mỗi ổ đĩa đầy bao nhiêu, tăng nhanh thế nào và khi nào sẽ đầy (hoặc vì sao chưa nói được), tình trạng các tác vụ dọn dẹp theo lịch cùng lần chạy cuối và mã thoát của nó, những chính sách đã có hiệu lực, số của con dấu mới nhất trên nhật ký của CleanDrive, và — từ lần quét bằng tay gần nhất — mỗi danh mục dọn dẹp chứa bao nhiêu. Tệp không nêu tên tệp hay thư mục nào, và không nêu hồ sơ dọn dẹp bằng cái tên người dùng đặt.
+
+“Kèm các thư mục lớn nhất” thêm tên và dung lượng của các thư mục lớn nhất trong lần quét đó. Tên thư mục có thể là tên người, nên mặc định là tắt.
+
+Tệp được ghi bằng quyền của người đang đăng nhập, nên họ cần quyền tạo và sửa tệp trong thư mục đó. Phép đo đĩa hằng ngày — thứ ghi tệp này — được giữ bật khi chính sách này được đặt.
+
+Cần CleanDrive Business; bản không có sẽ báo chính sách này là không áp dụng và không ghi gì.</string>
+      <string id="ReportFolder">Thư mục (ví dụ \\server\cleandrive):</string>
+      <string id="ReportTopFolders">Kèm các thư mục lớn nhất của lần quét gần nhất</string>
       <string id="Category_temp">Tệp tạm</string>
       <string id="Category_cache">Bộ nhớ đệm</string>
       <string id="Category_crashdump">Tệp ghi lỗi treo</string>
@@ -131,6 +143,12 @@ Cần CleanDrive Business; bản không có sẽ báo chính sách này là khô
         <textBox refId="QuarantineFolderPath">
           <label>$(string.QuarantineFolderPath)</label>
         </textBox>
+      </presentation>
+      <presentation id="MachineReport">
+        <textBox refId="ReportFolder">
+          <label>$(string.ReportFolder)</label>
+        </textBox>
+        <checkBox refId="ReportTopFolders" defaultChecked="false">$(string.ReportTopFolders)</checkBox>
       </presentation>
     </presentationTable>
   </resources>

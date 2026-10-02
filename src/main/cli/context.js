@@ -59,6 +59,10 @@ function create() {
     // and the organisation's quarantine folder made the way a chosen one is.
     reconcileTasks: (settings, options) => require('../tasks').reconcile(settings, options),
     prepareZone: (zone) => require('../lib/quarantine-zone').prepare(path.dirname(zone)),
+    // The machine report (H3): built from the same parts the daily
+    // measurement uses, written by `policy apply`, printed by `report`.
+    buildReport: (settings) => require('../fleet/collect').buildFor(services(), settings, { version: app.getVersion(), channel: BUILD_CHANNEL }),
+    writeReport: (settings) => require('../fleet/collect').writeIfAsked(services(), settings, { version: app.getVersion(), channel: BUILD_CHANNEL }),
     app: {
       version: app.getVersion(),
       channel: BUILD_CHANNEL,

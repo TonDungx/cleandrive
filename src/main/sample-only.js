@@ -30,13 +30,15 @@ const { sample } = require('./lib/sampler');
 async function runSample() {
   const { settings: store, history } = services();
 
-  // The settings are read only to decide *which* volumes to measure. Nothing
-  // here acts on a policy, so a missing or corrupt file is not a problem worth
-  // reporting: the defaults measure the home volume, which is the useful
-  // answer anyway. Nor does the organisation's policy (H2) say anything about
-  // measuring, so it is not read: that would be a reg.exe process a day for
-  // nothing, in the one process measured to the millisecond.
-  const settings = await store.load({ policy: false });
+  // The settings decide *which* volumes to measure. A missing or corrupt file
+  // is not a problem worth reporting: the defaults measure the home volume,
+  // which is the useful answer anyway.
+  //
+  // The organisation's policy is read as well, since H3: it is what says
+  // whether this machine writes a report for the console, and where. Until
+  // then it was skipped as "a reg.exe process a day for nothing" -- 25-45 ms
+  // (measured for H2), now for something.
+  const settings = await store.load();
   await history.load();
 
   const result = await sample({
@@ -60,7 +62,43 @@ async function runSample() {
   );
 
   await maybeRecap({ store, history, settings });
+  await maybeReport(settings);
   return result;
+}
+
+/**
+ * The machine report for the organisation's console (H3), if its policy asks
+ * for one.
+ *
+ * ## Why here, and why last
+ *
+ * Decided 2026-10-02. A report has to arrive whether or not anybody opens the
+ * app, and this is the process that already runs once a day with the app
+ * closed -- the same reasoning the summary below used, and the same refusal of
+ * a third Windows task. The policy keeps this task on while it asks for a
+ * report (policy/effective.js), so a person switching the daily measurement
+ * off cannot silence it by accident.
+ *
+ * Last, because of what a dead share does: measured, a server address that
+ * does not answer holds a write for 42 seconds, and no exit in Node or
+ * Electron ends the process before that write gives up. By the time it is
+ * attempted, the measurement is on disk and the summary has been shown, so a
+ * share that has gone costs a hidden process staying up for that long -- inside
+ * the task's five-minute limit -- and nothing else. A failure is logged and
+ * leaves the exit code alone: the measurement, which is this task's job,
+ * succeeded, and the console's "no report since" is the place the
+ * organisation finds out.
+ */
+async function maybeReport(settings) {
+  if (!settings.managed || !settings.managed.report) return null;
+  const { BUILD_CHANNEL } = require('./build-info');
+  const written = await require('./fleet/collect').writeIfAsked(services(), settings, {
+    version: app.getVersion(),
+    channel: BUILD_CHANNEL,
+  });
+  if (written && written.ok) console.log(`[sample] report written to ${written.file} in ${written.ms} ms`);
+  else if (written) console.error(`[sample] the report could not be written to ${written.file} (${written.code}): ${written.error}`);
+  return written;
 }
 
 /**

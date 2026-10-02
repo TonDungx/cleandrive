@@ -8011,3 +8011,434 @@ button.is-managed {
     border-color: CanvasText;
   }
 }
+
+/* ==========================================================================
+   console (H3) — CleanDrive.exe --console <folder>
+
+   One window over every machine's report. No verdict colours: what needs a
+   look is said in words and carried by weight, the way a changed journal is
+   in the Restore Center. The only fill is the drive meter, in the accent,
+   because how full a drive is is a quantity, not a judgement.
+   ========================================================================== */
+
+.console-body {
+  overflow: hidden;
+}
+
+.console {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 24px 24px 48px;
+}
+
+.console-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px 20px;
+  margin: 0 0 8px;
+}
+
+.console-title {
+  min-width: 0;
+}
+
+.console-title h1 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.console-share {
+  margin: 2px 0 0;
+  color: var(--text-2);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.console-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.console-status {
+  margin: 0 0 16px;
+  min-height: 1.5em;
+  color: var(--text-2);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.console-status.is-strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.console-gate {
+  max-width: 78ch;
+  margin: 0 0 16px;
+}
+
+.console-gate .card-note {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+/* The daily measurement held on by the report policy (Trends): the padlock
+   sits under the switch it explains, with air before the time field. */
+#panel-trends .managed-mark[data-managed='report'] {
+  margin: 0 0 10px;
+}
+
+/* A command to type, on a line of its own so it never breaks at its `--`. */
+.console-command {
+  margin: 10px 0;
+}
+
+.console-command code {
+  display: inline-block;
+  max-width: 100%;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.console-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 18px;
+  margin: 0 0 12px;
+}
+
+.console-search input {
+  width: 220px;
+  max-width: 100%;
+}
+
+.console-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* The chips sit on the page, not on a card, and the accent on its soft fill
+   over --bg is under 4.5:1 in the light theme (test:a11y). The hover shade is
+   darker in light and lighter in dark -- more contrast in both. */
+.console-filters .chip.is-active,
+.console-filters .chip.is-active .chip-meta {
+  color: var(--accent-hover);
+}
+
+.console-table-wrap {
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+.console-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.console-table th {
+  padding: 0;
+  text-align: left;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.console-sort {
+  width: 100%;
+  padding: 9px 12px;
+  border: 0;
+  background: none;
+  color: var(--text-2);
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.console-sort:hover {
+  color: var(--text);
+}
+
+.console-table th[aria-sort='ascending'] .console-sort::after {
+  content: ' ▲';
+  color: var(--accent);
+}
+
+.console-table th[aria-sort='descending'] .console-sort::after {
+  content: ' ▼';
+  color: var(--accent);
+}
+
+.console-table td {
+  padding: 10px 12px;
+  vertical-align: top;
+  border-bottom: 1px solid var(--border-soft);
+  overflow-wrap: anywhere;
+}
+
+.console-row:last-child td {
+  border-bottom: 0;
+}
+
+.console-row.is-selected td {
+  background: var(--accent-soft);
+}
+
+/* A machine that needs a look is written heavier, not painted. */
+.console-row.is-attention .console-attention {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* A computer name is at most 15 characters (NetBIOS) and is read as one word:
+   it never breaks, and its column is as wide as it needs. */
+.console-host {
+  display: block;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.console-table td:first-child .console-sub {
+  white-space: nowrap;
+}
+
+.console-table td:nth-child(2) {
+  min-width: 150px;
+}
+
+.console-cell {
+  min-width: 0;
+}
+
+.console-host:hover {
+  text-decoration: underline;
+}
+
+.console-sub {
+  display: block;
+  color: var(--text-3);
+  font-size: 11.5px;
+}
+
+.console-strong {
+  display: block;
+  color: var(--text);
+  font-weight: 600;
+}
+
+.console-meter {
+  display: block;
+  width: 100%;
+  max-width: 140px;
+  height: 4px;
+  margin: 4px 0;
+  border-radius: var(--radius-pill);
+  background: var(--surface-3);
+  overflow: hidden;
+}
+
+.console-meter-fill {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+
+.console-attention {
+  margin: 0;
+  padding: 0 0 0 16px;
+  color: var(--text-2);
+}
+
+.console-attention li + li {
+  margin-top: 2px;
+}
+
+.console-empty {
+  color: var(--text-3);
+  text-align: center;
+}
+
+.console-unreadable {
+  margin: 12px 0 0;
+  color: var(--text-2);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.console-detail {
+  margin: 16px 0 0;
+}
+
+.console-detail .card-head h2 {
+  font-size: 14px;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.console-detail-body {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+  gap: 6px 28px;
+}
+
+.console-detail-body > .console-facts:first-child {
+  grid-column: 1 / -1;
+}
+
+.console-detail-section {
+  min-width: 0;
+}
+
+.console-detail-head {
+  margin: 14px 0 6px;
+  font-family: var(--font-display);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+.console-facts {
+  display: grid;
+  grid-template-columns: minmax(90px, max-content) 1fr;
+  gap: 3px 14px;
+  margin: 0 0 10px;
+  font-size: 12px;
+}
+
+.console-facts dt {
+  color: var(--text-3);
+  overflow-wrap: anywhere;
+}
+
+.console-facts dd {
+  margin: 0;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.console-note {
+  margin: 4px 0 8px;
+  color: var(--text-2);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.console-foot {
+  max-width: 90ch;
+  margin: 18px 0 0;
+  color: var(--text-3);
+  font-size: 11.5px;
+  line-height: 1.6;
+}
+
+/* Narrow: one block per machine, each value under its own label. The table's
+   header goes off screen, and every cell says what it is (data-label, written
+   by console.js in the reader's language). */
+@media (max-width: 760px) {
+  .console {
+    padding: 18px 14px 40px;
+  }
+
+  .console-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  .console-table,
+  .console-table tbody,
+  .console-row,
+  .console-row td {
+    display: block;
+    width: 100%;
+  }
+
+  .console-row {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border-soft);
+  }
+
+  .console-row:last-child {
+    border-bottom: 0;
+  }
+
+  .console-row td {
+    display: grid;
+    grid-template-columns: minmax(96px, 34%) minmax(0, 1fr);
+    gap: 10px;
+    min-width: 0;
+    padding: 4px 0;
+    border-bottom: 0;
+  }
+
+  .console-table td:nth-child(2) {
+    min-width: 0;
+  }
+
+  .console-row td::before {
+    content: attr(data-label);
+    color: var(--text-3);
+    font-size: 11.5px;
+  }
+
+  .console-row td.console-empty {
+    display: block;
+  }
+
+  .console-row td.console-empty::before {
+    content: none;
+  }
+
+  .console-search input {
+    width: 100%;
+  }
+
+  .console-search {
+    flex: 1 1 100%;
+  }
+}
+
+@media (forced-colors: active) {
+  .console-meter-fill {
+    forced-color-adjust: none;
+    background: Highlight;
+  }
+
+  .console-row.is-selected td {
+    outline: 1px solid Highlight;
+  }
+}

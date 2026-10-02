@@ -185,6 +185,18 @@ console.log('\nentitlements: what never goes through can()\n');
     'src/main/policy/store.js',
     'src/main/policy/admx.js',
     'src/main/cli/commands/policy.js',
+    // The machine report and the console (H3): whether a report is written is
+    // the policy's acting half, decided in services.js; whether the console
+    // opens is biz.console, decided in main.js. Both handed in.
+    'src/main/fleet/report.js',
+    'src/main/fleet/collect.js',
+    'src/main/fleet/share.js',
+    'src/main/fleet/console.js',
+    'src/main/fleet/console-model.js',
+    'src/main/fleet/console-state.js',
+    'src/main/fleet/console-args.js',
+    'src/main/fleet/console-main.js',
+    'src/main/sample-only.js',
   ];
   const offenders = mustNotGate.filter((rel) => /license\/(entitlements|state)/.test(fs.readFileSync(path.join(ROOT, rel), 'utf8')));
   check('the journal, the ledger, the purge and the Recycle Bin never consult a licence', offenders.length === 0,
@@ -213,6 +225,15 @@ console.log('\nentitlements: what never goes through can()\n');
     /canNow\(\)\('biz\.audit'\)/.test(servicesSrc) && /new ActionJournal\([^)]*sealer/.test(servicesSrc));
   check('and the check of the seals is one of the Restore Center’s handlers, ungated',
     restoreBlock.includes("handle('journal:verify'"));
+
+  // H3: the console is biz.console, asked where the mode starts and handed in.
+  const mainSrc = fs.readFileSync(path.join(ROOT, 'src/main/main.js'), 'utf8');
+  const consoleBranch = mainSrc.slice(mainSrc.indexOf('} else if (isConsole) {'), mainSrc.indexOf('} else if (isHelper) {'));
+  check('whether the console opens is decided where its mode starts, from biz.console',
+    consoleBranch.length > 0 && /allowed: canNow\(\)\('biz\.console'\)/.test(consoleBranch));
+  const fleetDir = path.join(ROOT, 'src/main/fleet');
+  const listed = fs.readdirSync(fleetDir).filter((f) => f.endsWith('.js')).map((f) => `src/main/fleet/${f}`);
+  check('and every module under fleet/ is on the list above', listed.every((rel) => mustNotGate.includes(rel)), listed.filter((rel) => !mustNotGate.includes(rel)).join(', '));
 
   // And on the command line, the table that decides: everything is behind
   // biz.cli except reading the journal, putting things back, describing the

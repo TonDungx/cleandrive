@@ -63,6 +63,7 @@ function effectiveOf(policy) {
     updatesOff: policy.updatesOff,
     quarantineFolder: policy.quarantineFolder,
     profileId: policy.profile ? policy.profile.id : null,
+    report: policy.report,
   };
 }
 
@@ -166,13 +167,21 @@ async function apply(args, ctx) {
   const settings = await store.get();
   let zone = null;
   if (settings.managed.quarantineZone) zone = await ctx.prepareZone(settings.managed.quarantineZone);
-  // The cleanup tasks only: the daily measurement is no business of a policy.
-  const reconciled = await ctx.reconcileTasks(settings, { settingsExisted: store.exists, sweep: true, sampler: false });
+  // The cleanup tasks, and the daily measurement only when the policy asks for
+  // a report (H3): the report rides on that task, and the policy is what keeps
+  // it on. Without one, the measurement is no business of a policy -- a logon
+  // script must not register a task nobody asked for.
+  const reporting = Boolean(settings.managed.report);
+  const reconciled = await ctx.reconcileTasks(settings, { settingsExisted: store.exists, sweep: true, sampler: reporting });
   const problems = [...(reconciled.problems || [])];
   if (zone && !zone.ok) {
     const { zoneReason } = require('../../actions/quarantine');
     problems.push(`The organisation's quarantine folder (${settings.managed.quarantineZone}) could not be made ready: ${f.text(zoneReason(zone.reason))}.`);
   }
+  // And one report at once, so the machine is in the console the morning the
+  // logon script runs rather than at the next daily measurement.
+  const written = reporting ? await ctx.writeReport(settings) : null;
+  if (written && !written.ok) problems.push(`The report could not be written to ${written.file} (${written.code}): ${written.error}`);
   const code = problems.length > 0 ? EXIT.REFUSED : EXIT.OK;
 
   const profiles = (reconciled.profiles || []).map((p) => ({
@@ -196,6 +205,8 @@ async function apply(args, ctx) {
     changes: (reconciled.changes || []).map((c) => f.text(c)),
     problems: problems.map((p) => f.text(p)),
     quarantineZone: zone ? { ok: zone.ok, zone: zone.zone || null, reason: zone.reason || null } : null,
+    sampler: reporting && reconciled.sampler ? { taskPath: reconciled.sampler.taskPath, installed: reconciled.sampler.installed, ok: reconciled.sampler.ok } : null,
+    report: written ? { ok: written.ok, file: written.file, ms: written.ms, error: written.ok ? null : written.error } : null,
   });
 
   if (policy.status === 'none') ctx.out.line('No CleanDrive policy is set on this computer; the tasks were checked against the settings alone.');
@@ -204,6 +215,7 @@ async function apply(args, ctx) {
   if ((reconciled.changes || []).length === 0 && problems.length === 0) ctx.out.line('The scheduled tasks already match. Nothing was changed.');
   for (const c of reconciled.changes || []) ctx.out.line(`changed: ${f.text(c)}`);
   for (const p of problems) ctx.out.line(`problem: ${f.text(p)}`);
+  if (written && written.ok) ctx.out.line(`report: written to ${written.file}`);
   return code;
 }
 

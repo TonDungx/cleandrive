@@ -39,6 +39,7 @@ and the notifications.
 - [Disk alerts and the tray](#disk-alerts-and-the-tray)
 - [The command line](#the-command-line)
 - [Managed by an organisation](#managed-by-an-organisation)
+- [The organisation's console](#the-organisations-console)
 - [Rules the interface will not break](#rules-the-interface-will-not-break)
 - [What it deliberately does not do](#what-it-deliberately-does-not-do)
 - [Limits worth knowing before you plan around it](#limits-worth-knowing-before-you-plan-around-it)
@@ -2155,8 +2156,10 @@ sealed."*
   proof against the person whose computer it is.
 - **The newest sessions, taken out whole, leave no trace**: nothing comes after
   them to notice. Nor does deleting the whole journal.
-- Both need a copy kept where the user cannot rewrite it. That is the
-  multi-machine console's job, which is not built yet.
+- Both need a copy kept where the user cannot rewrite it. With the
+  organisation's daily report on, [the console](#the-organisations-console)
+  keeps one: it notices both, for any change made after it has read a report
+  from that computer.
 
 The key is `seal-key.json`, beside the settings. Its private half is protected
 by Windows (DPAPI) for this user's account; the screen shows the first sixteen
@@ -2559,6 +2562,7 @@ cleandrive diff <snapshot> <snapshot> [--json]
 cleandrive system [--json]
 cleandrive profiles [--json]
 cleandrive run --profile <id> [--report-only] [--json]
+cleandrive report [--json]
 cleandrive journal list | show <session> | verify [--json]
 cleandrive restore <session> [--dry-run] [--json]
 cleandrive policy validate [<file.reg>] | apply [--json]
@@ -2623,7 +2627,13 @@ should. That file holds no logic of its own; what it starts is the executable.
   says, value by value, what the app makes of the policy in the registry — or
   of a `.reg` file before it is rolled out — and changes nothing. `apply`
   registers or removes this account's scheduled cleanups to match the policy
-  now, instead of the next time somebody opens the window.
+  now, instead of the next time somebody opens the window — and, when the
+  policy asks for a daily report, the daily disk measurement too, and writes
+  one report at once.
+- **`report` prints what this computer sends to the organisation's console**
+  ([The organisation's console](#the-organisations-console)) and writes
+  nothing. It answers whether or not a policy asks for one, so the question
+  "what would it send about me?" can be answered before anybody switches it on.
 
 `profiles` lists the ids `run --profile` takes — a profile's name is optional,
 so the id is the one thing every profile has. `snapshots` lists the ids `diff`
@@ -2664,6 +2674,8 @@ $scan.cleanup.safeBytes
 `journal verify --json` is the Restore Center's own check, report and all
 (`cleandrive.journal-verify/1`). `policy validate --json` and `policy apply
 --json` are `cleandrive.policy-validate/1` and `cleandrive.policy-apply/1`.
+`report --json` is the machine report itself, byte for byte what goes on the
+share (`cleandrive.machine-report/1`).
 
 ### Language
 
@@ -2696,10 +2708,11 @@ Group Policy can be given the same values with `reg import`.
 | **Folders automatic cleanup never touches** | Added to every profile's list; a person can add more, not remove these. | Applies |
 | **Do not check for updates** | No request to the release page, not even from *Check now*. | Applies |
 | **Where files moved to another drive go** | The `CleanDrive Quarantine` folder is made inside the folder named, which must already exist on a local drive; a person cannot choose another. | Not applied, and said so |
+| **Daily report for the CleanDrive console** | Once a day each computer writes one small file about its drives and cleanup tasks to the folder named — normally a share on the organisation's network — for [the console](#the-organisations-console). It names no file and no folder; ticking *Include the largest folders* adds the names of the largest folders from the last scan. The daily disk measurement, which writes it, is kept on while this is set. | Not applied, and said so |
 
 The ones that only take something away apply to every copy of CleanDrive: an
 organisation's *view only* that a missing licence could quietly switch off
-would be a safety rail that is not there. The two that make the app act on the
+would be a safety rail that is not there. The three that make the app act on the
 organisation's behalf are CleanDrive Business, and Business is closed on an
 installed copy until licences exist — so on one, `cleandrive policy validate`
 and the line at the top of the window both say which policies were set but not
@@ -2725,8 +2738,10 @@ organisation's scheduled task is registered the next time CleanDrive opens, or
 at once by `cleandrive policy apply` — run as the person who signs in (a logon
 script, or an Intune script in the user's context), because scheduled cleanups
 belong to an account. Run as SYSTEM, from a startup script, it refuses and says
-why. It registers nothing else: not the daily disk measurement, which is the
-person's own setting.
+why. The daily disk measurement is the person's own setting, and `apply`
+leaves it alone — unless the policy asks for a daily report, which rides on
+that measurement: then `apply` registers it too, and writes the first report
+at once.
 
 **A policy that cannot be read is no policy, said out loud.** If neither
 `reg.exe` nor PowerShell can read the key, the app runs as if none were set,
@@ -2739,6 +2754,110 @@ editor or into Intune — the machine this was built on runs Windows 11 Home,
 which has neither. [Unverified] Their structure follows the ADMX files
 Microsoft ships in `C:\Windows\PolicyDefinitions`, they parse as XML, and
 every value they write is one the app is tested to read.
+
+---
+
+## The organisation's console
+
+One window over every computer an organisation manages, with no server and no
+cloud: each computer writes a small file to a shared folder on the
+organisation's own network, and the console reads the folder. Both halves are
+CleanDrive Business, closed on an installed copy until licences exist.
+
+### What each computer writes
+
+With the *Daily report for the CleanDrive console* policy set, each computer
+writes `<computer name>.cleandrive.json` to the folder the policy names, once a
+day, as part of the daily disk measurement — the same task that draws the
+Trends chart, so there is no third scheduled task. `cleandrive policy apply`
+writes one at once, so a logon script puts the computer in the console the same
+morning.
+
+The file holds:
+
+- each drive, by letter: how full, how fast it is growing, and when it would
+  fill — the Trends tab's own numbers, not a second calculation — or, when the
+  history does not support a forecast, the reason Trends gives, which the
+  console shows in its own language;
+- each cleanup profile by its **id**, never its name or folders: whether it is
+  on, whether Windows holds a task that matches it, when Windows last ran it
+  and with what exit code, and what the app recorded of that run (counts and
+  outcome; a reason that would name a folder or a program has that part
+  blanked);
+- whether the daily measurement's own task is registered;
+- which policies took effect there, and which were set but not applied;
+- the number, hash and key of the newest seal on the journal (Business);
+- from the last scan someone ran by hand: when, whether it covered a whole
+  drive or one folder (never which folder), and how much each cleanup category
+  held. With *Include the largest folders* ticked, also the names and sizes of
+  that scan's largest folders — off by default, because a folder under
+  `C:\Users` is a person's name.
+
+It names no file and no folder. It is ASCII JSON with
+`"schema": "cleandrive.machine-report/1"`, and `cleandrive report --json` prints
+exactly what would be written.
+
+**Permissions.** The file is written with the rights of the person signed in,
+so the share needs to let them create and change files. Anyone who can write
+there can also write a file claiming to be another computer; the console
+treats every file as untrusted and draws it as text only, but it cannot know
+who wrote it.
+
+**When the share is not there.** The report is the last thing the daily
+measurement does, after the measurement and any summary. A share that has gone
+leaves the exit code alone and is logged; measured on the machine this was
+built on, a server address that does not answer holds the hidden process for
+about 42–44 seconds before Windows gives up — inside the task's five-minute
+limit. A folder that does not exist is never created.
+
+### Opening the console
+
+```
+"C:\Program Files\CleanDrive\CleanDrive.exe" --console \\server\cleandrive
+```
+
+`--console` must come first. Without a folder it opens on the one this
+computer's own policy names, or asks for one. It opens its own window and
+takes no single-instance lock, so it runs beside CleanDrive's own window.
+
+It lists every computer that reported, with its fullest-soonest drive, growth,
+when it fills, the last automatic run and its exit code, when it last reported,
+and what needs a look:
+
+| Needs a look | Why |
+| --- | --- |
+| No report for more than 2 days | The report rides on the daily measurement, so a computer whose task broke cannot say so — it falls silent |
+| A cleanup task switched on but not registered, or not matching its profile; a last run Windows recorded as failed | Task Scheduler's own answer, in words: *the program it launches could not be found — the app has moved* |
+| A drive that fills within 30 days on its own trend, or is over 95% full | The console's thresholds, said at the foot of the window |
+| The computer's own journal check finds a changed or missing session | |
+| **The newest seal went back, or a seal number already seen came back different** | See below |
+| A report older than one already seen, or a file not named after its computer | An old file put back, or a mistake |
+
+Find a computer by name, filter (*Needs a look*, *Silent*, *Task problems*,
+*Filling up*, *Journal*), sort by any column, open a computer for every drive,
+task, category and policy it reported, and **Export CSV** — one line per
+computer and drive, with a byte-order mark so Excel reads it, and every cell
+that would start a formula defused.
+
+**What the console keeps.** It is read-only, with one exception: in its own
+data folder (`console-seen.json`), the seal numbers and hashes it has seen for
+each computer. That is the copy off the machine the journal's seal needs
+([what the seal cannot find](#whether-the-journal-is-still-as-it-was)): when a
+computer's newest sessions are taken out whole, its newest seal number goes
+back; when its journal is rewritten and signed again, a number the console has
+already seen comes back with a different hash. Neither shows on the computer
+itself, and both show here — **provided the console read a report before the
+change**. It cannot notice a person who forges every report from then on: they
+can write their own computer's file. *Start this computer's seals again* makes
+the next report the new reference, after a reinstall for instance.
+
+**Limits.** [Unverified] Speed over a real network: the share was tested
+through this machine's own administrative share (`\\localhost\D$`, the real
+SMB client and server — 10–20 ms a report) because there is no second machine
+here. Two people using CleanDrive on one computer write the same file, the last
+one winning. A run recorded by CleanDrive 0.4 or earlier, just before an
+upgrade, can show exit code 0 for a run that failed: those versions never
+handed their exit code to Windows.
 
 ---
 
@@ -2774,7 +2893,9 @@ every value they write is one the app is tested to read.
   off and the app makes no network requests at all. An organisation can switch
   the first off for every computer it manages. The interface itself is
   forbidden from reaching the network either way: both requests are made by the
-  main process.
+  main process. (An organisation's [daily report](#the-organisations-console)
+  is a file written to a folder the organisation names, usually a share on its
+  own network — not a request to anybody, and nothing it holds names a file.)
 - **No automatic optimisation, defragmentation or registry cleaning.** It does
   not claim to make anything faster.
 - **No system change of its own.** Hibernation, restore points, the component
@@ -2796,8 +2917,12 @@ every value they write is one the app is tested to read.
   only while the right-click menu is switched on, its four entries in your
   account's registry (see [the right-click menu](#the-right-click-menu-and-what-it-writes)).
   And, only when an organisation names one, the `CleanDrive Quarantine` folder
-  inside the folder it named. The app reads an organisation's policy and never
-  writes it.
+  inside the folder it named. And, only when an organisation's policy asks for
+  it, one small file a day in the folder it named — [the machine
+  report](#what-each-computer-writes), which names no file or folder. The
+  console, when someone opens it, keeps the seal numbers it has seen in its own
+  data folder, and writes a CSV only where it is told to. The app reads an
+  organisation's policy and never writes it.
 - **Settings upgrade forward, once.** The settings file is versioned; the first
   save after an upgrade keeps the previous file as `settings.v1.json`, and the
   version before this one still reads the new file (that is tested against the

@@ -179,7 +179,10 @@ async function main() {
     //
     // And the command line with H1: what `--json` prints is a file the moment
     // anybody redirects it, so it is held to the same rule.
-    const roots = ['report', 'snapshots', 'journal', path.join('lib', 'media', 'mp4'), 'cli'];
+    //
+    // And `fleet` with H3: the machine report is a file on a share that every
+    // reporting machine can read, and the console writes a CSV.
+    const roots = ['report', 'snapshots', 'journal', path.join('lib', 'media', 'mp4'), 'cli', 'fleet'];
     const files = [];
     const walk = (dir) => {
       for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -196,6 +199,8 @@ async function main() {
     check('the journal, its seal and its key are among what is read',
       ['journal.js', 'seal.js', 'seal-key.js'].every((name) => named.includes(name)), named.filter((n) => /journal|seal/.test(n)).join(', '));
     check('and so is the command line', files.some((file) => /[\\/]cli[\\/]output\.js$/.test(file)) && files.some((file) => /[\\/]cli[\\/]commands[\\/]scan\.js$/.test(file)));
+    check('and so are the machine report and the console (H3)',
+      ['report.js', 'collect.js', 'share.js', 'console-model.js'].every((name) => files.some((file) => file.endsWith(path.join('fleet', name)))));
 
     const guilty = files.filter((file) => {
       const src = fs.readFileSync(file, 'utf8');

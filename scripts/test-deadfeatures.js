@@ -154,7 +154,37 @@ check('every panel has a tab that opens it', panels.every((p) => tabs.includes(p
 check('every tab has a panel behind it', tabs.every((t) => panels.includes(t)),
   tabs.filter((t) => !panels.includes(t)).join(', '));
 
-/* -- 7. exceptions carry their reason --------------------------------------- */
+/* -- 7. the console window (H3) ------------------------------------------------ */
+
+// A second window, reached by a command-line mode (`--console`) this script
+// cannot see from the markup -- so the chain is checked link by link: main.js
+// routes the mode to console-main.js, which loads console.html with its own
+// preload, whose every API console.js calls, and whose every channel
+// console-main.js answers.
+{
+  const consolePreload = read(path.join(SRC, 'main/console-preload.js'));
+  const consoleMain = read(path.join(SRC, 'main/fleet/console-main.js'));
+  const consolePage = read(path.join(SRC, 'renderer/console.html'));
+  const consoleScript = read(path.join(SRC, 'renderer/console.js'));
+  const mainJs = read(path.join(SRC, 'main/main.js'));
+
+  check('main.js routes --console to the console window',
+    /consoleArgs\.wanted\(/.test(mainJs) && /require\('\.\/fleet\/console-main'\)\s*\.start\(/.test(mainJs));
+  check('which loads console.html with the console preload, and the page loads its script',
+    /console-preload\.js/.test(consoleMain) && /'console\.html'/.test(consoleMain) && /<script src="console\.js"><\/script>/.test(consolePage));
+
+  const consoleApis = [...consolePreload.matchAll(/^\s{2}(\w+):\s*\(/gm)].map((m) => m[1]);
+  const unusedConsole = consoleApis.filter((name) => !new RegExp(`\\bapi\\s*\\.\\s*${name}\\b`).test(consoleScript));
+  check('every API in the console preload is called by console.js', consoleApis.length >= 4 && unusedConsole.length === 0,
+    unusedConsole.join(', ') || String(consoleApis.length));
+  const consoleHandled = [...consoleMain.matchAll(/\bhandle\(\s*'([^']+)'/g)].map((m) => m[1]);
+  const unreachableConsole = consoleHandled.filter((ch) => !consolePreload.includes(`'${ch}'`));
+  check('every console channel with a handler is reachable through its preload', unreachableConsole.length === 0, unreachableConsole.join(', '));
+  check('and nothing in the main window reaches the console\'s bridge',
+    !rendererFiles.filter((f) => !/console\.js$/.test(f)).some((f) => /\bconsole(Read|Info|Pick|ExportCsv|Forget)\b/.test(read(f))));
+}
+
+/* -- 8. exceptions carry their reason --------------------------------------- */
 
 const badExceptions = [];
 for (const [group, entries] of Object.entries(ALLOWED)) {

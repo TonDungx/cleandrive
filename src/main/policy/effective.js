@@ -55,6 +55,9 @@ function managedOf(policy) {
     protectedFolders: policy.protectedFolders,
     updatesOff: policy.updatesOff,
     quarantineZone: policy.quarantineFolder ? zoneFor(policy.quarantineFolder) : null,
+    // Where this machine's daily report goes (H3). Shown in the window's line
+    // as well as used, so the person at the computer knows it is being sent.
+    report: policy.report ? { folder: policy.report.folder, topFolders: policy.report.topFolders } : null,
     applied,
     // Set by the organisation but not applied, so the window can say so
     // rather than let an administrator believe it holds.
@@ -92,6 +95,10 @@ function effective(file, policy) {
     autoClean: { ...file.autoClean, profiles },
     updates: policy.updatesOff ? { ...file.updates, enabled: false } : file.updates,
     quarantine: managed.quarantineZone ? { ...file.quarantine, zone: managed.quarantineZone } : file.quarantine,
+    // The report rides on the daily measurement (H3, decided 2026-10-02), so
+    // the organisation that asked for one keeps that task on. Measuring
+    // deletes nothing; the person's own choice comes back with the policy gone.
+    trends: managed.report ? { ...file.trends, dailySample: true } : file.trends,
     managed,
   };
 }
@@ -131,6 +138,7 @@ function toFile(next, file, policy) {
 
   if (policy.updatesOff && out.updates) out.updates = { ...out.updates, enabled: file.updates.enabled };
   if (policy.quarantineFolder && out.quarantine) out.quarantine = { ...out.quarantine, zone: file.quarantine.zone };
+  if (policy.report && out.trends) out.trends = { ...out.trends, dailySample: file.trends.dailySample };
   return out;
 }
 

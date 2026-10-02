@@ -443,6 +443,7 @@ function renderSampling(report) {
     $('trend-time-row').hidden = !sampling.dailySample;
     $('trend-recap').value = sampling.recap || 'off';
   }
+  holdDailyForReport();
   syncRecapNote(sampling);
 
   list.push(samplingRow(
@@ -531,6 +532,24 @@ $('trend-daily').addEventListener('change', () => {
   $('trend-time-row').hidden = !$('trend-daily').checked;
   markTrendsDirty();
 });
+
+/**
+ * The daily measurement, held on while the organisation's policy asks this
+ * machine for a report (H3): the report rides on it. The time stays the
+ * person's to choose. Saving with the box held writes the person's own choice
+ * back to the file, not the policy's (policy/effective.js), so it returns
+ * when the policy goes.
+ */
+function holdDailyForReport() {
+  const managed = Managed.current();
+  const held = Boolean(managed && managed.report);
+  if (held) {
+    $('trend-daily').checked = true;
+    $('trend-time-row').hidden = false;
+  }
+  Managed.hold($('trend-daily'), held, { release: true });
+}
+Managed.onChange(() => holdDailyForReport());
 
 $('trend-time').addEventListener('change', markTrendsDirty);
 $('trend-time').addEventListener('input', markTrendsDirty);

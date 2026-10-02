@@ -32,6 +32,7 @@ const COMMANDS = Object.freeze({
   system: { feature: 'biz.cli', positional: [0, 0], flags: ['json'], usage: 'system [--json]' },
   profiles: { feature: 'biz.cli', positional: [0, 0], flags: ['json'], usage: 'profiles [--json]' },
   run: { feature: 'biz.cli', positional: [0, 0], flags: ['json', 'report-only'], values: ['profile'], required: ['profile'], usage: 'run --profile <id> [--report-only] [--json]' },
+  report: { feature: 'biz.cli', positional: [0, 0], flags: ['json'], usage: 'report [--json]' },
   journal: {
     feature: null,
     sub: { list: [0, 0], show: [1, 1], verify: [0, 0] },

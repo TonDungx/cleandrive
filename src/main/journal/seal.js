@@ -371,7 +371,17 @@ function verifyJournal(entries, { keys = new Map(), current = null } = {}) {
     pruned: merged(pruned),
     duplicates: [...new Set(duplicates)],
     unreadable,
-    seals: { count: real.length, first: real.length ? lowest : null, last: last ? last.n : null, lastAt: last ? last.entry.line.t : null },
+    // The newest genuine seal's line hash and key travel in the machine report
+    // (H3), so a console off this machine can notice the two things the seal
+    // alone cannot: the newest sessions removed, or the journal re-signed.
+    seals: {
+      count: real.length,
+      first: real.length ? lowest : null,
+      last: last ? last.n : null,
+      lastAt: last ? last.entry.line.t : null,
+      lastHash: last ? last.entry.hash : null,
+      lastKey: last && typeof last.entry.line.key === 'string' ? last.entry.line.key : null,
+    },
     keys: { current, used: [...usedKeys], unknown: unknownKey },
   };
 }

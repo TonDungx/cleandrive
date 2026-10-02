@@ -135,6 +135,14 @@ function strings() {
       'Enabled: files CleanDrive moves to another drive go to a “CleanDrive Quarantine” folder inside the folder given here, and the person cannot choose another. The folder must be on a local drive; network folders, Windows’ own folders and folders inside OneDrive are refused, as they are when a person picks one.\n\nMay use %USERPROFILE% and other variables.\n\nNeeds CleanDrive Business; a copy without it reports this policy as not applied.'
     ),
     QuarantineFolderPath: t('policy.admx.quarantine.folder', 'Folder:'),
+
+    MachineReport: t('policy.admx.report', 'Daily report for the CleanDrive console'),
+    MachineReport_Explain: t(
+      'policy.admx.report.explain',
+      'Enabled: once a day, each computer writes one file, <computer name>.cleandrive.json, to the folder given here — normally a share on the organisation’s own network. There is no CleanDrive server and nothing goes to the internet. Open the files with “CleanDrive.exe --console <folder>”.\n\nThe file holds: how full each drive is, how fast it is growing and when it would fill (or why that cannot be said yet), the state of the scheduled cleanup tasks with the last run and its exit code, which policies took effect, the number of the newest seal on CleanDrive’s journal, and, from the last scan someone ran by hand, how much each cleanup category held. It names no file and no folder, and no cleanup profile by the name a person gave it.\n\n“Include the largest folders” adds the names and sizes of the largest folders from that last scan. Folder names can be people’s names, so it is off unless ticked.\n\nThe file is written with the rights of the person signed in, so they need permission to create and change files in the folder. The daily disk measurement that writes it is kept on while this policy is set.\n\nNeeds CleanDrive Business; a copy without it reports this policy as not applied and writes nothing.'
+    ),
+    ReportFolder: t('policy.admx.report.folder', 'Folder (for example \\\\server\\cleandrive):'),
+    ReportTopFolders: t('policy.admx.report.top', 'Include the largest folders from the last scan'),
   };
   for (const name of CATEGORIES) out[`Category_${idOf(name)}`] = CATEGORY_TEXT[name] ? CATEGORY_TEXT[name]() : name;
   return out;
@@ -247,6 +255,13 @@ function admx() {
     '      </elements>',
     '    </policy>',
 
+    ...policyOpen('MachineReport', { presentation: true, valueName: false }),
+    '      <elements>',
+    `        <text id="ReportFolder" key="${xml(keyOf(VALUES.reportFolder))}" valueName="${VALUES.reportFolder.valueName}" required="true" expandable="true" />`,
+    ...booleanOf('ReportTopFolders', keyOf(VALUES.reportTopFolders), VALUES.reportTopFolders.valueName),
+    '      </elements>',
+    '    </policy>',
+
     '  </policies>',
     '</policyDefinitions>',
     '',
@@ -300,6 +315,12 @@ function adml(code) {
       '        <textBox refId="QuarantineFolderPath">',
       '          <label>$(string.QuarantineFolderPath)</label>',
       '        </textBox>',
+      '      </presentation>',
+      '      <presentation id="MachineReport">',
+      '        <textBox refId="ReportFolder">',
+      '          <label>$(string.ReportFolder)</label>',
+      '        </textBox>',
+      '        <checkBox refId="ReportTopFolders" defaultChecked="false">$(string.ReportTopFolders)</checkBox>',
       '      </presentation>',
       '    </presentationTable>',
       '  </resources>',

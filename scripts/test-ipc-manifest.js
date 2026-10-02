@@ -11,7 +11,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-const { INVOKE, EVENTS } = require('../src/main/ipc-manifest');
+const { INVOKE, CONSOLE_INVOKE, EVENTS } = require('../src/main/ipc-manifest');
 
 const ROOT = path.join(__dirname, '..');
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
@@ -71,13 +71,42 @@ check('ipc.js handles every operation in the manifest, once each',
 check('and registers nothing directly, around the manifest check',
   (ipcSource.match(/ipcMain\.handle\(/g) || []).length === 1);
 
+// The console (H3) is a second window in a process of its own, with its own
+// preload and its own short list. It registers in fleet/console-main.js, so
+// that window does not load ipc.js -- the scanner, the tray, the updater -- to
+// read JSON files. Held to its list here exactly as ipc.js is to its own.
+const CONSOLE_MAIN = path.join('src', 'main', 'fleet', 'console-main.js');
 const sources = mainSources();
 const strays = [];
 for (const rel of sources) {
-  if (rel.endsWith('ipc.js')) continue;
+  if (rel.endsWith('ipc.js') || rel === CONSOLE_MAIN) continue;
   if (/ipcMain\.(handle|on)\(/.test(read(rel))) strays.push(rel);
 }
 check('no other file in the main process registers a handler', strays.length === 0, strays.join(', '));
+
+console.log('\nipc: the console window, and only its own list\n');
+
+check('the two lists share no channel', !CONSOLE_INVOKE.some((c) => INVOKE.includes(c)));
+check('every console name is console:verb', CONSOLE_INVOKE.every((c) => /^console:[a-zA-Z-]+$/.test(c)));
+{
+  const consolePreload = read('src/main/console-preload.js');
+  const asked = [...new Set(all(consolePreload, /ipcRenderer\.invoke\('([^']+)'/g))];
+  check('the console preload invokes exactly the console list', same(asked, CONSOLE_INVOKE),
+    `missing: ${diff(CONSOLE_INVOKE, asked).join(', ') || '-'}; extra: ${diff(asked, CONSOLE_INVOKE).join(', ') || '-'}`);
+  check('it never sends, listens, or computes a channel',
+    !/ipcRenderer\.(send|sendSync|sendTo|postMessage|on)\(/.test(consolePreload) && !/ipcRenderer\.invoke\((?!')/.test(consolePreload));
+  check('and exposes one object, once', (consolePreload.match(/exposeInMainWorld\(/g) || []).length === 1);
+  check('the main window\'s preload names no console channel', !CONSOLE_INVOKE.some((c) => preload.includes(`'${c}'`)));
+
+  const consoleMain = read(CONSOLE_MAIN);
+  const consoleHandled = all(consoleMain, /\n\s+handle\('([^']+)'/g);
+  check('console-main.js handles exactly the console list, once each',
+    same(consoleHandled, CONSOLE_INVOKE) && new Set(consoleHandled).size === consoleHandled.length,
+    `missing: ${diff(CONSOLE_INVOKE, consoleHandled).join(', ') || '-'}; extra: ${diff(consoleHandled, CONSOLE_INVOKE).join(', ') || '-'}`);
+  check('through the manifest\'s console check, and nothing registered around it',
+    /manifest\.assertConsoleInvokable\(channel\)/.test(consoleMain) && (consoleMain.match(/ipcMain\.handle\(/g) || []).length === 1 && !/ipcMain\.on\(/.test(consoleMain));
+  check('and ipc.js registers none of them', !CONSOLE_INVOKE.some((c) => ipcSource.includes(`'${c}'`)));
+}
 
 const sent = new Set();
 for (const rel of sources) {

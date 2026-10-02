@@ -71,6 +71,12 @@ const VALUES = Object.freeze({
   updatesOff: { policy: 'DisableUpdateCheck', key: '', valueName: 'DisableUpdateCheck', type: 'dword', min: 0, max: 1 },
 
   quarantineFolder: { policy: 'QuarantineFolder', key: '', valueName: 'QuarantineFolder', type: 'path' },
+
+  // H3: where each machine writes its daily report for the console, and
+  // whether the report may name the largest folders of the last scan. Folder
+  // names can be people's names, so that half is off unless ticked.
+  reportFolder: { policy: 'MachineReport', key: '', valueName: 'ReportFolder', type: 'path' },
+  reportTopFolders: { policy: 'MachineReport', key: '', valueName: 'ReportTopFolders', type: 'dword', min: 0, max: 1 },
 });
 
 /**
@@ -85,6 +91,8 @@ const POLICIES = Object.freeze([
   { name: 'ProtectedFolders', kind: 'tighten' },
   { name: 'DisableUpdateCheck', kind: 'tighten' },
   { name: 'QuarantineFolder', kind: 'acting' },
+  // Writing to a folder the organisation chose, on its say: acting (H3).
+  { name: 'MachineReport', kind: 'acting' },
 ]);
 
 /** The categories a policy may name: the hard list an unattended run may ever touch. */

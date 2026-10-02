@@ -300,6 +300,23 @@ function fakeReg(answers, calls) {
     check('and one on the network is refused', qn.quarantineFolder === null && entryOf(qn, 'QuarantineFolder').state === 'refused');
   }
   {
+    // H3: the folder each machine writes its report to.
+    const r = interpret(read({ '': { ReportFolder: '\\\\srv\\cleandrive\\' } }), { acting: false, env: ENV });
+    check('MachineReport needs Business, and says so', r.report === null && entryOf(r, 'MachineReport').state === 'needsBusiness');
+    const ra = interpret(read({ '': { ReportFolder: '\\\\srv\\cleandrive\\' } }), { acting: true, env: ENV });
+    check('with it, a share is accepted -- the point of this one -- and the folder names are off by default',
+      ra.report && ra.report.folder === '\\\\srv\\cleandrive' && ra.report.topFolders === false && entryOf(ra, 'MachineReport').state === 'applied', JSON.stringify(ra.report));
+    const rt = interpret(read({ '': { ReportFolder: { expand: '%USERPROFILE%\\Reports' }, ReportTopFolders: 1 } }), { acting: true, env: ENV });
+    check('a local folder works too, %VARIABLES% expanded, and the folder names only when ticked',
+      rt.report && rt.report.folder === 'C:\\Users\\tester\\Reports' && rt.report.topFolders === true && entryOf(rt, 'MachineReport').message.i18n === 'policy.report.appliedTop');
+    const rr = interpret(read({ '': { ReportFolder: 'relative\\x' } }), { acting: true, env: ENV });
+    check('a relative folder is refused, never guessed at', rr.report === null && entryOf(rr, 'MachineReport').state === 'refused');
+    const rb = interpret(read({ '': { ReportFolder: 'E:\\R', ReportTopFolders: 3 } }), { acting: true, env: ENV });
+    check('a wrong ReportTopFolders sends no folder names, and says why', rb.report && rb.report.topFolders === false && entryOf(rb, 'MachineReport').problems.length === 1);
+    const ro = interpret(read({ '': { ReportTopFolders: 1 } }), { acting: true, env: ENV });
+    check('ReportTopFolders with no folder writes nothing, and says so', ro.report === null && entryOf(ro, 'MachineReport').state === 'refused');
+  }
+  {
     const p = interpret(read({ '': { ViewOnyl: 1 }, Extra: { a: 1 } }), { env: ENV });
     check('a misspelt value is reported, never guessed at', p.entries.some((e) => e.state === 'unknown' && e.message.i18n === 'policy.unknown.value') && !p.viewOnly);
     check('and so is a subkey this version does not read', p.entries.some((e) => e.state === 'unknown' && e.message.i18n === 'policy.unknown.key'));
@@ -366,6 +383,20 @@ function fakeReg(answers, calls) {
     check('updates off on screen; the organisation\'s quarantine folder in place', view.updates.enabled === false && view.quarantine.zone === 'F:\\Org\\CleanDrive Quarantine');
     const back = toFile(view, fileSettings, policy);
     check('and neither reaches the file', back.updates.enabled === true && back.quarantine.zone === 'E:\\CleanDrive Quarantine');
+  }
+  {
+    // H3: the report rides on the daily measurement, so the policy keeps it on.
+    const off = { ...fileSettings, trends: { ...fileSettings.trends, dailySample: false } };
+    const policy = policyOf({ '': { ReportFolder: '\\\\srv\\r' } }, true);
+    const view = effective(off, policy);
+    check('a report policy keeps the daily measurement on, and says where the report goes',
+      view.trends.dailySample === true && view.managed.report && view.managed.report.folder === '\\\\srv\\r' && view.managed.active === true);
+    const back = toFile(view, off, policy);
+    check('and the person\'s own "off" is what reaches the file', back.trends.dailySample === false);
+    const timeChanged = toFile({ ...view, trends: { ...view.trends, sampleTime: '09:30' } }, off, policy);
+    check('a time chosen while it is held is kept, with the "off"', timeChanged.trends.sampleTime === '09:30' && timeChanged.trends.dailySample === false);
+    const noBusiness = effective(off, policyOf({ '': { ReportFolder: '\\\\srv\\r' } }, false));
+    check('without Business nothing is forced and nothing is sent', noBusiness.trends.dailySample === false && noBusiness.managed.report === null && noBusiness.managed.notApplied.includes('MachineReport'));
   }
   {
     const spoof = coerceSettings({ version: settingsLib.SCHEMA_VERSION, managed: { viewOnly: false, active: true }, autoClean: { profiles: [{ id: 'main', managed: true, roots: ['D:\\x'] }] } }).settings;
@@ -525,7 +556,15 @@ function fakeReg(answers, calls) {
     check('the update check returns before any request when the organisation switched it off -- the manual button too',
       checkFn.indexOf('if (state.managed)') > 0 && checkFn.indexOf('if (state.managed)') < checkFn.indexOf('checkForUpdates'));
     const sampler = fs.readFileSync(path.join(ROOT, 'src/main/sample-only.js'), 'utf8');
-    check('the daily sampler does not read the policy', /store\.load\(\{ policy: false \}\)/.test(sampler));
+    // H2 kept the sampler off the policy ("a reg.exe process a day for
+    // nothing"). H3 gave it something to read it for -- the report -- and
+    // made the report the last thing it does, after the measurement and the
+    // summary, because a dead share holds a write for ~42 s (measured).
+    check('the daily sampler reads the policy (H3: it says whether and where to write the report)',
+      /store\.load\(\)/.test(sampler) && !/policy: false/.test(sampler));
+    const order = ['await maybeRecap(', 'await maybeReport('].map((s) => sampler.indexOf(s));
+    check('and writes the report last, after the measurement and the summary',
+      order.every((i) => i > 0) && order[0] < order[1] && sampler.indexOf('await sample(') < order[0]);
   }
 
   {

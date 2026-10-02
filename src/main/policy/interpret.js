@@ -38,6 +38,7 @@ function emptyPolicy(overrides = {}) {
     protectedFolders: [],
     updatesOff: false,
     quarantineFolder: null,
+    report: null,
     entries: [],
     ...overrides,
   };
@@ -272,6 +273,42 @@ function interpret(read, { acting = false, env = process.env, minMinutes = 1 } =
           folder: one.path,
         });
       }
+    }
+  }
+
+  /* -- MachineReport (H3) ------------------------------------------------- */
+  {
+    const got = scalar(tree, VALUES.reportFolder);
+    const top = flag(VALUES.reportTopFolders);
+    if (got.present) {
+      // A share is the point of this one, so a network folder is accepted --
+      // it is only ever written to, one small file named after the machine.
+      const one = folder(got.value, env, { network: true });
+      const problems = top.present && !top.ok ? [top.problem] : [];
+      if (!one.ok) entry('MachineReport', 'refused', m('policy.refused', 'Not applied.'), { problems: [one.problem, ...problems] });
+      else if (!gate('MachineReport')) {
+        entry('MachineReport', 'needsBusiness', NEEDS_BUSINESS(), { folder: one.path });
+      } else {
+        policy.report = { folder: one.path, topFolders: top.ok === true && top.on === true };
+        entry(
+          'MachineReport',
+          'applied',
+          policy.report.topFolders
+            ? m(
+                'policy.report.appliedTop',
+                'Once a day, a summary of this computer’s drives and cleanup tasks is written to {path}, with the names of the largest folders from the last scan. It names no file.',
+                { path: one.path }
+              )
+            : m(
+                'policy.report.applied',
+                'Once a day, a summary of this computer’s drives and cleanup tasks is written to {path}. It names no file and no folder.',
+                { path: one.path }
+              ),
+          { folder: one.path, problems }
+        );
+      }
+    } else if (top.present) {
+      entry('MachineReport', 'refused', m('policy.report.noFolder', 'ReportTopFolders is set, but no folder is named for the report, so nothing is written.'));
     }
   }
 
