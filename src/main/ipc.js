@@ -41,6 +41,7 @@ const planner = require('./planner/plan');
 const { HelperClient, appLauncher } = require('./helper/client');
 const licenseState = require('./license/state');
 const entitlements = require('./license/entitlements');
+const commerce = require('./commerce');
 const { CancelToken, formatBytes, formatDuration, pathKey, displayPath, throttle } = require('./lib/util');
 const { services } = require('./services');
 const scheduler = require('./lib/scheduler');
@@ -402,6 +403,85 @@ function rememberMedia(candidate) {
 let lastReconciliation = null;
 
 /** Called by main.js after the launch reconciliation. */
+/* ---- plans and licence (Phase 6) ----------------------------------------- */
+
+/**
+ * The version this copy was before this launch, as the settings recorded it,
+ * so the licence screen can say that Pro stopped being open to everyone
+ * (0.6.0) to whoever had it while it was. Captured by main.js before the
+ * updater records the new version.
+ */
+let upgradedFrom = null;
+function noteUpgradedFrom(version) {
+  upgradedFrom = typeof version === 'string' ? version : null;
+}
+
+/** "0.5.0" < "0.6.0", numerically, part by part. */
+function olderThan(a, b) {
+  const pa = String(a).split('.').map((n) => parseInt(n, 10) || 0);
+  const pb = String(b).split('.').map((n) => parseInt(n, 10) || 0);
+  for (let i = 0; i < 3; i++) if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) < (pb[i] || 0);
+  return false;
+}
+
+/** The release that closed Pro again; before it, an installed copy had Pro and the add-on open. */
+const CLOSED_IN = '0.6.0';
+
+let checkingOut = false;
+
+/** What the screen shows about the licence this account holds. */
+async function licenceStatus() {
+  const { BUILD_INFO } = require('./build-info');
+  const stored = licenseState.storedLicence();
+  const applied = licenseState.currentLicense();
+  const id = await require('./license/machine').machineId().catch(() => null);
+  const period = stored.state === 'free' ? null : stored.trial ? 'trial' : stored.expires ? 'annual' : 'lifetime';
+  return {
+    state: stored.state,
+    tier: stored.tier || null,
+    addons: stored.addons || [],
+    plan: stored.plan || null,
+    period,
+    seats: stored.seats || null,
+    expires: stored.expires || null,
+    issuedAt: stored.issuedAt || null,
+    fallback: stored.fallback === true,
+    mock: stored.mock === true,
+    source: stored.source,
+    reason: stored.reason || null,
+    trialUsed: stored.trialUsed === true,
+    canTrial: !stored.trialUsed && stored.state === 'free',
+    orderId: stored.orderId || null,
+    machine: require('./license/machine').shortId(id),
+    channel: BUILD_INFO.channel,
+    version: BUILD_INFO.version,
+    // A checkout whose override decides what is open; the screen then says
+    // so instead of pretending the stored licence is what applies.
+    overridden: applied.source === 'dev',
+    // This code exists only from CLOSED_IN on, so an upgrade from before it is
+    // all there is to ask about.
+    closedAgain: Boolean(upgradedFrom && olderThan(upgradedFrom, CLOSED_IN)),
+    closedIn: CLOSED_IN,
+    upgradedFrom,
+  };
+}
+
+/** The choice a quote or a checkout is about, with nothing else carried over. */
+function choiceOf(c) {
+  const v = c && typeof c === 'object' ? c : {};
+  return {
+    planId: String(v.planId || ''),
+    addons: Array.isArray(v.addons) ? v.addons.filter((a) => typeof a === 'string').slice(0, 4) : [],
+    seats: Number.isInteger(v.seats) ? v.seats : undefined,
+  };
+}
+
+/** A provider's answer as the window may see it: the key to show, never the address. */
+async function paymentReply(result) {
+  const { licence, token, ...rest } = result;
+  return { ...rest, token: licence ? token : null, licence: licence ? await licenceStatus() : null };
+}
+
 function noteReconciliation(result) {
   lastReconciliation = result && (result.changes.length > 0 || result.problems.length > 0) ? result : null;
 }
@@ -3321,6 +3401,129 @@ function register() {
     guard(async () => entitlements.forRenderer(licenseState.currentLicense()))
   );
 
+  /* ---- plans and licence (Phase 6) --------------------------------------- */
+
+  /*
+   * The Plans & licence screen, the plans dialog and checkout.
+   *
+   * The window is told about the licence it holds -- tier, dates, seats --
+   * because showing that is the screen's whole job. It is never told the
+   * address unless it asks for it by name (`license:email`, one DPAPI call),
+   * and it is never handed a `can()`: what is allowed is still
+   * `license:entitlements`, asked again on `license:changed`.
+   *
+   * Payment goes through the provider here, never from the window (§7.7).
+   */
+  handle('license:status', () => guard(() => licenceStatus()));
+
+  handle('license:email', () => guard(() => licenseState.emailOfCurrent()));
+
+  handle('license:token', () => guard(async () => licenseState.currentToken()));
+
+  handle('license:activate', (_event, text) =>
+    guard(async () => {
+      const result = await licenseState.activate(typeof text === 'string' ? text.slice(0, 8192) : '');
+      return { ok: result.ok, reason: result.reason || null, status: await licenceStatus() };
+    })
+  );
+
+  handle('license:deactivate', (event) =>
+    guard(async () => {
+      const win = BrowserWindow.fromWebContents(event.sender);
+      const { response } = await dialog.showMessageBox(win, {
+        type: 'question',
+        buttons: [t('licence.deactivate.confirm', 'Deactivate'), t('app.cancel', 'Cancel')],
+        defaultId: 1,
+        cancelId: 1,
+        noLink: true,
+        title: t('licence.deactivate.title', 'Deactivate this computer'),
+        message: t('licence.deactivate.message', 'Remove the licence from this computer?'),
+        detail: t(
+          'licence.deactivate.detail',
+          'This computer goes back to CleanDrive Free. Keep a copy of the licence key if you want to enter it again later. Nothing the app has done is affected: the Restore Center, the journal and every file moved to another drive stay exactly as they are.'
+        ),
+      });
+      if (response !== 0) return { cancelled: true, status: await licenceStatus() };
+      await licenseState.deactivate();
+      return { cancelled: false, status: await licenceStatus() };
+    })
+  );
+
+  handle('license:saveKey', (event) =>
+    guard(async () => {
+      const key = licenseState.currentToken();
+      if (!key) return { saved: false };
+      const win = BrowserWindow.fromWebContents(event.sender);
+      const { canceled, filePath } = await dialog.showSaveDialog(win, {
+        title: t('licence.save.title', 'Save the licence key'),
+        defaultPath: 'CleanDrive-licence-key.txt',
+        filters: [{ name: t('licence.save.filter', 'Text'), extensions: ['txt'] }],
+      });
+      if (canceled || !filePath) return { saved: false };
+      // The key and nothing else: it names no address, and it is the one
+      // thing needed to activate this licence again.
+      await require('node:fs/promises').writeFile(filePath, `${key}\r\n`, 'utf8');
+      return { saved: true, path: filePath };
+    })
+  );
+
+  handle('commerce:plans', () =>
+    guard(async () => ({
+      plans: commerce.PLANS,
+      features: Object.entries(entitlements.FEATURES)
+        .filter(([key]) => key !== 'free')
+        .map(([key, f]) => ({ key, tier: f.tier, addon: f.addon || null })),
+    }))
+  );
+
+  // The discount here is only for the screen's arithmetic: checkout asks the
+  // provider about the code again and takes its answer, not this one.
+  handle('commerce:quote', (_event, choice) =>
+    guard(async () => {
+      const d = choice && Number(choice.discount);
+      return commerce.quote({ ...choiceOf(choice), discount: d >= 0 && d < 1 ? d : 0 });
+    })
+  );
+
+  handle('commerce:coupon', (_event, code, planId) =>
+    guard(async () => commerce.getProvider({ dir: services().dir }).coupon(String(code || '').slice(0, 64), String(planId || '')))
+  );
+
+  handle('commerce:checkout', (_event, req) =>
+    guard(async () => {
+      if (checkingOut) throw Object.assign(new Error(t('commerce.busy', 'A payment is already in progress.')), { code: 'EBUSY', quiet: true });
+      checkingOut = true;
+      try {
+        const r = req && typeof req === 'object' ? req : {};
+        const result = await commerce.checkout(
+          {
+            ...choiceOf(r),
+            method: String(r.method || ''),
+            email: String(r.email || '').trim().slice(0, 254),
+            coupon: r.coupon ? String(r.coupon).trim().slice(0, 64) : undefined,
+          },
+          { dir: services().dir }
+        );
+        return paymentReply(result);
+      } finally {
+        checkingOut = false;
+      }
+    })
+  );
+
+  handle('commerce:status', (_event, orderId) =>
+    guard(async () => paymentReply(await commerce.status(String(orderId || ''), { dir: services().dir })))
+  );
+
+  handle('commerce:startTrial', () =>
+    guard(async () => {
+      const result = await commerce.startTrial();
+      return { ok: result.ok, reason: result.reason || null, status: await licenceStatus() };
+    })
+  );
+
+  handle('commerce:invoices', () => guard(() => commerce.getProvider({ dir: services().dir }).invoices()));
+
   /* ---- shell helpers --------------------------------------------------- */
 
   handle('shell:reveal', (event, target) =>
@@ -4362,6 +4565,7 @@ function cancelAll() {
 
 module.exports = {
   register,
+  noteUpgradedFrom,
   // The report’s words, so a harness photographs what the app writes
   // rather than a second copy made for the camera (G2).
   reportWords,

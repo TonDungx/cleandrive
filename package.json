@@ -20,6 +20,7 @@
     "test:fleet": "node scripts/test-fleet.js",
     "verify:console": "node scripts/verify-console.js",
     "shoot:console": "electron scripts/shoot-console.js",
+    "shoot:licence": "electron scripts/shoot-licence.js",
     "test:cli": "node scripts/test-cli.js",
     "verify:cli": "node scripts/verify-cli.js",
     "test:scanner": "node scripts/test-scanner.js",

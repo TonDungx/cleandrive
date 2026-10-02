@@ -443,6 +443,9 @@ if (isCli) {
     if (settings) {
       // Before apply(), so the "you have just updated" notice is ready by the
       // time the window asks for it.
+      // Read before noteVersion overwrites it: the licence screen tells
+      // whoever had Pro while it was open to everyone that it has closed.
+      ipc.noteUpgradedFrom(settings.updates && settings.updates.lastVersion);
       await updater.noteVersion(require('./services').services().settings);
 
       updater.apply(settings, {

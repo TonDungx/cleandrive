@@ -758,6 +758,42 @@ app.whenReady().then(async () => {
   `));
   await run(`document.getElementById('shrink-close').click();`);
 
+  // Plans and licence (Phase 6): the dialog's three views -- choosing a plan,
+  // paying, and what happened -- every one of them drawn by script. Paying
+  // writes license.dat and orders.json into this harness's own userData.
+  await tab('settings');
+  await run(`await window.LicenceUI.open({ opener: document.getElementById('licence-plans') });`);
+  await until(`document.getElementById('plans').open === true && document.querySelectorAll('#plans-columns .plans-col').length === 3`, 10000);
+  await settle();
+  open = await axeRun();
+  check('with the plans open, no violations', open.violations.length === 0, open.violations.map((v) => `${v.id}: ${v.nodes.join(' | ')}`).join(' || '));
+  await run(`document.querySelector('#plans-columns [data-focus-key="choose-pro"]').click();`);
+  await until(`!document.getElementById('plans-checkout').hidden && document.getElementById('plans-total').textContent !== '—'`, 10000);
+  await settle();
+  open = await axeRun();
+  check('with checkout open, no violations', open.violations.length === 0, open.violations.map((v) => `${v.id}: ${v.nodes.join(' | ')}`).join(' || '));
+  check('every field in checkout has a label of its own', await js(`
+    [...document.querySelectorAll('#plans-checkout input, #plans-checkout select')]
+      .every((i) => i.labels && i.labels.length > 0 && i.labels[0].textContent.trim().length > 1)
+  `));
+  check('and the Pay button says why it waits', await js(`
+    document.getElementById('plans-pay').disabled && document.getElementById('plans-pay-hint').getAttribute('role') === 'status'
+      && document.getElementById('plans-pay-hint').textContent.length > 10
+  `));
+  await run(`
+    const e = document.getElementById('plans-email'); e.value = 'a11y@example.vn'; e.dispatchEvent(new Event('input'));
+    document.querySelector('input[name="plans-method"][value="vnpay"]').click();
+    document.getElementById('plans-terms').click();
+    document.getElementById('plans-pay').click();
+  `);
+  await until(`!document.getElementById('plans-result').hidden`, 15000);
+  await settle();
+  open = await axeRun();
+  check('with the result shown, no violations', open.violations.length === 0, open.violations.map((v) => `${v.id}: ${v.nodes.join(' | ')}`).join(' || '));
+  check('a screen reader starts the result at its title', await js(`document.activeElement === document.getElementById('plans-title')`));
+  await run(`document.getElementById('plans').close();`);
+  check('closing gives the keyboard back to the button that opened it', await js(`document.activeElement === document.getElementById('licence-plans')`));
+
   await tab('usage');
   await run(`await openViewer(${JSON.stringify(path.join(tree, 'notes.txt'))});`);
   await until(`document.querySelector('#viewer-body pre, #viewer-body .doc, #viewer-body *')`, 10000);

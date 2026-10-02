@@ -8442,3 +8442,390 @@ button.is-managed {
     outline: 1px solid Highlight;
   }
 }
+
+/* ==========================================================================
+   plans and licence (Phase 6)
+   ========================================================================== */
+
+/* Accent, never green, amber or red: those three are verdicts about files,
+   and a licence is not one. */
+
+.licence-notes:empty {
+  display: none;
+}
+
+.licence-note {
+  margin: 0 0 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-soft);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  color: var(--text);
+}
+
+.licence-facts li,
+.licence-invoices li,
+#plans-result-facts li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  padding: 8px 12px;
+  font-size: 12.5px;
+}
+
+.licence-facts li + li,
+.licence-invoices li + li,
+#plans-result-facts li + li {
+  border-top: 1px solid var(--border-soft);
+}
+
+.licence-invoices li.card-note {
+  margin: 0;
+}
+
+.licence-fact-label {
+  flex: 0 0 150px;
+  color: var(--text-3);
+}
+
+.licence-fact-value {
+  flex: 1 1 220px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--text);
+}
+
+.licence-actions {
+  flex-wrap: wrap;
+}
+
+.licence-sub {
+  margin: 16px 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.licence-label {
+  display: block;
+  margin: 10px 0 5px;
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.licence-enter {
+  margin: 4px 0 6px;
+}
+
+.licence-key,
+.plans-dialog .input {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+}
+
+.licence-key {
+  resize: vertical;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  word-break: break-all;
+}
+
+.licence-key:focus,
+.plans-dialog .input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-ring);
+}
+
+/* The strip at the top of the window. */
+.licence-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  /* Lined up with the panel below it: the same 1360px column, the same gutters. */
+  margin: 16px max(24px, calc((100% - 1312px) / 2)) 0;
+  padding: 8px 14px;
+  border: 1px solid var(--border-soft);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  color: var(--text);
+  font-size: 12.5px;
+}
+
+.licence-strip[hidden] {
+  display: none;
+}
+
+.licence-strip-text {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+
+.upgrade-hint {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+
+.upgrade-hint-plans {
+  font-size: 11.5px;
+}
+
+/* The plans dialog. */
+.plans-dialog {
+  width: min(900px, calc(100vw - 32px));
+}
+
+.plans-dialog[aria-busy="true"] .plans-body {
+  cursor: progress;
+}
+
+.plans-view[hidden] {
+  display: none;
+}
+
+.plans-period {
+  margin: 10px 0 6px;
+}
+
+.plans-period-note {
+  margin: 0 0 12px;
+}
+
+.plans-columns {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.plans-col {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.plans-col[data-column="pro"] {
+  border-color: var(--accent);
+}
+
+.plans-col-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+}
+
+.plans-col-name {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.plans-col-price {
+  flex-basis: 100%;
+  margin: 2px 0 8px;
+  color: var(--text-2);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.plans-current {
+  padding: 1px 8px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-pill);
+  color: var(--accent);
+  font-size: 11px;
+}
+
+.plans-col-body {
+  flex: 1;
+}
+
+.plans-col-list {
+  margin: 0 0 10px;
+  padding-left: 18px;
+  color: var(--text);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.plans-col-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 2px 0 12px;
+}
+
+/* A long label wraps inside its column instead of running out of it. */
+.plans-col-foot .btn {
+  max-width: 100%;
+  height: auto;
+  min-height: 30px;
+  white-space: normal;
+  text-align: left;
+}
+
+.plans-col-foot .plans-addon {
+  flex-basis: 100%;
+  margin: 0 0 2px;
+}
+
+#plans-result-facts:empty,
+.licence-facts:empty {
+  display: none;
+}
+
+.plans-coupon .card-note {
+  margin: 0;
+}
+
+/* Focus is put on the heading so a screen reader starts each view at the top;
+   it is not a control, and a ring round it would say it was one. */
+#plans-title:focus {
+  outline: none;
+}
+
+.plans-promise {
+  margin: 14px 0 0;
+  color: var(--text-2);
+  font-size: 12.5px;
+}
+
+.plans-lines {
+  list-style: none;
+  margin: 10px 0 8px;
+  padding: 0;
+}
+
+.plans-lines li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border-soft);
+  font-size: 13px;
+}
+
+.plans-amount {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.plans-coupon {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+}
+
+.plans-coupon .licence-label {
+  flex-basis: 100%;
+  margin-bottom: 0;
+}
+
+.plans-coupon .input {
+  flex: 1 1 160px;
+  width: auto;
+}
+
+.plans-total {
+  display: flex;
+  justify-content: space-between;
+  margin: 8px 0 4px;
+  font-size: 15px;
+}
+
+.plans-seats {
+  width: auto;
+  min-width: 160px;
+}
+
+.plans-methods {
+  margin: 12px 0 8px;
+  padding: 0;
+  border: 0;
+}
+
+.plans-methods .check,
+.plans-checkout > .check {
+  margin-bottom: 7px;
+}
+
+.plans-dialog input[type="radio"] {
+  accent-color: var(--accent);
+  margin-top: 1px;
+}
+
+.plans-foot {
+  flex-wrap: wrap;
+  align-items: center;
+  margin-top: 14px;
+}
+
+#plans-pay.is-busy::before {
+  content: "";
+  display: inline-block;
+  width: 11px;
+  height: 11px;
+  margin-right: 7px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  vertical-align: -1px;
+  animation: plans-spin 0.8s linear infinite;
+}
+
+@keyframes plans-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #plans-pay.is-busy::before {
+    animation: none;
+  }
+}
+
+.plans-result-message {
+  margin: 12px 0;
+  font-size: 14px;
+}
+
+@media (max-width: 860px) {
+  .licence-strip {
+    margin: 14px 18px 0;
+  }
+}
+
+@media (max-width: 720px) {
+  .licence-strip {
+    margin: 12px 14px 0;
+  }
+}
+
+@media (max-width: 760px) {
+  .plans-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .licence-fact-label {
+    flex-basis: 100%;
+  }
+}

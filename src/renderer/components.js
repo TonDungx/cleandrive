@@ -590,6 +590,8 @@
    * have not been read yet -- an app that is not sure must not advertise.
    * There is no modal version and no way to attach one to a dialog: the rule
    * is that the moment of deciding what to delete never carries an upsell.
+   * The button beside the words opens the plans (Phase 6); the hint itself
+   * is still only ever placed on a screen, never in a confirmation.
    */
   function UpgradeHint(feature, message) {
     const known = entitlements && entitlements.get(feature);
@@ -597,7 +599,17 @@
     const el = document.createElement('p');
     el.className = 'upgrade-hint';
     el.dataset.feature = feature;
-    el.textContent = tm(message);
+    const words = document.createElement('span');
+    words.textContent = tm(message);
+    el.append(words);
+    if (root.LicenceUI) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'btn btn-sm upgrade-hint-plans';
+      button.textContent = t('licence.seePlans', 'See the plans');
+      button.addEventListener('click', () => root.LicenceUI.open({ feature, opener: button }));
+      el.append(button);
+    }
     return el;
   }
 

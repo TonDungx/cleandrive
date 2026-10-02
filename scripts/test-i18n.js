@@ -40,6 +40,8 @@ const SRC = path.join(__dirname, '..', 'src');
  * reported as dead weight.
  */
 const DYNAMIC_PREFIXES = [
+  // "3 days left" of a trial, through `word()` (Phase 6).
+  'licence.day.',
   'app.file.',
   'app.item.',
   'app.location.',

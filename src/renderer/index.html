@@ -217,6 +217,15 @@
       ></div>
 
       <main>
+      <!-- A thin strip about the licence (ROADMAP §7.2.5): a trial in its last
+           three days, or Pro closed again in 0.6.0 for someone who had it.
+           licence.js keeps it hidden while anything is scanning, deleting or
+           asking -- a progress bar, the delete bar, any open dialog. -->
+      <div class="licence-strip" id="licence-strip" role="status" hidden>
+        <span class="licence-strip-text" id="licence-strip-text"></span>
+        <button class="btn btn-sm" id="licence-strip-plans" data-i18n="licence.strip.plans">See the plans</button>
+        <button class="btn btn-sm" id="licence-strip-close" data-i18n="licence.strip.close">Not now</button>
+      </div>
       <!-- ------------------------------------------------ disk usage -->
       <section class="panel is-active" id="panel-usage" role="tabpanel">
         <div class="panel-actions">
@@ -1521,6 +1530,41 @@
       -->
       <section class="panel" id="panel-settings" role="tabpanel">
         <div class="grid">
+          <!-- Plans and licence (Phase 6, ROADMAP §7.2.1). Everything with a
+               date, a count or a state in it is written by licence.js, so
+               none of those elements carry data-i18n. -->
+          <section class="card card-wide licence-card" id="licence-card" aria-labelledby="licence-title">
+            <div class="card-head">
+              <h2 id="licence-title" data-i18n="licence.title">Plans and licence</h2>
+              <span class="card-badge" id="licence-badge">—</span>
+            </div>
+            <div class="licence-notes" id="licence-notes"></div>
+            <ul class="path-list licence-facts" id="licence-facts"></ul>
+            <div class="panel-actions panel-actions-tight licence-actions">
+              <button class="btn btn-primary btn-sm" id="licence-plans"></button>
+              <button class="btn btn-sm" id="licence-trial" hidden data-i18n="licence.trial">Try Pro for 14 days — no payment</button>
+              <button class="btn btn-sm" id="licence-enter" aria-expanded="false" aria-controls="licence-enter-form" data-i18n="licence.enter">Enter a licence key</button>
+              <button class="btn btn-sm" id="licence-copy" hidden data-i18n="licence.copy">Copy the key</button>
+              <button class="btn btn-sm" id="licence-save" hidden data-i18n="licence.saveKey">Save the key to a file</button>
+              <span class="spacer"></span>
+              <button class="btn btn-sm" id="licence-deactivate" hidden data-i18n="licence.deactivate">Deactivate this computer</button>
+            </div>
+            <form class="licence-enter" id="licence-enter-form" hidden>
+              <label class="licence-label" for="licence-key" data-i18n="licence.keyLabel">Licence key</label>
+              <textarea class="licence-key" id="licence-key" rows="3" spellcheck="false" autocomplete="off"></textarea>
+              <div class="panel-actions panel-actions-tight">
+                <button class="btn btn-primary btn-sm" type="submit" id="licence-activate" data-i18n="licence.activate">Activate</button>
+                <button class="btn btn-sm" type="button" id="licence-enter-cancel" data-i18n="app.cancel">Cancel</button>
+              </div>
+              <p class="card-note" id="licence-enter-result" role="status"></p>
+            </form>
+            <h3 class="licence-sub" data-i18n="licence.invoices">Recent invoices</h3>
+            <ul class="path-list licence-invoices" id="licence-invoices"></ul>
+            <p class="card-note" data-i18n="licence.promise">
+              Every safety and restore feature is always free. A licence that runs out never loses any data.
+            </p>
+          </section>
+
           <section class="card">
             <h2 data-i18n="settings.language.title">Language</h2>
             <p class="card-note" data-i18n="settings.language.note">
@@ -1787,6 +1831,8 @@
               <span class="card-badge" id="update-badge">—</span>
             </div>
             <ul class="path-list" id="version-facts"></ul>
+            <!-- §7.8: a dev build says so here, and only here -- never on the checkout. -->
+            <p class="card-note" id="version-channel" hidden></p>
             <label class="check check-lead">
               <input type="checkbox" id="update-enabled" />
               <span data-i18n="update.enabled">Check for new versions</span>
@@ -2117,6 +2163,84 @@
       </div>
     </dialog>
 
+    <!--
+      Choosing a plan, paying for it, and what happened (ROADMAP §7.2.2-7.2.4).
+      Three views in one dialog, so focus never leaves it between them. There
+      is no field for a card number and there never will be (§7.7): the card
+      option is a choice of method, and a real provider draws its own page.
+    -->
+    <dialog class="shortcuts plans-dialog" id="plans" aria-labelledby="plans-title">
+      <div class="shortcuts-head">
+        <h2 id="plans-title" tabindex="-1"></h2>
+        <span class="spacer"></span>
+        <button class="btn btn-sm" id="plans-close" data-i18n="app.close">Close</button>
+      </div>
+      <div class="shortcuts-body plans-body">
+        <section class="plans-view" id="plans-choose">
+          <div class="segmented plans-period" id="plans-period" role="group" data-i18n-aria="plans.period" aria-label="How long">
+            <button class="segmented-option" type="button" data-period="annual" data-i18n="plans.period.annual">Yearly</button>
+            <button class="segmented-option" type="button" data-period="lifetime" data-i18n="plans.period.lifetime">Lifetime</button>
+          </div>
+          <p class="card-note plans-period-note" id="plans-period-note"></p>
+          <div class="plans-columns" id="plans-columns"></div>
+          <p class="plans-promise" data-i18n="plans.promise">
+            Every safety and restore feature is always free. A licence that runs out never loses any data.
+          </p>
+        </section>
+
+        <form class="plans-view plans-checkout" id="plans-checkout" hidden novalidate>
+          <ul class="plans-lines" id="plans-lines"></ul>
+          <div class="plans-coupon">
+            <label class="licence-label" for="plans-coupon" data-i18n="checkout.coupon">Discount code</label>
+            <input class="input" id="plans-coupon" type="text" autocomplete="off" spellcheck="false" maxlength="64" />
+            <button class="btn btn-sm" type="button" id="plans-coupon-apply" data-i18n="checkout.apply">Apply</button>
+            <span class="card-note" id="plans-coupon-result" role="status"></span>
+          </div>
+          <p class="card-note" data-i18n="checkout.vat">VAT included.</p>
+          <p class="plans-total"><span data-i18n="checkout.total">Total</span> <strong id="plans-total"></strong></p>
+
+          <label class="licence-label" for="plans-email" data-i18n="checkout.email">Email for the licence</label>
+          <input class="input" id="plans-email" type="email" autocomplete="email" spellcheck="false" maxlength="254" aria-describedby="plans-email-note" />
+          <p class="card-note" id="plans-email-note" data-i18n="checkout.email.note">
+            Used only to tie the licence to you. It is kept on this computer encrypted for your Windows account, and it is not in the licence key.
+          </p>
+
+          <label class="licence-label" for="plans-seats" data-i18n="checkout.seats">Computers</label>
+          <select class="plans-seats" id="plans-seats"></select>
+
+          <fieldset class="plans-methods">
+            <legend class="licence-label" data-i18n="checkout.method">Payment method</legend>
+            <label class="check"><input type="radio" name="plans-method" value="card" /> <span data-i18n="checkout.method.card">International card</span></label>
+            <label class="check"><input type="radio" name="plans-method" value="momo" /> <span data-i18n="checkout.method.momo">MoMo</span></label>
+            <label class="check"><input type="radio" name="plans-method" value="vnpay" /> <span data-i18n="checkout.method.vnpay">VNPay</span></label>
+            <label class="check"><input type="radio" name="plans-method" value="bank_qr" /> <span data-i18n="checkout.method.bankQr">Bank transfer (QR)</span></label>
+          </fieldset>
+
+          <label class="check">
+            <input type="checkbox" id="plans-terms" />
+            <span data-i18n="checkout.terms">I agree to the Terms and the Refund policy</span>
+          </label>
+
+          <div class="panel-actions plans-foot">
+            <span class="card-note" id="plans-pay-hint" role="status"></span>
+            <span class="spacer"></span>
+            <button class="btn btn-sm" type="button" id="plans-back" data-i18n="checkout.back">Back</button>
+            <button class="btn btn-primary btn-sm" type="submit" id="plans-pay" disabled></button>
+          </div>
+        </form>
+
+        <section class="plans-view plans-result" id="plans-result" hidden>
+          <p class="plans-result-message" id="plans-result-message"></p>
+          <ul class="path-list" id="plans-result-facts"></ul>
+          <div class="plans-key" id="plans-key-box" hidden>
+            <label class="licence-label" for="plans-key" data-i18n="result.key">Licence key</label>
+            <textarea class="licence-key" id="plans-key" rows="3" readonly spellcheck="false"></textarea>
+          </div>
+          <div class="panel-actions plans-foot" id="plans-result-actions"></div>
+        </section>
+      </div>
+    </dialog>
+
     <dialog class="shortcuts hardlink-dialog" id="hardlink" aria-labelledby="hardlink-title">
       <div class="shortcuts-head">
         <h2 id="hardlink-title" data-i18n="hardlink.dialog.title">Join these copies into one file?</h2>
@@ -2208,5 +2332,6 @@
     <script src="hardlink.js"></script>
     <!-- The introduction, last: it opens over a window that is already built. -->
     <script src="intro.js"></script>
+    <script src="licence.js"></script>
   </body>
 </html>

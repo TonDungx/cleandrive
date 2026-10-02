@@ -201,6 +201,22 @@ const payloadOf = (t) => token.verifyToken(t, { channel: 'stable' });
     check('and it is not the GUID itself', raw && real !== raw && !real.includes(raw.replace(/-/g, '').toLowerCase()));
   }
 
+  console.log('\ncommerce: what the window is made of\n');
+
+  {
+    const R = path.join(__dirname, '..', 'src', 'renderer');
+    const ui = fs.readFileSync(path.join(R, 'licence.js'), 'utf8');
+    const html = fs.readFileSync(path.join(R, 'index.html'), 'utf8');
+    const { FEATURES } = require('../src/main/license/entitlements');
+    const unlabelled = Object.keys(FEATURES).filter((k) => k !== 'free' && !ui.includes(`t('feature.${k}',`));
+    check('the plan columns word every feature key, each with a literal key (§7.2.2: from FEATURES)', unlabelled.length === 0, unlabelled.join(', '));
+    const plansMarkup = html.slice(html.indexOf('<dialog class="shortcuts plans-dialog"'), html.indexOf('</dialog>', html.indexOf('<dialog class="shortcuts plans-dialog"')));
+    check('the checkout has no field a card number could go in (§7.7)', plansMarkup.length > 1000 &&
+      !/autocomplete="cc-|name="card|id="[^"]*card[^"]*"\s[^>]*type="(text|number|tel)"|inputmode="numeric"/i.test(plansMarkup) &&
+      !/createElement\('input'\)[\s\S]{0,200}type = '(text|number|tel)'/.test(ui));
+    check('and the window never reaches the network to pay (§7.7)', !/\bfetch\(|XMLHttpRequest|WebSocket|navigator\.sendBeacon/.test(ui));
+  }
+
   console.log(failures === 0 ? '\nALL PASS\n' : `\n${failures} FAILURE(S)\n`);
   process.exit(failures === 0 ? 0 : 1);
 })().catch((err) => {

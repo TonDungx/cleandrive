@@ -2545,6 +2545,17 @@ Các con số giá ở trên chỉ là **dữ liệu mẫu**. [Speculation] Giá
 
 Banner **không bao giờ** xuất hiện trong màn đang quét, đang xoá, hộp thoại xác nhận hay toast.
 
+> **✅ Đã code xong (2026-10-02), mục 6.4 — các màn của §7.2** (gộp hai mục 6.4 và 6.5 đã đề xuất: tách ra thì nút "Chọn gói" của thẻ licence sẽ không dẫn tới đâu giữa hai commit). Code: `renderer/licence.js`, thẻ đầu tiên của Settings, `<dialog id="plans">` ba màn (chọn gói → thanh toán → kết quả), dải `#licence-strip`, 13 kênh IPC `license:*`/`commerce:*`, nút "Xem các gói" trên mọi `UpgradeHint`. Khác đặc tả, và vì sao:
+> - **Checkout giống hệt production ở mọi kênh, kể cả stable** (người dùng chốt), dù trên stable bấm Thanh toán không thu tiền. Điều duy nhất được nói về mock nằm **trên thẻ licence, nói về licence**: *"được cấp trong thời gian chưa mở bán, và sẽ hết hiệu lực khi bắt đầu bán"* (người dùng chốt). Dòng §7.8 *"Kênh: dev · Thanh toán: giả lập"* chỉ có ở thẻ Phiên bản của kênh dev.
+> - **Chỉ VND, không có công tắc tiền tệ** (người dùng chốt).
+> - **Không có màn "Quản lý máy đã kích hoạt"**: thẻ ghi *"1 / {n} máy · máy này là {8 ký tự của machineId}"*. Một danh sách máy dựng ra là nói dối trên màn hình (người dùng để nguyên đề xuất); số máy thật là việc của máy chủ licence ở Giai đoạn 7.
+> - **Không có nút "Xem hoá đơn"**: mock không có bản hoá đơn nào để mở (`url: null`), nên dòng hoá đơn chỉ ghi ngày, gói, số tiền, phương thức.
+> - **"Điều khoản & Chính sách hoàn tiền" chưa có văn bản** để đọc — ô tick vẫn bắt buộc, và **bị bỏ tick mỗi lần mở checkout** (đồng ý cho lần mua này). [Unverified] văn bản pháp lý là việc của Giai đoạn 7.
+> - **Thêm một nội dung banner đặc tả không có:** người nâng cấp từ bản trước 0.6.0 (đọc `updates.lastVersion` *trước* khi updater ghi đè) thấy một lần, trên dải và trên thẻ, rằng Pro và Developer Pack đã thuộc về licence trở lại, dữ liệu và Khôi phục không đổi, hồ sơ tự động thêm chỉ còn báo cáo. `state.js` đã ghi từ 2026-09-24 là Giai đoạn 6 "phải nói ra". Banner "hết hạn" và màn Automatic là mục 6.5.
+> - **Dải banner tự ẩn** khi có thanh tiến độ đang hiện, thanh xoá, hoặc **bất kỳ** `dialog[open]` nào — theo dõi bằng `MutationObserver`, không polling. "Tối đa một lần mỗi ngày" nghĩa là *không hiện lại ở cửa sổ sau trong cùng ngày*; ảnh chụp bắt được bản đầu làm nó **biến mất ở lần vẽ lại kế tiếp trong cùng cửa sổ**.
+> - **Email:** không có trong token, `license.dat`, `orders.json`, hay tệp "Lưu mã" (ảnh chụp kiểm cả hai tệp). Thẻ mở nó bằng một lời gọi DPAPI; dùng thử không có email nên không gọi.
+> - **Ảnh chụp thật** (`npm run shoot:licence`, 35 ảnh, hai theme, tiếng Việt và tiếng Anh, 1180/720/560, đo tràn theo mép nội dung **và theo từng cột gói**): bắt được **6 lỗi** của chính mục này — nút "Dùng thử" lòi ra ngoài cột Pro; ô số máy cắt chữ và mất mũi tên (class `.input` đè `select`); checkbox Developer Pack nằm dưới đáy danh sách dài; danh sách rỗng vẽ một đường kẻ; dải dùng thử tự ẩn ở lần vẽ lại; vẽ lại checkout dùng báo giá của lần trước (lỗi `coupon.code` trong renderer). `test:a11y` thêm 7 kiểm tra (axe ba màn của hộp thoại, mọi ô có nhãn, nút Thanh toán nói vì sao chờ, tiêu điểm về tiêu đề và về nút đã mở). `test-commerce.js` thêm 3 kiểm tra tĩnh: mọi khoá `FEATURES` có nhãn, **không ô nào nhận được số thẻ** (§7.7), cửa sổ không gọi mạng để thanh toán.
+
 ### 7.3. Giao diện provider
 
 ```js

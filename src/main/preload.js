@@ -196,6 +196,21 @@ const api = {
   /* which features this build may use -- never the licence itself */
   entitlements: () => ipcRenderer.invoke('license:entitlements'),
 
+  /* plans and licence (Phase 6): what the licence screen shows, and checkout */
+  licenceStatus: () => ipcRenderer.invoke('license:status'),
+  licenceEmail: () => ipcRenderer.invoke('license:email'),
+  licenceToken: () => ipcRenderer.invoke('license:token'),
+  licenceActivate: (text) => ipcRenderer.invoke('license:activate', text),
+  licenceDeactivate: () => ipcRenderer.invoke('license:deactivate'),
+  licenceSaveKey: () => ipcRenderer.invoke('license:saveKey'),
+  commercePlans: () => ipcRenderer.invoke('commerce:plans'),
+  commerceQuote: (choice) => ipcRenderer.invoke('commerce:quote', choice),
+  commerceCoupon: (code, planId) => ipcRenderer.invoke('commerce:coupon', code, planId),
+  commerceCheckout: (request) => ipcRenderer.invoke('commerce:checkout', request),
+  commerceStatus: (orderId) => ipcRenderer.invoke('commerce:status', orderId),
+  commerceStartTrial: () => ipcRenderer.invoke('commerce:startTrial'),
+  commerceInvoices: () => ipcRenderer.invoke('commerce:invoices'),
+
   /* what the organisation's policy locks (H2) -- never the registry itself */
   policyState: () => ipcRenderer.invoke('policy:state'),
 

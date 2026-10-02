@@ -153,6 +153,21 @@ const INVOKE = Object.freeze([
   'monitor:resume',
 
   'license:entitlements',
+  // Plans and licence (Phase 6): the screen, the key, the plans dialog and
+  // checkout. Payment goes through main, never from the window (§7.7).
+  'license:status',
+  'license:email',
+  'license:token',
+  'license:activate',
+  'license:deactivate',
+  'license:saveKey',
+  'commerce:plans',
+  'commerce:quote',
+  'commerce:coupon',
+  'commerce:checkout',
+  'commerce:status',
+  'commerce:startTrial',
+  'commerce:invoices',
   // What the organisation's policy locks (H2): the line and the padlocks.
   'policy:state',
 ]);

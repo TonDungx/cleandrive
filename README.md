@@ -2330,6 +2330,7 @@ is off out of the box and stays off when the app updates.
 
 | Card | What it holds |
 | --- | --- |
+| **Plans and licence** | Which plan this computer is on and until when, the key, the plans, and the invoices ([below](#plans-and-licence)) |
 | **Appearance** | Light, dark, follow the system, or your own colours |
 | **Your own colours** | Eleven colours, checked as you pick them; import and export a theme file |
 | **Keyboard** | Where the list of keys is (**?** opens it too) |
@@ -2345,6 +2346,54 @@ is off out of the box and stays off when the app updates.
 The version lives here because "which version am I running" is the first thing
 anyone reporting a problem is asked, and it used to sit inside a screen about
 deleting files on a timetable.
+
+### Plans and licence
+
+The first card in Settings. It says which plan this computer is on — **Free**,
+**Pro** (yearly or lifetime, with or without the **Developer Pack**), a 14-day
+**Pro trial**, or **Business** — when it ends, how many computers it covers,
+the email it was bought with, the order, and the invoices. Its buttons open the
+plans, start the trial (once per copy), take a licence key, copy or save the
+key, and deactivate this computer.
+
+**The plans.** Three columns, Free, Pro and Business, each listing what it
+includes; the lists are drawn from the same table the app checks before it lets
+a feature run, so the two cannot disagree. Yearly or lifetime is a switch above
+them. Lifetime covers every later version; a yearly licence that runs out keeps
+Pro on the versions released while it was paid for. Business is yearly and
+includes the Developer Pack. Every *This is part of CleanDrive Pro* line in the
+app carries a **See the plans** button that opens the same dialog.
+
+**Paying.** The total is worked out in one place and the Pay button only works
+once there is an email address, a payment method and agreement to the terms —
+and it says which is missing. There is no field for a card number, and there
+never will be: *International card* is a choice of method, and the payment
+provider draws its own page. When a payment succeeds the licence is active at
+once, no restart; the key is shown with buttons to copy it and save it to a file.
+A declined card, an unreachable server, a cancelled payment, a bank transfer
+still waiting and a payment with no answer yet each have their own words and
+their own way on, and none of them is ever said to have charged anything.
+
+> **Payment is not open yet.** Until it is, pressing Pay activates the plan
+> without taking any money, on every copy. A licence issued that way says so on
+> this card, and it ends when selling begins. The prices are sample prices, in
+> VND.
+
+**What stays free, whatever the licence.** Restore, every confirmation, every
+warning and the journal. A licence that runs out never deletes or hides anything
+the app made: what is in quarantine, the snapshots, the reports and the journal
+are all still there.
+
+**Pro was open to everyone up to 0.5.0**, while there was nothing to buy. From
+0.6.0 Pro and the Developer Pack are part of a licence again. Someone upgrading
+from an earlier version is told so on the card and, once, in a strip at the top
+of the window. Automatic profiles they made stay; every profile after the first,
+and any profile that moves files to another drive, runs in report only until a
+licence includes it (see [Profiles](#profiles)).
+
+**The strip at the top** says one of two things — a trial in its last three
+days, or Pro closed again — and never appears over a scan, a delete, or a
+dialog. *Not now* puts it away; the trial one comes back at most once a day.
 
 ### Updates
 
@@ -2899,6 +2948,8 @@ handed their exit code to Windows.
   main process. (An organisation's [daily report](#the-organisations-console)
   is a file written to a folder the organisation names, usually a share on its
   own network — not a request to anybody, and nothing it holds names a file.)
+  Buying a plan makes no request either, until payment opens: the payment
+  provider in this version answers from inside the app.
 - **No automatic optimisation, defragmentation or registry cleaning.** It does
   not claim to make anything faster.
 - **No system change of its own.** Hibernation, restore points, the component
@@ -2931,6 +2982,10 @@ handed their exit code to Windows.
   your Windows account with DPAPI and opened only when the licence screen shows
   it, and, once this copy has had a trial, that trial's key, which is how it
   knows not to offer another.
+  And `orders.json`, once something has been bought: the plan, the price, the
+  method and a hash of this computer's id for each order — no email address and
+  no licence key — which is what the invoices on the licence card are read
+  from. And the licence key, only where you save it.
 - **Settings upgrade forward, once.** The settings file is versioned; the first
   save after an upgrade keeps the previous file as `settings.v1.json`, and the
   version before this one still reads the new file (that is tested against the
