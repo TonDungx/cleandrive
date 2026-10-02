@@ -289,8 +289,13 @@ const SINKS = [
  * translates from (`t('category.' + group.category, group.label)`), so the
  * English there is the second argument to a `t()` call in another file. It is
  * reached by a computed key, which is why it cannot be spotted automatically.
+ *
+ * `legal-text.js` holds the Terms of use and the Refund policy whole, once in
+ * Vietnamese and once in English (Phase 6): a legal document is translated as
+ * a document, not sentence by sentence through keys, and the Vietnamese one
+ * governs. test-commerce.js holds the two versions to the same sections.
  */
-const ALLOWED_FILES = new Set(['lib/advisor.js']);
+const ALLOWED_FILES = new Set(['lib/advisor.js', 'legal-text.js']);
 
 function looksLikeProse(text) {
   if (!/[a-z]{3}/.test(text)) return false;

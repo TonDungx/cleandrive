@@ -259,6 +259,24 @@ app.whenReady().then(async () => {
   await need('§7.2.3: Pay waits for an email, a method and the terms', `document.getElementById('plans-pay').disabled && /Còn thiếu: địa chỉ email, phương thức thanh toán, đồng ý điều khoản/.test(document.getElementById('plans-pay-hint').textContent)`);
   await need('no field for a card number anywhere (§7.7)', `![...document.querySelectorAll('#plans input')].some((i) => /card|cc-|number/i.test((i.autocomplete || '') + (i.name || '') + (i.id || '')) && i.type !== 'radio')`);
   await shoot('checkout-empty-vi-light');
+
+  // The two documents, opened from the agreement line itself.
+  await js(`document.querySelector('#plans-checkout [data-legal="terms"]').click();`);
+  await until(`document.getElementById('legal').open && document.getElementById('legal-title').textContent === 'Điều khoản sử dụng'`, 3000, 'the Terms of use');
+  await need('reading the terms does not agree to them', `!document.getElementById('plans-terms').checked && document.getElementById('plans').open`);
+  await need('the terms say up front that nothing is sold yet, then ten sections', `/chưa mở bán/.test(document.getElementById('legal-body').textContent) && document.querySelectorAll('#legal-body h3').length === 10`);
+  await overflow('1180 vi, the Terms of use');
+  await both('legal-terms-vi');
+  await js(`document.getElementById('legal').scrollTop = document.getElementById('legal').scrollHeight;`);
+  await shoot('legal-terms-end-vi-light');
+  await js(`document.getElementById('legal-close').click();`);
+  await need('closing it gives the keyboard back to the link', `document.activeElement === document.querySelector('#plans-checkout [data-legal="terms"]')`);
+  await js(`document.querySelector('#plans-checkout [data-legal="refund"]').click();`);
+  await until(`document.getElementById('legal').open && document.getElementById('legal-title').textContent === 'Chính sách hoàn tiền'`, 3000, 'the Refund policy');
+  await need('a document opened after another starts at its top', `document.getElementById('legal').scrollTop === 0`);
+  await need('the refund policy: 30 days, no reason, no fee', `/30 ngày kể từ ngày thanh toán/.test(document.getElementById('legal-body').textContent)`);
+  await both('legal-refund-vi');
+  await js(`document.getElementById('legal-close').click();`);
   await js(`
     const e = document.getElementById('plans-email'); e.value = 'nguoi.mua@example.vn'; e.dispatchEvent(new Event('input'));
     document.querySelector('input[name="plans-method"][value="momo"]').click();
@@ -427,6 +445,10 @@ app.whenReady().then(async () => {
     await until(`!document.getElementById('plans-checkout').hidden`, 3000, 'checkout');
     await overflow(`${width} vi, checkout`);
     await shoot(`checkout-${width}-vi-light`);
+    await js(`document.querySelector('#plans-checkout [data-legal="terms"]').click();`);
+    await until(`document.getElementById('legal').open`, 3000, 'the Terms of use');
+    await shoot(`legal-${width}-vi-light`);
+    await js(`document.getElementById('legal-close').click();`);
     await js(`document.getElementById('plans').close();`);
   }
   win.setSize(1180, 900);
@@ -439,6 +461,11 @@ app.whenReady().then(async () => {
   await until(`document.getElementById('plans').open`, 3000, 'the dialog');
   await need('English prices', `/₫499,000 a year · 3 computers/.test(document.getElementById('plans-columns').textContent)`);
   await shoot('plans-choose-en-light');
+  await js(`document.getElementById('plans').close(); document.querySelector('#licence-card [data-legal="refund"]').click();`);
+  await until(`document.getElementById('legal').open && document.getElementById('legal-title').textContent === 'Refund policy'`, 3000, 'the English Refund policy');
+  await need('in English, the window\'s language', `/not on sale yet/.test(document.getElementById('legal-body').textContent)`);
+  await shoot('legal-refund-en-light');
+  await js(`document.getElementById('legal-close').click();`);
   await js(`document.getElementById('plans').close();`);
 
   console.log(errors.length ? `\nrenderer errors: ${errors.slice(0, 4).join(' | ')}` : '\nno renderer errors');

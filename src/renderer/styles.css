@@ -8834,3 +8834,80 @@ button.is-managed {
     flex-basis: 100%;
   }
 }
+
+/* ==========================================================================
+   the Terms of use and the Refund policy (Phase 6)
+   ========================================================================== */
+
+/* A word in a sentence that opens a document: it reads as a link, and it is
+   a button, because it opens something in the app rather than going anywhere. */
+.legal-link {
+  appearance: none;
+  display: inline;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.legal-link:hover {
+  text-decoration-thickness: 2px;
+}
+
+.legal-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+.licence-legal {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: baseline;
+}
+
+.legal-dialog {
+  width: min(760px, calc(100vw - 32px));
+}
+
+#legal-title:focus {
+  outline: none;
+}
+
+/* No scrolling of its own: the dialog scrolls, with the heading pinned, so
+   there is one place the position lives (legal.js resets it on open). */
+.legal-body {
+  line-height: 1.55;
+}
+
+.legal-meta {
+  margin: 10px 0 12px;
+  color: var(--text-3);
+  font-size: 12px;
+}
+
+.legal-heading {
+  margin: 18px 0 6px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.legal-text {
+  margin: 0 0 8px;
+  font-size: 13px;
+}
+
+.legal-list {
+  margin: 0 0 10px;
+  padding-left: 20px;
+  font-size: 13px;
+}
+
+.legal-list li + li {
+  margin-top: 4px;
+}

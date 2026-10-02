@@ -793,6 +793,16 @@ app.whenReady().then(async () => {
   check('a screen reader starts the result at its title', await js(`document.activeElement === document.getElementById('plans-title')`));
   await run(`document.getElementById('plans').close();`);
   check('closing gives the keyboard back to the button that opened it', await js(`document.activeElement === document.getElementById('licence-plans')`));
+  // The Terms of use, from the foot of the licence card: a long document,
+  // headings and lists, all drawn by script.
+  await run(`document.querySelector('#licence-card [data-legal="terms"]').click();`);
+  await until(`document.getElementById('legal').open === true && document.querySelectorAll('#legal-body h3').length >= 5`, 5000);
+  await settle();
+  open = await axeRun();
+  check('with the Terms of use open, no violations', open.violations.length === 0, open.violations.map((v) => `${v.id}: ${v.nodes.join(' | ')}`).join(' || '));
+  check('the document starts at its heading, in one scrolling box the keys move', await js(`(() => { const d = document.getElementById('legal'); return document.activeElement === document.getElementById('legal-title') && d.scrollTop === 0 && d.scrollHeight > d.clientHeight && /auto|scroll/.test(getComputedStyle(d).overflowY) && getComputedStyle(document.getElementById('legal-body')).overflowY === 'visible'; })()`));
+  await run(`document.getElementById('legal').close();`);
+  check('closing it gives the keyboard back to the link', await js(`document.activeElement === document.querySelector('#licence-card [data-legal="terms"]')`));
 
   await tab('usage');
   await run(`await openViewer(${JSON.stringify(path.join(tree, 'notes.txt'))});`);

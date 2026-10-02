@@ -1569,6 +1569,11 @@
             <p class="card-note" data-i18n="licence.promise">
               Every safety and restore feature is always free. A licence that runs out never loses any data.
             </p>
+            <p class="card-note licence-legal">
+              <button type="button" class="legal-link" data-legal="terms" data-i18n="legal.terms">Terms of use</button>
+              <span aria-hidden="true">·</span>
+              <button type="button" class="legal-link" data-legal="refund" data-i18n="legal.refund">Refund policy</button>
+            </p>
           </section>
 
           <section class="card">
@@ -2202,7 +2207,7 @@
             <button class="btn btn-sm" type="button" id="plans-coupon-apply" data-i18n="checkout.apply">Apply</button>
             <span class="card-note" id="plans-coupon-result" role="status"></span>
           </div>
-          <p class="card-note" data-i18n="checkout.vat">VAT included.</p>
+          <p class="card-note" data-i18n="checkout.finalPrice">The final price: every tax and fee included, nothing added at payment.</p>
           <p class="plans-total"><span data-i18n="checkout.total">Total</span> <strong id="plans-total"></strong></p>
 
           <label class="licence-label" for="plans-email" data-i18n="checkout.email">Email for the licence</label>
@@ -2222,9 +2227,12 @@
             <label class="check"><input type="radio" name="plans-method" value="bank_qr" /> <span data-i18n="checkout.method.bankQr">Bank transfer (QR)</span></label>
           </fieldset>
 
+          <!-- The two documents open over checkout, in the app (legal.js); a
+               button inside a label does not tick the box, so reading them
+               never agrees to them. -->
           <label class="check">
-            <input type="checkbox" id="plans-terms" />
-            <span data-i18n="checkout.terms">I agree to the Terms and the Refund policy</span>
+            <input type="checkbox" id="plans-terms" aria-describedby="plans-terms-docs" />
+            <span id="plans-terms-docs"><span data-i18n="checkout.terms.lead">I agree to the</span> <button type="button" class="legal-link" data-legal="terms" data-i18n="legal.terms">Terms of use</button> <span data-i18n="checkout.terms.and">and the</span> <button type="button" class="legal-link" data-legal="refund" data-i18n="legal.refund">Refund policy</button></span>
           </label>
 
           <div class="panel-actions plans-foot">
@@ -2245,6 +2253,20 @@
           <div class="panel-actions plans-foot" id="plans-result-actions"></div>
         </section>
       </div>
+    </dialog>
+
+    <!--
+      The Terms of use and the Refund policy (Phase 6), read in the app: no
+      request, and the same text whatever the network does. Drawn by legal.js
+      from its own data with textContent, in the window's language.
+    -->
+    <dialog class="shortcuts legal-dialog" id="legal" aria-labelledby="legal-title">
+      <div class="shortcuts-head">
+        <h2 id="legal-title" tabindex="-1"></h2>
+        <span class="spacer"></span>
+        <button class="btn btn-sm" id="legal-close" data-i18n="app.close">Close</button>
+      </div>
+      <div class="shortcuts-body legal-body" id="legal-body"></div>
     </dialog>
 
     <dialog class="shortcuts hardlink-dialog" id="hardlink" aria-labelledby="hardlink-title">
@@ -2338,6 +2360,8 @@
     <script src="hardlink.js"></script>
     <!-- The introduction, last: it opens over a window that is already built. -->
     <script src="intro.js"></script>
+    <script src="legal-text.js"></script>
+    <script src="legal.js"></script>
     <script src="licence.js"></script>
   </body>
 </html>

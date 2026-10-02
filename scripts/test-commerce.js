@@ -217,6 +217,41 @@ const payloadOf = (t) => token.verifyToken(t, { channel: 'stable' });
     check('and the window never reaches the network to pay (§7.7)', !/\bfetch\(|XMLHttpRequest|WebSocket|navigator\.sendBeacon/.test(ui));
   }
 
+  console.log('\ncommerce: the Terms of use and the Refund policy\n');
+
+  {
+    const R = path.join(__dirname, '..', 'src', 'renderer');
+    const docs = require('../src/renderer/legal-text');
+    const viewer = fs.readFileSync(path.join(R, 'legal.js'), 'utf8');
+    const html = fs.readFileSync(path.join(R, 'index.html'), 'utf8');
+    const kinds = Object.keys(docs);
+    check('two documents: the terms and the refund policy', kinds.join() === 'terms,refund', kinds.join());
+    for (const kind of kinds) {
+      const { vi, en } = docs[kind];
+      const whole = (d) => d && d.title && d.version && d.effective && Array.isArray(d.sections) && d.sections.length > 0 &&
+        d.sections.every((s) => s.heading && Array.isArray(s.body) && s.body.length > 0 &&
+          s.body.every((b) => (typeof b === 'string' && b.length > 10) || (Array.isArray(b) && b.length > 0 && b.every((x) => typeof x === 'string' && x.length > 5))));
+      check(`${kind}: complete in Vietnamese, which governs, and in English`, whole(vi) && whole(en));
+      check(`${kind}: the same sections, in the same order, in both`, vi.sections.length === en.sections.length &&
+        vi.sections.every((s, i) => s.body.length === en.sections[i].body.length && s.heading.split('.')[0] === en.sections[i].heading.split('.')[0]),
+        `${vi.sections.length} vi / ${en.sections.length} en`);
+      check(`${kind}: the same version and date in both`, vi.version === en.version && /2026/.test(vi.effective) && /2026/.test(en.effective));
+      check(`${kind}: says up front that nothing is being sold yet`, /chưa mở bán/.test(vi.notice) && /not on sale yet/.test(en.notice));
+    }
+    const asked = [...html.matchAll(/data-legal="([a-z]+)"/g)].map((m) => m[1]);
+    check('every way in names a document that exists', asked.length >= 4 && asked.every((k) => kinds.includes(k)), [...new Set(asked)].join(', '));
+    const agreement = html.slice(html.indexOf('id="plans-terms"'), html.indexOf('</label>', html.indexOf('id="plans-terms"')));
+    check('checkout\'s agreement line opens both, as buttons that do not tick the box',
+      /type="button" class="legal-link" data-legal="terms"/.test(agreement) && /type="button" class="legal-link" data-legal="refund"/.test(agreement));
+    check('a document is drawn as text, never as markup, and fetched from nowhere',
+      !/innerHTML|insertAdjacentHTML|outerHTML/.test(viewer) && !/\bfetch\(|XMLHttpRequest/.test(viewer));
+    const all = JSON.stringify(docs);
+    check('the only address in them is the project\'s own support page', (all.match(/https?:\/\/[^\s"',)]+/g) || []).map((u) => u.replace(/[.,;:]+$/, '')).every((u) => u === 'https://github.com/TonDungx/cleandrive/issues'));
+    check('the price line no longer says VAT: software is not subject to it (Luật Thuế GTGT 2024, Điều 5 k21)', !/VAT/.test(html) &&
+      /every tax and fee included/.test(html));
+    check('the refund window in the policy is the one the terms point to: 30 days', /30 ngày/.test(JSON.stringify(docs.refund.vi)) && /30 days/.test(JSON.stringify(docs.refund.en)));
+  }
+
   console.log(failures === 0 ? '\nALL PASS\n' : `\n${failures} FAILURE(S)\n`);
   process.exit(failures === 0 ? 0 : 1);
 })().catch((err) => {

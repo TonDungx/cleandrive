@@ -2379,6 +2379,22 @@ their own way on, and none of them is ever said to have charged anything.
 > this card, and it ends when selling begins. The prices are sample prices, in
 > VND.
 
+**The Terms of use and the Refund policy** open from the two words in
+checkout's agreement line and from the foot of the licence card, inside the app
+— no request — in Vietnamese or English with the window; the Vietnamese text
+governs, and where the two differ the reading better for the customer applies.
+Opening them never ticks the box. In short: a full refund within 30 days of
+paying, no reason asked and no fee, for a first purchase and for each yearly
+renewal; after that a yearly plan can be ended for the unused whole months; a
+lifetime plan is not refunded after 30 days unless the app is not as
+described, which is grounds at any time; money goes back by the method used,
+within 7 working days of accepting and never more than 30. A refund ends that
+licence and deletes nothing. No automatic renewal. Complaints are acknowledged
+within 3 working days and answered within 15, and nothing in either document
+takes away a right Vietnamese consumer law gives. Both say plainly that
+nothing is sold yet, and that the seller's name, address and tax code will be
+published there before anything is.
+
 **What stays free, whatever the licence.** Restore, every confirmation, every
 warning and the journal. A licence that runs out never deletes or hides anything
 the app made: what is in quarantine, the snapshots, the reports and the journal
