@@ -11,24 +11,14 @@
  * has to take this back, and must say so to whoever has been using it.
  *
  * A checkout is different: it opens every feature by default, so a developer
- * sees the whole app, and `CLEANDRIVE_ENTITLEMENTS` narrows it to test one
- * tier. A release build ignores that variable entirely. Honouring it there
- * would make "set an environment variable" a way round paying, and more to the
- * point would make the build that users run depend on an input nobody chose.
- *
- *   CLEANDRIVE_ENTITLEMENTS = all | free | pro | pro+dev | business
+ * sees the whole app, and can narrow it to one tier (`dev-overrides.js`). That
+ * module is not in a release build at all, and is only ever loaded here, on
+ * the `dev` channel -- so a release has no way to be told a tier by its
+ * environment.
  */
 
 const { BUILD_CHANNEL } = require('../build-info');
 const entitlements = require('./entitlements');
-
-const PRESETS = Object.freeze({
-  all: { state: 'active', tier: 'business', addons: ['dev'] },
-  business: { state: 'active', tier: 'business', addons: [] },
-  'pro+dev': { state: 'active', tier: 'pro', addons: ['dev'] },
-  pro: { state: 'active', tier: 'pro', addons: [] },
-  free: { state: 'free' },
-});
 
 /**
  * What a release build runs under until licences exist (see above).
@@ -42,16 +32,28 @@ const PRESETS = Object.freeze({
 const OPEN_PRO = Object.freeze({ state: 'active', tier: 'pro', addons: ['dev'] });
 
 /**
+ * The developer's choice, on the `dev` channel only. A dev channel without
+ * the module (it cannot happen in a checkout; it would mean a build that
+ * mislabels itself) gets nothing rather than everything.
+ */
+function devLicence(env) {
+  let overrides = null;
+  try {
+    // eslint-disable-next-line global-require
+    overrides = require('./dev-overrides');
+  } catch {
+    return Object.freeze({ ...entitlements.FREE, source: 'dev' });
+  }
+  return overrides.fromEnv(env);
+}
+
+/**
  * @param {object} [options]  injectable, for the harness
  * @param {string} [options.channel]
  * @param {object} [options.env]
  */
 function currentLicense({ channel = BUILD_CHANNEL, env = process.env } = {}) {
-  if (channel === 'dev') {
-    const wanted = String(env.CLEANDRIVE_ENTITLEMENTS || 'all').trim().toLowerCase();
-    const preset = PRESETS[wanted] || PRESETS.all;
-    return Object.freeze({ ...preset, source: 'dev' });
-  }
+  if (channel === 'dev') return devLicence(env);
   return Object.freeze({ ...OPEN_PRO, source: 'open' });
 }
 
@@ -61,4 +63,4 @@ function canNow(options) {
   return (feature) => entitlements.can(lic, feature);
 }
 
-module.exports = { currentLicense, canNow, PRESETS, OPEN_PRO };
+module.exports = { currentLicense, canNow, OPEN_PRO };

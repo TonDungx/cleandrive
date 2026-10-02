@@ -21,6 +21,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const { buildAppIco } = require('../src/main/lib/trayicon');
+const guard = require('./release-guard');
 const pkg = require('../package.json');
 
 const ROOT = path.join(__dirname, '..');
@@ -130,8 +131,23 @@ function mb(bytes) {
       // Only what the running app opens, plus production dependencies, which
       // electron-builder adds by itself. The test harnesses in particular would
       // ship a verify-autoclean.js that deletes real files, to a machine whose
-      // owner never asked for it.
-      files: ['src/**/*', 'package.json'],
+      // owner never asked for it. Developer-only modules -- the entitlement
+      // override -- are left out of every channel but `dev`.
+      files: ['src/**/*', 'package.json', ...guard.excludedFor(channel)],
+
+      // The release guard, on what was actually packed: after the app folder
+      // exists and before the installer is made, so a build that fails it
+      // never produces one. See scripts/release-guard.js.
+      afterPack: async (context) => {
+        const problems = guard.checkPackage(context.appOutDir, {
+          channel,
+          devDependencies: Object.keys(pkg.devDependencies || {}),
+        });
+        if (problems.length > 0) {
+          throw new Error(`release guard: ${problems.length} problem(s) in a ${channel} build\n  ${problems.join('\n  ')}`);
+        }
+        console.log(`guard       clean for ${channel}\n`);
+      },
       // The command line's batch file, as `<install folder>\bin\cleandrive.cmd`,
       // and the Group Policy files, as `<install folder>\policy\`.
       extraFiles: [

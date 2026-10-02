@@ -2779,6 +2779,13 @@ export async function getProvider() {
 - Trong kênh dev, Settings → Phiên bản hiện dòng nhỏ *"Kênh: dev · Thanh toán: giả lập"*. **Màn checkout thì không có dấu hiệu gì khác biệt**, đúng yêu cầu giống production. Có thể tắt dòng này bằng một cờ dev để chụp ảnh marketing.
 - [Inference] Nếu Giai đoạn 7 chưa xong mà vẫn cần phát hành bản beta công khai, bản đó nên build ở kênh `beta` với entitlements mở toàn bộ và **ẩn hẳn** mục mua hàng, thay vì phát hành với mock.
 
+> **✅ Đã code xong (2026-10-02), mục 6.1.** Khác đặc tả, và vì sao:
+> - **Mock _không_ bị rào ở Giai đoạn 6.** Người dùng chốt (2026-10-02): khoá Pro lại trên stable, và vì chưa có đường thanh toán thật nên **bấm Thanh toán là thành công ở mọi kênh, kể cả stable** — mock và khoá ký của nó phải ship trong 0.6.0. Rào cho `MockPaymentProvider`, khoá riêng của mock và `kid` `mock-*` là **việc của Giai đoạn 7**, đúng như §8.3 bước 3 vốn đã ghi. Không ai cần kênh beta công khai (người dùng chốt: không).
+> - **Đo trước:** đọc `app.asar` của bản stable 0.5.0 thì chuỗi `CLEANDRIVE_ENTITLEMENTS` nằm trong `license/state.js` (code chạy thật) và `ipc.js` (comment), và `dist-app/**` của đặc tả không tồn tại — electron-builder đóng thẳng `src/**/*`. Nên rào **đọc thứ đã được đóng gói**, không đọc cây nguồn: hook `afterPack` của electron-builder, sau khi có `win-unpacked` và trước khi tạo installer.
+> - **Phần ghi đè của dev tách sang `license/dev-overrides.js`**, bị loại khỏi `files` ở mọi kênh trừ `dev`, và chỉ được `state.js` nạp khi kênh là `dev`. Rào từ chối bốn thứ: module đó hoặc tên biến trong bất kỳ tệp chữ nào, bất cứ gì dưới `scripts/`, một devDependency (axe-core, Electron), và `build-info.json` thiếu hoặc ghi kênh khác.
+> - **Không thêm dependency:** bộ đọc asar tự viết (~40 dòng). Đối chiếu với `@electron/asar` trên bản 0.5.0: **1.334/1.334 tệp, 11,0 MB, khớp từng byte**. Chạy trên chính bản đó, rào bắt **đúng hai tệp** trên.
+> - **CJS, `.js`:** `scripts/release-guard.js` (`npm run guard:release`), `test-release-guard.js` trong `npm test` (asar dựng tay theo định dạng, mỗi luật một ca hỏng và một ca sạch, cộng phép kiểm cây nguồn), `verify-release-guard.js` (`npm run verify:release-guard`, ba lần build thật, ~15 s mỗi lần): **13/0** — build stable có một tệp cài sẵn tên biến ghi đè **fail ở `afterPack` và không để lại installer**; build stable sạch qua rào, exe đóng gói khởi động được khi thiếu `dev-overrides.js` và **bỏ qua** `CLEANDRIVE_ENTITLEMENTS=business` (CLI vẫn đóng); build dev mang tệp đó và **làm theo** biến.
+
 ### 7.9. Kiểm thử thương mại
 
 | Harness | Kiểm tra |

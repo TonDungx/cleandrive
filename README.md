@@ -3096,11 +3096,22 @@ CLEANDRIVE_ENTITLEMENTS=free npm start        # narrow a checkout to one tier: f
 CLEANDRIVE_COPIES_SCOPE=D:\x npm start        # where "Find duplicates" looks, instead of Home (a checkout only)
 ```
 
-A checkout opens every feature by default; a built installer ignores
-`CLEANDRIVE_ENTITLEMENTS` entirely. One feature so far belongs to the paid tier
-— comparing two scans of a folder — and until licences exist a built installer
-has that tier open to everyone. The developer add-on and the business tier stay
-closed.
+A checkout opens every feature by default and honours `CLEANDRIVE_ENTITLEMENTS`.
+A built installer cannot be told a tier at all: the module that reads the
+variable is left out of every build but the `dev` channel. Until licences
+exist, an installed copy has Pro and the developer add-on open to everyone and
+Business closed.
+
+**The release guard.** `npm run build` checks what it actually packed — after
+the app folder is made and before the installer is — and stops if a build that
+is not `dev` holds the developer override (the module, or the variable's name
+in any text file), anything from `scripts/`, a devDependency, or a
+`build-info.json` that names another channel. `npm run guard:release --
+dist\win-unpacked` runs the same check on a folder already built;
+`npm run verify:release-guard` proves it on three real builds (a planted leak
+that must fail without leaving an installer, a clean stable build whose exe
+ignores the variable, and a dev build that honours it). It reads the asar
+itself, so it adds no dependency.
 
 Three Windows programs are run for OneDrive's *Free up space*, each by its
 absolute path in `System32`: `tasklist` to see whether OneDrive is running,

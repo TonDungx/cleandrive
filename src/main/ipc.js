@@ -155,7 +155,7 @@ function copiesScopeFor(file) {
   if (copiesScope) return copiesScope;
   // A checkout only, for the harness that starts the real app from a command
   // line (verify-launch-target.js) and cannot reach this module's setter. A
-  // built installer ignores it, as it ignores CLEANDRIVE_ENTITLEMENTS.
+  // built installer ignores it, as it has no way to be told a tier.
   if (!app.isPackaged && process.env.CLEANDRIVE_COPIES_SCOPE) return process.env.CLEANDRIVE_COPIES_SCOPE;
   const home = app.getPath('home');
   const rel = path.relative(home.toLowerCase(), file.toLowerCase());
