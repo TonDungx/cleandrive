@@ -165,6 +165,14 @@ section { padding-block: clamp(56px, 8vw, 96px); }
 .hero .inner { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); gap: clamp(32px, 5vw, 64px); align-items: center; }
 .hero-copy { display: grid; gap: 22px; min-width: 0; }
 .hero-links { display: grid; gap: 8px; }
+
+/* "Bản thử nghiệm": said once above the headline and again on every version line. */
+.beta-tag {
+  justify-self: start; display: inline-flex; align-items: center; gap: 8px;
+  padding: 4px 12px; border: 1px solid var(--sun); border-radius: 999px;
+  background: var(--sun-soft); color: var(--ink); font-size: .9rem; font-weight: 700;
+}
+.beta-tag::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--sun); }
 .hero-links a { font-weight: 700; font-size: .98rem; }
 @media (max-width: 900px) { .hero .inner { grid-template-columns: minmax(0, 1fr); } }
 
@@ -322,6 +330,7 @@ footer .inner { display: flex; flex-wrap: wrap; gap: 8px 24px; justify-content: 
   <header class="hero" id="top">
     <div class="inner">
       <div class="hero-copy">
+        <p class="beta-tag">Bản thử nghiệm · miễn phí</p>
         <h1>Ổ C đầy? Xem nó đầy <mark>vì đâu</mark> trước đã.</h1>
         <p class="lede">CleanDrive cho bạn thấy dung lượng đang nằm ở đâu, thứ gì xoá được và vì sao. Bạn quyết định. Không có gì bị xoá khi bạn chưa đồng ý.</p>
 
@@ -355,8 +364,8 @@ footer .inner { display: flex; flex-wrap: wrap; gap: 8px 24px; justify-content: 
             Tải CleanDrive miễn phí
           </a>
           <div class="hero-links">
-            <span class="ver"><strong>Phiên bản <span data-version>0.6.3</span></strong> · <span data-size>78 MB</span> · Windows 10/11 64-bit</span>
-            <a href="https://github.com/TonDungx/cleandrive/releases" target="_blank" rel="noopener">Xem các bản phát hành</a>
+            <span class="ver"><strong>Bản thử nghiệm <span data-version>0.6.3</span></strong> · <span data-size>78 MB</span> · Windows 10/11 64-bit</span>
+            <a href="https://github.com/TonDungx/cleandrive/issues" target="_blank" rel="noopener">Gặp lỗi? Báo cho chúng tôi</a>
           </div>
         </div>
       </div>
@@ -589,6 +598,10 @@ footer .inner { display: flex; flex-wrap: wrap; gap: 8px 24px; justify-content: 
       </div>
       <div class="faq">
         <details>
+          <summary>Bản thử nghiệm nghĩa là gì?</summary>
+          <p>CleanDrive đang cho người dùng thử trước khi mở bán. App dùng được hằng ngày, nhưng vẫn có thể còn lỗi. Gặp lỗi hay có góp ý, bạn báo ở <a href="https://github.com/TonDungx/cleandrive/issues" target="_blank" rel="noopener">trang báo lỗi</a>, ghi kèm phiên bản (xem trong Cài đặt), bạn đã làm gì và thấy gì. Có ảnh chụp màn hình thì càng tốt.</p>
+        </details>
+        <details>
           <summary>CleanDrive có miễn phí không?</summary>
           <p>Có. Bản miễn phí dùng mãi mãi, trên mọi máy, không cần tài khoản. Bạn có đủ phần quét dung lượng, Nên xoá gì, Trùng lặp, Ảnh &amp; video và Khôi phục. Gói trả phí chỉ thêm công cụ cho ai cần nhiều hơn.</p>
         </details>
@@ -631,8 +644,8 @@ footer .inner { display: flex; flex-wrap: wrap; gap: 8px 24px; justify-content: 
             Tải CleanDrive miễn phí
           </a>
         </div>
-        <span class="ver"><strong>Phiên bản <span data-version>0.6.3</span></strong> · <span data-size>78 MB</span> · Windows 10/11 64-bit</span>
-        <a href="https://github.com/TonDungx/cleandrive/releases" target="_blank" rel="noopener">Xem các bản phát hành</a>
+        <span class="ver"><strong>Bản thử nghiệm <span data-version>0.6.3</span></strong> · <span data-size>78 MB</span> · Windows 10/11 64-bit</span>
+        <a href="https://github.com/TonDungx/cleandrive/issues" target="_blank" rel="noopener">Gặp lỗi? Báo cho chúng tôi</a>
       </div>
 
       <div class="ss">
@@ -665,8 +678,8 @@ footer .inner { display: flex; flex-wrap: wrap; gap: 8px 24px; justify-content: 
 
   <footer>
     <div class="inner">
-      <span>CleanDrive · Phiên bản <span data-version>0.6.3</span> · Windows 10/11 64-bit</span>
-      <a href="https://github.com/TonDungx/cleandrive/releases" target="_blank" rel="noopener">Xem các bản phát hành</a>
+      <span>CleanDrive · Bản thử nghiệm <span data-version>0.6.3</span> · Windows 10/11 64-bit</span>
+      <span class="foot-links"><a href="https://github.com/TonDungx/cleandrive/issues" target="_blank" rel="noopener">Báo lỗi</a> · <a href="https://github.com/TonDungx/cleandrive/releases" target="_blank" rel="noopener">Các bản phát hành</a></span>
     </div>
   </footer>
 
