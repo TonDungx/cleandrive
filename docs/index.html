@@ -678,7 +678,7 @@ footer .inner { display: flex; flex-wrap: wrap; gap: 8px 24px; justify-content: 
 
   <footer>
     <div class="inner">
-      <span>CleanDrive · Bản thử nghiệm <span data-version>0.6.3</span> · Windows 10/11 64-bit</span>
+      <span>CleanDrive · Bản thử nghiệm <span data-version>0.6.3</span> · Windows 10/11 64-bit<br>Trang này đếm lượt xem bằng Cloudflare Web Analytics, không dùng cookie. App thì không gửi gì.</span>
       <span class="foot-links"><a href="https://github.com/TonDungx/cleandrive/issues" target="_blank" rel="noopener">Báo lỗi</a> · <a href="https://github.com/TonDungx/cleandrive/releases" target="_blank" rel="noopener">Các bản phát hành</a></span>
     </div>
   </footer>
@@ -759,5 +759,7 @@ function pickInstaller(release) {
     .catch(() => {});
 })();
 </script>
+<!-- Cloudflare Web Analytics: page views only, no cookies. -->
+<script type='module' src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "8b9eed09d1c744c0ad1b1bb621489e7a"}'></script>
 </body>
 </html>
