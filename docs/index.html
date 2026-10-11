@@ -142,7 +142,9 @@ section { padding-block: clamp(56px, 8vw, 96px); }
 .term .p { color: var(--term-dim); }
 .term .c { color: var(--term-accent); font-weight: 600; }
 .term .d { color: var(--term-dim); }
-@media (max-width: 860px) { .nav-links { display: none; } .nav .btn { margin-left: auto; } }
+/* Six items need about 1080px on one line; below that only the brand and Tải về stay (2026-10-11). */
+.nav-links a, .nav .btn { white-space: nowrap; }
+@media (max-width: 1080px) { .nav-links { display: none; } .nav .btn { margin-left: auto; } }
 @media (prefers-reduced-motion: reduce) { .nav-glow { transition: none; } }
 
 /* buttons */
@@ -321,6 +323,7 @@ footer .inner { display: flex; flex-wrap: wrap; gap: 8px 24px; justify-content: 
         <li><a href="#bang-gia">Bảng giá</a></li>
         <li><a href="#doanh-nghiep">Doanh nghiệp</a></li>
         <li><a href="#hoi-dap">Hỏi đáp</a></li>
+        <li><a href="huong-dan-cleandrive.pdf" download="Huong-dan-su-dung-CleanDrive.pdf">Hướng dẫn</a></li>
         <li aria-hidden="true" class="nav-glow" id="nav-glow"></li>
       </ul>
       <a class="btn btn-sm" href="https://github.com/TonDungx/cleandrive/releases/latest" data-download>Tải về</a>
@@ -365,6 +368,7 @@ footer .inner { display: flex; flex-wrap: wrap; gap: 8px 24px; justify-content: 
           </a>
           <div class="hero-links">
             <span class="ver"><strong>Bản thử nghiệm <span data-version>0.6.3</span></strong> · <span data-size>78 MB</span> · Windows 10/11 64-bit</span>
+            <a href="huong-dan-cleandrive.pdf" download="Huong-dan-su-dung-CleanDrive.pdf">Tải hướng dẫn sử dụng (PDF)</a>
             <a href="https://github.com/TonDungx/cleandrive/issues" target="_blank" rel="noopener">Gặp lỗi? Báo cho chúng tôi</a>
           </div>
         </div>
@@ -645,6 +649,7 @@ footer .inner { display: flex; flex-wrap: wrap; gap: 8px 24px; justify-content: 
           </a>
         </div>
         <span class="ver"><strong>Bản thử nghiệm <span data-version>0.6.3</span></strong> · <span data-size>78 MB</span> · Windows 10/11 64-bit</span>
+        <a href="huong-dan-cleandrive.pdf" download="Huong-dan-su-dung-CleanDrive.pdf">Tải hướng dẫn sử dụng (PDF)</a>
         <a href="https://github.com/TonDungx/cleandrive/issues" target="_blank" rel="noopener">Gặp lỗi? Báo cho chúng tôi</a>
       </div>
 
@@ -679,7 +684,7 @@ footer .inner { display: flex; flex-wrap: wrap; gap: 8px 24px; justify-content: 
   <footer>
     <div class="inner">
       <span>CleanDrive · Bản thử nghiệm <span data-version>0.6.3</span> · Windows 10/11 64-bit<br>Trang này đếm lượt xem bằng Cloudflare Web Analytics, không dùng cookie. App thì không gửi gì.</span>
-      <span class="foot-links"><a href="https://github.com/TonDungx/cleandrive/issues" target="_blank" rel="noopener">Báo lỗi</a> · <a href="https://github.com/TonDungx/cleandrive/releases" target="_blank" rel="noopener">Các bản phát hành</a></span>
+      <span class="foot-links"><a href="huong-dan-cleandrive.pdf" download="Huong-dan-su-dung-CleanDrive.pdf">Hướng dẫn</a> · <a href="https://github.com/TonDungx/cleandrive/issues" target="_blank" rel="noopener">Báo lỗi</a> · <a href="https://github.com/TonDungx/cleandrive/releases" target="_blank" rel="noopener">Các bản phát hành</a></span>
     </div>
   </footer>
 
