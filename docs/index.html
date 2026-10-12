@@ -326,7 +326,7 @@ footer .inner { display: flex; flex-wrap: wrap; gap: 8px 24px; justify-content: 
         <li><a href="huong-dan-cleandrive.pdf" download="Huong-dan-su-dung-CleanDrive.pdf">Hướng dẫn</a></li>
         <li aria-hidden="true" class="nav-glow" id="nav-glow"></li>
       </ul>
-      <a class="btn btn-sm" href="https://github.com/TonDungx/cleandrive/releases/latest" data-download>Tải về</a>
+      <a class="btn btn-sm" href="https://github.com/TonDungx/cleandrive/releases/latest" data-download="nav">Tải về</a>
     </div>
   </nav>
 
@@ -362,7 +362,7 @@ footer .inner { display: flex; flex-wrap: wrap; gap: 8px 24px; justify-content: 
         <p class="scan-note">Trong lúc quét, vài người bạn nhỏ đi dọc thanh tiến trình cho đỡ chờ. Bé mèo là một trong số đó.</p>
 
         <div class="dl-row">
-          <a class="btn btn-big" href="https://github.com/TonDungx/cleandrive/releases/latest" data-download>
+          <a class="btn btn-big" href="https://github.com/TonDungx/cleandrive/releases/latest" data-download="hero">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>
             Tải CleanDrive miễn phí
           </a>
@@ -499,7 +499,7 @@ footer .inner { display: flex; flex-wrap: wrap; gap: 8px 24px; justify-content: 
           <h3>Miễn phí</h3>
           <div class="price">0 ₫</div>
           <p>Không tài khoản, không giới hạn thời gian.</p>
-          <a class="btn" href="https://github.com/TonDungx/cleandrive/releases/latest" data-download>Tải về</a>
+          <a class="btn" href="https://github.com/TonDungx/cleandrive/releases/latest" data-download="pricing">Tải về</a>
         </div>
         <ul class="ticks">
           <li>Dung lượng đĩa: quét thư mục, xem danh sách hoặc bản đồ</li>
@@ -643,7 +643,7 @@ footer .inner { display: flex; flex-wrap: wrap; gap: 8px 24px; justify-content: 
         <h2>Xem ổ đĩa của bạn đang chứa gì</h2>
         <p class="lede">Cài xong, chọn một thư mục và bấm Quét. Bạn chưa phải xoá gì cả.</p>
         <div>
-          <a class="btn btn-big" href="https://github.com/TonDungx/cleandrive/releases/latest" data-download>
+          <a class="btn btn-big" href="https://github.com/TonDungx/cleandrive/releases/latest" data-download="final">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>
             Tải CleanDrive miễn phí
           </a>
@@ -683,7 +683,7 @@ footer .inner { display: flex; flex-wrap: wrap; gap: 8px 24px; justify-content: 
 
   <footer>
     <div class="inner">
-      <span>CleanDrive · Bản thử nghiệm <span data-version>0.6.3</span> · Windows 10/11 64-bit<br>Trang này đếm lượt xem bằng Cloudflare Web Analytics, không dùng cookie. App chỉ gửi góp ý khi bạn bấm Gửi.</span>
+      <span>CleanDrive · Bản thử nghiệm <span data-version>0.6.3</span> · Windows 10/11 64-bit<br>Trang này đếm lượt xem và lượt bấm tải, không dùng cookie và không lưu địa chỉ IP (Cloudflare Web Analytics và máy chủ của CleanDrive). App chỉ gửi góp ý khi bạn bấm Gửi.</span>
       <span class="foot-links"><a href="huong-dan-cleandrive.pdf" download="Huong-dan-su-dung-CleanDrive.pdf">Hướng dẫn</a> · <a href="https://github.com/TonDungx/cleandrive/issues" target="_blank" rel="noopener">Báo lỗi</a> · <a href="https://github.com/TonDungx/cleandrive/releases" target="_blank" rel="noopener">Các bản phát hành</a></span>
     </div>
   </footer>
@@ -762,6 +762,24 @@ function pickInstaller(release) {
       if (found.size) for (const el of document.querySelectorAll('[data-size]')) el.textContent = found.size;
     })
     .catch(() => {});
+})();
+</script>
+<script>
+/* Counts for /admin (cloudflare/stats): a view, with the referring site, and
+   which download button was pressed. Numbers per day only: no cookie, no id,
+   and the server keeps no address. sendBeacon outlives the page, so a click
+   that leaves for the download is still counted. */
+(() => {
+  const STATS = 'https://cleandrive-stats.dungduongton.workers.dev/track';
+  const send = (e, k) => {
+    try {
+      if (navigator.sendBeacon) navigator.sendBeacon(STATS, JSON.stringify({ e, k }));
+    } catch { /* counting must never break the page */ }
+  };
+  send('view', document.referrer && !document.referrer.startsWith(location.origin) ? document.referrer : '');
+  for (const a of document.querySelectorAll('a[data-download]')) {
+    a.addEventListener('click', () => send('download', a.dataset.download));
+  }
 })();
 </script>
 <!-- Cloudflare Web Analytics: page views only, no cookies. -->

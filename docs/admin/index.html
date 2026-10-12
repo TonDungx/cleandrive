@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>CleanDrive · Quản trị</title>
+<link rel="icon" href="../favicon.ico">
+<style>
+/* The owner's numbers. The page is public; the numbers are not: they come
+   from cloudflare/stats, which answers only with the password. */
+:root {
+  --bg: #F3F6FB; --card: #FFFFFF; --ink: #10294D; --ink-2: #4A6286; --line: #D6E3F2;
+  --blue: #2F6FD1; --sun: #E39A12; --red: #C2453A; --green: #1F8A55;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #0B1328; --card: #13213F; --ink: #E7EFFB; --ink-2: #A8BAD6; --line: #253A63; --blue: #6FA4F5; --sun: #FFB547; --red: #F07A6E; --green: #4CC38A; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.5 "Segoe UI", system-ui, sans-serif; }
+header { display: flex; align-items: center; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--line); background: var(--card); }
+header h1 { font-size: 17px; margin: 0; }
+header .spacer { flex: 1; }
+main { max-width: 1100px; margin: 0 auto; padding: 20px 16px 48px; }
+button, input { font: inherit; }
+button { padding: 7px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--ink); cursor: pointer; }
+button.primary { background: var(--blue); border-color: var(--blue); color: #fff; font-weight: 600; }
+input[type=password] { padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--ink); width: 260px; max-width: 100%; }
+.login { max-width: 420px; margin: 12vh auto 0; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 24px; }
+.login p { color: var(--ink-2); }
+.err { color: var(--red); min-height: 1.5em; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.tile { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+.tile .v { font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.tile .l { color: var(--ink-2); }
+.tile .s { color: var(--ink-2); font-size: 12.5px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 12px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+.card h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-2); margin: 0 0 10px; }
+.wide { grid-column: 1 / -1; }
+table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+td, th { padding: 5px 4px; border-bottom: 1px solid var(--line); text-align: left; }
+td.n, th.n { text-align: right; }
+.bar { height: 8px; border-radius: 4px; background: var(--blue); opacity: .75; }
+.legend { display: flex; gap: 16px; color: var(--ink-2); font-size: 12.5px; margin-top: 6px; flex-wrap: wrap; }
+.dot { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+.note { color: var(--ink-2); font-size: 12.5px; margin-top: 16px; }
+svg text { fill: var(--ink-2); font-size: 10px; }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<header>
+  <h1>CleanDrive · Quản trị</h1>
+  <span class="spacer"></span>
+  <span id="updated" class="s"></span>
+  <button id="refresh" hidden>Tải lại</button>
+  <button id="logout" hidden>Đăng xuất</button>
+</header>
+
+<section class="login" id="login">
+  <h2>Đăng nhập</h2>
+  <p>Mật khẩu là ADMIN_TOKEN bạn đặt cho cleandrive-stats bằng <code>wrangler secret put</code>.</p>
+  <form id="login-form">
+    <input type="password" id="password" autocomplete="current-password" aria-label="Mật khẩu" required>
+    <button class="primary" type="submit">Vào</button>
+  </form>
+  <p class="err" id="login-err" role="alert"></p>
+</section>
+
+<main id="board" hidden>
+  <div class="tiles" id="tiles"></div>
+  <div class="grid">
+    <section class="card wide">
+      <h2>30 ngày qua, theo ngày</h2>
+      <div id="chart"></div>
+      <div class="legend">
+        <span><span class="dot" style="background:var(--blue)"></span>Lượt xem trang</span>
+        <span><span class="dot" style="background:var(--sun)"></span>Bấm tải</span>
+        <span><span class="dot" style="background:var(--red)"></span>Gỡ app (trang Tạm biệt)</span>
+      </div>
+    </section>
+    <section class="card"><h2>Người xem đến từ đâu</h2><div id="t-view"></div></section>
+    <section class="card"><h2>Quốc gia</h2><div id="t-country"></div></section>
+    <section class="card"><h2>Bấm tải ở nút nào</h2><div id="t-download"></div></section>
+    <section class="card"><h2>Lý do gỡ</h2><div id="t-reason"></div></section>
+    <section class="card"><h2>Gỡ từ phiên bản</h2><div id="t-goodbye"></div></section>
+    <section class="card"><h2>Tải bộ cài trên GitHub</h2><div id="t-github"></div></section>
+  </div>
+  <p class="note">
+    Lượt xem là số lần trang được mở, không phải số người: trang không dùng cookie nên không phân biệt được ai với ai.
+    Số người (visits) xem ở Cloudflare Web Analytics. "Bấm tải" là người bấm nút trên trang; "Tải bộ cài" của GitHub
+    còn gồm cả lượt app tự cập nhật. "Gỡ app" chỉ đếm được máy cài từ 0.6.5 trở đi, và chỉ khi trình duyệt mở được trang
+    Tạm biệt sau khi gỡ. Ngày tính theo giờ Việt Nam.
+  </p>
+</main>
+
+<script>
+(() => {
+  const STATS = 'https://cleandrive-stats.dungduongton.workers.dev/stats';
+  const KEY = 'cleandrive.admin';
+  const REASONS = { 'not-enough': 'Dọn được ít quá', 'hard-to-use': 'Khó dùng, khó hiểu', afraid: 'Sợ xoá nhầm',
+    'just-trying': 'Chỉ cài để thử', 'other-app': 'Đã dùng app khác', other: 'Lý do khác' };
+  const BUTTONS = { nav: 'Thanh trên cùng', hero: 'Đầu trang', pricing: 'Bảng giá (gói Free)', final: 'Cuối trang' };
+  const $ = (id) => document.getElementById(id);
+  const fmt = (n) => (n || 0).toLocaleString('vi-VN');
+  const sum = (series, days) => days.reduce((t, d) => t + ((series || {})[d] || 0), 0);
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+  function table(rows, label) {
+    if (!rows || rows.length === 0) return '<p class="s">Chưa có số liệu.</p>';
+    const max = Math.max(...rows.map((r) => r.n));
+    return '<table>' + rows.map((r) => `<tr><td>${esc(label ? label(r.key) : r.key)}</td>
+      <td style="width:40%"><div class="bar" style="width:${(r.n / max) * 100}%"></div></td><td class="n">${fmt(r.n)}</td></tr>`).join('') + '</table>';
+  }
+
+  function chart(data) {
+    const W = 1040; const H = 200; const pad = 24;
+    const kinds = [['view', 'var(--blue)'], ['download', 'var(--sun)'], ['goodbye', 'var(--red)']];
+    const max = Math.max(1, ...data.days.flatMap((d) => kinds.map(([k]) => (data.series[k] || {})[d] || 0)));
+    const step = (W - pad) / data.days.length;
+    const bw = Math.max(2, step / 4);
+    let bars = '';
+    data.days.forEach((d, i) => {
+      kinds.forEach(([k, color], j) => {
+        const v = (data.series[k] || {})[d] || 0;
+        const h = (v / max) * (H - pad - 8);
+        bars += `<rect x="${pad + i * step + j * bw}" y="${H - pad - h}" width="${bw - 1}" height="${h}" fill="${color}"><title>${d}: ${fmt(v)}</title></rect>`;
+      });
+      if (i % 5 === 0 || i === data.days.length - 1) bars += `<text x="${pad + i * step}" y="${H - 6}">${d.slice(5)}</text>`;
+    });
+    bars += `<text x="0" y="12">${fmt(max)}</text><line x1="${pad}" y1="${H - pad}" x2="${W}" y2="${H - pad}" stroke="var(--line)"/>`;
+    return `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Biểu đồ 30 ngày">${bars}</svg>`;
+  }
+
+  function draw(data) {
+    const days = data.days;
+    const last7 = days.slice(-7);
+    const latest = data.releases[0] || null;
+    const tiles = [
+      ['Lượt xem trang', sum(data.series.view, days), `hôm nay ${fmt(sum(data.series.view, [data.today]))} · 7 ngày ${fmt(sum(data.series.view, last7))}`],
+      ['Bấm tải', sum(data.series.download, days), `hôm nay ${fmt(sum(data.series.download, [data.today]))} · 7 ngày ${fmt(sum(data.series.download, last7))}`],
+      ['Gỡ app', sum(data.series.goodbye, days), `hôm nay ${fmt(sum(data.series.goodbye, [data.today]))} · 7 ngày ${fmt(sum(data.series.goodbye, last7))}`],
+      ['Tải bộ cài (GitHub, tất cả bản)', data.releases.reduce((t, r) => t + r.installer, 0), latest ? `bản ${latest.tag}: ${fmt(latest.installer)}` : ''],
+      ['Lượt kiểm tra cập nhật', latest ? latest.feed : 0, latest ? `của bản ${latest.tag}; mỗi app đang chạy kiểm tra lúc mở và mỗi 6 giờ` : ''],
+    ];
+    $('tiles').innerHTML = tiles.map(([l, v, s]) => `<div class="tile"><div class="v">${fmt(v)}</div><div class="l">${esc(l)}</div><div class="s">${esc(s)}</div></div>`).join('');
+    $('chart').innerHTML = chart(data);
+    $('t-view').innerHTML = table(data.top.view);
+    $('t-country').innerHTML = table(data.top.country);
+    $('t-download').innerHTML = table(data.top.download, (k) => BUTTONS[k] || k);
+    $('t-reason').innerHTML = table(data.top.reason, (k) => REASONS[k] || k);
+    $('t-goodbye').innerHTML = table(data.top.goodbye);
+    $('t-github').innerHTML = data.releases.length === 0 ? '<p class="s">GitHub chưa trả lời.</p>'
+      : '<table><tr><th>Bản</th><th class="n">Tải bộ cài</th><th class="n">Kiểm tra cập nhật</th></tr>' +
+        data.releases.map((r) => `<tr><td>${esc(r.tag)}</td><td class="n">${fmt(r.installer)}</td><td class="n">${fmt(r.feed)}</td></tr>`).join('') + '</table>';
+    $('updated').textContent = `Cập nhật lúc ${new Date().toLocaleTimeString('vi-VN')}`;
+  }
+
+  const token = () => { try { return sessionStorage.getItem(KEY) || ''; } catch { return ''; } };
+
+  async function load() {
+    const pass = token();
+    if (!pass) return show(false);
+    let res;
+    try {
+      res = await fetch(STATS, { headers: { authorization: `Bearer ${pass}` } });
+    } catch {
+      $('login-err').textContent = 'Không kết nối được máy chủ thống kê.';
+      return show(false);
+    }
+    if (res.status === 401) {
+      try { sessionStorage.removeItem(KEY); } catch { /* nothing to forget */ }
+      $('login-err').textContent = 'Sai mật khẩu.';
+      return show(false);
+    }
+    const data = await res.json().catch(() => null);
+    if (!data || !data.ok) {
+      $('login-err').textContent = 'Máy chủ thống kê trả lời lạ.';
+      return show(false);
+    }
+    $('login-err').textContent = '';
+    show(true);
+    draw(data);
+  }
+
+  function show(signedIn) {
+    $('login').hidden = signedIn;
+    $('board').hidden = !signedIn;
+    $('refresh').hidden = !signedIn;
+    $('logout').hidden = !signedIn;
+    if (!signedIn) $('password').focus();
+  }
+
+  $('login-form').addEventListener('submit', (event) => {
+    event.preventDefault();
+    try { sessionStorage.setItem(KEY, $('password').value); } catch { /* the session cannot keep it; one look only */ }
+    $('password').value = '';
+    load();
+  });
+  $('refresh').addEventListener('click', load);
+  $('logout').addEventListener('click', () => {
+    try { sessionStorage.removeItem(KEY); } catch { /* nothing kept */ }
+    show(false);
+  });
+  load();
+})();
+</script>
+</body>
+</html>

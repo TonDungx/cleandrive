@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>CleanDrive đã được gỡ</title>
+<link rel="icon" href="../favicon.ico">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@700&family=Nunito:wght@400;600;700&display=swap">
+<style>
+/* The page the uninstaller opens (since 0.6.5). One question, nothing required. */
+:root {
+  --sky: #EEF5FC; --paper: #FFFFFF; --ink: #10294D; --ink-2: #455E80; --line: #CFDFF0;
+  --blue: #2F6FD1; --link: #1C5BB8; --sun: #F7A928; --sun-ink: #2B1B00;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --sky: #0C1631; --paper: #152447; --ink: #E7EFFB; --ink-2: #A8BAD6; --line: #2A3D66; --blue: #6FA4F5; --link: #8DBBFF; --sun: #FFB547; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 24px 16px; background: var(--sky); color: var(--ink); font: 16px/1.6 Nunito, "Segoe UI", system-ui, sans-serif; }
+main { width: min(560px, 100%); background: var(--paper); border: 1px solid var(--line); border-radius: 16px; padding: 28px 28px 24px; }
+.brand { display: flex; align-items: center; gap: 10px; font: 700 18px "Baloo 2", Nunito, sans-serif; }
+.mark { width: 30px; height: 30px; border-radius: 8px; background: var(--blue); display: grid; place-items: center; }
+h1 { font: 700 26px/1.25 "Baloo 2", Nunito, sans-serif; margin: 18px 0 8px; }
+p { margin: 0 0 14px; color: var(--ink-2); }
+fieldset { border: 0; margin: 6px 0 16px; padding: 0; display: grid; gap: 8px; }
+legend { font-weight: 700; color: var(--ink); margin-bottom: 8px; padding: 0; }
+label { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border: 1px solid var(--line); border-radius: 10px; cursor: pointer; }
+label:has(input:checked) { border-color: var(--blue); box-shadow: 0 0 0 1px var(--blue) inset; }
+input { width: 17px; height: 17px; accent-color: var(--blue); }
+button { font: inherit; font-weight: 700; padding: 10px 22px; border: 0; border-radius: 999px; background: var(--sun); color: var(--sun-ink); cursor: pointer; }
+button:disabled { opacity: .5; cursor: default; }
+button:focus-visible, label:focus-within { outline: 2px solid var(--link); outline-offset: 2px; }
+a { color: var(--link); }
+.thanks { font-weight: 700; color: var(--ink); }
+.small { font-size: 13.5px; }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <div class="brand"><span class="mark" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="12" rx="3"/><path d="M7 14h4"/></svg></span>CleanDrive</div>
+  <h1>CleanDrive đã được gỡ khỏi máy</h1>
+  <p>Cảm ơn bạn đã dùng thử. Cài đặt và lịch sử của bạn vẫn còn trên máy, nên nếu cài lại, mọi thứ vẫn như cũ.</p>
+
+  <form id="why">
+    <fieldset>
+      <legend>Nếu được, cho mình biết vì sao bạn gỡ? (không bắt buộc)</legend>
+      <label><input type="radio" name="reason" value="not-enough"> Dọn được ít quá</label>
+      <label><input type="radio" name="reason" value="hard-to-use"> Khó dùng, khó hiểu</label>
+      <label><input type="radio" name="reason" value="afraid"> Sợ xoá nhầm</label>
+      <label><input type="radio" name="reason" value="just-trying"> Chỉ cài để thử</label>
+      <label><input type="radio" name="reason" value="other-app"> Đã dùng app khác</label>
+      <label><input type="radio" name="reason" value="other"> Lý do khác</label>
+    </fieldset>
+    <button type="submit" id="send" disabled>Gửi</button>
+  </form>
+  <p class="thanks" id="thanks" role="status" hidden>Cảm ơn bạn. Mình đã nhận được.</p>
+
+  <p class="small">Muốn nói rõ hơn? Viết ở <a href="https://github.com/TonDungx/cleandrive/issues" target="_blank" rel="noopener">trang góp ý</a>. Muốn cài lại: <a href="../">tondungx.github.io/cleandrive</a>.</p>
+  <p class="small">Trang này chỉ đếm số lượt gỡ và lý do bạn chọn, theo ngày. Nó không biết bạn là ai và không lưu địa chỉ IP.</p>
+</main>
+<script>
+(() => {
+  const STATS = 'https://cleandrive-stats.dungduongton.workers.dev/track';
+  const send = (e, k) => {
+    try {
+      if (navigator.sendBeacon) navigator.sendBeacon(STATS, JSON.stringify({ e, k }));
+    } catch { /* counting must never break the page */ }
+  };
+  // Once per opening of this tab: reloading it is not a second uninstall.
+  let version = '';
+  try { version = new URLSearchParams(location.search).get('v') || ''; } catch { version = ''; }
+  try {
+    if (!sessionStorage.getItem('cleandrive.goodbye')) {
+      sessionStorage.setItem('cleandrive.goodbye', '1');
+      send('goodbye', version);
+    }
+  } catch {
+    send('goodbye', version);
+  }
+  const form = document.getElementById('why');
+  const button = document.getElementById('send');
+  form.addEventListener('change', () => { button.disabled = !form.reason.value; });
+  form.addEventListener('submit', (event) => {
+    event.preventDefault();
+    if (!form.reason.value) return;
+    send('reason', form.reason.value);
+    form.hidden = true;
+    document.getElementById('thanks').hidden = false;
+  });
+})();
+</script>
+</body>
+</html>
