@@ -101,7 +101,9 @@ svg text { fill: var(--ink-2); font-size: 10px; }
   const KEY = 'cleandrive.admin';
   const REASONS = { 'not-enough': 'Dọn được ít quá', 'hard-to-use': 'Khó dùng, khó hiểu', afraid: 'Sợ xoá nhầm',
     'just-trying': 'Chỉ cài để thử', 'other-app': 'Đã dùng app khác', other: 'Lý do khác' };
-  const BUTTONS = { nav: 'Thanh trên cùng', hero: 'Đầu trang', pricing: 'Bảng giá (gói Free)', final: 'Cuối trang' };
+  const BUTTONS = { nav: 'Thanh trên cùng', hero: 'Đầu trang', pricing: 'Bảng giá (gói Free)', final: 'Cuối trang',
+    'mac-arm64-hero': 'Mac chip Apple, đầu trang', 'mac-x64-hero': 'Mac Intel, đầu trang',
+    'mac-arm64-final': 'Mac chip Apple, cuối trang', 'mac-x64-final': 'Mac Intel, cuối trang' };
   const $ = (id) => document.getElementById(id);
   const fmt = (n) => (n || 0).toLocaleString('vi-VN');
   const sum = (series, days) => days.reduce((t, d) => t + ((series || {})[d] || 0), 0);
